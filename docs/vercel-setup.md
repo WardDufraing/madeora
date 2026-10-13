@@ -42,10 +42,10 @@ Check: the Production environment page shows branch `production`.
 
 ## 5. Check that previews work
 
-1. Open the S04b pull request on GitHub (branch `chore/vercel-previews`). Within a few minutes a **Vercel** comment and check appear. If they do not, open **Deployments** in Vercel and click **Redeploy** on the latest one for that branch.
+1. Open the S04b pull request on GitHub (branch `chore/vercel-previews`). Within a few minutes a **Vercel** comment and check appear. If they do not, open **Deployments** in Vercel, click **Create Deployment**, type `chore/vercel-previews` and click **Create Deployment** again.
 2. Click **Visit Preview**. The Madeora page opens, because you are signed in to Vercel.
 3. Copy the preview link and open it in a private browser window. You should see a Vercel login page instead of Madeora. That proves strangers cannot open it.
-4. After the pull request is merged, **Deployments** shows a new **Preview** for `main` and still no **Production** deployment.
+4. After the pull request is merged, **Deployments** shows a new **Preview** for `main`. The only **Production** entry is the failed one from step 2; you may delete it (click the **⋯** next to it, then **Delete**).
 
 ## What not to add
 

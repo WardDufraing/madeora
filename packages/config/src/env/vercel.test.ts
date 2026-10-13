@@ -12,16 +12,19 @@ describe("vercelPreviewDefaults", () => {
     });
   });
 
-  it("falls back to the deployment URL when there is no branch URL", () => {
+  it("accepts an explicit preview target", () => {
+    expect(vercelPreviewDefaults({ ...preview, VERCEL_TARGET_ENV: "preview" })).toMatchObject({
+      NEXT_PUBLIC_APP_URL: "https://madeora-git-feat-x-ward.vercel.app",
+    });
+  });
+
+  it("does not use the per-deployment URL", () => {
     expect(
       vercelPreviewDefaults({
         VERCEL_ENV: "preview",
         VERCEL_URL: "madeora-abc123-ward.vercel.app",
       }),
-    ).toEqual({
-      APP_ENV: "preview",
-      NEXT_PUBLIC_APP_URL: "https://madeora-abc123-ward.vercel.app",
-    });
+    ).toEqual({ APP_ENV: "preview" });
   });
 
   it("never replaces values that are already set", () => {
@@ -45,6 +48,7 @@ describe("vercelPreviewDefaults", () => {
     ["production", { ...preview, VERCEL_ENV: "production" }],
     ["development", { ...preview, VERCEL_ENV: "development" }],
     ["outside Vercel", { VERCEL_BRANCH_URL: preview.VERCEL_BRANCH_URL }],
+    ["a custom (staging) environment", { ...preview, VERCEL_TARGET_ENV: "staging" }],
   ])("adds nothing in %s, so missing values still fail validation", (_name, source) => {
     expect(vercelPreviewDefaults(source)).toEqual({});
   });
@@ -55,6 +59,9 @@ describe("vercelPreviewDefaults", () => {
     "evil.example:8080",
     "user@evil.example",
     "localhost",
+    "madeora.example.com",
+    "evil.example/x.vercel.app",
+    "vercel.app",
     "",
   ])("ignores a host that is not a bare host name: %j", (host) => {
     expect(vercelPreviewDefaults({ VERCEL_ENV: "preview", VERCEL_BRANCH_URL: host })).toEqual({

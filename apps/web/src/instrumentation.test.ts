@@ -5,7 +5,7 @@ describe("register", () => {
     vi.stubEnv("NEXT_RUNTIME", "nodejs");
     vi.stubEnv("VERCEL_ENV", "");
     vi.stubEnv("VERCEL_BRANCH_URL", "");
-    vi.stubEnv("VERCEL_URL", "");
+    vi.stubEnv("VERCEL_TARGET_ENV", "");
   });
 
   afterEach(() => {

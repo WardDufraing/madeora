@@ -4,7 +4,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "env": ["APP_ENV", "NEXT_PUBLIC_*", "VERCEL_ENV", "VERCEL_BRANCH_URL", "VERCEL_URL"],
+      "env": ["APP_ENV", "NEXT_PUBLIC_*", "VERCEL_ENV", "VERCEL_TARGET_ENV", "VERCEL_BRANCH_URL"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
     "dev": {
