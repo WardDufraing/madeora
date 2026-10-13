@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "engines": {
-    "node": ">=22.12.0",
+    "node": ">=22.18.0",
     "pnpm": ">=10.28.0"
   },
   "scripts": {
@@ -14,7 +14,9 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:e2e": "turbo run test:e2e"
+    "test:e2e": "turbo run test:e2e",
+    "check:spec": "node tools/repo-checks/src/cli/spec-guard.ts",
+    "audit:deps": "node tools/repo-checks/src/cli/audit.ts"
   },
   "devDependencies": {
     "prettier": "3.9.10",

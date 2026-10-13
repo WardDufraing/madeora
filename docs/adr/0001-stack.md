@@ -20,7 +20,7 @@
 
 ## Pinned versions
 
-Node.js 22 LTS (`.nvmrc`, `engines >=22.12`), pnpm 10.28.0 (`packageManager`), Turborepo 2.11.8, Next.js 16.4.0, React 19.3.0, TypeScript 6.0.3, ESLint 9.39.5, typescript-eslint 8.71.2, Tailwind CSS 4.3.3, Zod 4.6.7, Vitest 5.0.4, Prettier 3.9.10, `@playwright/test` 1.56.1.
+Node.js 22 LTS (`.nvmrc`, `engines >=22.18`, raised in S02 so repository scripts run as TypeScript with Node's built-in type stripping), pnpm 10.28.0 (`packageManager`), Turborepo 2.11.8, Next.js 16.4.0, React 19.3.0, TypeScript 6.0.3, ESLint 9.39.5, typescript-eslint 8.71.2, Tailwind CSS 4.3.3, Zod 4.6.7, Vitest 5.0.4, Prettier 3.9.10, `@playwright/test` 1.56.1.
 
 Reasons for the versions that are not the newest:
 
