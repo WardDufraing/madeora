@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TestDatabaseConfigError, resolveTestDatabaseUrl } from "../src/run-sql.ts";
+import { TestDatabaseConfigError, isolatedEnv, resolveTestDatabaseUrl } from "../src/run-sql.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const typesFile = "packages/database/src/database.types.ts";
@@ -44,7 +44,7 @@ const generated = spawnSync(
     "--schema",
     "public",
   ],
-  { cwd: repoRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+  { cwd: repoRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: isolatedEnv() },
 );
 if (generated.status !== 0) {
   // The CLI's own message, which names the connection problem but not the password.

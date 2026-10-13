@@ -12,6 +12,9 @@
 -- Assertions raise an exception on failure. The runner stops at the first failure and reports
 -- its message, so every assertion needs a description that says what was expected.
 
+-- Dropped first (inside the same transaction), so a run that somehow committed cannot break every
+-- later run with "schema tests already exists".
+drop schema if exists tests cascade;
 create schema tests;
 grant usage on schema tests to anon, authenticated, service_role;
 

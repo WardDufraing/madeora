@@ -4,7 +4,7 @@
 
 - Node.js 22 LTS, 22.18 or newer (see `.nvmrc`). The repository scripts in `tools/repo-checks` run as TypeScript directly, which needs Node 22.18+.
 - pnpm 10.28.0. With Corepack: `corepack enable`, and the version in `package.json` is used automatically.
-- For the database: Docker (Docker Desktop on macOS or Windows), which the Supabase CLI uses to run a local Supabase stack, and the PostgreSQL client `psql` (16 or newer), which runs the RLS tests. The Supabase CLI itself (2.118.0) is installed by `pnpm install`; run it with `pnpm exec supabase`.
+- For the database: Docker (Docker Desktop on macOS or Windows, free for personal use and small businesses; see the cost register), which the Supabase CLI uses to run a local Supabase stack, and the PostgreSQL client `psql` (16 or newer), which runs the RLS tests. The Supabase CLI itself (2.118.0) is installed by `pnpm install`; run it with `pnpm exec supabase`.
 
 ## First setup
 
@@ -74,7 +74,7 @@ The database is defined only by Git: `supabase/migrations/` (applied in file-nam
 
 ### Writing RLS tests
 
-Add a file `tests/db/rls/<area>.test.sql`. `pnpm test:db` runs every such file against the migrated and seeded database, each in its own transaction that is always rolled back, so a test may create rows freely. A test must not commit, roll back or use psql commands (lines starting with `\`); the runner refuses those.
+Add a file `tests/db/rls/<area>.test.sql`. `pnpm test:db` runs every such file against the migrated and seeded database, each in its own transaction that is always rolled back, so a test may create rows freely. A test must not commit, roll back, use savepoints or use psql commands (a backslash outside quoted text); the runner refuses those before anything runs.
 
 Actors (`tests/db/sql/helpers.sql`) switch to the same database role and JWT claims as a real Supabase API request, so only RLS decides what they see:
 
@@ -89,11 +89,11 @@ Assertions run a query as the current actor and stop the test with their descrip
 - `tests.assert_denied(query, description)`: the query is refused (by default with SQLSTATE `42501`, which covers missing grants and policy `with check` failures).
 - `tests.assert_allowed(query, description)` and `tests.assert_true(condition, description)`.
 
-Every cross-Home or cross-user rule needs a test with at least two actors, and a test that it is actually enforced. `tests/db/harness/two-user.test.ts` shows the pattern: the same check must fail when the policy is dropped, switched off or widened. `tests/db/rls/baseline.test.sql` checks the whole database after every migration: every table in schema `public` has RLS, every view there is `security_invoker`, and schema `private` (for internal helper functions) is closed to the API roles.
+Every cross-Home or cross-user rule needs a test with at least two actors, and a test that it is actually enforced. `tests/db/harness/two-user.test.ts` shows the pattern: the same check must fail when the policy is dropped, switched off or widened. `tests/db/rls/baseline.test.sql` checks the whole database after every migration: every table in schema `public` has RLS, every view there is `security_invoker`, and schema `private` (for internal helper functions) and every function in it are closed to the API roles. When an RLS policy needs a `private` helper, grant it in the migration and add it to the allowlist in that test, with the reason. `tests/db/rls/shim-fidelity.test.sql` checks the role attributes the tests rely on.
 
 ### Without Docker: the PostgreSQL fallback
 
-Where the Supabase stack cannot start (no Docker, as in Claude's build containers; build plan decision D4), `pnpm test:db:fallback` creates a throwaway PostgreSQL cluster in a temporary folder, listening only on `127.0.0.1` port 54339. It applies `tests/db/shim/supabase-shim.sql` (the Supabase roles, default grants, `auth.users` and `auth.uid()`), then every migration and the seed, runs the same tests and the database types check, and deletes the cluster. It needs the PostgreSQL 16+ server programs (`initdb`, `pg_ctl`; set `PG_BIN` to their folder if `pg_config --bindir` does not find them) and must not run as root. The shim imitates Supabase but is not Supabase: the CI job on the real stack is the binding check.
+Where the Supabase stack cannot start (no Docker, as in Claude's build containers; build plan decision D4), `pnpm test:db:fallback` creates a throwaway PostgreSQL cluster in a private temporary folder, listening only on `127.0.0.1` port 54339 with a random per-run password. It applies `tests/db/shim/supabase-shim.sql` (the Supabase roles, default grants, `auth.users` and `auth.uid()`), then every migration and the seed, runs the same tests and the database types check, and deletes the cluster. It needs the PostgreSQL 16+ server programs (`initdb`, `pg_ctl`; set `PG_BIN` to their folder if `pg_config --bindir` does not find them) and must not run as root. The shim imitates Supabase but is not Supabase: the CI job on the real stack is the binding check.
 
 ## Dependency audit exceptions
 

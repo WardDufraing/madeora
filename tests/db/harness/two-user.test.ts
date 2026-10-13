@@ -58,11 +58,79 @@ describe("two-user RLS check", () => {
   });
 });
 
+describe("assertion helpers", () => {
+  it("assert_denied fails when the statement is refused with a different error", () => {
+    expectFailure(
+      [
+        fixture,
+        "select tests.act_as('alice');",
+        `select tests.assert_denied(
+           $$insert into harness.notes (owner_id, body) values (tests.user_id('bob'), 'forged')$$,
+           'refused as a unique violation', '23505');`,
+      ],
+      "refused as a unique violation (expected error 23505, got 42501",
+    );
+  });
+
+  it("assert_denied fails when the statement succeeds", () => {
+    expectFailure(
+      [
+        fixture,
+        "select tests.act_as('alice');",
+        "select tests.assert_denied($$select 1$$, 'refused');",
+      ],
+      "refused (expected error 42501, but the statement succeeded)",
+    );
+  });
+
+  it("assert_allowed fails when the statement is refused", () => {
+    expectFailure(
+      [
+        fixture,
+        "select tests.act_as_anon();",
+        "select tests.assert_allowed($$insert into harness.notes (body) values ('x')$$, 'anon may insert');",
+      ],
+      "anon may insert (expected success, got 42501",
+    );
+  });
+});
+
 describe("baseline guards", () => {
   it("fail when a table in schema public has no row level security", () => {
     expectFailure(
       ["create table public.unprotected (id int);", baseline],
       "Every table in schema public has row level security enabled",
+    );
+  });
+
+  it("pass when a new function in schema private gets only the default privileges", () => {
+    expect(
+      runSql([
+        "create function private.helper() returns int language sql as 'select 1';",
+        baseline,
+      ]),
+    ).toEqual({ ok: true });
+  });
+
+  it("fail when a function in schema private is executable by PUBLIC", () => {
+    expectFailure(
+      [
+        "create function private.helper() returns int language sql as 'select 1';",
+        "grant execute on function private.helper() to public;",
+        baseline,
+      ],
+      "No function in schema private is executable by PUBLIC, anon or authenticated",
+    );
+  });
+
+  it("fail when a function in schema private is executable by authenticated", () => {
+    expectFailure(
+      [
+        "create function private.helper() returns int language sql as 'select 1';",
+        "grant execute on function private.helper() to authenticated;",
+        baseline,
+      ],
+      "No function in schema private is executable by PUBLIC, anon or authenticated",
     );
   });
 

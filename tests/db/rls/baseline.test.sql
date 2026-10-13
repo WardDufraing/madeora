@@ -35,6 +35,28 @@ select tests.assert_true(
   'The API roles anon and authenticated cannot use schema private'
 );
 
+-- No function in schema private is executable by PUBLIC or the API roles unless it is allowlisted
+-- here. When an RLS policy needs a helper, grant it in its migration and add its signature, as
+-- regprocedure text such as 'private.is_home_member(uuid)', to this list with a comment saying why.
+select tests.assert_true(
+  not exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.oid::regprocedure::text <> all (array[]::text[])
+      and (
+        has_function_privilege('anon', p.oid, 'execute')
+        or has_function_privilege('authenticated', p.oid, 'execute')
+        or exists (
+          select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          where a.grantee = 0 and a.privilege_type = 'EXECUTE'
+        )
+      )
+  ),
+  'No function in schema private is executable by PUBLIC, anon or authenticated unless allowlisted'
+);
+
 -- The synthetic seed is loaded, with its fixed IDs.
 select tests.assert_true(
   tests.user_id('alice') = '10000000-0000-4000-8000-000000000001'

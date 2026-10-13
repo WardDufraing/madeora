@@ -6,6 +6,7 @@ import {
   databaseUrlVariable,
   defaultLocalDatabaseUrl,
   firstError,
+  isolatedEnv,
   resolveTestDatabaseUrl,
 } from "./run-sql.ts";
 
@@ -32,6 +33,13 @@ describe("resolveTestDatabaseUrl", () => {
     // A loopback host name with a socket or remote host override in the query string.
     "postgresql://postgres:secret-password@127.0.0.1/postgres?host=db.example.com",
     "postgresql://postgres:secret-password@/postgres?host=db.example.com",
+    // libpq parameters that redirect the connection after the host check.
+    "postgresql://postgres@127.0.0.1:5432/postgres?hostaddr=10.0.0.5",
+    "postgresql:///postgres?host=%2Ftmp,db.example.com",
+    "postgresql:///postgres?host=%2Ftmp&host=db.example.com",
+    "postgresql://postgres@localhost/postgres?service=prod",
+    "postgresql://postgres@localhost/postgres?options=-c%20search_path%3Dx",
+    "postgresql://postgres@localhost/postgres?sslmode=disable&sslmode=require",
   ])("refuses a database that is not on this machine: %s", (url) => {
     expect(() => resolveTestDatabaseUrl({ [databaseUrlVariable]: url })).toThrow(
       TestDatabaseConfigError,
@@ -60,6 +68,22 @@ describe("resolveTestDatabaseUrl", () => {
   });
 });
 
+describe("isolatedEnv", () => {
+  it("drops every libpq PG* variable and keeps the rest", () => {
+    expect(
+      isolatedEnv({
+        PATH: "/usr/bin",
+        PGHOST: "db.example.com",
+        PGHOSTADDR: "10.0.0.5",
+        PGSERVICE: "prod",
+        PGPASSWORD: "secret",
+        HOME: "/home/me",
+        EMPTY: undefined,
+      }),
+    ).toEqual({ PATH: "/usr/bin", HOME: "/home/me" });
+  });
+});
+
 describe("buildScript", () => {
   it("wraps the helpers and the parts in one transaction that is rolled back", () => {
     const script = buildScript(["select 1;"]);
@@ -84,13 +108,33 @@ describe("buildScript", () => {
     "\\! rm -rf /",
     "\\c other_database",
     "select 1;\ncommit;",
+    // On one line, after another statement, or after a comment: psql still runs them.
+    "create table t (id int); select 1; commit;",
+    "select 1; /* note */ rollback;",
+    "select 1; end;",
+    "end;",
+    "savepoint s;",
+    "release savepoint s;",
+    "prepare transaction 'x';",
+    "select 1; \\! touch /tmp/pwned",
+    "select 1 \\gexec",
   ])("refuses test SQL that controls the transaction or uses psql commands: %j", (sql) => {
     expect(() => buildScript([sql])).toThrow(/must not control transactions/);
   });
 
-  it("allows PL/pgSQL blocks, whose begin and end are not transaction statements", () => {
-    const block = "do $$\nbegin\n  if true then\n    perform 1;\n  end if;\nend\n$$;";
-    expect(() => buildScript([block])).not.toThrow();
+  it.each([
+    ["a PL/pgSQL block", "do $$\nbegin\n  if true then\n    perform 1;\n  end if;\nend\n$$;"],
+    [
+      "a tagged dollar quote",
+      "create function f() returns int language plpgsql as $fn$ begin return 1; end $fn$;",
+    ],
+    ["keywords inside a string", "select 'commit; end; \\! not a command';"],
+    ["an E-string with an escaped quote", "select E'it\\'s; commit';"],
+    ["keywords in comments", "-- commit;\nselect 1; /* rollback; \\! */"],
+    ["a quoted identifier", 'select 1 as "commit; end";'],
+    ["column names that start with a keyword", "select 1 as end_date, 2 as begin_at;"],
+  ])("allows %s", (_label, sql) => {
+    expect(() => buildScript([sql])).not.toThrow();
   });
 });
 

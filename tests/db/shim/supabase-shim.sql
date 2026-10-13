@@ -5,12 +5,17 @@
 --
 -- It mirrors, as of Supabase CLI 2.118 / supabase/postgres 17:
 --   * the API roles anon, authenticated and service_role (service_role bypasses RLS);
---   * a non-superuser `postgres` role that owns application objects and runs migrations;
+--   * a non-superuser `postgres` role with BYPASSRLS that owns application objects and runs
+--     migrations (rls/shim-fidelity.test.sql checks these role attributes on both databases);
 --   * Supabase's default grants on schema public, so RLS is the only barrier, exactly as on Supabase;
 --   * auth.users (only the columns seeds use) and auth.uid() / auth.role() / auth.jwt(), which read
 --     the same request.jwt.* settings as on Supabase;
 --   * the `extensions` schema with pgcrypto and uuid-ossp.
 -- Runs as the cluster superuser (supabase_admin), like Supabase's own image setup.
+--
+-- Known differences from Supabase: PostgreSQL 16 here, 17 there; auth.users is a small subset
+-- owned by supabase_admin (Supabase: supabase_auth_admin, many more columns); no GoTrue, PostgREST,
+-- Realtime or other extensions. A test that passes here but fails in CI is a shim gap: fix the shim.
 
 \set ON_ERROR_STOP on
 
@@ -20,7 +25,7 @@ create role service_role nologin noinherit bypassrls;
 create role authenticator login noinherit;
 grant anon, authenticated, service_role to authenticator;
 
-create role postgres login createrole createdb;
+create role postgres login createrole createdb bypassrls;
 grant anon, authenticated, service_role to postgres;
 grant all on database postgres to postgres;
 
