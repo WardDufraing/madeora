@@ -21,6 +21,7 @@
   --color-accent-subtle: var(--md-color-accent-subtle);
   --color-accent-fg: var(--md-color-accent-fg);
   --color-focus: var(--md-color-focus);
+  --color-accent-edge: var(--md-color-accent-edge);
   --color-success: var(--md-color-success);
   --color-success-subtle: var(--md-color-success-subtle);
   --color-success-solid: var(--md-color-success-solid);
@@ -49,6 +50,7 @@
   --text-helper--line-height: var(--md-text-helper-line-height);
   --radius-control: var(--md-radius-control);
   --radius-card: var(--md-radius-card);
+  --radius-checkbox: var(--md-radius-checkbox);
   --shadow-card: var(--md-shadow-card);
   --shadow-overlay: var(--md-shadow-overlay);
   --ease-standard: var(--md-ease-standard);

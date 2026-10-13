@@ -78,6 +78,7 @@ const accentKeys: readonly (keyof AccentTokens)[] = [
   "accentSubtle",
   "accentFg",
   "focusRing",
+  "accentEdge",
 ];
 
 function cssName(key: keyof AccentTokens): string {
@@ -105,6 +106,44 @@ for (const theme of themes) {
       await page.getByRole("button", { name: "Open dialog" }).click();
       await expect(page.getByRole("dialog", { name: "Example dialog" })).toBeVisible();
       expect(await axeViolations(page)).toEqual([]);
+    });
+
+    test("paints only colours that are design tokens", async ({ page }) => {
+      await open(page, theme);
+      await page.getByRole("button", { name: "Show warning toast" }).click();
+      await page.getByRole("button", { name: "Open dialog" }).click();
+      await settle(page);
+      const tokens = await page.evaluate(() => {
+        const probe = document.createElement("span");
+        document.body.append(probe);
+        const values: string[] = [];
+        for (const sheet of document.styleSheets) {
+          for (const rule of sheet.cssRules) {
+            if (!(rule instanceof CSSStyleRule)) continue;
+            for (const name of rule.style) {
+              if (!name.startsWith("--md-color-")) continue;
+              probe.style.color = `var(${name})`;
+              values.push(getComputedStyle(probe).color);
+            }
+          }
+        }
+        probe.remove();
+        return values;
+      });
+      const allowed = new Set([...tokens, "rgba(0, 0, 0, 0)"]);
+      const painted = await page.evaluate(() => {
+        const found: string[] = [];
+        for (const element of document.querySelectorAll("body, body *")) {
+          const style = getComputedStyle(element);
+          if (style.display === "none" || style.visibility === "hidden") continue;
+          found.push(style.color, style.backgroundColor, style.borderTopColor, style.outlineColor);
+          if (element instanceof SVGElement && style.stroke !== "none") found.push(style.stroke);
+          if (element instanceof HTMLDialogElement)
+            found.push(getComputedStyle(element, "::backdrop").backgroundColor);
+        }
+        return [...new Set(found)];
+      });
+      expect(painted.filter((colour) => !allowed.has(colour))).toEqual([]);
     });
 
     test("changing the accent tokens recolours every accent use", async ({ page }) => {
@@ -173,6 +212,41 @@ test("the atmospheric background is on the page only and disappears with forced 
 
   await page.emulateMedia({ forcedColors: "active" });
   await expect(page.locator("body")).toHaveCSS("background-image", "none");
+});
+
+test("the atmospheric background disappears with reduced transparency", async ({ page }) => {
+  // Playwright has no option for this media feature yet, so it is emulated through Chromium.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  await page.goto("/dev/components");
+  await expect(page.locator("body")).toHaveCSS("background-image", "none");
+});
+
+test("a checked checkbox still shows its check mark in forced colours (High Contrast)", async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: "active" });
+  await page.goto("/dev/components");
+  const look = (name: string) =>
+    page.getByRole("checkbox", { name, exact: true }).evaluate((input) => {
+      const mark = input.nextElementSibling;
+      if (!mark) throw new Error("check mark missing");
+      const markStyle = getComputedStyle(mark);
+      return {
+        box: getComputedStyle(input).backgroundColor,
+        mark: markStyle.stroke === "none" ? markStyle.color : markStyle.stroke,
+        shown: markStyle.display !== "none",
+      };
+    });
+
+  const checked = await look("Checked");
+  const unchecked = await look("Unchecked");
+  expect(checked.shown).toBe(true);
+  expect(checked.mark).not.toBe(checked.box);
+  expect(unchecked.shown).toBe(false);
+  expect(checked.box).not.toBe(unchecked.box);
 });
 
 test("reduced motion sets every duration token to zero", async ({ page }) => {

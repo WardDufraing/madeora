@@ -88,7 +88,7 @@ export function parseIconSvg(source: string, file = "icon"): IconElement[] {
     const attributes = readAttributes(match[2] ?? "", `${file} <${tag}>`);
     if (attributes.size === 0) throw new Error(`${file} <${tag}>: has no geometry.`);
     for (const [name, value] of attributes) {
-      const pattern = allowed[name];
+      const pattern = Object.hasOwn(allowed, name) ? allowed[name] : undefined;
       if (!pattern) throw new Error(`${file} <${tag}>: attribute ${name} is not allowed.`);
       if (!pattern.test(value))
         throw new Error(`${file} <${tag}>: attribute ${name} has an unsafe value.`);

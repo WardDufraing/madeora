@@ -34,6 +34,7 @@ const accentKeys: readonly (keyof AccentTokens)[] = [
   "accentSubtle",
   "accentFg",
   "focusRing",
+  "accentEdge",
 ];
 
 /** Colour names as Tailwind sees them (`bg-<name>`, `text-<name>`, `border-<name>`). */
@@ -67,6 +68,13 @@ export function themeVariables(theme: Theme): [string, string][] {
   vars.push(["--md-atmosphere-cool", atmosphere[theme].cool]);
   vars.push(["--md-atmosphere-accent-strength", atmosphere[theme].accentStrength]);
   vars.push(["--md-atmosphere-cool-strength", atmosphere[theme].coolStrength]);
+  // Declared in every theme block, because custom properties resolve where they are declared:
+  // an element that forces a theme gets a background built from its own values.
+  vars.push([
+    "--md-atmosphere",
+    "radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), " +
+      "radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%)",
+  ]);
   return vars;
 }
 
@@ -81,12 +89,6 @@ function staticVariables(): [string, string][] {
     vars.push([`--md-icon-${name}`, `${String(value)}px`]);
   for (const [name, value] of Object.entries(duration)) vars.push([`--md-duration-${name}`, value]);
   for (const [name, value] of Object.entries(easing)) vars.push([`--md-ease-${name}`, value]);
-  // Recomputed wherever the accent changes, because custom properties resolve where declared.
-  vars.push([
-    "--md-atmosphere",
-    "radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), " +
-      "radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%)",
-  ]);
   return vars;
 }
 

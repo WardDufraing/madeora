@@ -25,6 +25,8 @@ export const spacingUnitPx = 4;
 export const radius = {
   control: "0.625rem",
   card: "1rem",
+  /** The 20px checkbox box: a control radius would make it look round. */
+  checkbox: "0.375rem",
 } as const;
 
 /** Restrained depth (spec: flat or very subtle elevation, no heavy glassmorphism). */

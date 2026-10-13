@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { vi } from "vitest";
 
 import { axeViolations } from "@/test/axe";
@@ -103,6 +103,47 @@ describe("Dialog", () => {
     );
     fireEvent.click(document.body);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("returns focus after closing a dialog that was mounted open, also in StrictMode", async () => {
+    function MountedOpen() {
+      const [open, setOpen] = useState(true);
+      return (
+        <Dialog
+          open={open}
+          onClose={() => {
+            setOpen(false);
+          }}
+          title="Mounted open"
+          closeLabel="Close"
+        />
+      );
+    }
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    render(
+      <StrictMode>
+        <MountedOpen />
+      </StrictMode>,
+    );
+    expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
+  it("returns focus to the opener when unmounted while open", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const { unmount } = render(
+      <Dialog open onClose={() => undefined} title="Unmounted" closeLabel="Close" />,
+    );
+    expect(opener).not.toHaveFocus();
+    unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
   });
 
   it("has no axe violations when open", async () => {

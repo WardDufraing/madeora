@@ -66,6 +66,8 @@ describe("parseIconSvg", () => {
     ["content after the root", `${svg('<path d="M0 0"/>')}<script>alert(1)</script>`],
     ["no shapes", svg("")],
     ["an empty shape", svg("<path/>")],
+    ["an attribute named like an object property", svg('<path d="M0 0" toString="1"/>')],
+    ["an attribute named constructor", svg('<circle cx="1" cy="1" r="1" constructor="x"/>')],
   ];
   for (const [what, source] of refused) {
     it(`refuses ${what}`, () => {

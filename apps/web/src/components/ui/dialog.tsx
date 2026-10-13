@@ -42,11 +42,15 @@ export function Dialog({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) {
-      opener.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      dialog.showModal();
-    } else if (!open && dialog.open) {
+    if (open) {
+      // Remember the opener once per opening. Checked separately from showModal() because
+      // development StrictMode re-runs this effect while the dialog is already open.
+      const active = document.activeElement;
+      if (!opener.current && active instanceof HTMLElement && !dialog.contains(active)) {
+        opener.current = active;
+      }
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
       dialog.close();
     }
   }, [open]);
@@ -57,13 +61,15 @@ export function Dialog({
     restoreFocus(opener);
   }, [open]);
 
-  // So does unmounting while open.
-  useEffect(
-    () => () => {
+  // So does unmounting while open. Development StrictMode simulates an unmount while the element
+  // stays on the page; focus is left in the dialog then.
+  useEffect(() => {
+    const dialog = ref.current;
+    return () => {
+      if (dialog?.isConnected) return;
       restoreFocus(opener);
-    },
-    [],
-  );
+    };
+  }, []);
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>) {
     // Escape: let the owner decide, so `open` stays the single source of truth.

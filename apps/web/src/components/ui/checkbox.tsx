@@ -15,9 +15,10 @@ export interface CheckboxProps extends Omit<
 }
 
 /**
- * A native checkbox drawn with tokens. The whole row (box and label) is the click target, at
- * least 24px high (WCAG 2.5.8; spec: generous targets). The checked state shows a check mark,
- * not only a colour change.
+ * A native checkbox drawn with tokens. The box and the label are both click targets; the row is
+ * at least 24px high and the 20px box has room around it (WCAG 2.5.8 spacing). The checked state
+ * shows a check mark, not only a colour change, also in forced-colours (High Contrast) mode,
+ * where the browser's system colours replace the tokens.
  */
 export function Checkbox({ label, description, error, className, ref, ...rest }: CheckboxProps) {
   const id = useId();
@@ -37,16 +38,17 @@ export function Checkbox({ label, description, error, className, ref, ...rest }:
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}
             className={cx(
-              "peer size-5 cursor-pointer appearance-none rounded-[0.375rem] border-2 bg-surface",
+              "peer size-5 cursor-pointer appearance-none rounded-checkbox border-2 bg-surface",
               "transition-colors duration-(--md-duration-fast) ease-standard",
-              "checked:border-accent checked:bg-accent",
+              "checked:border-accent-edge checked:bg-accent",
+              "forced-colors:forced-color-adjust-none forced-colors:checked:border-[Highlight] forced-colors:checked:bg-[Highlight]",
               "disabled:cursor-not-allowed disabled:opacity-60",
               error ? "border-danger" : "border-line-control",
             )}
           />
           <CheckIcon
             size="sm"
-            className="pointer-events-none absolute inset-0.5 hidden text-on-accent peer-checked:block"
+            className="pointer-events-none absolute inset-0.5 hidden text-on-accent peer-checked:block forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none"
           />
         </span>
         <label htmlFor={id} className="cursor-pointer text-body text-fg">

@@ -30,7 +30,11 @@ export interface LoadingStateProps {
   readonly className?: string;
 }
 
-/** Content is on its way. The label is always visible, so the spinner is never the only signal. */
+/**
+ * Content is on its way. The label is always visible, so the spinner is never the only signal.
+ * Its status role is announced most reliably when it replaces content inside a container that
+ * was already on the page, rather than arriving as part of a brand-new page section.
+ */
 export function LoadingState({ label, className }: LoadingStateProps) {
   return (
     <div role="status" className={cx(frame, "text-fg-muted", className)}>

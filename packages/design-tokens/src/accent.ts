@@ -15,6 +15,12 @@ export interface AccentTokens {
   readonly accentFg: Hex;
   /** Keyboard focus outline. */
   readonly focusRing: Hex;
+  /**
+   * Edge of accent-filled controls such as a checked checkbox: the accent itself when it stands
+   * out from every surface (3:1), otherwise moved towards the text colour until it does, so the
+   * control's outline never disappears with a very light or very dark accent.
+   */
+  readonly accentEdge: Hex;
 }
 
 const WHITE: Hex = "#ffffff";
@@ -32,9 +38,11 @@ function pickOnColour(background: Hex): Hex {
 /**
  * Derives the full set of accent tokens for one theme from a single solid colour.
  *
- * The result is accessible by construction (spec: "validate contrast and derive accessible
- * hover/pressed states"): text on the accent meets 4.5:1, hover and pressed only ever increase
- * that contrast, accent text meets 4.5:1 and the focus ring 3:1 on every page surface. When the
+ * Guarantees (spec: "validate contrast and derive accessible hover/pressed states"): text on the
+ * accent meets 4.5:1, hover and pressed only ever increase that contrast, accent text meets 4.5:1
+ * and the focus ring and `accentEdge` 3:1 on every page surface. The fill itself is not held to
+ * 3:1 against surfaces (a white accent on a white card is allowed), so controls that rely on the
+ * fill to show their shape draw `accentEdge` around it. When the
  * chosen colour cannot carry readable text, the fill is nudged just far enough, so the caller
  * should show the returned `accent`, not the input, in previews.
  */
@@ -62,6 +70,7 @@ export function deriveAccent(input: string, theme: Theme): AccentTokens {
     accentSubtle,
     accentFg: towardsContrast(base, n.fg, [...surfaces, accentSubtle], CONTRAST.text),
     focusRing: towardsContrast(base, n.fg, surfaces, CONTRAST.ui),
+    accentEdge: towardsContrast(accent, n.fg, surfaces, CONTRAST.ui),
   };
 }
 

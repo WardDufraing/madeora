@@ -4,9 +4,13 @@ import { describe, expect, it } from "vitest";
 
 import * as icons from "./index.ts";
 
-const iconComponents = Object.entries(icons).filter(([name]) => name !== "createIcon");
+const iconComponents = Object.entries(icons).filter(([name]) => name.endsWith("Icon"));
 
 describe("icons", () => {
+  it("does not export createIcon, so no icon can skip the SVG reader", () => {
+    expect(Object.keys(icons)).not.toContain("createIcon");
+  });
+
   it("exports every icon in the inventory", () => {
     expect(iconComponents.map(([name]) => name).sort()).toEqual([
       "CheckIcon",
@@ -21,7 +25,7 @@ describe("icons", () => {
 
   for (const [name, Icon] of iconComponents) {
     it(`${name} is decorative by default and draws only with currentColor`, () => {
-      const markup = renderToStaticMarkup(createElement(Icon as icons.IconComponent));
+      const markup = renderToStaticMarkup(createElement(Icon));
       expect(markup).toContain('aria-hidden="true"');
       expect(markup).toContain('focusable="false"');
       expect(markup).not.toContain("role=");

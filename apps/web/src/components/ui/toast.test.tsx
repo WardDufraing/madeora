@@ -22,9 +22,15 @@ function keepApi(value: ToastApi) {
   api = value;
 }
 
-function renderProvider() {
+function renderProvider(
+  toneLabels?: Partial<Record<"info" | "success" | "warning" | "error", string>>,
+) {
   return render(
-    <ToastProvider regionLabel="Notifications" dismissLabel="Dismiss">
+    <ToastProvider
+      regionLabel="Notifications"
+      dismissLabel="Dismiss"
+      {...(toneLabels ? { toneLabels } : {})}
+    >
       <Capture onApi={keepApi} />
     </ToastProvider>,
   );
@@ -149,6 +155,68 @@ describe("Toast", () => {
     });
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByRole("listitem")).toHaveTextContent("Two");
+  });
+
+  it("never re-announces an older toast when a newer one is dismissed", () => {
+    renderProvider();
+    show({ title: "First", duration: null });
+    const second = show({ title: "Second", duration: null });
+    const before = screen.getByRole("status").innerHTML;
+    act(() => {
+      api?.dismiss(second);
+    });
+    expect(screen.getByRole("status").innerHTML).toBe(before);
+    expect(screen.getByRole("status").lastElementChild).toHaveTextContent("Second");
+  });
+
+  it("announces every toast shown at the same time", () => {
+    renderProvider();
+    act(() => {
+      api?.show({ title: "One" });
+      api?.show({ title: "Two" });
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("OneTwo");
+    expect(screen.getByRole("status")).toHaveAttribute("aria-atomic", "false");
+  });
+
+  it("keeps toasts with an action until dismissed, so the action stays reachable", () => {
+    renderProvider();
+    show({ title: "Item deleted", action: { label: "Undo", onAction: () => undefined } });
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
+  it("moves focus to the next toast, then back to where it was, when a focused toast closes", async () => {
+    render(
+      <>
+        <button type="button">Before</button>
+        <ToastProvider regionLabel="Notifications" dismissLabel="Dismiss">
+          <Capture onApi={keepApi} />
+        </ToastProvider>
+      </>,
+    );
+    show({ title: "One", duration: null });
+    show({ title: "Two", duration: null });
+    const before = screen.getByRole("button", { name: "Before" });
+    before.focus();
+    await userEvent.tab();
+    const [firstDismiss] = screen.getAllByRole("button", { name: "Dismiss" });
+    expect(firstDismiss).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "Dismiss" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    expect(before).toHaveFocus();
+  });
+
+  it("names the tone for screen readers when tone labels are given", () => {
+    renderProvider({ warning: "Warning" });
+    show({ title: "Almost full", tone: "warning" });
+    expect(screen.getByRole("status")).toHaveTextContent("Warning: Almost full");
+    expect(screen.getByRole("listitem")).toHaveTextContent("Warning: Almost full");
   });
 
   it("refuses to work outside a provider", () => {

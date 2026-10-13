@@ -46,6 +46,7 @@ describe("deriveAccent", () => {
         }
         for (const surface of surfaces) {
           expect(contrastRatio(t.focusRing, surface)).toBeGreaterThanOrEqual(CONTRAST.ui);
+          expect(contrastRatio(t.accentEdge, surface)).toBeGreaterThanOrEqual(CONTRAST.ui);
         }
       });
     }
@@ -60,7 +61,7 @@ describe("deriveAccent", () => {
     const purple = deriveAccent("#8057f5", "light");
     const green = deriveAccent("#0e7c66", "light");
     for (const key of Object.keys(purple) as (keyof typeof purple)[]) {
-      if (key === "onAccent") continue;
+      if (key === "onAccent" || key === "accentEdge") continue;
       expect(green[key]).not.toBe(purple[key]);
     }
   });
