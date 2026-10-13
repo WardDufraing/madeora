@@ -1,0 +1,20 @@
+# Code owners are asked to review every pull request that touches their paths.
+# GitHub enforces this only when branch protection requires code-owner review
+# (see docs/github-setup.md); until then it requests Ward's review automatically.
+
+# Default: the owner reviews everything.
+*                       @WardDufraing
+
+# Read-only product specification and the files that keep it byte-for-byte intact.
+/docs/product/          @WardDufraing
+/.gitattributes         @WardDufraing
+/tools/repo-checks/     @WardDufraing
+
+# Owner-approved documents: changed only with owner approval, in their own pull request.
+/CLAUDE.md              @WardDufraing
+/architecture.md        @WardDufraing
+/docs/adr/              @WardDufraing
+/docs/design/           @WardDufraing
+
+# CI, repository settings and review rules.
+/.github/               @WardDufraing

@@ -1,0 +1,11 @@
+{
+  "exceptions": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Reached only through lint tooling (@madeora/config > @next/eslint-plugin-next > fast-glob > micromatch > braces). It expands glob patterns written in our own ESLint config, never untrusted input, and is not bundled into the web app. No patched version exists yet (S01 review L2).",
+      "added": "2026-10-13",
+      "expires": "2026-12-31"
+    }
+  ]
+}

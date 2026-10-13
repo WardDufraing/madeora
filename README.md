@@ -7,6 +7,7 @@ The code is a Turborepo + pnpm monorepo:
 - `apps/web`: the Next.js web app (App Router, strict TypeScript, Tailwind CSS).
 - `packages/config`: shared TypeScript and ESLint configuration and the validated environment settings.
 - `tests/e2e`: Playwright browser tests.
+- `tools/repo-checks`: repository guards run by CI (product-specification guard, dependency audit).
 
 No product features exist yet.
 
@@ -26,4 +27,5 @@ No product features exist yet.
 
 - **The product specification is read-only.** The three files in `docs/product/` must never be edited, renamed, moved, reformatted or regenerated. Changes to them happen in a separate workflow outside this repository.
 - `architecture.md` and `CLAUDE.md` change only with the owner's approval, in their own pull request.
-- Feature branches merge into `main`. The owner decided (13 October 2026) that production will run from a separate `production` branch, changed only through a release pull request from `main`. Until that change to `architecture.md` lands, its release sections still describe deploying from `main`.
+- Feature branches merge into `main`. Production runs only from the separate `production` branch, which changes only through a release pull request from `main` ([ADR 0002](docs/adr/0002-branch-model.md)).
+- Every pull request runs CI (`.github/workflows/ci.yml`), including a spec guard that fails if anything in `docs/product/` changes. Repository settings the owner applies by hand are in [`docs/github-setup.md`](docs/github-setup.md).

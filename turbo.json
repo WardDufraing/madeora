@@ -24,6 +24,10 @@
       "dependsOn": ["@madeora/web#build"],
       "env": ["APP_ENV", "NEXT_PUBLIC_*", "CI", "PLAYWRIGHT_*"],
       "cache": false
+    },
+    "@madeora/repo-checks#test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.gitattributes", "$TURBO_ROOT$/docs/product/**"]
     }
   }
 }

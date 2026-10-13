@@ -435,7 +435,7 @@ madeora/
 - **PR previews:** Vercel preview deployments use non-production credentials, isolated or safely shared non-production test fixtures, and restricted access where appropriate. Untrusted pull requests must never receive production secrets or privileged staging credentials.
 - **Staging:** dedicated Vercel deployment and independent Supabase project/database, R2 storage, Trigger.dev environment and Resend credentials/domain or safe test-delivery mode. Validate migrations, RLS, authentication, API integrations, background jobs, email behavior, responsive/wall-display journeys and recovery paths before promotion.
 - **Production:** separate accounts/projects/buckets/keys wherever the providers support them; restrict access by least privilege. Never connect preview or staging to production data or services by accident.
-- **Promotion:** feature branch → required CI + independent agent review + human PR approval → protected main → staging deployment and release checks → explicitly approved production deployment. A production hotfix follows an expedited but documented validation and review process; never silently bypass security checks.
+- **Promotion:** feature branch → required CI + independent agent review + human PR approval → protected `main` (integration) → staging deployment and release checks → owner-approved release pull request from `main` into the protected `production` branch → production deployment from `production` only. Feature branches never target `production`, and a merge into `main` never deploys to production (owner decision 2026-10-13, ADR 0002). A production hotfix follows an expedited but documented validation and review process through `main` and a release pull request; never silently bypass security checks.
 - **Database migrations:** version-controlled SQL, forward/backward compatibility (expand → migrate/backfill → contract), staged rehearsal, backups and recovery plan. Roll back application code when safe; do not assume destructive database migrations can be rolled back automatically.
 - **Release validation:** automated smoke checks plus manual review of high-risk user journeys, accessibility, privacy, cross-Home authorization and integrations. Record release decision and known non-blocking issues per the product specification.
 - **Secrets and data:** independent credentials and configuration for each environment, no production secrets in CI jobs handling untrusted code, no production personal data copied to non-production without a separately approved privacy-safe process. Use synthetic or sanitized fixtures.
@@ -481,7 +481,7 @@ Tests must be added or updated in the same branch as behavior changes. CI failur
 
 ## 30. CI/CD and GitHub policy
 
-**GitHub is the authoritative repository.** Configure `main` as protected: no direct pushes, no force pushes, no deletion, no bypass by development automation where GitHub permits enforcement.
+**GitHub is the authoritative repository.** Configure `main` and `production` as protected: no direct pushes, no force pushes, no deletion, no bypass by development automation where GitHub permits enforcement. `main` is the integration branch; `production` is changed only by a release pull request from `main` (ADR 0002).
 
 Every feature, bug fix, refactor, dependency update, migration, documentation change or configuration change gets its own branch and pull request. Examples:
 
@@ -504,7 +504,7 @@ Required pipeline for every PR:
 
 Claude should create `.github/workflows/ci.yml` and deployment workflows during bootstrap. Use least-privilege `GITHUB_TOKEN` permissions, pinned major/action versions or SHA pinning for sensitive workflows, concurrency cancellation for superseded PR runs, and GitHub environment approvals for production. Never allow untrusted PR code access to production secrets. Ensure branch protection/rulesets require named status checks and at least one human approval if owner wants manual release gating. **Agent review is not automatically a GitHub-enforceable approval**: capture it in PR comments/check results and keep a separate human approval gate if required.
 
-Production deployment should follow merge to protected `main` plus required checks and explicit environment approval where configured. Include rollback and migration recovery procedures.
+Production deployment happens only from the protected `production` branch, after the owner merges a release pull request from `main` with required checks green, plus explicit environment approval where configured. Include rollback and migration recovery procedures.
 
 ## 31. Google Calendar integration (required MVP)
 
