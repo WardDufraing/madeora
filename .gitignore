@@ -14,9 +14,9 @@ playwright-report/
 test-results/
 blob-report/
 
-# Local environment files: never commit credentials
-.env
-.env*.local
+# Local environment files: never commit credentials. Only .env.example is tracked.
+.env*
+!.env.example
 
 # OS and editor files
 .DS_Store

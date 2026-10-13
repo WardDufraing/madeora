@@ -25,7 +25,7 @@ Defined and validated in `packages/config/src/env/index.ts`, documented in `apps
 | `APP_ENV`             | server only              | yes      | `development`, `test`, `preview`, `staging` or `production` |
 | `NEXT_PUBLIC_APP_URL` | public (in browser code) | yes      | Absolute `http` or `https` URL of the web app               |
 
-The server checks these when it starts. If one is missing or invalid, it logs the variable's name and answers every request with an error until the configuration is fixed. Values are never printed.
+`pnpm build` checks the public values first, because they are built into the browser code. The server checks all of them again when it starts. If one is missing or invalid, it logs the variable's name and answers every request with an error until the configuration is fixed. Values are never printed.
 
 ## Checks (the same commands CI will run)
 
