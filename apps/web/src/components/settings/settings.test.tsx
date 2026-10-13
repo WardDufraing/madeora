@@ -33,6 +33,8 @@ describe("ThemeSetting", () => {
     await user.click(screen.getByRole("radio", { name: "Same as this device" }));
     expect(document.documentElement).not.toHaveAttribute("data-theme");
     expect(document.cookie).toContain("md-theme=system");
+    // Server-rendered data is refreshed, so Back and Forward show the new choice.
+    expect(router.refresh).toHaveBeenCalledTimes(3);
   });
 
   it("is translated", () => {

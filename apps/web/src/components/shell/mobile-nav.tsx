@@ -41,6 +41,35 @@ export function MobileNav() {
     setOpen(false);
   }
 
+  // A click on the backdrop lands on the dialog element itself; inside the panel it lands on its
+  // contents. Pointer-only, because keyboard users have Escape and the Close button.
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    function closeOnBackdrop(event: MouseEvent) {
+      if (event.target === element) setOpen(false);
+    }
+    element.addEventListener("click", closeOnBackdrop);
+    return () => {
+      element.removeEventListener("click", closeOnBackdrop);
+    };
+  }, []);
+
+  // The menu is for small screens only. If the window grows past the breakpoint while it is
+  // open, the sidebar takes over and the menu closes, so the page is not left inert.
+  useEffect(() => {
+    if (!open) return;
+    const wide = window.matchMedia("(min-width: 48rem)");
+    function closeIfWide() {
+      if (wide.matches) setOpen(false);
+    }
+    closeIfWide();
+    wide.addEventListener("change", closeIfWide);
+    return () => {
+      wide.removeEventListener("change", closeIfWide);
+    };
+  }, [open]);
+
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>) {
     event.preventDefault();
     setOpen(false);
@@ -84,6 +113,7 @@ export function MobileNav() {
         onClose={() => {
           setOpen(false);
         }}
+
         className="m-0 h-dvh max-h-dvh w-72 max-w-[calc(100vw-3rem)] border-e border-line bg-sidebar p-0 text-fg shadow-overlay backdrop:bg-overlay open:animate-enter"
       >
         <div className="flex h-full flex-col gap-4 p-3">
@@ -104,7 +134,7 @@ export function MobileNav() {
           </div>
           <nav
             aria-label={t("mainNavigation")}
-            className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto"
+            className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto p-1"
           >
             {renderItems(primaryNav)}
             {renderItems(secondaryNav)}

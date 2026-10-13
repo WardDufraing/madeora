@@ -12,11 +12,17 @@ interface AxeResult {
  * React build reports hydration mismatches this way (minified errors #418/#423 and their
  * recoverable-error logs), so this is also the hydration-warning check.
  */
-export const test = base.extend<{ consoleGuard: undefined }>({
+export const test = base.extend<{
+  /** Console messages a test expects, such as the browser's log line for a deliberate 404. */
+  allowedConsoleErrors: readonly RegExp[];
+  consoleGuard: undefined;
+}>({
+  allowedConsoleErrors: [[], { option: true }],
   consoleGuard: [
-    async ({ page }, use) => {
+    async ({ page, allowedConsoleErrors }, use) => {
       const problems: string[] = [];
       page.on("console", (message) => {
+        if (allowedConsoleErrors.some((pattern) => pattern.test(message.text()))) return;
         if (message.type() === "error" || /hydrat/i.test(message.text())) {
           problems.push(`console ${message.type()}: ${message.text()}`);
         }

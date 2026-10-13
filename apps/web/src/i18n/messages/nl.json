@@ -1,6 +1,6 @@
 {
   "Metadata": {
-    "titleTemplate": "%s · Madeora"
+    "pageTitle": "{page} · Madeora"
   },
   "Shell": {
     "skipToContent": "Naar de hoofdinhoud",
@@ -34,6 +34,10 @@
   "Placeholder": {
     "title": "Nog niet gebouwd",
     "description": "{section} hoort bij Madeora, maar is nog niet gebouwd."
+  },
+  "NotFound": {
+    "title": "Pagina niet gevonden",
+    "description": "Dit adres bestaat niet in Madeora. Gebruik het menu om te vinden wat je zocht."
   },
   "Settings": {
     "appearance": "Weergave",

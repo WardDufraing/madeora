@@ -21,7 +21,7 @@ import { TextField } from "@/components/ui/text-field";
 import { InteractiveDemo } from "./interactive-demo";
 
 export const metadata: Metadata = {
-  title: "Component preview",
+  title: "Component preview · Madeora",
   robots: { index: false, follow: false },
 };
 

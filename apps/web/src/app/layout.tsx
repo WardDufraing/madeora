@@ -1,6 +1,5 @@
-import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getLocale } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { localeDirection } from "@/i18n/locales";
@@ -8,11 +7,6 @@ import { themeAttribute } from "@/preferences/preferences";
 import { getDevicePreferences } from "@/preferences/server";
 
 import "./globals.css";
-
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: { default: "Madeora", template: t("titleTemplate") } };
-}
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const [locale, { theme }] = await Promise.all([getLocale(), getDevicePreferences()]);

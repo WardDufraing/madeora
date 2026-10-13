@@ -105,7 +105,7 @@ export function Sidebar({ initialState }: SidebarProps) {
       </div>
       <nav
         aria-label={t("mainNavigation")}
-        className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto px-3 pb-3"
+        className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto px-3 pt-1 pb-3"
       >
         {renderItems(primaryNav)}
         {renderItems(secondaryNav)}

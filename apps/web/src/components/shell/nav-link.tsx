@@ -43,7 +43,7 @@ export function NavLink({
         "hover:bg-accent-subtle hover:text-fg",
         // The current page is marked by weight and a bar at the start edge, not by colour alone.
         active
-          ? "bg-accent-subtle font-semibold text-fg before:absolute before:inset-y-2 before:start-0 before:w-1 before:rounded-full before:bg-accent"
+          ? "bg-accent-subtle font-semibold text-fg before:absolute before:inset-y-2 before:start-0 before:w-1 before:rounded-full before:bg-accent forced-colors:before:bg-[Highlight] before:forced-color-adjust-none"
           : "text-fg-muted",
         collapsed ? "mx-auto w-10 justify-center" : "gap-3 px-3",
       )}

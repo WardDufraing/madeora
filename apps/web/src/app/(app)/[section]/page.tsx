@@ -2,24 +2,21 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
-import { unbuiltSections, type NavId } from "@/components/shell/nav-items";
+import { isUnbuiltSection } from "@/components/shell/nav-items";
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState } from "@/components/ui/states";
+import { pageTitle } from "@/i18n/page-title";
 
 // Typed here rather than with Next's generated PageProps, which only exist after `next typegen`.
 interface SectionPageProps {
   readonly params: Promise<{ readonly section: string }>;
 }
 
-function unbuiltSection(section: string): NavId | undefined {
-  return unbuiltSections.has(section as NavId) ? (section as NavId) : undefined;
-}
-
 export async function generateMetadata({ params }: SectionPageProps): Promise<Metadata> {
-  const id = unbuiltSection((await params).section);
-  if (!id) return {};
+  const id = (await params).section;
+  if (!isUnbuiltSection(id)) return {};
   const t = await getTranslations("Nav");
-  return { title: t(id) };
+  return { title: await pageTitle(t(id)) };
 }
 
 /**
@@ -27,8 +24,8 @@ export async function generateMetadata({ params }: SectionPageProps): Promise<Me
  * which takes precedence over this one, and removes its id from `unbuiltSections`.
  */
 export default async function UnbuiltSectionPage({ params }: SectionPageProps) {
-  const id = unbuiltSection((await params).section);
-  if (!id) notFound();
+  const id = (await params).section;
+  if (!isUnbuiltSection(id)) notFound();
 
   const [tNav, t] = await Promise.all([getTranslations("Nav"), getTranslations("Placeholder")]);
   return (

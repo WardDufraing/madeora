@@ -1,6 +1,6 @@
 {
   "Metadata": {
-    "titleTemplate": "%s · Madeora"
+    "pageTitle": "{page} · Madeora"
   },
   "Shell": {
     "skipToContent": "Skip to main content",
@@ -34,6 +34,10 @@
   "Placeholder": {
     "title": "Not built yet",
     "description": "{section} is part of Madeora but has not been built yet."
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "description": "This address does not exist in Madeora. Use the menu to find what you were looking for."
   },
   "Settings": {
     "appearance": "Appearance",

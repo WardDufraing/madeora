@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
-import { axeViolations, expect, nonTokenColours, test } from "../support/browser";
+import { axeViolations, expect, nonTokenColours, settle, test } from "../support/browser";
 
 // S05: the app shell, theme and language. Every test also fails on console errors, page errors
 // or hydration warnings (see support/browser.ts).
@@ -149,6 +149,7 @@ test.describe("desktop sidebar", () => {
     await link.focus();
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toHaveText("Calendar");
+    await settle(page);
     const linkBox = await link.boundingBox();
     const tipBox = await tooltip.boundingBox();
     expect(tipBox?.x ?? 0).toBeGreaterThanOrEqual((linkBox?.x ?? 0) + (linkBox?.width ?? 0));
@@ -171,6 +172,43 @@ test.describe("desktop sidebar", () => {
     await expect(current).toHaveAttribute("aria-current", "page");
     await expect(current).toHaveCSS("font-weight", "600");
     await expect(page.locator('aside [aria-current="page"]')).toHaveCount(1);
+  });
+
+  for (const state of ["expanded", "collapsed"] as const) {
+    test(`the first item's focus ring is not clipped by the scrolling navigation (${state})`, async ({
+      page,
+      context,
+    }) => {
+      await setCookies(context, { "md-sidebar": state }, page);
+      await page.goto("/");
+      const first = mainNav(page).getByRole("link").first();
+      await first.focus();
+      const [ring, nav] = await Promise.all([
+        first.evaluate((el) => {
+          const style = getComputedStyle(el);
+          const extra =
+            Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+          const box = el.getBoundingClientRect();
+          return { top: box.top - extra, bottom: box.bottom + extra };
+        }),
+        mainNav(page).evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect),
+      ]);
+      expect(ring.top).toBeGreaterThanOrEqual(nav.top);
+    });
+  }
+
+  test("in forced colours, the current page keeps its start-edge bar in a system colour", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ forcedColors: "active" });
+    await page.goto("/calendar");
+    const current = mainNav(page).getByRole("link", { name: "Calendar" });
+    const [bar, canvas] = await current.evaluate((el) => [
+      getComputedStyle(el, "::before").backgroundColor,
+      getComputedStyle(document.body).backgroundColor,
+    ]);
+    expect(bar).not.toBe("rgba(0, 0, 0, 0)");
+    expect(bar).not.toBe(canvas);
   });
 
   test("the sidebar width animation stops under reduced motion", async ({ page }) => {
@@ -218,6 +256,19 @@ test.describe("theme", () => {
     await page.reload();
     await expect(html).not.toHaveAttribute("data-theme");
     expect(await pageColour()).toBe(dark);
+  });
+
+  test("after changing the theme, Back shows the new choice and every option still works", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    await page.getByRole("radio", { name: "Dark" }).check();
+    await mainNav(page).getByRole("link", { name: "Calendar" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Calendar" })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+    await page.getByRole("radio", { name: "Same as this device" }).check();
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme");
   });
 
   test("the server renders the saved theme on <html>, so the first paint is right", async ({
@@ -290,6 +341,41 @@ test.describe("language", () => {
   });
 });
 
+test.describe("server and client agree", () => {
+  test.use({ viewport: desktop });
+
+  // Production React does not report attribute mismatches during hydration, so compare the
+  // attributes the server sends with what the page has once it is interactive.
+  test("<html> and the sidebar keep the server's language, direction, theme and state", async ({
+    page,
+    context,
+  }) => {
+    await setCookies(
+      context,
+      { "md-locale": "nl", "md-theme": "dark", "md-sidebar": "collapsed" },
+      page,
+    );
+    const html = await (await page.request.get("/")).text();
+    const serverHtml = /<html([^>]*)>/.exec(html)?.[1] ?? "";
+    const serverAside = /<aside([^>]*)>/.exec(html)?.[1] ?? "";
+    expect(serverHtml).toContain('lang="nl"');
+    expect(serverHtml).toContain('dir="ltr"');
+    expect(serverHtml).toContain('data-theme="dark"');
+    expect(serverAside).toContain('data-state="collapsed"');
+
+    await page.goto("/");
+    await expect(mainNav(page)).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    const client = await page.evaluate(() => ({
+      lang: document.documentElement.lang,
+      dir: document.documentElement.dir,
+      theme: document.documentElement.dataset.theme,
+      state: document.querySelector("aside")?.dataset.state,
+    }));
+    expect(client).toEqual({ lang: "nl", dir: "ltr", theme: "dark", state: "collapsed" });
+  });
+});
+
 test.describe("pages", () => {
   test.use({ viewport: desktop });
 
@@ -302,6 +388,32 @@ test.describe("pages", () => {
     await expect(page).toHaveTitle("Pets · Madeora");
     expect((await page.request.get("/not-a-section")).status()).toBe(404);
     expect((await page.request.get("/trash")).status()).toBe(404);
+    expect((await page.request.get("/a/b")).status()).toBe(404);
+  });
+
+  test.describe("not found", () => {
+    // Opening a missing page makes the browser log the 404 response itself.
+    test.use({ allowedConsoleErrors: [/status of 404/] });
+
+    test("the not-found page is in the interface language, inside and outside the shell", async ({
+      page,
+      context,
+    }) => {
+      await setCookies(context, { "md-locale": "nl" }, page);
+      for (const path of ["/not-a-section", "/a/b"]) {
+        const response = await page.goto(path);
+        expect(response?.status()).toBe(404);
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(
+          page.getByRole("heading", { level: 1, name: "Pagina niet gevonden" }),
+        ).toBeVisible();
+        await expect(page).toHaveTitle("Pagina niet gevonden · Madeora");
+        await expect(page.getByText("This page could not be found")).toHaveCount(0);
+      }
+      // Inside the shell for a single unknown segment.
+      await page.goto("/not-a-section");
+      await expect(page.getByRole("navigation", { name: "Hoofdmenu" })).toBeVisible();
+    });
   });
 });
 
@@ -348,6 +460,25 @@ test.describe("small screens", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Tasks" })).toBeVisible();
   });
 
+  test("a click on the backdrop closes the menu", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
+    await page.mouse.click(phone.width - 10, phone.height / 2);
+    await expect(page.getByRole("dialog")).toBeHidden();
+  });
+
+  test("widening the window to desktop size closes the menu", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
+    await page.setViewportSize(desktop);
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(sidebar(page)).toBeVisible();
+    await mainNav(page).getByRole("link", { name: "Tasks" }).click();
+    await expect(page).toHaveURL(/\/tasks$/);
+  });
+
   test("the page does not scroll sideways", async ({ page }) => {
     await page.goto("/settings");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -382,6 +513,7 @@ test.describe("right-to-left layout", () => {
     await link.focus();
     const tooltip = link.locator("[aria-hidden] > span");
     await expect(tooltip).toBeVisible();
+    await settle(page);
     const linkBox = await link.boundingBox();
     const tipBox = await tooltip.boundingBox();
     expect((tipBox?.x ?? 0) + (tipBox?.width ?? 0)).toBeLessThanOrEqual(linkBox?.x ?? 0);
@@ -391,6 +523,9 @@ test.describe("right-to-left layout", () => {
     await page.setViewportSize(phone);
     await goRtl(page, "/");
     await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
+    // Measure after the enter animation (a slight scale-up) has finished.
+    await settle(page);
     const box = await page.getByRole("dialog", { name: "Menu" }).boundingBox();
     expect(Math.round((box?.x ?? 0) + (box?.width ?? 0))).toBe(phone.width);
   });

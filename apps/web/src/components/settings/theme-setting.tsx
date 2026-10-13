@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useId, useState, useTransition } from "react";
 
 import { saveTheme } from "@/preferences/client";
 import { themePreferences, type ThemePreference } from "@/preferences/preferences";
@@ -21,7 +22,9 @@ const labelKey = {
 /** Light, dark or the device's setting. Applies at once and is remembered on this device. */
 export function ThemeSetting({ initialTheme }: ThemeSettingProps) {
   const t = useTranslations("Settings");
+  const router = useRouter();
   const [theme, setTheme] = useState(initialTheme);
+  const [, startTransition] = useTransition();
   const hintId = useId();
 
   return (
@@ -37,6 +40,11 @@ export function ThemeSetting({ initialTheme }: ThemeSettingProps) {
           onChange={() => {
             setTheme(option);
             saveTheme(option);
+            // Refresh the server-rendered data too, so Back and Forward never show a page
+            // rendered with the previous theme.
+            startTransition(() => {
+              router.refresh();
+            });
           }}
         />
       ))}

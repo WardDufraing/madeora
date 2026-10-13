@@ -4,10 +4,11 @@ import { getTranslations } from "next-intl/server";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState } from "@/components/ui/states";
+import { pageTitle } from "@/i18n/page-title";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Nav");
-  return { title: t("dashboard") };
+  return { title: await pageTitle(t("dashboard")) };
 }
 
 // The personal dashboard arrives with S07 (starter dashboard) and S17 (widgets).

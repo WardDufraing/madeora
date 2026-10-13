@@ -6,10 +6,11 @@ import { ThemeSetting } from "@/components/settings/theme-setting";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { getDevicePreferences } from "@/preferences/server";
+import { pageTitle } from "@/i18n/page-title";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Nav");
-  return { title: t("settings") };
+  return { title: await pageTitle(t("settings")) };
 }
 
 export default async function SettingsPage() {

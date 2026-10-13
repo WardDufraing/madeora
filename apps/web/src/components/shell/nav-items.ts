@@ -75,6 +75,11 @@ export const unbuiltSections: ReadonlySet<NavId> = new Set([
   "help",
 ]);
 
+/** Whether a URL segment names an unbuilt navigation section. */
+export function isUnbuiltSection(value: string): value is NavId {
+  return (unbuiltSections as ReadonlySet<string>).has(value);
+}
+
 /** Whether `href` is the current page or a page inside it. */
 export function isActive(href: string, pathname: string): boolean {
   if (href === "/") return pathname === "/";
