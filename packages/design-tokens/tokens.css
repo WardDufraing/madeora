@@ -1,0 +1,162 @@
+/* Generated from packages/design-tokens/src by `pnpm --filter @madeora/design-tokens generate`. Do not edit. */
+
+/* Light is the default. `data-theme` on an element forces a theme for it and its children. */
+:root {
+  --md-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --md-text-page-title: 1.875rem;
+  --md-text-page-title-line-height: 2.375rem;
+  --md-text-section-title: 1.125rem;
+  --md-text-section-title-line-height: 1.625rem;
+  --md-text-body: 0.9375rem;
+  --md-text-body-line-height: 1.5rem;
+  --md-text-helper: 0.8125rem;
+  --md-text-helper-line-height: 1.25rem;
+  --md-radius-control: 0.625rem;
+  --md-radius-card: 1rem;
+  --md-icon-sm: 16px;
+  --md-icon-md: 20px;
+  --md-icon-lg: 24px;
+  --md-duration-fast: 120ms;
+  --md-duration-base: 200ms;
+  --md-duration-slow: 240ms;
+  --md-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-ease-enter: cubic-bezier(0, 0, 0, 1);
+  --md-ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  --md-atmosphere: radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%);
+}
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --md-color-page: #f7f8fc;
+  --md-color-sidebar: #ffffff;
+  --md-color-surface: #ffffff;
+  --md-color-surface-elevated: #ffffff;
+  --md-color-fg: #151a29;
+  --md-color-fg-muted: #667085;
+  --md-color-line: #e6e9f1;
+  --md-color-line-control: #868ea3;
+  --md-color-accent: #8057f5;
+  --md-color-accent-hover: #714dd8;
+  --md-color-accent-pressed: #6142ba;
+  --md-color-on-accent: #ffffff;
+  --md-color-accent-subtle: #f0ebfe;
+  --md-color-accent-fg: #7350dd;
+  --md-color-focus: #8057f5;
+  --md-color-success: #067647;
+  --md-color-success-subtle: #f0f7f4;
+  --md-color-success-solid: #067647;
+  --md-color-on-success: #ffffff;
+  --md-color-warning: #b54708;
+  --md-color-warning-subtle: #fbf4f0;
+  --md-color-warning-solid: #b54708;
+  --md-color-on-warning: #ffffff;
+  --md-color-danger: #b42318;
+  --md-color-danger-subtle: #fbf2f1;
+  --md-color-danger-solid: #b42318;
+  --md-color-on-danger: #ffffff;
+  --md-color-info: #175cd3;
+  --md-color-info-subtle: #f1f5fc;
+  --md-color-info-solid: #175cd3;
+  --md-color-on-info: #ffffff;
+  --md-color-overlay: rgb(21 26 41 / 0.45);
+  --md-shadow-card: 0 1px 2px rgb(21 26 41 / 0.04), 0 4px 16px rgb(21 26 41 / 0.04);
+  --md-shadow-overlay: 0 4px 12px rgb(21 26 41 / 0.08), 0 16px 40px rgb(21 26 41 / 0.12);
+  --md-atmosphere-cool: #5b8def;
+  --md-atmosphere-accent-strength: 10%;
+  --md-atmosphere-cool-strength: 8%;
+}
+
+/* With no explicit choice, follow the operating system. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --md-color-page: #10141d;
+    --md-color-sidebar: #11151e;
+    --md-color-surface: #1a1f2a;
+    --md-color-surface-elevated: #222836;
+    --md-color-fg: #f7f8fc;
+    --md-color-fg-muted: #aab3c5;
+    --md-color-line: #303746;
+    --md-color-line-control: #737d92;
+    --md-color-accent: #936bff;
+    --md-color-accent-hover: #a07dff;
+    --md-color-accent-pressed: #ad8fff;
+    --md-color-on-accent: #10141d;
+    --md-color-accent-subtle: #322e55;
+    --md-color-accent-fg: #a787fe;
+    --md-color-focus: #936bff;
+    --md-color-success: #47cd89;
+    --md-color-success-subtle: #203737;
+    --md-color-success-solid: #47cd89;
+    --md-color-on-success: #10141d;
+    --md-color-warning: #fdb022;
+    --md-color-warning-subtle: #3a3329;
+    --md-color-warning-solid: #fdb022;
+    --md-color-on-warning: #10141d;
+    --md-color-danger: #f97066;
+    --md-color-danger-subtle: #392a32;
+    --md-color-danger-solid: #f97066;
+    --md-color-on-danger: #10141d;
+    --md-color-info: #53b1fd;
+    --md-color-info-subtle: #223348;
+    --md-color-info-solid: #53b1fd;
+    --md-color-on-info: #10141d;
+    --md-color-overlay: rgb(0 0 0 / 0.6);
+    --md-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.2);
+    --md-shadow-overlay: 0 4px 12px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.45);
+    --md-atmosphere-cool: #3d6fe0;
+    --md-atmosphere-accent-strength: 18%;
+    --md-atmosphere-cool-strength: 12%;
+  }
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --md-color-page: #10141d;
+  --md-color-sidebar: #11151e;
+  --md-color-surface: #1a1f2a;
+  --md-color-surface-elevated: #222836;
+  --md-color-fg: #f7f8fc;
+  --md-color-fg-muted: #aab3c5;
+  --md-color-line: #303746;
+  --md-color-line-control: #737d92;
+  --md-color-accent: #936bff;
+  --md-color-accent-hover: #a07dff;
+  --md-color-accent-pressed: #ad8fff;
+  --md-color-on-accent: #10141d;
+  --md-color-accent-subtle: #322e55;
+  --md-color-accent-fg: #a787fe;
+  --md-color-focus: #936bff;
+  --md-color-success: #47cd89;
+  --md-color-success-subtle: #203737;
+  --md-color-success-solid: #47cd89;
+  --md-color-on-success: #10141d;
+  --md-color-warning: #fdb022;
+  --md-color-warning-subtle: #3a3329;
+  --md-color-warning-solid: #fdb022;
+  --md-color-on-warning: #10141d;
+  --md-color-danger: #f97066;
+  --md-color-danger-subtle: #392a32;
+  --md-color-danger-solid: #f97066;
+  --md-color-on-danger: #10141d;
+  --md-color-info: #53b1fd;
+  --md-color-info-subtle: #223348;
+  --md-color-info-solid: #53b1fd;
+  --md-color-on-info: #10141d;
+  --md-color-overlay: rgb(0 0 0 / 0.6);
+  --md-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.2);
+  --md-shadow-overlay: 0 4px 12px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.45);
+  --md-atmosphere-cool: #3d6fe0;
+  --md-atmosphere-accent-strength: 18%;
+  --md-atmosphere-cool-strength: 12%;
+}
+
+/* Reduced motion: every transition and animation built on the duration tokens stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --md-duration-fast: 0ms;
+    --md-duration-base: 0ms;
+    --md-duration-slow: 0ms;
+  }
+}

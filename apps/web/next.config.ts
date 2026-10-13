@@ -4,7 +4,7 @@ import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source.
-  transpilePackages: ["@madeora/config"],
+  transpilePackages: ["@madeora/config", "@madeora/design-tokens", "@madeora/icons"],
   poweredByHeader: false,
   reactStrictMode: true,
 };

@@ -44,7 +44,8 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request into `main` or 
 | Type check                                  | Format, lint, typecheck, unit tests, build | `pnpm typecheck`                                                              |
 | Unit and component tests                    | Format, lint, typecheck, unit tests, build | `pnpm test`                                                                   |
 | Production build                            | Format, lint, typecheck, unit tests, build | `pnpm build`                                                                  |
-| Browser smoke tests                         | E2E smoke tests                            | `pnpm test:e2e` (builds the web app first)                                    |
+| Client code cannot import server settings   | Format, lint, typecheck, unit tests, build | `pnpm test:boundary` (two real `next build` runs on small fixture apps)       |
+| Browser tests (incl. axe in both themes)    | E2E smoke tests                            | `pnpm test:e2e` (builds the web app first)                                    |
 | Fresh database, migrations, seed, RLS tests | Database and RLS tests                     | `pnpm db:start`, then `pnpm test:db` (see "Database" below)                   |
 | Database types match the migrations         | Database and RLS tests                     | `pnpm db:types --check`                                                       |
 | Reset rebuilds the same database            | Database and RLS tests                     | `pnpm db:reset --yes`, then `pnpm test:db`                                    |
@@ -55,6 +56,18 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request into `main` or 
 | Pull requests into `production` from `main` | Release source                             | (CI only)                                                                     |
 
 `pnpm build` and `pnpm test:e2e` need `APP_ENV` and `NEXT_PUBLIC_APP_URL`. CI uses the synthetic values `APP_ENV=test` and `NEXT_PUBLIC_APP_URL=http://127.0.0.1:3100`.
+
+## Design tokens and components
+
+Colours, type, spacing, radii, elevation, motion and icon sizes live in `packages/design-tokens/src` (TypeScript, the single source). Read the spec's UI / UX Style Guide and [`docs/design/design-decisions.md`](design/design-decisions.md) before changing them; the reasons for each choice are in [ADR 0004](adr/0004-design-tokens-and-components.md).
+
+- **Use token utilities only:** `bg-surface`, `text-fg`, `text-fg-muted`, `border-line`, `border-line-control`, `bg-accent`, `text-on-accent`, `text-accent-fg`, `bg-danger-solid` and so on. Tailwind's own colour palette is switched off, and a test fails on any hex value, colour function or palette name outside `packages/design-tokens`. Purple is only the default accent value: never write it anywhere.
+- **Change or add a token:** edit `packages/design-tokens/src`, run `pnpm --filter @madeora/design-tokens generate`, and commit the regenerated `tokens.css` and `tailwind.css`. Text and control colours need a contrast test in both themes.
+- **Themes:** light by default, the system's dark mode when nothing is forced, and `data-theme="light"` or `"dark"` on an element to force one.
+- **Icons:** see [`packages/icons/README.md`](../packages/icons/README.md).
+- **Components:** `apps/web/src/components/ui/`. Pass every visible string as a prop (translations arrive with `next-intl` in S05).
+- **Preview:** with `pnpm dev`, open http://localhost:3000/dev/components. It shows every component and is not served when `APP_ENV=production`. Switch the theme from the browser console with `document.documentElement.dataset.theme = "dark"`.
+- **Accessibility tests:** component tests call `axeViolations(container)` from `apps/web/src/test/axe.ts`. Colour contrast is only measurable in a real browser, so `tests/e2e/specs/design-system.spec.ts` runs axe on the preview in both themes.
 
 ## Database
 

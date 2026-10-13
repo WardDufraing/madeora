@@ -1,0 +1,57 @@
+/* Generated from packages/design-tokens/src by `pnpm --filter @madeora/design-tokens generate`. Do not edit. */
+
+/* Tailwind's default colour palette is removed, so only Madeora tokens exist as colour utilities. */
+@theme {
+  --color-*: initial;
+}
+
+@theme inline {
+  --color-page: var(--md-color-page);
+  --color-sidebar: var(--md-color-sidebar);
+  --color-surface: var(--md-color-surface);
+  --color-surface-elevated: var(--md-color-surface-elevated);
+  --color-fg: var(--md-color-fg);
+  --color-fg-muted: var(--md-color-fg-muted);
+  --color-line: var(--md-color-line);
+  --color-line-control: var(--md-color-line-control);
+  --color-accent: var(--md-color-accent);
+  --color-accent-hover: var(--md-color-accent-hover);
+  --color-accent-pressed: var(--md-color-accent-pressed);
+  --color-on-accent: var(--md-color-on-accent);
+  --color-accent-subtle: var(--md-color-accent-subtle);
+  --color-accent-fg: var(--md-color-accent-fg);
+  --color-focus: var(--md-color-focus);
+  --color-success: var(--md-color-success);
+  --color-success-subtle: var(--md-color-success-subtle);
+  --color-success-solid: var(--md-color-success-solid);
+  --color-on-success: var(--md-color-on-success);
+  --color-warning: var(--md-color-warning);
+  --color-warning-subtle: var(--md-color-warning-subtle);
+  --color-warning-solid: var(--md-color-warning-solid);
+  --color-on-warning: var(--md-color-on-warning);
+  --color-danger: var(--md-color-danger);
+  --color-danger-subtle: var(--md-color-danger-subtle);
+  --color-danger-solid: var(--md-color-danger-solid);
+  --color-on-danger: var(--md-color-on-danger);
+  --color-info: var(--md-color-info);
+  --color-info-subtle: var(--md-color-info-subtle);
+  --color-info-solid: var(--md-color-info-solid);
+  --color-on-info: var(--md-color-on-info);
+  --color-overlay: var(--md-color-overlay);
+  --font-sans: var(--md-font-sans);
+  --text-page-title: var(--md-text-page-title);
+  --text-page-title--line-height: var(--md-text-page-title-line-height);
+  --text-section-title: var(--md-text-section-title);
+  --text-section-title--line-height: var(--md-text-section-title-line-height);
+  --text-body: var(--md-text-body);
+  --text-body--line-height: var(--md-text-body-line-height);
+  --text-helper: var(--md-text-helper);
+  --text-helper--line-height: var(--md-text-helper-line-height);
+  --radius-control: var(--md-radius-control);
+  --radius-card: var(--md-radius-card);
+  --shadow-card: var(--md-shadow-card);
+  --shadow-overlay: var(--md-shadow-overlay);
+  --ease-standard: var(--md-ease-standard);
+  --ease-enter: var(--md-ease-enter);
+  --ease-exit: var(--md-ease-exit);
+}
