@@ -1,0 +1,56 @@
+{
+  "Metadata": {
+    "titleTemplate": "%s · Madeora"
+  },
+  "Shell": {
+    "skipToContent": "Naar de hoofdinhoud",
+    "mainNavigation": "Hoofdmenu",
+    "brandLink": "Madeora, naar het dashboard",
+    "collapseSidebar": "Zijbalk inklappen",
+    "expandSidebar": "Zijbalk uitklappen",
+    "openMenu": "Menu openen",
+    "menuTitle": "Menu",
+    "currentContext": "Huidige omgeving",
+    "personalContext": "Persoonlijk"
+  },
+  "Nav": {
+    "dashboard": "Dashboard",
+    "calendar": "Agenda",
+    "tasks": "Taken",
+    "chores": "Klusjes",
+    "meals": "Maaltijden",
+    "shopping": "Boodschappen",
+    "habits": "Gewoontes",
+    "pets": "Huisdieren",
+    "photos": "Foto's",
+    "integrations": "Koppelingen",
+    "settings": "Instellingen",
+    "help": "Help"
+  },
+  "Dashboard": {
+    "emptyTitle": "Je dashboard komt eraan",
+    "emptyDescription": "Hier verschijnen widgets voor je taken, agenda en meer zodra die onderdelen van Madeora gebouwd zijn."
+  },
+  "Placeholder": {
+    "title": "Nog niet gebouwd",
+    "description": "{section} hoort bij Madeora, maar is nog niet gebouwd."
+  },
+  "Settings": {
+    "appearance": "Weergave",
+    "theme": "Thema",
+    "themeLight": "Licht",
+    "themeDark": "Donker",
+    "themeSystem": "Zoals dit apparaat",
+    "language": "Taal",
+    "savedOnDevice": "Opgeslagen op dit apparaat."
+  },
+  "Components": {
+    "close": "Sluiten",
+    "dismiss": "Sluiten",
+    "notifications": "Meldingen",
+    "toneInfo": "Informatie",
+    "toneSuccess": "Gelukt",
+    "toneWarning": "Waarschuwing",
+    "toneError": "Fout"
+  }
+}

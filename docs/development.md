@@ -65,11 +65,23 @@ Colours, type, spacing, radii, elevation, motion and icon sizes live in `package
 
 - **Use token utilities only:** `bg-surface`, `text-fg`, `text-fg-muted`, `border-line`, `border-line-control`, `bg-accent`, `text-on-accent`, `text-accent-fg`, `bg-danger-solid` and so on. Tailwind's own colour palette is switched off, and a test fails on any hex value, colour function or palette name outside `packages/design-tokens`. Purple is only the default accent value: never write it anywhere.
 - **Change or add a token:** edit `packages/design-tokens/src`, run `pnpm --filter @madeora/design-tokens generate`, and commit the regenerated `tokens.css` and `tailwind.css`. Text and control colours need a contrast test in both themes.
-- **Themes:** light by default, the system's dark mode when nothing is forced, and `data-theme="light"` or `"dark"` to force one. Set it, and any accent override, on `<html>`.
+- **Themes:** light by default, the system's dark mode when nothing is forced, and `data-theme="light"` or `"dark"` to force one. Set it, and any accent override, on `<html>`. In the app, people choose Light, Dark or "Same as this device" on the Settings page (`/settings`); see "App shell, theme and languages" below.
 - **Icons:** see [`packages/icons/README.md`](../packages/icons/README.md).
 - **Components:** `apps/web/src/components/ui/`. Pass every visible string as a prop (translations arrive with `next-intl` in S05).
-- **Preview:** with `pnpm dev`, open http://localhost:3000/dev/components. It shows every component and is not served when `APP_ENV=production`. Switch the theme from the browser console with `document.documentElement.dataset.theme = "dark"`.
+- **Preview:** with `pnpm dev`, open http://localhost:3000/dev/components. It shows every component and is not served when `APP_ENV=production`. It follows the theme chosen on `/settings`, or switch it from the browser console with `document.documentElement.dataset.theme = "dark"`.
 - **Accessibility tests:** component tests call `axeViolations(container)` from `apps/web/src/test/axe.ts`. Colour contrast is only measurable in a real browser, so `tests/e2e/specs/design-system.spec.ts` runs axe on the preview in both themes.
+
+## App shell, theme and languages
+
+The reasons for each choice are in [ADR 0005](adr/0005-app-shell-theme-languages.md).
+
+- **Pages inside the app** live in `apps/web/src/app/(app)/`, which wraps them in the shell (`src/components/shell/`): skip link, sidebar, top bar with the context switcher slot, and the small-screen menu. Each page renders one `<h1>` with `PageHeader`.
+- **Navigation items** are listed in `src/components/shell/nav-items.ts`. A module that is not built yet shows a "not built yet" page through `src/app/(app)/[section]/page.tsx`. When you build a module, add its own route folder (for example `src/app/(app)/tasks/`) and remove its id from `unbuiltSections`.
+- **Text:** every word the interface shows or announces comes from `src/i18n/messages/en.json` (English, the source) and `nl.json`. Use `useTranslations("Namespace")` in components and `getTranslations` in async server code. Keys are typed, so a key that is not in `en.json` fails the type check. Add every new key to both files in the same change: a test fails if the two files have different keys or different `{arguments}`, if a message cannot be formatted, or if a key is never used. Never translate content people write (names, notes, titles).
+- **Which language:** the server decides per request, in `src/i18n/request.ts`: the language saved on this device (cookie `md-locale`), else the browser's `Accept-Language`, else English. The URL never contains the language. Accounts (S07) will add the saved account language in front of the cookie.
+- **Theme and sidebar:** saved on this device in the cookies `md-theme` (`light`, `dark` or `system`) and `md-sidebar` (`expanded` or `collapsed`). The server reads them, so the first paint already has the right theme and sidebar width. Invalid values are ignored. To start fresh, delete the `md-` cookies for the site in your browser.
+- **Right-to-left:** write logical directions only (`ms-`, `pe-`, `start-`, `border-e`, `text-start`, `margin-inline-start`, …). `src/rtl-safe.test.ts` fails on physical left/right classes and CSS properties; use an `rtl:` variant only for something that must mirror, such as an arrow icon. `<html dir>` comes from `localeDirection()`, so a right-to-left language only needs to be added to the locale list.
+- **Browser tests** import `test` and `expect` from `tests/e2e/support/browser.ts`, which fails a test on any console error, page error or hydration warning. The same file has `axeViolations()` and `nonTokenColours()`.
 
 ## Database
 

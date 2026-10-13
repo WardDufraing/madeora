@@ -1,40 +1,10 @@
 import { deriveAccent, themes, type AccentTokens, type Theme } from "@madeora/design-tokens";
-import { expect, test, type Page } from "@playwright/test";
-import { createRequire } from "node:module";
+import type { Page } from "@playwright/test";
+
+import { axeViolations, expect, nonTokenColours, test } from "../support/browser";
 
 // Real-browser checks for the S04 design tokens and base components, on the development-only
 // component preview. Colour contrast can only be measured here, not in jsdom.
-
-const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
-
-interface AxeResult {
-  violations: { id: string; help: string; nodes: { target: string[] }[] }[];
-}
-
-/** Waits for enter animations to finish, so contrast is measured at full opacity. */
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
-        .map((animation) => animation.finished),
-    ),
-  );
-}
-
-async function axeViolations(page: Page): Promise<string[]> {
-  await settle(page);
-  await page.addScriptTag({ path: axePath });
-  const result = await page.evaluate(async () => {
-    const axe = (window as unknown as { axe: { run: (context: Document) => Promise<AxeResult> } })
-      .axe;
-    return axe.run(document);
-  });
-  return result.violations.map(
-    (v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(" ")).join(", ")})`,
-  );
-}
 
 async function open(page: Page, theme: Theme) {
   await page.goto("/dev/components");
@@ -112,38 +82,7 @@ for (const theme of themes) {
       await open(page, theme);
       await page.getByRole("button", { name: "Show warning toast" }).click();
       await page.getByRole("button", { name: "Open dialog" }).click();
-      await settle(page);
-      const tokens = await page.evaluate(() => {
-        const probe = document.createElement("span");
-        document.body.append(probe);
-        const values: string[] = [];
-        for (const sheet of document.styleSheets) {
-          for (const rule of sheet.cssRules) {
-            if (!(rule instanceof CSSStyleRule)) continue;
-            for (const name of rule.style) {
-              if (!name.startsWith("--md-color-")) continue;
-              probe.style.color = `var(${name})`;
-              values.push(getComputedStyle(probe).color);
-            }
-          }
-        }
-        probe.remove();
-        return values;
-      });
-      const allowed = new Set([...tokens, "rgba(0, 0, 0, 0)"]);
-      const painted = await page.evaluate(() => {
-        const found: string[] = [];
-        for (const element of document.querySelectorAll("body, body *")) {
-          const style = getComputedStyle(element);
-          if (style.display === "none" || style.visibility === "hidden") continue;
-          found.push(style.color, style.backgroundColor, style.borderTopColor, style.outlineColor);
-          if (element instanceof SVGElement && style.stroke !== "none") found.push(style.stroke);
-          if (element instanceof HTMLDialogElement)
-            found.push(getComputedStyle(element, "::backdrop").backgroundColor);
-        }
-        return [...new Set(found)];
-      });
-      expect(painted.filter((colour) => !allowed.has(colour))).toEqual([]);
+      expect(await nonTokenColours(page)).toEqual([]);
     });
 
     test("changing the accent tokens recolours every accent use", async ({ page }) => {

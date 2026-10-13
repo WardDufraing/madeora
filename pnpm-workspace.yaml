@@ -8,3 +8,9 @@ packages:
 # Only these dependencies may run install scripts.
 onlyBuiltDependencies:
   - sharp
+
+# next-intl's sibling packages are released together; keep them on the same version as next-intl
+# (4.14.7) instead of letting its ^ ranges pull newer, younger releases.
+overrides:
+  use-intl: 4.14.7
+  icu-minify: 4.14.7

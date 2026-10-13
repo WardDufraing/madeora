@@ -7,7 +7,7 @@ import { Card } from "./card";
 describe("Card", () => {
   it("is a region named by its title heading", () => {
     render(
-      <Card title="Tasks" description="4 left" action={<a href="/tasks">View all</a>}>
+      <Card title="Tasks" description="4 left" action={<a href="#tasks">View all</a>}>
         <p>Content</p>
       </Card>,
     );

@@ -17,6 +17,7 @@
     "@madeora/design-tokens": "workspace:*",
     "@madeora/icons": "workspace:*",
     "next": "16.4.0",
+    "next-intl": "4.14.7",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
