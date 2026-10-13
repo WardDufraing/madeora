@@ -429,7 +429,7 @@ madeora/
 
 ## 26. Deployment environments and release workflow — approved strategy A
 
-**Decision:** Use **local development + isolated pull-request previews + dedicated staging + production**. **Phasing (owner, 2026-10-13):** while bootstrapping solo, every PR requires CI and the independent review agent; PR previews and staging are introduced at the release stage, before external users. Staging is a persistent release-validation environment, not a synonym for ephemeral Vercel previews. Progressive rollout infrastructure is not a default MVP requirement.
+**Decision:** Use **local development + isolated pull-request previews + dedicated staging + production**. **Phasing (owner, 2026-10-13):** while bootstrapping solo, every PR requires CI and the independent review agent. **PR previews start early (owner, 2026-10-13, ADR 0005):** from step S04b, every PR into `main` and `main` itself get a Vercel preview on the free Hobby plan, behind Vercel Authentication, with synthetic data only and no production credentials; production builds stay switched off until the release step. Dedicated staging is still introduced at the release stage, before external users. Staging is a persistent release-validation environment, not a synonym for ephemeral Vercel previews. Progressive rollout infrastructure is not a default MVP requirement.
 
 - **Local development:** use local tooling and isolated development resources, including Supabase CLI where appropriate. Keep environment setup reproducible and documented.
 - **PR previews:** Vercel preview deployments use non-production credentials, isolated or safely shared non-production test fixtures, and restricted access where appropriate. Untrusted pull requests must never receive production secrets or privileged staging credentials.
@@ -499,7 +499,7 @@ Required pipeline for every PR:
 4. Next.js production build.
 5. Playwright smoke/E2E on representative user journeys; full suite for main/release or where appropriate.
 6. Migration checks, secret scanning, dependency vulnerability review and changed-file policy checks.
-7. Vercel preview deployment, with test data and no production secrets — **a release-stage requirement during the solo bootstrap phase**, not a per-PR gate (owner, 2026-10-13).
+7. Vercel preview deployment, with test data and no production secrets — **runs on every PR from step S04b** (owner, 2026-10-13, ADR 0005). It is informational, not a required merge gate, until preview smoke checks are added.
 8. Independent agent review and human approval as configured by repository rules.
 
 Claude should create `.github/workflows/ci.yml` and deployment workflows during bootstrap. Use least-privilege `GITHUB_TOKEN` permissions, pinned major/action versions or SHA pinning for sensitive workflows, concurrency cancellation for superseded PR runs, and GitHub environment approvals for production. Never allow untrusted PR code access to production secrets. Ensure branch protection/rulesets require named status checks and at least one human approval if owner wants manual release gating. **Agent review is not automatically a GitHub-enforceable approval**: capture it in PR comments/check results and keep a separate human approval gate if required.
