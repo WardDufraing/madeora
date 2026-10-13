@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { EnvValidationError, parseEnv, publicEnvSchema, serverEnvSchema } from "./index";
+import { EnvValidationError, parseEnv } from "./core.ts";
+import { publicEnvSchema } from "./public.ts";
+import { serverEnvSchema } from "./server.ts";
 
 function captureError(fn: () => unknown): EnvValidationError {
   try {

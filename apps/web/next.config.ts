@@ -1,4 +1,4 @@
-import { parseEnv, publicEnvSchema } from "@madeora/config/env";
+import { getPublicEnv } from "@madeora/config/env/public";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
 export default function config(phase: string): NextConfig {
   // NEXT_PUBLIC_ values are inlined into the bundle at build time, so check them before building.
   if (phase === PHASE_PRODUCTION_BUILD) {
-    parseEnv(publicEnvSchema, process.env);
+    getPublicEnv(process.env);
   }
   return nextConfig;
 }

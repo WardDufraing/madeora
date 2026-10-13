@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - tests/e2e
+  - tests/db
   - tools/*
 
 # Only these dependencies may run install scripts.

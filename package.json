@@ -15,11 +15,18 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
+    "test:db": "turbo run test:db",
+    "test:db:fallback": "turbo run test:db:fallback",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "node tests/db/scripts/reset-local.ts",
+    "db:types": "node tests/db/scripts/gen-types.ts",
     "check:spec": "node tools/repo-checks/src/cli/spec-guard.ts",
     "audit:deps": "node tools/repo-checks/src/cli/audit.ts"
   },
   "devDependencies": {
     "prettier": "3.9.10",
+    "supabase": "2.118.0",
     "turbo": "2.11.8"
   }
 }

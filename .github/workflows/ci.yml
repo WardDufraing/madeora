@@ -136,3 +136,40 @@ jobs:
           name: playwright-report
           path: tests/e2e/playwright-report/
           retention-days: 7
+
+  database:
+    name: Database and RLS tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # The Supabase CLI sends usage data to PostHog unless this is set.
+      SUPABASE_TELEMETRY_DISABLED: "1"
+      DO_NOT_TRACK: "1"
+      # The local stack's database (supabase/config.toml). Synthetic credentials, never a hosted project.
+      MADEORA_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A fresh runner has no database, so this builds one from scratch: every migration in order,
+      # then the synthetic seed. Services the tests do not need are left out.
+      - name: Start a fresh local Supabase stack (migrations and seed)
+        run: pnpm exec supabase start -x realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+      - name: Run the RLS tests
+        run: pnpm test:db
+      - name: Check the generated database types match the migrations
+        run: pnpm db:types --check
+      # Proves the documented reset rebuilds the same database, then tests it again.
+      - name: Reset the local database and run the RLS tests again
+        run: |
+          pnpm db:reset --yes
+          pnpm test:db
+      - name: Show database logs when a step fails
+        if: failure()
+        run: docker logs supabase_db_madeora --tail 200 || true

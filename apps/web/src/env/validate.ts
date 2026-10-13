@@ -1,5 +1,7 @@
-import { parseEnv, publicEnvSchema, serverEnvSchema } from "@madeora/config/env";
-import type { EnvSource, PublicEnv, ServerEnv } from "@madeora/config/env";
+import type { EnvSource } from "@madeora/config/env";
+import { parseEnv } from "@madeora/config/env";
+import { publicEnvSchema, type PublicEnv } from "@madeora/config/env/public";
+import { serverEnvSchema, type ServerEnv } from "@madeora/config/env/server";
 
 const startupSchema = serverEnvSchema.extend(publicEnvSchema.shape);
 
