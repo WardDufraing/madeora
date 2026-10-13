@@ -19,3 +19,7 @@
 
 # CI, repository settings and review rules.
 /.github/               @WardDufraing
+
+# Database schema, security policies and the tests that prove them.
+/supabase/              @WardDufraing
+/tests/db/              @WardDufraing

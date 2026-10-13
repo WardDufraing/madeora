@@ -1,4 +1,10 @@
 {
   "extends": "./tsconfig/library.json",
-  "include": ["src", "*.ts"]
+  "compilerOptions": {
+    // The env modules import each other by .ts file name, so Node can load them directly with its
+    // built-in type stripping (the boundary test does). Only erasable TypeScript syntax is allowed.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["src", "testing", "*.ts"]
 }

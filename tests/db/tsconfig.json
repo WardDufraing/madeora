@@ -1,0 +1,10 @@
+{
+  "extends": "@madeora/config/tsconfig/library.json",
+  "compilerOptions": {
+    // The fallback script runs directly with Node's built-in TypeScript type stripping, so imports
+    // name the .ts file and only erasable TypeScript syntax is allowed.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["src", "harness", "rls", "scripts", "*.ts"]
+}

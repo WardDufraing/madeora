@@ -84,6 +84,7 @@ Do these steps twice, once for `main` and once for `production`.
      - `Dependency audit`
      - `Format, lint, typecheck, unit tests, build`
      - `E2E smoke tests`
+     - `Database and RLS tests`
      - For the **production** ruleset only, also add `Release source`.
    - **Block force pushes**
 8. Click **Create**.

@@ -28,6 +28,16 @@
     "@madeora/repo-checks#test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.gitattributes", "$TURBO_ROOT$/docs/product/**"]
+    },
+    "test:db": {
+      "dependsOn": ["^build"],
+      "env": ["MADEORA_TEST_DATABASE_URL"],
+      "cache": false
+    },
+    "test:db:fallback": {
+      "dependsOn": ["^build"],
+      "env": ["PG_BIN"],
+      "cache": false
     }
   }
 }

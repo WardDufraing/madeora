@@ -5,7 +5,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Vitest runs server modules outside Next.js, where "server-only" would always throw.
+      "server-only": fileURLToPath(import.meta.resolve("@madeora/config/testing/empty-module")),
+    },
   },
   test: {
     environment: "jsdom",

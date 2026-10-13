@@ -1,26 +1,16 @@
-import { z } from "zod";
+import type { z } from "zod";
 
 /**
- * Typed, Zod-validated environment configuration (architecture.md §20).
+ * Typed, Zod-validated environment configuration (architecture.md §20): the shared parser.
  *
  * Error messages name the variables that failed and why, but never include their values,
  * so a misconfigured secret cannot leak into logs.
+ *
+ * The schemas live in two separate modules so server secrets cannot reach browser code:
+ * - `@madeora/config/env/server`: server-only values. It imports "server-only", so a Client
+ *   Component that imports it (directly or through another module) fails the Next.js build.
+ * - `@madeora/config/env/public`: `NEXT_PUBLIC_` values, which Next.js bundles into browser code.
  */
-
-export const appEnvironments = ["development", "test", "preview", "staging", "production"] as const;
-
-/** Server-only settings. Never import a parsed server env into client components. */
-export const serverEnvSchema = z.object({
-  APP_ENV: z.enum(appEnvironments),
-});
-
-/** Public settings. Only `NEXT_PUBLIC_` values belong here; they are bundled into browser code. */
-export const publicEnvSchema = z.object({
-  NEXT_PUBLIC_APP_URL: z.url({ protocol: /^https?$/ }),
-});
-
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
-export type PublicEnv = z.infer<typeof publicEnvSchema>;
 
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
