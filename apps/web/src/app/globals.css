@@ -1,1 +1,44 @@
 @import "tailwindcss";
+/* Madeora design tokens (packages/design-tokens): CSS custom properties for both themes, and the
+   Tailwind theme that exposes only those tokens (Tailwind's own colour palette is removed). */
+@import "@madeora/design-tokens/tokens.css";
+@import "@madeora/design-tokens/tailwind.css";
+
+@layer base {
+  html {
+    font-family: var(--md-font-sans);
+  }
+
+  body {
+    background-color: var(--color-page);
+    color: var(--color-fg);
+    /* The page-only atmospheric background (spec: the only gradient allowed anywhere). */
+    background-image: var(--md-atmosphere);
+    background-repeat: no-repeat;
+  }
+
+  /* One visible keyboard focus style everywhere, in the accent's focus-ring colour. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  /* The interface must work without the decorative background (spec). */
+  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+    body {
+      background-image: none;
+    }
+  }
+}
+
+/* Enter animation for overlays (dialog, toast). Duration tokens are 0ms under reduced motion. */
+@keyframes md-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem) scale(0.98);
+  }
+}
+
+@utility animate-enter {
+  animation: md-enter var(--md-duration-base) var(--md-ease-enter);
+}

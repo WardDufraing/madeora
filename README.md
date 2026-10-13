@@ -7,6 +7,8 @@ The code is a Turborepo + pnpm monorepo:
 - `apps/web`: the Next.js web app (App Router, strict TypeScript, Tailwind CSS).
 - `packages/config`: shared TypeScript and ESLint configuration and the validated environment settings (server-only and public kept apart).
 - `packages/database`: TypeScript types generated from the database schema.
+- `packages/design-tokens`: colours (light and dark, accent derived from one colour), type, spacing, radii, motion; generates the CSS and Tailwind theme.
+- `packages/icons`: Madeora's own SVG icons as typed React components.
 - `supabase/`: Supabase CLI project: `migrations/` (schema and RLS policies, in order) and `seed.sql` (synthetic data only).
 - `tests/e2e`: Playwright browser tests.
 - `tests/db`: database and RLS tests, with the multi-actor test helpers.

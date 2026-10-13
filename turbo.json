@@ -40,6 +40,10 @@
       "env": ["PG_BIN"],
       "cache": false,
       "passThroughEnv": ["SUPABASE_TELEMETRY_DISABLED", "DO_NOT_TRACK"]
+    },
+    "test:boundary": {
+      "dependsOn": ["^build"],
+      "cache": false
     }
   }
 }

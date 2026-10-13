@@ -7,6 +7,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 import { base } from "./base.js";
+import { madeoraPlugin } from "./rules/no-server-env-in-client.js";
 
 /** @type {import("typescript-eslint").ConfigArray} */
 export const next = tseslint.config(
@@ -39,6 +40,11 @@ export const next = tseslint.config(
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
     },
+  },
+  {
+    files: ["**/*.{ts,tsx,js,jsx}"],
+    plugins: { madeora: madeoraPlugin },
+    rules: { "madeora/no-server-env-in-client": "error" },
   },
 );
 

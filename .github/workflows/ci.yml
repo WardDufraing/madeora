@@ -110,6 +110,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # Client Components must not be able to import server-only settings (real `next build`).
+      - run: pnpm test:boundary
 
   e2e:
     name: E2E smoke tests

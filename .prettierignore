@@ -8,6 +8,9 @@ architecture.md
 docs/design/
 
 # Generated files and build output.
+packages/design-tokens/tokens.css
+packages/design-tokens/tailwind.css
+packages/icons/src/generated/
 pnpm-lock.yaml
 **/.next/
 **/.turbo/
