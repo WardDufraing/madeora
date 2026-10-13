@@ -198,3 +198,4 @@ The modules below describe user-facing feature boundaries, **not** separate secu
 - **Integrations (M14):** §4.8 above and `Project-specification.md` §8 and §10; Google Calendar workflows, authorization and conflicts appear throughout the detailed requirements.
 - **All modules:** `Project-specification.md` §11.2 and subsequent confirmed feature decisions, plus §9–10 journeys and quality bar.
 - **MVP exclusions:** Bill management, package tracking, smart-home control. Do not assume unapproved third-party providers are MVP commitments.
+
