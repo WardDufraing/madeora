@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output and caches
+.next/
+.turbo/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
+# Local environment files: never commit credentials
+.env
+.env*.local
+
+# OS and editor files
+.DS_Store
+*.log
