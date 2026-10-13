@@ -1,0 +1,3 @@
+# The product specification must stay byte-for-byte identical: no line-ending or text conversion.
+docs/product/** -text
+*.png binary
