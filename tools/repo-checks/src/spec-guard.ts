@@ -40,7 +40,14 @@ export function specPathsIn(changedPaths: readonly string[]): string[] {
 export function checkSpecFiles(cwd: string): string[] {
   const problems: string[] = [];
   const expected = Object.keys(SPEC_CHECKSUMS).sort();
-  const tracked = nulSeparated(git(cwd, ["ls-files", "-z", "--", SPEC_DIR])).sort();
+  // Each entry: "<mode> <object> <stage>\t<path>".
+  const entries = nulSeparated(git(cwd, ["ls-files", "-s", "-z", "--", SPEC_DIR]));
+  const modes = new Map<string, string>();
+  for (const entry of entries) {
+    const tab = entry.indexOf("\t");
+    modes.set(entry.slice(tab + 1), entry.slice(0, entry.indexOf(" ")));
+  }
+  const tracked = [...modes.keys()].sort();
 
   for (const path of tracked) {
     if (!expected.includes(path)) problems.push(`${path}: unexpected file in ${SPEC_DIR}`);
@@ -49,6 +56,13 @@ export function checkSpecFiles(cwd: string): string[] {
     if (!tracked.includes(path)) {
       problems.push(`${path}: missing`);
       continue;
+    }
+    // 100644 is a regular, non-executable file. This rejects symlinks (120000) and
+    // executable files (100755), which would otherwise pass a content check.
+    if (modes.get(path) !== "100644") {
+      problems.push(
+        `${path}: must be a regular file with mode 100644 (found ${modes.get(path) ?? "none"})`,
+      );
     }
     const actual = createHash("sha256")
       .update(readFileSync(join(cwd, path)))

@@ -1,10 +1,12 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  chmodSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -148,6 +150,33 @@ describe("runSpecGuard", () => {
     const problems = runSpecGuard({ cwd: dir, base });
     expect(problems).toContain("docs/product/.gitattributes: unexpected file in docs/product/");
     expect(problems.some((p) => p.includes("unexpected Git attributes"))).toBe(true);
+  });
+
+  it("fails when a .gitattributes elsewhere in docs/ changes the specification's attributes", () => {
+    writeFileSync(join(dir, "docs/.gitattributes"), "product/** ident\n");
+    commitAll(dir, "attributes in docs/");
+    expect(runSpecGuard({ cwd: dir })).toContain(
+      `${firstSpec}: unexpected Git attributes (ident: set)`,
+    );
+  });
+
+  it("fails when a spec file becomes executable", () => {
+    chmodSync(join(dir, firstSpec), 0o755);
+    commitAll(dir, "chmod spec");
+    expect(runSpecGuard({ cwd: dir })).toContain(
+      `${firstSpec}: must be a regular file with mode 100644 (found 100755)`,
+    );
+  });
+
+  it("fails when a spec file is replaced by a symlink to an identical copy", () => {
+    mkdirSync(join(dir, "copy"));
+    copyFileSync(join(dir, firstSpec), join(dir, "copy/spec.md"));
+    rmSync(join(dir, firstSpec));
+    symlinkSync(join("..", "..", "copy/spec.md"), join(dir, firstSpec));
+    commitAll(dir, "symlink spec");
+    expect(runSpecGuard({ cwd: dir })).toContain(
+      `${firstSpec}: must be a regular file with mode 100644 (found 120000)`,
+    );
   });
 
   describe("command line", () => {

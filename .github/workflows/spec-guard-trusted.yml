@@ -1,0 +1,52 @@
+# Runs the spec guard from the target branch (main or production) against a pull request's files.
+# The "Spec guard" job in ci.yml runs the pull request's own copy of the guard, so a pull request
+# that edited both a spec file and the guard could make that copy pass. This copy comes from the
+# target branch, so a pull request cannot change the rules it is checked by.
+#
+# Security: pull_request_target runs with the target branch's workflow and token. This job
+# only reads: the token is read-only, no secrets exist or are used, credentials are not
+# persisted, and no code from the pull request is executed. The pull request is checked out
+# purely as data; only Git itself and the trusted guard script read it.
+# Note: GitHub runs the target branch's version of this file, so it takes effect for pull
+# requests opened after it has been merged.
+name: Spec guard (trusted)
+
+on:
+  pull_request_target:
+    branches: [main, production]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spec-guard-trusted-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  spec-guard-trusted:
+    name: Spec guard (trusted)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the guard from the target branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: Check out the pull request's files (data only, never executed)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pull-request
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: trusted/.nvmrc
+      - name: Check the product specification is unchanged
+        working-directory: pull-request
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node "$GITHUB_WORKSPACE/trusted/tools/repo-checks/src/cli/spec-guard.ts" --base "$BASE_SHA" --head HEAD

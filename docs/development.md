@@ -31,19 +31,20 @@ Defined and validated in `packages/config/src/env/index.ts`, documented in `apps
 
 CI (`.github/workflows/ci.yml`) runs these on every pull request into `main` or `production` and on every push to them. Each row names the CI check it belongs to.
 
-| Check                                       | CI check                                    | Command                                                                       |
-| ------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
-| Install from the lockfile                   | every job except Spec guard and Secret scan | `pnpm install --frozen-lockfile`                                              |
-| Formatting                                  | Format, lint, typecheck, unit tests, build  | `pnpm format:check` (fix with `pnpm format`)                                  |
-| Lint (warnings fail)                        | Format, lint, typecheck, unit tests, build  | `pnpm lint`                                                                   |
-| Type check                                  | Format, lint, typecheck, unit tests, build  | `pnpm typecheck`                                                              |
-| Unit and component tests                    | Format, lint, typecheck, unit tests, build  | `pnpm test`                                                                   |
-| Production build                            | Format, lint, typecheck, unit tests, build  | `pnpm build`                                                                  |
-| Browser smoke tests                         | E2E smoke tests                             | `pnpm test:e2e` (builds the web app first)                                    |
-| Product specification unchanged             | Spec guard                                  | `pnpm check:spec` (add `--base origin/main` to also check your branch's diff) |
-| High or critical dependency advisories      | Dependency audit                            | `pnpm audit:deps`                                                             |
-| Secrets in Git history                      | Secret scan                                 | `gitleaks git --redact .` (gitleaks 8.30.1, installed separately)             |
-| Pull requests into `production` from `main` | Release source                              | (CI only)                                                                     |
+| Check                                       | CI check                                   | Command                                                                       |
+| ------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| Install from the lockfile                   | every job that builds or audits            | `pnpm install --frozen-lockfile`                                              |
+| Formatting                                  | Format, lint, typecheck, unit tests, build | `pnpm format:check` (fix with `pnpm format`)                                  |
+| Lint (warnings fail)                        | Format, lint, typecheck, unit tests, build | `pnpm lint`                                                                   |
+| Type check                                  | Format, lint, typecheck, unit tests, build | `pnpm typecheck`                                                              |
+| Unit and component tests                    | Format, lint, typecheck, unit tests, build | `pnpm test`                                                                   |
+| Production build                            | Format, lint, typecheck, unit tests, build | `pnpm build`                                                                  |
+| Browser smoke tests                         | E2E smoke tests                            | `pnpm test:e2e` (builds the web app first)                                    |
+| Product specification unchanged             | Spec guard                                 | `pnpm check:spec` (add `--base origin/main` to also check your branch's diff) |
+| Same, using the target branch's guard       | Spec guard (trusted)                       | (CI only: runs `main`'s copy of the guard against the pull request)           |
+| High or critical dependency advisories      | Dependency audit                           | `pnpm audit:deps`                                                             |
+| Secrets in Git history                      | Secret scan                                | `gitleaks git --redact .` (gitleaks 8.30.1, installed separately)             |
+| Pull requests into `production` from `main` | Release source                             | (CI only)                                                                     |
 
 `pnpm build` and `pnpm test:e2e` need `APP_ENV` and `NEXT_PUBLIC_APP_URL`. CI uses the synthetic values `APP_ENV=test` and `NEXT_PUBLIC_APP_URL=http://127.0.0.1:3100`.
 
@@ -55,6 +56,6 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request into `main` or 
 - `reason`: why it does not affect Madeora, including the dependency path.
 - `added` and `expires`: dates (`YYYY-MM-DD`). An exception may last at most 90 days. When it expires, the check fails until someone re-assesses the advisory and renews or removes the exception.
 
-Exceptions are owner-reviewed (`CODEOWNERS`) and belong in the pull request that needs them. Remove an exception as soon as the check reports it as no longer needed.
+Exceptions are reviewed by the owner and belong in the pull request that needs them. Never use pnpm's own `auditConfig` ignore settings (`ignoreCves`, `ignoreGhsas`): they would skip the reason and expiry rules, so `pnpm audit:deps` fails if it finds them. Remove an exception as soon as the check reports it as no longer needed.
 
 Prettier never checks or rewrites `docs/product/` (the read-only product specification), `CLAUDE.md`, `architecture.md` or `docs/design/`; see `.prettierignore`.

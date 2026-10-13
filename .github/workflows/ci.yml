@@ -1,4 +1,5 @@
 # Required checks for every pull request into main or production, and for every push to them.
+# The trusted spec guard and the release-source check live in their own workflows.
 # Local equivalents of each job are listed in docs/development.md.
 name: CI
 
@@ -12,10 +13,11 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its older, superseded run. Runs on main and
-# production are never cancelled, so every commit there keeps a complete result.
+# A new push to a pull request cancels its older, superseded run. Push runs are grouped by
+# commit, so runs on main and production are never cancelled or dropped from the queue, and
+# every commit there keeps a complete result.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -49,24 +51,6 @@ jobs:
           else
             node tools/repo-checks/src/cli/spec-guard.ts
           fi
-
-  release-source:
-    name: Release source
-    if: github.event_name == 'pull_request' && github.base_ref == 'production'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-    steps:
-      - name: Only main may be merged into production
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          THIS_REPO: ${{ github.repository }}
-        run: |
-          if [ "$HEAD_REF" != "main" ] || [ "$HEAD_REPO" != "$THIS_REPO" ]; then
-            echo "::error::Pull requests into production must come from main in this repository (got $HEAD_REPO:$HEAD_REF). See docs/adr/0002-branch-model.md."
-            exit 1
-          fi
-          echo "Release pull request from main: allowed."
 
   secret-scan:
     name: Secret scan

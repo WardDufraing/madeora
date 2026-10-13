@@ -1,6 +1,7 @@
-# Code owners are asked to review every pull request that touches their paths.
-# GitHub enforces this only when branch protection requires code-owner review
-# (see docs/github-setup.md); until then it requests Ward's review automatically.
+# Who owns which paths. GitHub only acts on this file for public repositories or on paid
+# plans, and enforces it only when branch protection requires code-owner review
+# (docs/github-setup.md). While the repository is private on GitHub Free, it documents
+# ownership and the owner's review happens by process: only the owner merges.
 
 # Default: the owner reviews everything.
 *                       @WardDufraing

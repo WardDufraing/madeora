@@ -2,7 +2,7 @@
 // Runs `pnpm audit --json`, then fails on high or critical advisories that have no
 // unexpired exception in tools/repo-checks/audit-exceptions.json.
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,7 @@ import {
   auditPassed,
   evaluateAudit,
   exceptionsFileSchema,
+  filesWithAuditIgnores,
   parseAuditReport,
   type Advisory,
 } from "../audit.ts";
@@ -28,6 +29,19 @@ try {
   const exceptions = exceptionsFileSchema.parse(
     JSON.parse(readFileSync(exceptionsPath, "utf8")),
   ).exceptions;
+  const ignoreFiles = ["package.json", "pnpm-workspace.yaml", ".npmrc"].filter((path) =>
+    existsSync(path),
+  );
+  const ignoring = filesWithAuditIgnores(
+    Object.fromEntries(ignoreFiles.map((path) => [path, readFileSync(path, "utf8")])),
+  );
+  if (ignoring.length > 0) {
+    console.error(
+      `Dependency audit failed: pnpm audit ignore settings found in ${ignoring.join(", ")}. ` +
+        "Record a time-limited exception in tools/repo-checks/audit-exceptions.json instead.",
+    );
+    process.exit(1);
+  }
   // pnpm audit exits non-zero whenever it finds advisories, so the exit code is not used;
   // the JSON report is parsed instead, and anything unparseable fails below.
   const audit = spawnSync("pnpm", ["audit", "--json"], {

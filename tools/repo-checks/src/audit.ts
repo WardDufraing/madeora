@@ -85,6 +85,14 @@ export function evaluateAudit(
   const exceptionProblems: string[] = [];
   const valid = exceptions.filter((exception) => {
     const label = `${exception.id} (${exception.package})`;
+    if (exception.added > today) {
+      exceptionProblems.push(`${label}: "added" (${exception.added}) is in the future`);
+      return false;
+    }
+    if (exception.expires < exception.added) {
+      exceptionProblems.push(`${label}: "expires" is before "added"`);
+      return false;
+    }
     if (daysBetween(exception.added, exception.expires) > MAX_EXCEPTION_DAYS) {
       exceptionProblems.push(
         `${label}: lasts longer than ${String(MAX_EXCEPTION_DAYS)} days; shorten "expires"`,
@@ -124,4 +132,14 @@ export function evaluateAudit(
 
 export function auditPassed(result: AuditResult): boolean {
   return result.blocking.length === 0 && result.exceptionProblems.length === 0;
+}
+
+/**
+ * pnpm's own `auditConfig` ignore settings would hide advisories from `pnpm audit` and bypass
+ * the reasons and expiry dates required here. Returns the files that contain such a setting.
+ */
+export function filesWithAuditIgnores(files: Readonly<Record<string, string>>): string[] {
+  return Object.entries(files)
+    .filter(([, text]) => /auditConfig|ignoreCves|ignoreGhsas|ignoreUnfixable/.test(text))
+    .map(([path]) => path);
 }

@@ -7,6 +7,7 @@ These are the repository settings the owner changes by hand. Claude cannot chang
 - GitHub Actions includes 2,000 minutes a month for private repositories. With no payment method on file, Actions stops when the quota runs out. It does not charge.
 - Branch protection and rulesets are **not available** for private repositories on GitHub Free. They are free for public repositories, and they come with paid plans such as GitHub Pro. So part B can only be done after one of those changes. The owner has to approve that, because of the €0 rule.
 - GitHub secret scanning is not free for private repositories. CI runs the open-source gitleaks scanner instead (the `Secret scan` check).
+- Code owners (`.github/CODEOWNERS`) only take effect on public repositories or paid plans. Until then the file just documents who owns what, and your review happens because you are the one who merges.
 
 ## A. Settings to change now (all free)
 
@@ -73,8 +74,12 @@ Do these steps twice, once for `main` and once for `production`.
 7. Under **Rules**, tick:
    - **Restrict deletions**
    - **Require a pull request before merging**. Set **Required approvals** to `0`. Claude opens pull requests under your GitHub account, and GitHub never lets the author approve their own pull request, so any number above 0 would block every merge. Your approval is the act of merging. Leave **Require review from Code Owners** unticked for the same reason. Under **Allowed merge methods**, keep only **Merge**.
-   - **Require status checks to pass**. Tick **Require branches to be up to date before merging**. Then click **Add checks** and add each of these names exactly. They appear in the list once CI has run on at least one pull request.
+   - **Require status checks to pass**.
+     - For the **main** ruleset, tick **Require branches to be up to date before merging**.
+     - For the **production** ruleset, leave **Require branches to be up to date before merging** unticked. Releases are merge commits, so after the first release `production` always has a merge commit that `main` lacks. With this box ticked, every later release would be blocked.
+     - Then click **Add checks** and add each of these names exactly. They appear in the list once CI has run on at least one pull request.
      - `Spec guard`
+     - `Spec guard (trusted)`
      - `Secret scan`
      - `Dependency audit`
      - `Format, lint, typecheck, unit tests, build`

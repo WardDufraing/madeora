@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
   auditPassed,
   evaluateAudit,
   exceptionsFileSchema,
+  filesWithAuditIgnores,
   parseAuditReport,
   type Advisory,
   type AuditException,
@@ -72,6 +75,20 @@ describe("evaluateAudit", () => {
     expect(result.exceptionProblems[0]).toContain("longer than 90 days");
   });
 
+  it("rejects an exception whose added date is in the future, so the 90-day limit cannot be stretched", () => {
+    const futureAdded = { ...exception, added: "2027-03-01", expires: "2027-05-01" };
+    const result = evaluateAudit([braces], [futureAdded], "2026-10-13");
+    expect(result.blocking).toEqual([braces]);
+    expect(result.exceptionProblems[0]).toContain("is in the future");
+  });
+
+  it("rejects an exception that expires before it was added", () => {
+    const inverted = { ...exception, added: "2027-06-01", expires: "2026-12-31" };
+    const result = evaluateAudit([braces], [inverted], "2027-07-01");
+    expect(result.blocking).toEqual([braces]);
+    expect(result.exceptionProblems[0]).toContain('"expires" is before "added"');
+  });
+
   it("only matches the same advisory in the same package", () => {
     const otherPackage = { ...braces, package: "not-braces" };
     const otherAdvisory = { ...braces, id: "GHSA-2222-3333-4444" };
@@ -120,5 +137,28 @@ describe("exceptions file", () => {
     expect(() =>
       exceptionsFileSchema.parse({ exceptions: [{ ...exception, approvedForever: true }] }),
     ).toThrow();
+  });
+});
+
+describe("filesWithAuditIgnores", () => {
+  it("finds pnpm audit ignore settings that would bypass the exceptions file", () => {
+    expect(
+      filesWithAuditIgnores({
+        "package.json": '{ "pnpm": { "auditConfig": { "ignoreGhsas": ["GHSA-x"] } } }',
+        "pnpm-workspace.yaml": "auditConfig:\n  ignoreCves:\n    - CVE-1\n",
+        ".npmrc": "",
+      }),
+    ).toEqual(["package.json", "pnpm-workspace.yaml"]);
+  });
+
+  it("finds none in this repository", () => {
+    const root = new URL("../../../", import.meta.url);
+    const files = Object.fromEntries(
+      ["package.json", "pnpm-workspace.yaml"].map((path) => [
+        path,
+        readFileSync(new URL(path, root), "utf8"),
+      ]),
+    );
+    expect(filesWithAuditIgnores(files)).toEqual([]);
   });
 });
