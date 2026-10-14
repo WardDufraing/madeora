@@ -20,3 +20,29 @@ describe("validateStartupEnv", () => {
     );
   });
 });
+
+describe("validateStartupEnv in production", () => {
+  const production = {
+    APP_ENV: "production",
+    NEXT_PUBLIC_APP_URL: "https://madeora.test",
+    NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.test",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic",
+  };
+
+  it("requires the Turnstile site key", () => {
+    expect(() => validateStartupEnv(production)).toThrow(
+      "NEXT_PUBLIC_TURNSTILE_SITE_KEY (missing)",
+    );
+  });
+
+  it("accepts production with a Turnstile site key", () => {
+    const env = { ...production, NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" };
+    expect(validateStartupEnv(env)).toEqual(env);
+  });
+
+  it("keeps the site key optional outside production", () => {
+    expect(validateStartupEnv({ ...production, APP_ENV: "preview" })).toMatchObject({
+      APP_ENV: "preview",
+    });
+  });
+});

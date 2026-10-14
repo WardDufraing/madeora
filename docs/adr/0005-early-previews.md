@@ -1,6 +1,6 @@
 # ADR 0005: Vercel previews from S04b, before the release stage
 
-- **Status:** Accepted (owner decision, Ward, 13 October 2026). Changes the phasing in `CLAUDE.md` (Delivery) and `architecture.md` §26 and §30; staging and production phasing are unchanged.
+- **Status:** Accepted (owner decision, Ward, 13 October 2026). Changes the phasing in `CLAUDE.md` (Delivery) and `architecture.md` §26 and §30; staging and production phasing are unchanged. **Partly superseded by ADR 0008 (14 October 2026):** production now deploys from the `production` branch before the release step; "No production yet" below no longer applies.
 - **Date:** 2026-10-13
 - **Step:** S04b, Vercel preview deployments
 
