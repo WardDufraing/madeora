@@ -11,3 +11,8 @@
 # earlier comment, which quoted that code.
 1f58d0c0cd0dee43f555d1700020e0da6f10a1a8:tests/e2e/specs/auth.spec.ts:generic-api-key:333
 d33f06849d87ccef568828fe084b9d9e3fe41866:.gitleaksignore:generic-api-key:10
+#
+# S10 email config tests: a made-up Resend key ("re_synthetic_" followed by digits) used only to
+# check the schema accepts the shape. Not a credential.
+e35909d38f9a6ddfc7fc4af76f2af6cfa027a2f9:packages/config/src/env/email.test.ts:generic-api-key:9
+e35909d38f9a6ddfc7fc4af76f2af6cfa027a2f9:packages/config/src/env/email.test.ts:generic-api-key:23
