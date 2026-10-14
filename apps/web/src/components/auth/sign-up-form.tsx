@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
-import { classifyAuthError, type AuthFailure } from "@/auth/auth-errors";
+import { classifyAuthError, hidesAccountExistence, type AuthFailure } from "@/auth/auth-errors";
 import { signUpSchema, type SignUpValues } from "@/auth/schemas";
 import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
@@ -20,8 +20,9 @@ import { useAuthMessages } from "./use-auth-messages";
 
 /**
  * Registration with email and password. Afterwards it always shows "check your email": Supabase
- * Auth answers an already-registered address exactly like a new one when confirmation is on, so
- * the page reveals nothing about existing accounts (spec: no account enumeration).
+ * Auth answers an already-registered address like a new one when confirmation is on, and the few
+ * answers that could still tell them apart get the same message (`hidesAccountExistence`), so the
+ * page reveals nothing about existing accounts (spec: no account enumeration).
  */
 export function SignUpForm() {
   const t = useTranslations("Auth");
@@ -44,7 +45,7 @@ export function SignUpForm() {
       password: values.password,
       options: { emailRedirectTo: emailLinkTarget("/auth/confirm") },
     });
-    if (error) {
+    if (error && !hidesAccountExistence(error)) {
       setFailure(classifyAuthError(error));
       return;
     }

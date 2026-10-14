@@ -316,6 +316,9 @@ try {
     GOTRUE_DISABLE_SIGNUP: "false",
     GOTRUE_EXTERNAL_EMAIL_ENABLED: "true",
     GOTRUE_MAILER_AUTOCONFIRM: "false",
+    // Matches supabase/config.toml ([auth.sms] enable_confirmations = true). Turned on, Auth
+    // would answer a sign-up for an existing address with "User already registered".
+    GOTRUE_SMS_AUTOCONFIRM: "false",
     GOTRUE_PASSWORD_MIN_LENGTH: "12",
     GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true",
     GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10",

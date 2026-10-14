@@ -39,8 +39,9 @@ Check: the project page header says `madeora-preview` and the organization still
    - **Prevent use of leaked passwords:** leave off (it is a paid feature).
 3. Under **User Signups**, make sure **Allow new users to sign up** is on.
 4. Click **Save** (each section may have its own **Save** button).
+5. On the same page click **Phone**. Leave **Enable Phone provider** off, but make sure **Enable phone confirmations** is on, then click **Save**. With it off, Supabase tells anyone who signs up with an existing address that the address is already registered.
 
-Check: reopen the page; Confirm email is on and the minimum length shows 12.
+Check: reopen the page; Confirm email is on, the minimum length shows 12, and under Phone, Enable phone confirmations is on.
 
 ## 4. Allowed addresses
 

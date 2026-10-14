@@ -9,6 +9,7 @@ import {
 } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
 import { emailCount, emailLink, subjects } from "../support/mail";
+import { e2eEnv } from "../support/env";
 
 // S06: adult email/password accounts. These tests start signed out and make their own synthetic
 // accounts. Chromium logs every failed request (a wrong password is a 400 from Supabase Auth) as
@@ -318,6 +319,27 @@ test.describe("no account enumeration", () => {
     await expect(
       page.getByText(`If ${existing.email} can be used for a new account`),
     ).toBeVisible();
+  });
+
+  test("Supabase Auth itself answers sign-up for an existing address like a new one", async ({
+    request,
+    baseURL,
+  }) => {
+    // The browser's network panel shows this answer, so the settings must not reveal accounts
+    // either (supabase/config.toml: [auth.sms] enable_confirmations).
+    const existing = await registerConfirmed(baseURL ?? "");
+    const signUp = (email: string) =>
+      request.post(`${e2eEnv.supabaseUrl}/auth/v1/signup`, {
+        headers: { apikey: e2eEnv.publishableKey },
+        data: { email, password: "a different synthetic password" },
+      });
+    const forExisting = await signUp(existing.email);
+    const forNew = await signUp(newAccount().email);
+    expect(forExisting.status()).toBe(200);
+    expect(forNew.status()).toBe(200);
+    const keys = async (response: typeof forNew) =>
+      Object.keys((await response.json()) as object).sort();
+    expect(await keys(forExisting)).toEqual(await keys(forNew));
   });
 
   test("a reset for an unknown address gets the same answer as for a real one", async ({

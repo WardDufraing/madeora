@@ -269,7 +269,9 @@ content_path = "./supabase/templates/recovery.html"
 # Allow/disallow new user signups via SMS to your project.
 enable_signup = false
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+# Kept on although phone sign-up is off: with it off, Supabase Auth answers a sign-up for an
+# existing address with "User already registered", which reveals accounts (no account enumeration).
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.

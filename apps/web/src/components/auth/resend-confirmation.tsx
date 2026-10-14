@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
-import { classifyAuthError, type AuthFailure } from "@/auth/auth-errors";
+import { classifyAuthError, hidesAccountExistence, type AuthFailure } from "@/auth/auth-errors";
 import { emailOnlySchema, type EmailOnlyValues } from "@/auth/schemas";
 import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
@@ -42,7 +42,7 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
       email: values.email,
       options: { emailRedirectTo: emailLinkTarget("/auth/confirm") },
     });
-    const failure = error ? classifyAuthError(error) : null;
+    const failure = error && !hidesAccountExistence(error) ? classifyAuthError(error) : null;
     // Only failures that say nothing about the account are shown; anything else reads as "sent".
     setResult(failure === "rateLimited" || failure === "network" ? failure : "sent");
   });

@@ -4,7 +4,7 @@ import {
   AuthWeakPasswordError,
 } from "@supabase/supabase-js";
 
-import { classifyAuthError } from "./auth-errors";
+import { classifyAuthError, hidesAccountExistence } from "./auth-errors";
 
 describe("classifyAuthError", () => {
   it.each([
@@ -30,5 +30,21 @@ describe("classifyAuthError", () => {
     expect(classifyAuthError(new TypeError("Failed to fetch"))).toBe("network");
     expect(classifyAuthError(new Error("other"))).toBe("unknown");
     expect(classifyAuthError("text")).toBe("unknown");
+  });
+});
+
+describe("hidesAccountExistence", () => {
+  it.each([
+    ["user_already_exists", 422, true],
+    ["over_email_send_rate_limit", 429, true],
+    ["over_request_rate_limit", 429, false],
+    ["email_exists", 422, false],
+    ["weak_password", 422, false],
+  ])("%s → %s", (code, status, expected) => {
+    expect(hidesAccountExistence(new AuthApiError("message", status, code))).toBe(expected);
+  });
+
+  it("ignores errors that are not from Supabase Auth", () => {
+    expect(hidesAccountExistence(new TypeError("Failed to fetch"))).toBe(false);
   });
 });
