@@ -1,6 +1,6 @@
 # ADR 0009: Personal context and global preferences
 
-- **Status:** Accepted for S07 within the approved architecture (§4, §5, §6, §7, §9, §13, §14, §18, §19); the migration procedure for the hosted projects and the two choices marked **owner** in the brief need the owner's yes.
+- **Status:** Accepted for S07 within the approved architecture (§4, §5, §6, §7, §9, §13, §14, §18, §19). Owner approved on 2026-10-14: the 50-character display-name limit, the placeholder Home pages until S09, the SQL Editor procedure for migrations on the hosted projects, and deferring a fuller invisible-character policy for display names to S09/S11.
 - **Date:** 2026-10-14
 - **Step:** S07, personal context and preferences (brief: `plans/steps/S07-brief.md`)
 
