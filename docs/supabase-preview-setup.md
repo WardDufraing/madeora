@@ -63,7 +63,31 @@ Check: the Redirect URLs list shows exactly those two entries, each ending in `/
 
 Later: to test sign-up or reset on another pull request, add that branch's address the same way, and remove it once the pull request is merged.
 
-## 5. Email templates
+## 5. Send email through Resend
+
+Supabase only lets you edit email templates once the project sends through your own SMTP server. Resend's free plan (3,000 emails a month, 100 a day) provides one. Without a domain of your own, Resend sends only from its test address `onboarding@resend.dev`, and only to the email address of your Resend account, which is all previews need. Buying a domain costs money, so do not add one now.
+
+1. Open https://resend.com/signup and sign up with `warddufraing@gmail.com` (or **Continue with GitHub**, as long as the account's email is `warddufraing@gmail.com`). If Resend asks for a card or offers a paid trial, stop and tell Claude.
+2. In Resend click **API Keys** in the sidebar, then **Create API Key**:
+   - **Name:** `madeora-preview-supabase`
+   - **Permission:** `Sending access`
+   - **Domain:** `All domains`
+   - Click **Add**, then copy the key (it starts with `re_`). Resend shows it only once. Do not save it anywhere except the Supabase **Password** field below.
+3. In Supabase click **Authentication**, then **Emails**, then the **SMTP Settings** tab, and turn on **Enable Custom SMTP**.
+4. Fill in:
+   - **Sender email:** `onboarding@resend.dev`
+   - **Sender name:** `Madeora Preview`
+   - **Host:** `smtp.resend.com`
+   - **Port number:** `465`
+   - Leave any other field (such as the minimum interval between emails) as it is.
+   - **Username:** `resend`
+   - **Password:** paste the API key
+   - Click **Save changes**.
+5. Supabase now limits sign-in emails to 30 an hour (**Authentication**, **Rate Limits**, "Rate limit for sending emails"). Leave it at 30.
+
+Check: Supabase shows **Custom SMTP** as enabled, and the **Templates** tab now lets you edit the templates. If Supabase or Resend refuses the `onboarding@resend.dev` sender, stop and tell Claude.
+
+## 6. Email templates
 
 1. Click **Authentication**, then **Emails** (older dashboards: **Email Templates**).
 2. Click **Confirm signup**.
@@ -77,7 +101,7 @@ Later: to test sign-up or reset on another pull request, add that branch's addre
 
 Check: each template's source contains `token_hash={{ .TokenHash }}`, and its preview shows a heading and one link.
 
-## 6. Give previews the two public values
+## 7. Give previews the two public values
 
 Both values are public by design (they end up in the browser). Never copy the **Secret key** or the database password anywhere.
 
@@ -98,9 +122,9 @@ Both values are public by design (they end up in the browser). Never copy the **
 
 Check: the redeployed preview opens on the sign-in page instead of an error page.
 
-## 7. Check that it works
+## 8. Check that it works
 
-Supabase's built-in email sender only delivers to members of your Supabase organization, at most 2 emails an hour. So test with your own address, `warddufraing@gmail.com`, and expect to wait an hour between more than two emails.
+Resend's test sender only delivers to your own address, so test with `warddufraing@gmail.com`. The emails come from `onboarding@resend.dev`; if one is missing, check Gmail's spam folder.
 
 1. Open the S06 preview at its branch address (step 4), click **Create an account**, enter `warddufraing@gmail.com` and a password of at least 12 characters, and click **Create account**.
 2. Open the email "Confirm your Madeora email address" in Gmail and click **Confirm my email address**. On the page that opens, click the **Confirm my email address** button. You land on the dashboard.
@@ -110,6 +134,6 @@ Check: in Supabase, **Authentication**, **Users** lists `warddufraing@gmail.com`
 
 ## What not to add
 
-- No Supabase **Secret key**, `service_role` key or database password in Vercel or anywhere else. The app refuses to start with a secret-looking key in a public variable.
+- No Supabase **Secret key**, `service_role` key, database password or Resend API key in Vercel, in the repository or anywhere else. The Resend key belongs only in Supabase's SMTP settings. The app refuses to start with a secret-looking key in a public variable.
 - No real household data in this project: it is for trying out previews only.
 - The project pauses after a week without use. To wake it, open it in the Supabase dashboard and click **Restore project**; nothing is lost.

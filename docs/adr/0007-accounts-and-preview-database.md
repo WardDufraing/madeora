@@ -46,7 +46,7 @@ Facts checked on 2026-10-13 (supabase.com/pricing, Supabase Auth docs and the Su
 - A Server Component can refresh an expired session it cannot save (cookies are read-only there) if the proxy's refresh failed moments earlier; the browser may then be signed out by refresh-token reuse detection. Rare; revisit if it shows up.
 - If Supabase Auth is unreachable during sign-out, this browser's session cookies are still deleted, but the session itself expires on its own instead of being ended at once.
 - One-time token hashes appear in page addresses, so they can reach request logs and browser history; they are single-use and expire.
-- Preview email only reaches the owner's address, two emails an hour. Real delivery arrives with Resend (S10).
+- Supabase only allows custom email templates with custom SMTP, so the preview project sends through Resend's free SMTP (owner decision, 2026-10-14). Without a domain, Resend sends only from `onboarding@resend.dev` to the owner's own address. The Resend API key lives only in Supabase's SMTP settings. The app's own Resend integration is still S10.
 - Local developers register through the local mail catcher (http://127.0.0.1:54324); seed users have no password.
 
 ## Open owner choices
