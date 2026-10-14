@@ -1,4 +1,5 @@
 import { getPublicEnv } from "@madeora/config/env/public";
+import { applyVercelPreviewDefaults } from "@madeora/config/env/vercel";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import createNextIntlPlugin from "next-intl/plugin";
@@ -14,6 +15,9 @@ const nextConfig: NextConfig = {
 };
 
 export default function config(phase: string): NextConfig {
+  // Vercel previews have no fixed web address; fill it in before Next.js inlines it (previews only).
+  applyVercelPreviewDefaults(process.env);
+
   // NEXT_PUBLIC_ values are inlined into the bundle at build time, so check them before building.
   if (phase === PHASE_PRODUCTION_BUILD) {
     getPublicEnv(process.env);

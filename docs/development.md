@@ -32,6 +32,8 @@ Defined and validated in `packages/config/src/env/`, documented in `apps/web/.en
 
 A file that starts with `"use client"` must not import `@madeora/config/env/server` or `server-only`: ESLint (`madeora/no-server-env-in-client`) flags a direct import, and `pnpm test:boundary` proves with a real build that an indirect one fails too.
 
+On a Vercel preview (`VERCEL_ENV=preview`, see `docs/vercel-setup.md`), a missing `APP_ENV` becomes `preview` and a missing `NEXT_PUBLIC_APP_URL` becomes the preview's own `*.vercel.app` branch URL (`@madeora/config/env/vercel`). Nowhere else is a value filled in, production included.
+
 `pnpm build` checks the public values first, because they are built into the browser code. The server checks all of them again when it starts. If one is missing or invalid, it logs the variable's name and answers every request with an error until the configuration is fixed. Values are never printed.
 
 ## Checks (the same commands CI runs)
