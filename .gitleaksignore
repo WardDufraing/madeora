@@ -5,3 +5,7 @@
 # by a made-up value in a later commit) and a synthetic token hash in a unit test.
 99104b241b906513b719944dfce4140ca5d2e748:.github/workflows/ci.yml:generic-api-key:102
 99104b241b906513b719944dfce4140ca5d2e748:apps/web/src/components/auth/reset-password-form.test.tsx:generic-api-key:12
+#
+# S06 sign-up fix: an E2E test passes the publishable key from the test environment
+# (`apikey: e2eEnv.publishableKey`); the variable name, not a value.
+1f58d0c0cd0dee43f555d1700020e0da6f10a1a8:tests/e2e/specs/auth.spec.ts:generic-api-key:333
