@@ -39,8 +39,8 @@ export async function registerUnconfirmed(
 }
 
 /** Registers and confirms an account through the API and the real confirmation email. */
-export async function registerConfirmed(baseURL: string): Promise<Account> {
-  const account = await registerUnconfirmed(baseURL);
+export async function registerConfirmed(baseURL: string, account = newAccount()): Promise<Account> {
+  await registerUnconfirmed(baseURL, account);
   const link = await emailLink(account.email, subjects.confirmation);
   const response = await authApi("/verify", {
     type: "signup",

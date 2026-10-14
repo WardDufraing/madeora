@@ -105,7 +105,7 @@ Use a separate Resend key for production, so either environment's key can be rev
    - **Password:** paste the key
    - Leave every other field as it is and click **Save changes**.
 
-Check: Custom SMTP shows as enabled. Until S10, emails from production reach only `warddufraing@gmail.com`.
+Check: Custom SMTP shows as enabled. Until the sending domain is verified and the sender changed (`docs/email-setup.md`, steps 1 to 4), emails from production reach only `warddufraing@gmail.com`.
 
 ### 4.5 Email templates
 
@@ -212,7 +212,7 @@ Always share `https://www.madeora.studio`. Vercel also serves production on `.ve
 
 - **Undo a release:** in Vercel click **Deployments**, click **⋯** next to the previous **Production** deployment and choose **Instant Rollback**. Then tell Claude, so the fix goes through `main` and a new release. While a rollback is in force, Vercel builds new releases but does not put them on the production address. After the fixed release is **Ready**: open **Deployments**, click **⋯** next to it, choose **Promote** (or click **Undo Rollback** in the banner at the top of the project page), confirm, and check that it now carries the **Current** label.
 - **Paused project:** a free Supabase project pauses after a week without use, and production then shows errors. Open `madeora-production` in the Supabase dashboard and click **Restore project**; nothing is lost.
-- **Sign-up:** S10 brings real email. Until then keep **Allow new users to sign up** off.
+- **Sign-up:** opened with S10 (owner decision, ADR 0012). Switch **Allow new users to sign up** on only after the steps in `docs/email-setup.md` (step 8).
 - **Address changes:** if the production address ever changes, update it in Cloudflare (Turnstile hostname), Supabase (Site URL and Redirect URLs) and Vercel (`NEXT_PUBLIC_APP_URL`), then release again.
 
 ## What not to add

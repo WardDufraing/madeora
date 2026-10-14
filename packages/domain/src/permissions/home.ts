@@ -25,10 +25,15 @@ export function isHomeRole(value: unknown): value is HomeRole {
  * (ownership transfer, Home deletion, managing Administrators) are never in this list, so no grant
  * can confer them.
  */
-export const delegableCapabilities = ["manageHomeSettings"] as const;
+export const delegableCapabilities = ["manageHomeSettings", "manageInvitations"] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
-export const homeActions = ["home.view", "home.updateSettings"] as const;
+export const homeActions = [
+  "home.view",
+  "home.updateSettings",
+  "home.invitations.manage",
+  "home.invitations.manageAdministrators",
+] as const;
 export type HomeAction = (typeof homeActions)[number];
 
 /** The acting person's current membership of one Home, as the database reports it. */
@@ -61,6 +66,12 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.view": { roles: ["owner", "administrator", "member"] },
   // Name and scheduling timezone (spec: managed only by authorized Home managers).
   "home.updateSettings": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
+  // Member invitations, links and join codes, and deciding Member join requests (S10). The SQL
+  // function private.can_manage_invitations makes the same decision for every database call.
+  "home.invitations.manage": { roles: ["owner"], delegatedThrough: "manageInvitations" },
+  // Inviting or admitting Administrators: assigning Administrators is a non-delegable Owner power
+  // (spec "Confirmed customizable Administrator permissions"), so no capability reaches it.
+  "home.invitations.manageAdministrators": { roles: ["owner"] },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -97,5 +108,7 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
   return {
     "home.view": can("home.view"),
     "home.updateSettings": can("home.updateSettings"),
+    "home.invitations.manage": can("home.invitations.manage"),
+    "home.invitations.manageAdministrators": can("home.invitations.manageAdministrators"),
   };
 }

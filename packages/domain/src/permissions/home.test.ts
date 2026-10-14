@@ -31,29 +31,59 @@ const matrix: readonly {
   readonly granted: readonly DelegableCapability[];
   readonly expected: { readonly [A in HomeAction]: boolean };
 }[] = [
-  { role: "owner", granted: [], expected: { "home.view": true, "home.updateSettings": true } },
-  {
-    role: "administrator",
-    granted: [],
-    expected: { "home.view": true, "home.updateSettings": false },
-  },
-  {
-    role: "administrator",
-    granted: ["manageHomeSettings"],
-    expected: { "home.view": true, "home.updateSettings": true },
-  },
-  { role: "member", granted: [], expected: { "home.view": true, "home.updateSettings": false } },
-  {
-    role: "member",
-    granted: ["manageHomeSettings"],
-    expected: { "home.view": true, "home.updateSettings": false },
-  },
-  {
-    role: "owner",
-    granted: ["manageHomeSettings"],
-    expected: { "home.view": true, "home.updateSettings": true },
-  },
+  ...(["owner", "administrator", "member"] as const).flatMap((role) =>
+    [[], ["manageHomeSettings"], ["manageInvitations"]].map((granted) => {
+      const owner = role === "owner";
+      const admin = role === "administrator";
+      const has = (capability: DelegableCapability) =>
+        (granted as readonly DelegableCapability[]).includes(capability);
+      return {
+        role,
+        granted: granted as readonly DelegableCapability[],
+        expected: {
+          "home.view": true,
+          "home.updateSettings": owner || (admin && has("manageHomeSettings")),
+          "home.invitations.manage": owner || (admin && has("manageInvitations")),
+          // Owner-only, whatever was granted.
+          "home.invitations.manageAdministrators": owner,
+        },
+      };
+    }),
+  ),
 ];
+
+// The rule above spelled out for the cases that matter most, so a change to the generator cannot
+// silently weaken them.
+describe("Home permission matrix, explicit cases", () => {
+  it("never lets a Member or Administrator invite Administrators, whatever they hold", () => {
+    for (const role of ["member", "administrator"] as const) {
+      expect(
+        decideHomeAction(
+          HOME,
+          membership(role, [...delegableCapabilities]),
+          "home.invitations.manageAdministrators",
+        ).allowed,
+      ).toBe(false);
+    }
+  });
+
+  it("lets an Administrator manage Member invitations only with the granted capability", () => {
+    expect(
+      decideHomeAction(HOME, membership("administrator"), "home.invitations.manage").allowed,
+    ).toBe(false);
+    expect(
+      decideHomeAction(
+        HOME,
+        membership("administrator", ["manageInvitations"]),
+        "home.invitations.manage",
+      ).allowed,
+    ).toBe(true);
+    expect(
+      decideHomeAction(HOME, membership("member", ["manageInvitations"]), "home.invitations.manage")
+        .allowed,
+    ).toBe(false);
+  });
+});
 
 describe("Home permission matrix", () => {
   it("covers every role with and without every capability", () => {

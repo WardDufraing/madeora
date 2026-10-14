@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 describe("ContextSwitcher", () => {
-  it("names the Personal context with zero Homes and still offers Create a Home", async () => {
+  it("names the Personal context with zero Homes and still offers Create and Join a Home", async () => {
     const user = userEvent.setup();
     renderWithIntl(<ContextSwitcher homes={[]} />);
     const button = screen.getByRole("button", { name: "Current context: Personal" });
@@ -40,7 +40,7 @@ describe("ContextSwitcher", () => {
       within(list)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Personal Current", "Create a Home"]);
+    ).toEqual(["Personal Current", "Create a Home", "Join a Home"]);
     expect(within(list).getByRole("link", { name: /Personal/ })).toHaveAttribute(
       "href",
       "/?context=personal",
@@ -104,6 +104,8 @@ describe("ContextSwitcher", () => {
     );
     const button = screen.getByRole("button", { name: "Current context: Personal" });
     await user.click(button);
+    // Personal, Create a Home, Join a Home, then out.
+    await user.tab();
     await user.tab();
     await user.tab();
     await user.tab();
