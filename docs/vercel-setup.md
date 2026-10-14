@@ -49,4 +49,4 @@ Check: the Production environment page shows branch `production`.
 
 ## What not to add
 
-No other environment variables, except the two public Supabase values for the preview project that `docs/supabase-preview-setup.md` adds (S06), and the Production-only values that `docs/production-setup.md` adds (S06b). Previews hold synthetic data only and must never get production credentials, a Supabase secret key, or R2, Resend or Trigger.dev credentials until a later step says exactly which non-production values to add.
+No other environment variables, except the two public Supabase values for the preview project that `docs/supabase-preview-setup.md` adds (S06), and the Production-only values that `docs/production-setup.md` adds (S06b). Previews hold synthetic data only and must never get production credentials, a Supabase secret key, or R2 or Trigger.dev credentials until a later step says exactly which non-production values to add. From S10, previews get their own Resend sending key and sender (`docs/email-setup.md`), never the production key.

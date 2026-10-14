@@ -118,10 +118,134 @@ export type Database = {
         Args: { p_action: string; p_provider: string };
         Returns: string;
       };
+      count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
       create_home: {
         Args: { p_name: string; p_request_id: string; p_timezone: string };
         Returns: string;
       };
+      create_home_invitation: {
+        Args: {
+          p_email_locale?: string;
+          p_expires_in?: string;
+          p_home_id: string;
+          p_kind: string;
+          p_max_admissions?: number;
+          p_recipient_email?: string;
+          p_request_id: string;
+          p_role: string;
+        };
+        Returns: {
+          delivery_status: string;
+          expires_at: string;
+          invitation_id: string;
+          outcome: string;
+          token: string;
+        }[];
+      };
+      decide_join_request: {
+        Args: { p_decision: string; p_home_id: string; p_request_id: string };
+        Returns: string;
+      };
+      list_home_invitations: {
+        Args: { p_home_id: string };
+        Returns: {
+          admissions: number;
+          created_at: string;
+          delivery_status: string;
+          email_locale: string;
+          ended_at: string;
+          expires_at: string;
+          id: string;
+          kind: string;
+          last_sent_at: string;
+          max_admissions: number;
+          pending_requests: number;
+          recipient_email: string;
+          role: string;
+          state: string;
+          token: string;
+        }[];
+      };
+      list_home_join_requests: {
+        Args: { p_home_id: string };
+        Returns: {
+          applicant_email: string;
+          applicant_name: string;
+          can_decide: boolean;
+          created_at: string;
+          decided_at: string;
+          id: string;
+          kind: string;
+          role: string;
+          state: string;
+        }[];
+      };
+      list_my_join_requests: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          created_at: string;
+          decided_at: string;
+          home_id: string;
+          home_name: string;
+          id: string;
+          kind: string;
+          role: string;
+          state: string;
+        }[];
+      };
+      preview_home_invitation: {
+        Args: { p_token: string };
+        Returns: {
+          expires_at: string;
+          home_id: string;
+          home_name: string;
+          kind: string;
+          outcome: string;
+          request_id: string;
+          role: string;
+        }[];
+      };
+      record_home_invitation_delivery: {
+        Args: { p_home_id: string; p_invitation_id: string; p_status: string };
+        Returns: string;
+      };
+      renew_home_invitation: {
+        Args: { p_home_id: string; p_invitation_id: string };
+        Returns: {
+          email_locale: string;
+          expires_at: string;
+          home_name: string;
+          outcome: string;
+          recipient_email: string;
+          role: string;
+          token: string;
+        }[];
+      };
+      request_to_join_home: {
+        Args: { p_token: string };
+        Returns: {
+          home_name: string;
+          outcome: string;
+          request_id: string;
+        }[];
+      };
+      resend_home_invitation: {
+        Args: { p_home_id: string; p_invitation_id: string };
+        Returns: {
+          email_locale: string;
+          expires_at: string;
+          home_name: string;
+          outcome: string;
+          recipient_email: string;
+          role: string;
+          token: string;
+        }[];
+      };
+      revoke_home_invitation: {
+        Args: { p_home_id: string; p_invitation_id: string };
+        Returns: string;
+      };
+      withdraw_join_request: { Args: { p_request_id: string }; Returns: string };
     };
     Enums: {
       [_ in never]: never;

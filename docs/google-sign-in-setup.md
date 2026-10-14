@@ -36,7 +36,7 @@ Check: the project picker at the top shows `Madeora`.
 4. **Contact information:** your address. Click **Next**.
 5. Tick that you agree to the Google API Services User Data Policy, click **Continue**, then **Create**.
 6. In the left menu click **Data Access**, then **Add or remove scopes**. Tick only `.../auth/userinfo.email`, `.../auth/userinfo.profile` and `openid`. Click **Update**, then **Save**. Do not add any other scope: these three are "non-sensitive" and need no Google review.
-7. In the left menu click **Branding**. Under **Authorized domains** click **Add domain**, type `supabase.co`, and add `madeora.studio` the same way. Leave the logo empty (a logo triggers a Google review). Click **Save**.
+7. In the left menu click **Branding**. Under **Authorized domains** click **Add domain** and type the `madeora-preview` project address without `https://`, for example `abcdefghijklmnop.supabase.co` (Google refuses plain `supabase.co`: it is a shared suffix, so it says "Invalid domain: must be a top private domain"). Add `madeora.studio` the same way, and later the `madeora-production` project address. Leave the logo empty (a logo triggers a Google review). Click **Save**.
 8. In the left menu click **Audience**.
    - For now leave **Publishing status** on **Testing**. Under **Test users** click **Add users**, type your own Gmail address (and any other address you want to test with) and click **Save**. While in Testing, only these addresses can use Google sign-in.
    - When production should accept Google sign-in from anyone (not before step 7 below works): click **Publish app** and confirm. With only the three scopes above, Google shows "verification not required". If Google says verification **is** required, stop and tell Claude.

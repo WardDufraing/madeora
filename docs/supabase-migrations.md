@@ -13,6 +13,8 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261013000000_private_schema.sql`   | S03  | `private_schema` is `true`                             |
 | `supabase/migrations/20261014120000_user_preferences.sql` | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
 | `supabase/migrations/20261015090000_sign_in_methods.sql`  | S08  | `sign_in_methods_table` is not `NULL`                  |
+| `supabase/migrations/20261016090000_homes.sql`            | S09  | `homes_table` is `homes` (not `NULL`)                  |
+| `supabase/migrations/20261017090000_home_invitations.sql` | S10  | `invitations_table` is not `NULL`                      |
 
 Check query (read-only, safe to run any time):
 
@@ -20,7 +22,9 @@ Check query (read-only, safe to run any time):
 select
   exists (select 1 from pg_namespace where nspname = 'private') as private_schema,
   to_regclass('public.user_preferences') as preferences_table,
-  to_regclass('private.sign_in_method_grants') as sign_in_methods_table;
+  to_regclass('private.sign_in_method_grants') as sign_in_methods_table,
+  to_regclass('public.homes') as homes_table,
+  to_regclass('private.home_invitations') as invitations_table;
 ```
 
 ## Apply a migration

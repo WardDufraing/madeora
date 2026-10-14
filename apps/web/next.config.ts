@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     "@madeora/database",
     "@madeora/domain",
     "@madeora/design-tokens",
+    "@madeora/email",
     "@madeora/icons",
   ],
   poweredByHeader: false,

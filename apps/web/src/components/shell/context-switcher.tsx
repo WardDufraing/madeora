@@ -23,8 +23,8 @@ const itemClass =
 /**
  * The explicit context switcher in the top bar (spec "Confirmed explicit multi-Home switching"):
  * names the current context, and opens a list with Personal, every Home the person belongs to now
- * (with their role there) and Create a Home. A disclosure with plain links rather than an ARIA menu,
- * so it works the same with a keyboard, a screen reader and touch.
+ * (with their role there), Create a Home and Join a Home. A disclosure with plain links rather
+ * than an ARIA menu, so it works the same with a keyboard, a screen reader and touch.
  *
  * The context is the URL (`/homes/{id}/...` or a personal page), never this component's state, so
  * two tabs can be in different Homes. Every Home page checks the membership on the server; this
@@ -162,6 +162,9 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
           <div className="mt-1 border-t border-line pt-1">
             <Link href="/homes/new" className={itemClass}>
               {t("createHome")}
+            </Link>
+            <Link href="/homes/join" className={itemClass}>
+              {t("joinHome")}
             </Link>
           </div>
         </nav>

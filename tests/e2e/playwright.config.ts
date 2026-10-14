@@ -51,6 +51,10 @@ export default defineConfig({
       NEXT_PUBLIC_APP_URL: baseURL,
       NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
+      // Invitation emails (S10) go to the same local mail catcher as the auth emails.
+      EMAIL_TRANSPORT: "mailpit",
+      MAILPIT_URL: process.env.PLAYWRIGHT_MAILPIT_URL ?? "http://127.0.0.1:54324",
+      EMAIL_FROM: "Madeora Test <no-reply@madeora.test>",
     },
   },
 });

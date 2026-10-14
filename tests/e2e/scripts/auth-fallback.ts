@@ -334,8 +334,9 @@ try {
   );
   pgStarted = true;
 
-  // What Supabase's Postgres image provides for Auth: its API roles, and an `auth` schema owned by
-  // the role Auth connects as. Auth creates its own tables with its own migrations.
+  // What Supabase's Postgres image provides for Auth: its API roles, an `auth` schema owned by
+  // the role Auth connects as, and the `extensions` schema with pgcrypto (invitation tokens, S10).
+  // Auth creates its own tables with its own migrations.
   const authPassword = randomBytes(18).toString("hex");
   const restPassword = randomBytes(18).toString("hex");
   run("psql", [
@@ -362,7 +363,10 @@ try {
     alter role supabase_auth_admin set search_path = auth;
     create role authenticator login noinherit password '${restPassword}';
     grant anon, authenticated, service_role to authenticator;
-    grant usage on schema public to anon, authenticated, service_role;`,
+    grant usage on schema public to anon, authenticated, service_role;
+    create schema extensions;
+    grant usage on schema extensions to anon, authenticated, service_role;
+    create extension pgcrypto with schema extensions;`,
   ]);
 
   const jwtSecret = randomBytes(32).toString("hex");

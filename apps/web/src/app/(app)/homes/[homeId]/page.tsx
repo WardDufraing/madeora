@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
+import { countPendingJoinRequests } from "@/invitations/server";
 
 // Typed here rather than with Next's generated PageProps, which only exist after `next typegen`.
 interface HomePageProps {
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
 
 /**
  * A Home's dashboard (S09): the Home context made explicit, with the person's role there. Widgets
- * arrive with S17 and the modules. Nothing personal is shown here.
+ * arrive with S17 and the modules. Nothing personal is shown here. Invitation managers get an
+ * "Invite people" link with the number of join requests waiting (S10).
  */
 export default async function HomeDashboardPage({ params }: HomePageProps) {
   const { userId } = await requireIdentity();
@@ -39,7 +41,12 @@ export default async function HomeDashboardPage({ params }: HomePageProps) {
   if (!context) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
-  const { home, membership } = context;
+  const { home, membership, permissions } = context;
+  const canInvite = permissions["home.invitations.manage"];
+  const [pendingRequests, tInvitations] = await Promise.all([
+    canInvite ? countPendingJoinRequests(home.id) : Promise.resolve(0),
+    getTranslations("Invitations"),
+  ]);
 
   return (
     <>
@@ -55,6 +62,17 @@ export default async function HomeDashboardPage({ params }: HomePageProps) {
         >
           {t("settingsLink")}
         </Link>
+        {canInvite ? (
+          <Link
+            href={`/homes/${home.id}/invitations`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="invite-people-link"
+          >
+            {pendingRequests > 0
+              ? tInvitations("invitePeopleWithRequests", { count: pendingRequests })
+              : tInvitations("invitePeople")}
+          </Link>
+        ) : null}
       </div>
       <Card title={t("widgetsTitle")}>
         <EmptyState title={t("widgetsEmptyTitle")} description={t("widgetsEmptyDescription")} />
