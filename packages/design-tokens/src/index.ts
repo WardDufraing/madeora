@@ -11,6 +11,7 @@ export {
   fontSize,
   iconSize,
   radius,
+  shell,
   spacingUnitPx,
   type IconSize,
 } from "./scale.ts";

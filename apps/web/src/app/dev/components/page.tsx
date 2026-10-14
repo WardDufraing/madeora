@@ -21,7 +21,7 @@ import { TextField } from "@/components/ui/text-field";
 import { InteractiveDemo } from "./interactive-demo";
 
 export const metadata: Metadata = {
-  title: "Component preview",
+  title: "Component preview · Madeora",
   robots: { index: false, follow: false },
 };
 
@@ -46,7 +46,8 @@ export default async function ComponentPreviewPage() {
   if (getServerEnv().APP_ENV === "production") notFound();
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6">
+    // Fixed English sample copy, whatever the interface language.
+    <main lang="en" className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-page-title font-semibold">Component preview</h1>
         <p className="text-body text-fg-muted">

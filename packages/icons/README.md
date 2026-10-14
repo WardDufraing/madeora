@@ -13,14 +13,29 @@ Madeora's own SVG icons (`architecture.md` §16). No general-purpose icon pack i
 
 ## Inventory
 
-All icons were drawn for Madeora on 13 October 2026 (S04) as original artwork: simple geometric shapes, not copied or adapted from any icon set.
+All icons were drawn for Madeora on 13 October 2026 (S04 and S05) as original artwork: simple geometric shapes, not copied or adapted from any icon set. A test checks that this table lists exactly the exported icons.
 
-| Component     | File          | Used for                                                        |
-| ------------- | ------------- | --------------------------------------------------------------- |
-| `CheckIcon`   | `check.svg`   | Checked checkbox                                                |
-| `CloseIcon`   | `close.svg`   | Close and dismiss buttons (dialog, toast)                       |
-| `InfoIcon`    | `info.svg`    | Information messages                                            |
-| `SuccessIcon` | `success.svg` | Success messages                                                |
-| `WarningIcon` | `warning.svg` | Warning messages                                                |
-| `ErrorIcon`   | `error.svg`   | Error messages, field errors, the error state                   |
-| `SpinnerIcon` | `spinner.svg` | Loading button and loading state (stops when motion is reduced) |
+| Component             | File                   | Used for                                                        |
+| --------------------- | ---------------------- | --------------------------------------------------------------- |
+| `CheckIcon`           | `check.svg`            | Checked checkbox                                                |
+| `CloseIcon`           | `close.svg`            | Close and dismiss buttons (dialog, toast)                       |
+| `InfoIcon`            | `info.svg`             | Information messages                                            |
+| `SuccessIcon`         | `success.svg`          | Success messages                                                |
+| `WarningIcon`         | `warning.svg`          | Warning messages                                                |
+| `ErrorIcon`           | `error.svg`            | Error messages, field errors, the error state                   |
+| `SpinnerIcon`         | `spinner.svg`          | Loading button and loading state (stops when motion is reduced) |
+| `DashboardIcon`       | `dashboard.svg`        | Dashboard navigation item                                       |
+| `CalendarIcon`        | `calendar.svg`         | Calendar navigation item                                        |
+| `TasksIcon`           | `tasks.svg`            | Tasks navigation item                                           |
+| `ChoresIcon`          | `chores.svg`           | Chores navigation item                                          |
+| `MealsIcon`           | `meals.svg`            | Meals navigation item                                           |
+| `ShoppingIcon`        | `shopping.svg`         | Shopping navigation item                                        |
+| `HabitsIcon`          | `habits.svg`           | Habits navigation item                                          |
+| `PetsIcon`            | `pets.svg`             | Pets navigation item                                            |
+| `PhotosIcon`          | `photos.svg`           | Photos navigation item                                          |
+| `IntegrationsIcon`    | `integrations.svg`     | Integrations navigation item                                    |
+| `SettingsIcon`        | `settings.svg`         | Settings navigation item                                        |
+| `HelpIcon`            | `help.svg`             | Help navigation item                                            |
+| `MenuIcon`            | `menu.svg`             | Opens the navigation on small screens                           |
+| `SidebarCollapseIcon` | `sidebar-collapse.svg` | Collapse the sidebar (mirrored in right-to-left layouts)        |
+| `SidebarExpandIcon`   | `sidebar-expand.svg`   | Expand the sidebar (mirrored in right-to-left layouts)          |

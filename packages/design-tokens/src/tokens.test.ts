@@ -6,6 +6,7 @@ import { CONTRAST } from "./accent.ts";
 import { contrastRatio, isHex, type Hex } from "./color.ts";
 import { colourNames, renderTailwindCss, renderTokensCss, themeVariables } from "./css.ts";
 import { neutral, themes } from "./neutral.ts";
+import { shell } from "./scale.ts";
 import { semantic, tones } from "./semantic.ts";
 
 describe("neutral and semantic colours", () => {
@@ -77,6 +78,13 @@ describe("generated CSS", () => {
     const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     for (const name of ["fast", "base", "slow"])
       expect(reduced).toContain(`--md-duration-${name}: 0ms;`);
+  });
+
+  it("sizes the sidebar as the spec asks: about 240px expanded and 72px collapsed", () => {
+    const px = (rem: string) => Number.parseFloat(rem) * 16;
+    expect(px(shell["sidebar-expanded"])).toBe(240);
+    expect(px(shell["sidebar-collapsed"])).toBe(72);
+    expect(renderTokensCss()).toContain("--md-shell-sidebar-collapsed: 4.5rem;");
   });
 
   it("removes Tailwind's default colour palette", () => {
