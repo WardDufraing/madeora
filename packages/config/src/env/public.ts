@@ -32,8 +32,14 @@ function base64UrlDecode(value: string): string {
 
 export const publicEnvSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.url({ protocol: /^https?$/ }),
-  /** The Supabase project's API address (local stack, preview project, …). */
-  NEXT_PUBLIC_SUPABASE_URL: z.url({ protocol: /^https?$/ }),
+  /**
+   * The Supabase project's address (local stack, preview project, …): scheme and host only, such
+   * as `https://<ref>.supabase.co`. Supabase's clients add `/auth/v1`, `/rest/v1` and so on
+   * themselves, so a copied API address with a path (`…/rest/v1/`) would break every request.
+   */
+  NEXT_PUBLIC_SUPABASE_URL: z
+    .url({ protocol: /^https?$/ })
+    .refine((value) => value === new URL(value).origin),
   /**
    * The project's publishable key (`sb_publishable_…`, or the legacy `anon` JWT). It is public by
    * design: it only identifies the project, and RLS decides what it can reach.

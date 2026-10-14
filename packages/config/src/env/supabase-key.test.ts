@@ -63,3 +63,25 @@ describe("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", () => {
     ).toThrow("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (invalid)");
   });
 });
+
+describe("NEXT_PUBLIC_SUPABASE_URL", () => {
+  const key = { NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic" };
+
+  it.each([["http://127.0.0.1:54321"], ["https://abcdefghijklmnop.supabase.co"]])(
+    "accepts the project address %s",
+    (url) => {
+      const env = { ...base, ...key, NEXT_PUBLIC_SUPABASE_URL: url };
+      expect(parseEnv(publicEnvSchema, env)).toEqual(env);
+    },
+  );
+
+  it.each([
+    ["https://abcdefghijklmnop.supabase.co/rest/v1/"],
+    ["https://abcdefghijklmnop.supabase.co/"],
+    ["https://abcdefghijklmnop.supabase.co?x=1"],
+  ])("refuses %s, which has more than scheme and host", (url) => {
+    expect(() =>
+      parseEnv(publicEnvSchema, { ...base, ...key, NEXT_PUBLIC_SUPABASE_URL: url }),
+    ).toThrow("NEXT_PUBLIC_SUPABASE_URL (invalid)");
+  });
+});

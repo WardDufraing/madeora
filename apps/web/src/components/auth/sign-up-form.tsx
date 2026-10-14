@@ -12,6 +12,7 @@ import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextField } from "@/components/ui/text-field";
+import { useHydrated } from "@/components/ui/use-hydrated";
 
 import { FormAlert } from "./form-alert";
 import { ResendConfirmation } from "./resend-confirmation";
@@ -24,6 +25,7 @@ import { useAuthMessages } from "./use-auth-messages";
  */
 export function SignUpForm() {
   const t = useTranslations("Auth");
+  const hydrated = useHydrated();
   const messages = useAuthMessages();
   const [failure, setFailure] = useState<AuthFailure | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export function SignUpForm() {
 
   return (
     <form
+      method="post"
       noValidate
       onSubmit={(event) => {
         void onSubmit(event);
@@ -104,7 +107,7 @@ export function SignUpForm() {
           setShowPassword(event.target.checked);
         }}
       />
-      <Button type="submit" loading={isSubmitting}>
+      <Button type="submit" disabled={!hydrated} loading={isSubmitting}>
         {t("signUpSubmit")}
       </Button>
     </form>

@@ -112,10 +112,10 @@ Both values are public by design (they end up in the browser). Never copy the **
    - **Value:** paste the publishable key
    - **Environments:** tick **Preview** only (untick Production and Development)
    - Click **Save**.
-4. Back in Supabase click **Project Settings**, then **Data API**, and copy the **Project URL** (it looks like `https://abcdefghijklmnop.supabase.co`).
+4. Back in Supabase click **Project Settings**, then **Data API**, and copy the address shown there. Paste it somewhere you can edit it and delete everything after `.supabase.co`, including any `/rest/v1/` and the final `/`. What remains looks exactly like `https://abcdefghijklmnop.supabase.co`. (If anything follows the domain, the app treats the setting as invalid and the preview shows an error page instead of the sign-in page.)
 5. In Vercel add the second variable the same way:
    - **Key:** `NEXT_PUBLIC_SUPABASE_URL`
-   - **Value:** paste the Project URL
+   - **Value:** paste the shortened address, ending in `.supabase.co`
    - **Environments:** **Preview** only
    - Click **Save**.
 6. Values only reach new builds. In Vercel click **Deployments**, click **⋯** next to the newest preview of `feat/email-password-accounts`, choose **Redeploy** and confirm.

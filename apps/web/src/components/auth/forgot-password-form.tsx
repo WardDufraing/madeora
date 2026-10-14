@@ -11,6 +11,7 @@ import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { useHydrated } from "@/components/ui/use-hydrated";
 
 import { FormAlert } from "./form-alert";
 import { useAuthMessages } from "./use-auth-messages";
@@ -18,6 +19,7 @@ import { useAuthMessages } from "./use-auth-messages";
 /** Asks for a reset link. The answer never says whether the address has an account. */
 export function ForgotPasswordForm() {
   const t = useTranslations("Auth");
+  const hydrated = useHydrated();
   const messages = useAuthMessages();
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [failure, setFailure] = useState<AuthFailure | null>(null);
@@ -43,6 +45,7 @@ export function ForgotPasswordForm() {
 
   return (
     <form
+      method="post"
       noValidate
       onSubmit={(event) => {
         void onSubmit(event);
@@ -68,7 +71,7 @@ export function ForgotPasswordForm() {
         error={messages.field(errors.email?.message)}
         {...form.register("email")}
       />
-      <Button type="submit" loading={isSubmitting}>
+      <Button type="submit" disabled={!hydrated} loading={isSubmitting}>
         {t("forgotSubmit")}
       </Button>
     </form>

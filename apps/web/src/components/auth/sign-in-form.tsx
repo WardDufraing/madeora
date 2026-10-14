@@ -11,6 +11,7 @@ import { getSupabaseBrowserClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextField } from "@/components/ui/text-field";
+import { useHydrated } from "@/components/ui/use-hydrated";
 
 import { FormAlert } from "./form-alert";
 import { ResendConfirmation } from "./resend-confirmation";
@@ -23,6 +24,7 @@ export interface SignInFormProps {
 
 export function SignInForm({ next }: SignInFormProps) {
   const t = useTranslations("Auth");
+  const hydrated = useHydrated();
   const messages = useAuthMessages();
   const [failure, setFailure] = useState<{ kind: AuthFailure; email: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -50,6 +52,7 @@ export function SignInForm({ next }: SignInFormProps) {
   return (
     <div className="flex flex-col gap-4">
       <form
+        method="post"
         noValidate
         onSubmit={(event) => {
           void onSubmit(event);
@@ -84,7 +87,7 @@ export function SignInForm({ next }: SignInFormProps) {
             setShowPassword(event.target.checked);
           }}
         />
-        <Button type="submit" loading={isSubmitting || redirecting}>
+        <Button type="submit" disabled={!hydrated} loading={isSubmitting || redirecting}>
           {t("signInSubmit")}
         </Button>
       </form>

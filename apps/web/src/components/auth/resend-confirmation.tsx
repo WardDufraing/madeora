@@ -11,6 +11,7 @@ import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { useHydrated } from "@/components/ui/use-hydrated";
 
 import { FormAlert } from "./form-alert";
 import { useAuthMessages } from "./use-auth-messages";
@@ -26,6 +27,7 @@ export interface ResendConfirmationProps {
  */
 export function ResendConfirmation({ email }: ResendConfirmationProps) {
   const t = useTranslations("Auth");
+  const hydrated = useHydrated();
   const messages = useAuthMessages();
   const [result, setResult] = useState<"sent" | AuthFailure | null>(null);
   const form = useForm<EmailOnlyValues>({
@@ -47,6 +49,7 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
 
   return (
     <form
+      method="post"
       noValidate
       onSubmit={(event) => {
         void onSubmit(event);
@@ -63,7 +66,12 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
           {...form.register("email")}
         />
       ) : null}
-      <Button type="submit" variant="secondary" loading={form.formState.isSubmitting}>
+      <Button
+        type="submit"
+        variant="secondary"
+        disabled={!hydrated}
+        loading={form.formState.isSubmitting}
+      >
         {t("resendSubmit")}
       </Button>
       {result === "sent" ? (

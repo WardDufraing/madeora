@@ -13,6 +13,7 @@ import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextField } from "@/components/ui/text-field";
+import { useHydrated } from "@/components/ui/use-hydrated";
 
 import { FormAlert } from "./form-alert";
 import { useAuthMessages } from "./use-auth-messages";
@@ -39,6 +40,7 @@ type Stage = "form" | "signOutFailed" | "done";
  */
 export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
   const t = useTranslations("Auth");
+  const hydrated = useHydrated();
   const messages = useAuthMessages();
   const [stage, setStage] = useState<Stage>("form");
   const [failure, setFailure] = useState<AuthFailure | null>(null);
@@ -119,6 +121,7 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
 
   return (
     <form
+      method="post"
       noValidate
       onSubmit={(event) => {
         void onSubmit(event);
@@ -163,7 +166,7 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
           setShowPassword(event.target.checked);
         }}
       />
-      <Button type="submit" loading={isSubmitting || stage === "done"}>
+      <Button type="submit" disabled={!hydrated} loading={isSubmitting || stage === "done"}>
         {t("resetSubmit")}
       </Button>
     </form>

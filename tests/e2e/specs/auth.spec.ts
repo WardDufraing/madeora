@@ -412,6 +412,48 @@ test.describe("access to the app", () => {
       expect(response.headers()["cache-control"], path).toBe("private, no-store");
     }
   });
+
+  test("a form used before the page is ready never puts the password in the address", async ({
+    browser,
+  }) => {
+    // Without JavaScript the page stays as the server rendered it, as before hydration.
+    const unready = await browser.newContext({
+      javaScriptEnabled: false,
+      storageState: { cookies: [], origins: [] },
+    });
+    const page = await unready.newPage();
+    const requested: string[] = [];
+    page.on("request", (request) => requested.push(request.url()));
+    const account = newAccount();
+    const tokenHash = "ab".repeat(28);
+    const forms = [
+      { path: "/sign-in", submit: "Sign in", password: /^Password/ },
+      { path: "/sign-up", submit: "Create account", password: /^Password/ },
+      { path: "/forgot-password", submit: "Send reset link", password: null },
+      {
+        path: `/reset-password?token_hash=${tokenHash}`,
+        submit: "Save new password",
+        password: /^New password/,
+      },
+    ] as const;
+    for (const form of forms) {
+      await page.goto(form.path);
+      const submit = page.getByRole("button", { name: form.submit });
+      await expect(submit).toBeDisabled();
+      // A form that still slipped through would post its fields, never put them in the address.
+      await expect(page.locator("form").filter({ has: submit })).toHaveAttribute("method", "post");
+      if (form.password) await page.getByLabel(form.password).fill(account.password);
+      else await page.getByLabel("Email address").fill(account.email);
+      await page.keyboard.press("Enter");
+      await submit.click({ force: true });
+    }
+    await page.goto("/sign-in"); // Settles any navigation a submit could have started.
+    for (const url of requested) {
+      expect(url).not.toContain("password=");
+      expect(url).not.toContain("email=");
+    }
+    await unready.close();
+  });
 });
 
 test.describe("sessions", () => {
