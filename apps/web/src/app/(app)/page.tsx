@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
 
 import { requireIdentity } from "@/auth/identity";
+import { FormAlert } from "@/components/auth/form-alert";
 import { HomeSetupCard } from "@/components/dashboard/home-setup-card";
+import { RememberContext } from "@/components/homes/remember-context";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
+import { getHomeContext, getRememberedContext, listMyHomes } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { getStoredPreferences } from "@/preferences/account";
 import { formatDate, formatWeekday, isoDate } from "@/preferences/regional";
@@ -16,14 +20,35 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: await pageTitle(t("dashboard")) };
 }
 
+interface DashboardPageProps {
+  readonly searchParams: Promise<{
+    readonly context?: string | string[];
+    readonly notice?: string | string[];
+  }>;
+}
+
 /**
  * The personal dashboard: the starting point for every adult, with or without Homes (spec,
  * "Confirmed Home-independent adult account onboarding", "Confirmed editable starter personal
  * dashboard"). Widgets arrive with S17 and the modules; until then the widget area says so
- * honestly. Homes arrive with S09, so everyone is in the Personal context with zero Homes here.
+ * honestly.
+ *
+ * Opening `/` returns to the Home this device used last, if the person still belongs to it (S09);
+ * `?context=personal` (the switcher's Personal link) stays here and makes Personal the default
+ * again. `?notice=home-unavailable` explains, without saying why, that a Home could not be opened.
  */
-export default async function DashboardPage() {
-  await requireIdentity();
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const { userId } = await requireIdentity();
+  const params = await searchParams;
+  const notice = params.notice === "home-unavailable" ? "home-unavailable" : null;
+  if (params.context !== "personal" && notice === null) {
+    const remembered = await getRememberedContext(userId);
+    if (remembered?.kind === "home") {
+      const found = await getHomeContext(remembered.homeId);
+      if (found.status === "ok") redirect(`/homes/${found.context.home.id}`);
+    }
+  }
+
   const [t, tNav, locale, stored, { timeZone, source }, { effective }] = await Promise.all([
     getTranslations("Dashboard"),
     getTranslations("Nav"),
@@ -32,11 +57,23 @@ export default async function DashboardPage() {
     getEffectiveTimeZone(),
     getRegionalFormats(),
   ]);
+  const myHomes = await listMyHomes();
   const now = new Date();
+  const hasHomes = myHomes.status === "ok" && myHomes.homes.length > 0;
 
   return (
     <>
+      <RememberContext
+        userId={userId}
+        context={{ kind: "personal" }}
+        clearParams={["context", "notice"]}
+      />
       <PageHeader title={tNav("dashboard")} />
+      {notice ? (
+        <FormAlert tone="info" announce className="mb-6">
+          {t("homeUnavailable")}
+        </FormAlert>
+      ) : null}
       <div className="mb-6 flex flex-col gap-1">
         <p className="text-section-title font-semibold text-fg">
           {stored.displayName
@@ -56,11 +93,17 @@ export default async function DashboardPage() {
           {source === "fallback" ? ` ${t("todayFallbackZone", { zone: timeZone })}` : null}
         </p>
       </div>
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div
+        className={
+          hasHomes
+            ? "grid items-start gap-6"
+            : "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+        }
+      >
         <Card title={t("widgetsTitle")}>
           <EmptyState title={t("widgetsEmptyTitle")} description={t("widgetsEmptyDescription")} />
         </Card>
-        <HomeSetupCard />
+        {hasHomes ? null : <HomeSetupCard />}
       </div>
     </>
   );

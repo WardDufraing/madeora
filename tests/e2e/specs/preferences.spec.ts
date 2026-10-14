@@ -69,7 +69,7 @@ test("a new adult lands on the personal dashboard with zero Homes, without being
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   await expect(main.getByText("Welcome to Madeora")).toBeVisible();
-  await expect(page.getByRole("group", { name: "Current context" })).toHaveText("Personal");
+  await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
   await expect(
     main.getByRole("region", { name: "Your widgets" }).getByText("No widgets yet"),
   ).toBeVisible();
@@ -78,9 +78,9 @@ test("a new adult lands on the personal dashboard with zero Homes, without being
   const homes = main.getByRole("region", { name: "Homes" });
   await homes.getByRole("link", { name: "Create a Home" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Create a Home" })).toBeVisible();
-  await expect(page.getByText("Creating a Home is part of Madeora")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /Home name/ })).toBeVisible();
   await expect(page).toHaveTitle("Create a Home · Madeora");
-  await page.getByRole("link", { name: "Back to your dashboard" }).click();
+  await page.getByRole("link", { name: "Cancel" }).click();
   await homes.getByRole("link", { name: "Join a Home" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Join a Home" })).toBeVisible();
 

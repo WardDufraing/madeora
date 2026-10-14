@@ -123,6 +123,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
+      # The local stack's database, for the few test set-ups the app cannot do yet.
+      E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       SUPABASE_TELEMETRY_DISABLED: "1"
       DO_NOT_TRACK: "1"
     steps:

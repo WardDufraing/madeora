@@ -22,7 +22,7 @@
     },
     "test:e2e": {
       "dependsOn": ["@madeora/web#build"],
-      "env": ["APP_ENV", "NEXT_PUBLIC_*", "CI", "PLAYWRIGHT_*"],
+      "env": ["APP_ENV", "NEXT_PUBLIC_*", "CI", "PLAYWRIGHT_*", "E2E_*"],
       "cache": false,
       "passThroughEnv": [
         "HTTP_PROXY",

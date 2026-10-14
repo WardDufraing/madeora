@@ -3,6 +3,7 @@ import { createIcon } from "../create-icon.ts";
 
 export const CalendarIcon = createIcon("Calendar", [["rect",{"x":"4","y":"5","width":"16","height":"15","rx":"2"}],["path",{"d":"M4 10h16"}],["path",{"d":"M8 3v4M16 3v4"}]]);
 export const CheckIcon = createIcon("Check", [["polyline",{"points":"5 12.5 10 17.5 19 7"}]]);
+export const ChevronDownIcon = createIcon("ChevronDown", [["path",{"d":"m6 9 6 6 6-6"}]]);
 export const ChoresIcon = createIcon("Chores", [["path",{"d":"M4 11 12 4l8 7"}],["path",{"d":"M6 9.5V20h12V9.5"}],["path",{"d":"M10 20v-5h4v5"}]]);
 export const CloseIcon = createIcon("Close", [["path",{"d":"M6 6 18 18M18 6 6 18"}]]);
 export const DashboardIcon = createIcon("Dashboard", [["rect",{"x":"4","y":"4","width":"7","height":"7","rx":"1.5"}],["rect",{"x":"13","y":"4","width":"7","height":"7","rx":"1.5"}],["rect",{"x":"4","y":"13","width":"7","height":"7","rx":"1.5"}],["rect",{"x":"13","y":"13","width":"7","height":"7","rx":"1.5"}]]);

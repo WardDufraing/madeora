@@ -17,6 +17,7 @@
     "@madeora/config": "workspace:*",
     "@madeora/database": "workspace:*",
     "@madeora/design-tokens": "workspace:*",
+    "@madeora/domain": "workspace:*",
     "@madeora/icons": "workspace:*",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",

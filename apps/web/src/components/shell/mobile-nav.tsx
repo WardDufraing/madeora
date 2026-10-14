@@ -6,7 +6,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
 
 import { NavLink } from "./nav-link";
-import { isActive, primaryNav, secondaryNav, type NavItem } from "./nav-items";
+import {
+  contextHref,
+  homeIdFromPath,
+  isActive,
+  primaryNav,
+  secondaryNav,
+  type NavItem,
+} from "./nav-items";
 
 /**
  * Navigation below the `md` breakpoint: a menu button that opens a drawer on the native
@@ -75,14 +82,16 @@ export function MobileNav() {
     setOpen(false);
   }
 
+  const homeId = homeIdFromPath(pathname);
   const renderItems = (items: readonly NavItem[]) => (
     <ul className="flex flex-col gap-1">
       {items.map((item) => (
         <li key={item.id}>
           <NavLink
             item={item}
+            href={contextHref(item, homeId)}
             label={tNav(item.id)}
-            active={isActive(item.href, pathname)}
+            active={isActive(contextHref(item, homeId), pathname)}
             onNavigate={() => {
               setOpen(false);
             }}
