@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "pnpm run build",
+  "git": {
+    "deploymentEnabled": {
+      "production": false
+    }
+  },
+  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then echo 'Production deploys start at the release step (S49).'; exit 0; fi; exit 1"
+}

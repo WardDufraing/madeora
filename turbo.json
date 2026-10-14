@@ -1,0 +1,57 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "env": ["APP_ENV", "NEXT_PUBLIC_*", "VERCEL_ENV", "VERCEL_TARGET_ENV", "VERCEL_BRANCH_URL"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "test:e2e": {
+      "dependsOn": ["@madeora/web#build"],
+      "env": ["APP_ENV", "NEXT_PUBLIC_*", "CI", "PLAYWRIGHT_*"],
+      "cache": false,
+      "passThroughEnv": [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy"
+      ]
+    },
+    "@madeora/repo-checks#test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.gitattributes", "$TURBO_ROOT$/docs/product/**"]
+    },
+    "test:db": {
+      "dependsOn": ["^build"],
+      "env": ["MADEORA_TEST_DATABASE_URL"],
+      "cache": false,
+      "passThroughEnv": ["SUPABASE_TELEMETRY_DISABLED", "DO_NOT_TRACK"]
+    },
+    "test:db:fallback": {
+      "dependsOn": ["^build"],
+      "env": ["PG_BIN"],
+      "cache": false,
+      "passThroughEnv": ["SUPABASE_TELEMETRY_DISABLED", "DO_NOT_TRACK"]
+    },
+    "test:boundary": {
+      "dependsOn": ["^build"],
+      "cache": false
+    }
+  }
+}

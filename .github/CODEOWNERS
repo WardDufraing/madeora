@@ -1,0 +1,25 @@
+# Who owns which paths. GitHub only acts on this file for public repositories or on paid
+# plans, and enforces it only when branch protection requires code-owner review
+# (docs/github-setup.md). While the repository is private on GitHub Free, it documents
+# ownership and the owner's review happens by process: only the owner merges.
+
+# Default: the owner reviews everything.
+*                       @WardDufraing
+
+# Read-only product specification and the files that keep it byte-for-byte intact.
+/docs/product/          @WardDufraing
+/.gitattributes         @WardDufraing
+/tools/repo-checks/     @WardDufraing
+
+# Owner-approved documents: changed only with owner approval, in their own pull request.
+/CLAUDE.md              @WardDufraing
+/architecture.md        @WardDufraing
+/docs/adr/              @WardDufraing
+/docs/design/           @WardDufraing
+
+# CI, repository settings and review rules.
+/.github/               @WardDufraing
+
+# Database schema, security policies and the tests that prove them.
+/supabase/              @WardDufraing
+/tests/db/              @WardDufraing

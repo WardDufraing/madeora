@@ -9,7 +9,7 @@ These instructions are mandatory for every Claude agent working in this reposito
 - **Web MVP = Next.js App Router + React + strict TypeScript**, not a standalone React SPA. Use Server Components by default and client components only for required interaction.
 - **Development spend = €0.** No paid plan, billing activation, credit-card requirement, paid add-on or unexpected charge without explicit owner approval. Verify third-party free-tier limits and terms before integration; offer a no-cost fallback when unavailable.
 - **Product authority:** the product specification is immutable in this workstream. Never change it, including formatting.
-- **Delivery:** one feature branch and PR per change; tests and CI; separate independent review agent; human approval before merge or production deployment. **Solo bootstrap phase (owner, 2026-10-13):** CI and the independent review agent are required on every PR; Vercel PR previews and staging become required at the release stage, not before.
+- **Delivery:** one feature branch and PR per change; tests and CI; separate independent review agent; human approval before merge or production deployment. **Solo bootstrap phase (owner, 2026-10-13):** CI and the independent review agent are required on every PR; Vercel PR previews run from step S04b onward (owner, 2026-10-13, ADR 0005), on the free Hobby plan and access-protected; dedicated staging becomes required at the release stage, not before.
 - **Security:** tenant isolation in Supabase RLS plus authorized server workflows. Never rely on hidden UI or client state for access control.
 - **Scope:** native iOS/Android apps are post-MVP. Never add unapproved services, architecture changes, or product behavior.
 

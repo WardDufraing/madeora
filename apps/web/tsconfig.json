@@ -1,0 +1,11 @@
+{
+  "extends": "@madeora/config/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom/vitest"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", ".next/types/**/*.ts", "src", "scripts", "*.ts", "*.mjs"],
+  "exclude": ["node_modules"]
+}

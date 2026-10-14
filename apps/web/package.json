@@ -1,0 +1,47 @@
+{
+  "name": "@madeora/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:boundary": "node scripts/check-server-env-boundary.ts"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "5.9.1",
+    "@madeora/config": "workspace:*",
+    "@madeora/database": "workspace:*",
+    "@madeora/design-tokens": "workspace:*",
+    "@madeora/icons": "workspace:*",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.2",
+    "@tanstack/react-query": "5.104.0",
+    "next": "16.4.0",
+    "next-intl": "4.14.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-hook-form": "7.89.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "axe-core": "4.13.0",
+    "eslint": "9.39.5",
+    "jsdom": "30.1.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vitest": "5.0.4"
+  }
+}

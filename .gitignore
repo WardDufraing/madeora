@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output and caches
+.next/
+.turbo/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+# Signed-in browser state of the synthetic E2E account (tests/e2e/setup).
+tests/e2e/playwright/.auth/
+
+# Local environment files: never commit credentials. Only .env.example is tracked.
+.env*
+!.env.example
+
+# OS and editor files
+.DS_Store
+*.log

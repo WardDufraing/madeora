@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1a1a1a">
+    <h1 style="font-size: 20px">Choose a new Madeora password</h1>
+    <p>
+      We received a request to reset the password of the Madeora account for this email address.
+    </p>
+    <p>
+      <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery"
+        >Choose a new password</a
+      >
+    </p>
+    <p>
+      The link works once and expires after an hour. When you save a new password, every device
+      signed in to your account is signed out. If you did not ask for this, you can ignore this
+      email; your password stays the same.
+    </p>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+# The product specification is read-only and must stay byte-for-byte identical.
+# The formatter must never check or rewrite it.
+docs/product/
+
+# Owner-maintained documents, changed only with owner approval in their own PR.
+CLAUDE.md
+architecture.md
+docs/design/
+
+# Generated files and build output.
+packages/design-tokens/tokens.css
+packages/design-tokens/tailwind.css
+packages/icons/src/generated/
+pnpm-lock.yaml
+**/.next/
+**/.turbo/
+**/coverage/
+**/next-env.d.ts
+**/playwright-report/
+**/test-results/
