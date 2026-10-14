@@ -9,7 +9,7 @@ import { ResetPasswordForm } from "./reset-password-form";
 const auth = { verifyOtp: vi.fn(), updateUser: vi.fn(), signOut: vi.fn() };
 vi.mock("@/auth/supabase-browser", () => ({ getMemoryOnlySupabaseClient: () => ({ auth }) }));
 
-const tokenHash = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6";
+const tokenHash = "ab".repeat(16);
 const assign = vi.fn();
 
 beforeEach(() => {

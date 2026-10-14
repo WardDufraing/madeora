@@ -1,0 +1,7 @@
+# Findings gitleaks reports in this repository's history that are not secrets. Each line is a
+# gitleaks fingerprint (commit:file:rule:line). Never add a real credential here: rotate it instead.
+#
+# S06 first commit: the Supabase CLI's fixed, public local-development publishable key (replaced
+# by a made-up value in a later commit) and a synthetic token hash in a unit test.
+99104b241b906513b719944dfce4140ca5d2e748:.github/workflows/ci.yml:generic-api-key:102
+99104b241b906513b719944dfce4140ca5d2e748:apps/web/src/components/auth/reset-password-form.test.tsx:generic-api-key:12
