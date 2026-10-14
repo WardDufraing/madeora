@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 
+import { useCaptcha } from "./captcha";
 import { FormAlert } from "./form-alert";
 import { ResendConfirmation } from "./resend-confirmation";
 import { useAuthMessages } from "./use-auth-messages";
@@ -28,6 +29,7 @@ export function SignUpForm() {
   const t = useTranslations("Auth");
   const hydrated = useHydrated();
   const messages = useAuthMessages();
+  const captcha = useCaptcha("sign-up");
   const [failure, setFailure] = useState<AuthFailure | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -39,12 +41,18 @@ export function SignUpForm() {
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // Turnstile has no token yet (the button shows busy); Supabase Auth would refuse the request.
+    if (!captcha.ready) return;
     setFailure(null);
     const { error } = await getMemoryOnlySupabaseClient("email-requests").auth.signUp({
       email: values.email,
       password: values.password,
-      options: { emailRedirectTo: emailLinkTarget("/auth/confirm") },
+      options: {
+        emailRedirectTo: emailLinkTarget("/auth/confirm"),
+        ...captcha.options,
+      },
     });
+    captcha.reset();
     if (error && !hidesAccountExistence(error)) {
       setFailure(classifyAuthError(error));
       return;
@@ -108,7 +116,8 @@ export function SignUpForm() {
           setShowPassword(event.target.checked);
         }}
       />
-      <Button type="submit" disabled={!hydrated} loading={isSubmitting}>
+      {captcha.check}
+      <Button type="submit" disabled={!hydrated} loading={isSubmitting || !captcha.ready}>
         {t("signUpSubmit")}
       </Button>
     </form>

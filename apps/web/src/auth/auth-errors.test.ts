@@ -17,6 +17,8 @@ describe("classifyAuthError", () => {
     ["same_password", 422, "samePassword"],
     ["otp_expired", 403, "linkInvalid"],
     ["flow_state_not_found", 404, "linkInvalid"],
+    ["captcha_failed", 400, "captchaFailed"],
+    ["signup_disabled", 422, "signUpClosed"],
     ["unexpected_failure", 500, "unknown"],
   ])("maps %s (%i) to %s", (code, status, expected) => {
     expect(classifyAuthError(new AuthApiError("message", status, code))).toBe(expected);

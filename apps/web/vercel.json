@@ -2,10 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "pnpm run build",
-  "git": {
-    "deploymentEnabled": {
-      "production": false
-    }
-  },
-  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then echo 'Production deploys start at the release step (S49).'; exit 0; fi; exit 1"
+  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"production\" ] && [ \"$VERCEL_GIT_COMMIT_REF\" != \"production\" ]; then echo 'Production deploys only from the production branch (ADR 0008).'; exit 0; fi; exit 1"
 }

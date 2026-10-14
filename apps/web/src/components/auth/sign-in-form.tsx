@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 
+import { useCaptcha } from "./captcha";
 import { FormAlert } from "./form-alert";
 import { ResendConfirmation } from "./resend-confirmation";
 import { useAuthMessages } from "./use-auth-messages";
@@ -26,6 +27,7 @@ export function SignInForm({ next }: SignInFormProps) {
   const t = useTranslations("Auth");
   const hydrated = useHydrated();
   const messages = useAuthMessages();
+  const captcha = useCaptcha("sign-in");
   const [failure, setFailure] = useState<{ kind: AuthFailure; email: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -36,9 +38,15 @@ export function SignInForm({ next }: SignInFormProps) {
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // Turnstile has no token yet (the button shows busy); Supabase Auth would refuse the request.
+    if (!captcha.ready) return;
     setFailure(null);
     // Straight from the browser to Supabase Auth, which rate-limits per visitor IP (ADR 0007).
-    const { error } = await getSupabaseBrowserClient().auth.signInWithPassword(values);
+    const { error } = await getSupabaseBrowserClient().auth.signInWithPassword({
+      ...values,
+      options: captcha.options,
+    });
+    captcha.reset();
     if (error) {
       setFailure({ kind: classifyAuthError(error), email: values.email });
       form.setValue("password", "");
@@ -87,7 +95,12 @@ export function SignInForm({ next }: SignInFormProps) {
             setShowPassword(event.target.checked);
           }}
         />
-        <Button type="submit" disabled={!hydrated} loading={isSubmitting || redirecting}>
+        {captcha.check}
+        <Button
+          type="submit"
+          disabled={!hydrated}
+          loading={isSubmitting || redirecting || !captcha.ready}
+        >
           {t("signInSubmit")}
         </Button>
       </form>

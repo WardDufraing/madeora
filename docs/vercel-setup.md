@@ -24,7 +24,7 @@ Check: the top-left of https://vercel.com/dashboard shows your name with the lab
    - **Environment Variables:** add one. Key `ENABLE_EXPERIMENTAL_COREPACK`, value `1`. Click **Add**.
 5. Click **Deploy**.
 
-This first deployment builds `main` as "production". Vercel shows it as **Canceled**, because `apps/web/vercel.json` skips every production build (its Ignored Build Step) until the release step. That is correct. The next step stops Vercel treating `main` as production.
+This first deployment builds `main` as "production". Vercel shows it as **Canceled**, because `apps/web/vercel.json` skips every production build that is not from the `production` branch (its Ignored Build Step). That is correct. The next step stops Vercel treating `main` as production.
 
 ## 3. Make `production` the production branch
 
@@ -49,4 +49,4 @@ Check: the Production environment page shows branch `production`.
 
 ## What not to add
 
-No other environment variables, except the two public Supabase values for the preview project that `docs/supabase-preview-setup.md` adds (S06). Previews hold synthetic data only and must never get production credentials, a Supabase secret key, or R2, Resend or Trigger.dev credentials until a later step says exactly which non-production values to add.
+No other environment variables, except the two public Supabase values for the preview project that `docs/supabase-preview-setup.md` adds (S06), and the Production-only values that `docs/production-setup.md` adds (S06b). Previews hold synthetic data only and must never get production credentials, a Supabase secret key, or R2, Resend or Trigger.dev credentials until a later step says exactly which non-production values to add.

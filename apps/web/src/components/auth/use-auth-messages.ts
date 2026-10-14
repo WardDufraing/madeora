@@ -28,6 +28,8 @@ export function useAuthMessages(): {
     samePassword: t("samePassword"),
     linkInvalid: t("linkInvalid"),
     network: t("network"),
+    captchaFailed: t("captchaFailed"),
+    signUpClosed: t("signUpClosed"),
     unknown: t("unknown"),
   };
   return {

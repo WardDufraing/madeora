@@ -12,6 +12,8 @@ export type AuthFailure =
   | "samePassword"
   | "linkInvalid"
   | "network"
+  | "captchaFailed"
+  | "signUpClosed"
   | "unknown";
 
 export function classifyAuthError(error: unknown): AuthFailure {
@@ -30,6 +32,12 @@ export function classifyAuthError(error: unknown): AuthFailure {
       return "weakPassword";
     case "same_password":
       return "samePassword";
+    case "captcha_failed":
+      // Turnstile token missing, expired or refused (ADR 0008).
+      return "captchaFailed";
+    case "signup_disabled":
+      // Answered before Auth looks at the address, so it says nothing about any account.
+      return "signUpClosed";
     case "otp_expired":
     case "otp_disabled":
     case "flow_state_expired":

@@ -25,12 +25,13 @@ Defined and validated in `packages/config/src/env/`, documented in `apps/web/.en
 - `public.ts` (`@madeora/config/env/public`): `NEXT_PUBLIC_` values and `getPublicEnv()`. Next.js copies these into browser code, so never put a secret here.
 - `core.ts` (`@madeora/config/env`): the shared parser and error type.
 
-| Variable                               | Where                    | Required | Meaning                                                                                                   |
-| -------------------------------------- | ------------------------ | -------- | --------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`                              | server only              | yes      | `development`, `test`, `preview`, `staging` or `production`                                               |
-| `NEXT_PUBLIC_APP_URL`                  | public (in browser code) | yes      | Absolute `http` or `https` URL of the web app                                                             |
-| `NEXT_PUBLIC_SUPABASE_URL`             | public (in browser code) | yes      | Supabase API address; locally `http://127.0.0.1:54321`                                                    |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public (in browser code) | yes      | Supabase publishable key (`pnpm exec supabase status`). A secret or `service_role` key is refused at once |
+| Variable                               | Where                    | Required        | Meaning                                                                                                                    |
+| -------------------------------------- | ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                              | server only              | yes             | `development`, `test`, `preview`, `staging` or `production`                                                                |
+| `NEXT_PUBLIC_APP_URL`                  | public (in browser code) | yes             | Absolute `http` or `https` URL of the web app                                                                              |
+| `NEXT_PUBLIC_SUPABASE_URL`             | public (in browser code) | yes             | Supabase API address; locally `http://127.0.0.1:54321`                                                                     |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public (in browser code) | yes             | Supabase publishable key (`pnpm exec supabase status`). A secret or `service_role` key is refused at once                  |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | public (in browser code) | production only | Cloudflare Turnstile site key (ADR 0008). Unset locally, in CI and on previews: no security check. A secret key is refused |
 
 A file that starts with `"use client"` must not import `@madeora/config/env/server` or `server-only`: ESLint (`madeora/no-server-env-in-client`) flags a direct import, and `pnpm test:boundary` proves with a real build that an indirect one fails too.
 
@@ -133,7 +134,7 @@ Sign-in uses Supabase Auth from the local stack (`pnpm db:start`). Put its addre
 
 To get a local account, open http://localhost:3000/sign-up and register with any address on the reserved `.test` domain (for example `you@madeora.test`). The confirmation email never leaves your machine: open the local mail catcher at http://127.0.0.1:54324, open the email and follow its link. Password reset emails arrive there too. The seed users have no password and cannot sign in.
 
-Local Supabase Auth has raised rate limits (`supabase/config.toml`) so the browser tests never trip them; hosted projects keep Supabase's defaults. Previews use a separate free Supabase project (`docs/supabase-preview-setup.md`, ADR 0007).
+Local Supabase Auth has raised rate limits (`supabase/config.toml`) so the browser tests never trip them; hosted projects keep Supabase's defaults. Previews use a separate free Supabase project (`docs/supabase-preview-setup.md`, ADR 0007), and production its own (`docs/production-setup.md`, ADR 0008). Only production turns on Turnstile; to try the check locally, set `NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA` (Cloudflare's always-passing test key) and, in `supabase/config.toml`, `[auth.captcha]` with `enabled = true`, `provider = "turnstile"` and Cloudflare's test secret `1x0000000000000000000000000000000AA`; never commit that change.
 
 ### Browser tests without Docker
 
