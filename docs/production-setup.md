@@ -179,7 +179,7 @@ Every release works like this, the first one included.
 1. Open https://github.com/WardDufraing/madeora/compare/production...main.
 2. Click **Create pull request**. Title: `release: <today's date>`, for example `release: 2026-10-15`. Click **Create pull request**.
 3. Wait until every check is green, including `Release source`.
-4. Read the commit list: this is exactly what goes live.
+4. Read the commit list: this is exactly what goes live. If it adds a file in `supabase/migrations/`, apply that file to `madeora-production` now, before merging ([`docs/supabase-migrations.md`](supabase-migrations.md)).
 5. Click **Merge pull request**, then **Confirm merge**.
 6. In Vercel, click **Deployments**. Within a minute a deployment for branch `production` appears with the label **Production**. Wait until it says **Ready** and carries the **Current** label (the deployment the production address shows). If it is Ready but not Current, an earlier rollback is still in force: see "Undo a release" below.
 

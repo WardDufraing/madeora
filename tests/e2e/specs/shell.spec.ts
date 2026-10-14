@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
+import { registerConfirmed, signIn } from "../support/accounts";
 import { axeViolations, expect, nonTokenColours, settle, test } from "../support/browser";
 
 // S05: the app shell, theme and language. Every test also fails on console errors, page errors
@@ -301,27 +302,37 @@ test.describe("language", () => {
     await context.close();
   });
 
-  test("switches between Dutch and English at once and after a reload", async ({ page }) => {
-    await page.goto("/settings");
-    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  test.describe("on its own account", () => {
+    // Choosing a language saves it on the account (S07), so this test must not change the shared
+    // test account that other tests run as in parallel.
+    test.use({ storageState: { cookies: [], origins: [] } });
 
-    await markPage(page);
-    await page.getByRole("radio", { name: "Nederlands" }).check();
-    await expect(page.locator("html")).toHaveAttribute("lang", "nl");
-    await expect(page.getByRole("heading", { level: 1, name: "Instellingen" })).toBeVisible();
-    await expect(mainNav(page).getByRole("link")).toHaveText([...navNames.nl]);
-    await expect(page).toHaveTitle("Instellingen · Madeora");
-    expect(await stillSamePage(page)).toBe(true);
+    test("switches between Dutch and English at once and after a reload", async ({
+      page,
+      baseURL,
+    }) => {
+      await signIn(page, await registerConfirmed(baseURL ?? ""));
+      await page.goto("/settings");
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
 
-    await page.reload();
-    await expect(page.locator("html")).toHaveAttribute("lang", "nl");
-    await expect(page.getByRole("radio", { name: "Nederlands" })).toBeChecked();
+      await markPage(page);
+      await page.getByRole("radio", { name: "Nederlands" }).check();
+      await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+      await expect(page.getByRole("heading", { level: 1, name: "Instellingen" })).toBeVisible();
+      await expect(mainNav(page).getByRole("link")).toHaveText([...navNames.nl]);
+      await expect(page).toHaveTitle("Instellingen · Madeora");
+      expect(await stillSamePage(page)).toBe(true);
 
-    await page.getByRole("radio", { name: "English" }).check();
-    await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(mainNav(page).getByRole("link")).toHaveText([...navNames.en]);
-    await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+      await expect(page.getByRole("radio", { name: "Nederlands" })).toBeChecked();
+
+      await page.getByRole("radio", { name: "English" }).check();
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await expect(mainNav(page).getByRole("link")).toHaveText([...navNames.en]);
+      await page.reload();
+      await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    });
   });
 
   test("two people on different devices each get their own language", async ({ browser }) => {
