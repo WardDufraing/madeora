@@ -16,6 +16,7 @@
     "test": "turbo run test",
     "test:boundary": "turbo run test:boundary",
     "test:e2e": "turbo run test:e2e",
+    "test:e2e:fallback": "node tests/e2e/scripts/auth-fallback.ts",
     "test:db": "turbo run test:db",
     "test:db:fallback": "turbo run test:db:fallback",
     "db:start": "supabase start",

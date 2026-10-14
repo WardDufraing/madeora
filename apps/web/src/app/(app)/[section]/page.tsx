@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
+import { requireIdentity } from "@/auth/identity";
 import { isUnbuiltSection } from "@/components/shell/nav-items";
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState } from "@/components/ui/states";
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: SectionPageProps): Promise<Me
  * which takes precedence over this one, and removes its id from `unbuiltSections`.
  */
 export default async function UnbuiltSectionPage({ params }: SectionPageProps) {
+  await requireIdentity();
   const id = (await params).section;
   if (!isUnbuiltSection(id)) notFound();
 

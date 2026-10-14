@@ -27,6 +27,8 @@ function build(fixture: string): { status: number | null; output: string } {
       // Synthetic values only; the fixtures never read real configuration.
       APP_ENV: "test",
       NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3100",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic-test-value",
     },
   });
   rmSync(`${dir}/.next`, { recursive: true, force: true });

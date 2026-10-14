@@ -25,10 +25,12 @@ Defined and validated in `packages/config/src/env/`, documented in `apps/web/.en
 - `public.ts` (`@madeora/config/env/public`): `NEXT_PUBLIC_` values and `getPublicEnv()`. Next.js copies these into browser code, so never put a secret here.
 - `core.ts` (`@madeora/config/env`): the shared parser and error type.
 
-| Variable              | Where                    | Required | Meaning                                                     |
-| --------------------- | ------------------------ | -------- | ----------------------------------------------------------- |
-| `APP_ENV`             | server only              | yes      | `development`, `test`, `preview`, `staging` or `production` |
-| `NEXT_PUBLIC_APP_URL` | public (in browser code) | yes      | Absolute `http` or `https` URL of the web app               |
+| Variable                               | Where                    | Required | Meaning                                                                                                   |
+| -------------------------------------- | ------------------------ | -------- | --------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                              | server only              | yes      | `development`, `test`, `preview`, `staging` or `production`                                               |
+| `NEXT_PUBLIC_APP_URL`                  | public (in browser code) | yes      | Absolute `http` or `https` URL of the web app                                                             |
+| `NEXT_PUBLIC_SUPABASE_URL`             | public (in browser code) | yes      | Supabase API address; locally `http://127.0.0.1:54321`                                                    |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public (in browser code) | yes      | Supabase publishable key (`pnpm exec supabase status`). A secret or `service_role` key is refused at once |
 
 A file that starts with `"use client"` must not import `@madeora/config/env/server` or `server-only`: ESLint (`madeora/no-server-env-in-client`) flags a direct import, and `pnpm test:boundary` proves with a real build that an indirect one fails too.
 
@@ -40,26 +42,26 @@ On a Vercel preview (`VERCEL_ENV=preview`, see `docs/vercel-setup.md`), a missin
 
 CI (`.github/workflows/ci.yml`) runs these on every pull request into `main` or `production` and on every push to them. Each row names the CI check it belongs to.
 
-| Check                                       | CI check                                   | Command                                                                       |
-| ------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
-| Install from the lockfile                   | every job that builds or audits            | `pnpm install --frozen-lockfile`                                              |
-| Formatting                                  | Format, lint, typecheck, unit tests, build | `pnpm format:check` (fix with `pnpm format`)                                  |
-| Lint (warnings fail)                        | Format, lint, typecheck, unit tests, build | `pnpm lint`                                                                   |
-| Type check                                  | Format, lint, typecheck, unit tests, build | `pnpm typecheck`                                                              |
-| Unit and component tests                    | Format, lint, typecheck, unit tests, build | `pnpm test`                                                                   |
-| Production build                            | Format, lint, typecheck, unit tests, build | `pnpm build`                                                                  |
-| Client code cannot import server settings   | Format, lint, typecheck, unit tests, build | `pnpm test:boundary` (two real `next build` runs on small fixture apps)       |
-| Browser tests (incl. axe in both themes)    | E2E smoke tests                            | `pnpm test:e2e` (builds the web app first)                                    |
-| Fresh database, migrations, seed, RLS tests | Database and RLS tests                     | `pnpm db:start`, then `pnpm test:db` (see "Database" below)                   |
-| Database types match the migrations         | Database and RLS tests                     | `pnpm db:types --check`                                                       |
-| Reset rebuilds the same database            | Database and RLS tests                     | `pnpm db:reset --yes`, then `pnpm test:db`                                    |
-| Product specification unchanged             | Spec guard                                 | `pnpm check:spec` (add `--base origin/main` to also check your branch's diff) |
-| Same, using the target branch's guard       | Spec guard (trusted)                       | (CI only: runs `main`'s copy of the guard against the pull request)           |
-| High or critical dependency advisories      | Dependency audit                           | `pnpm audit:deps`                                                             |
-| Secrets in Git history                      | Secret scan                                | `gitleaks git --redact .` (gitleaks 8.30.1, installed separately)             |
-| Pull requests into `production` from `main` | Release source                             | (CI only)                                                                     |
+| Check                                       | CI check                                   | Command                                                                          |
+| ------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| Install from the lockfile                   | every job that builds or audits            | `pnpm install --frozen-lockfile`                                                 |
+| Formatting                                  | Format, lint, typecheck, unit tests, build | `pnpm format:check` (fix with `pnpm format`)                                     |
+| Lint (warnings fail)                        | Format, lint, typecheck, unit tests, build | `pnpm lint`                                                                      |
+| Type check                                  | Format, lint, typecheck, unit tests, build | `pnpm typecheck`                                                                 |
+| Unit and component tests                    | Format, lint, typecheck, unit tests, build | `pnpm test`                                                                      |
+| Production build                            | Format, lint, typecheck, unit tests, build | `pnpm build`                                                                     |
+| Client code cannot import server settings   | Format, lint, typecheck, unit tests, build | `pnpm test:boundary` (two real `next build` runs on small fixture apps)          |
+| Browser tests (incl. axe in both themes)    | E2E smoke tests                            | `pnpm db:start`, then `pnpm test:e2e` (builds the web app first; see "Accounts") |
+| Fresh database, migrations, seed, RLS tests | Database and RLS tests                     | `pnpm db:start`, then `pnpm test:db` (see "Database" below)                      |
+| Database types match the migrations         | Database and RLS tests                     | `pnpm db:types --check`                                                          |
+| Reset rebuilds the same database            | Database and RLS tests                     | `pnpm db:reset --yes`, then `pnpm test:db`                                       |
+| Product specification unchanged             | Spec guard                                 | `pnpm check:spec` (add `--base origin/main` to also check your branch's diff)    |
+| Same, using the target branch's guard       | Spec guard (trusted)                       | (CI only: runs `main`'s copy of the guard against the pull request)              |
+| High or critical dependency advisories      | Dependency audit                           | `pnpm audit:deps`                                                                |
+| Secrets in Git history                      | Secret scan                                | `gitleaks git --redact .` (gitleaks 8.30.1, installed separately)                |
+| Pull requests into `production` from `main` | Release source                             | (CI only)                                                                        |
 
-`pnpm build` and `pnpm test:e2e` need `APP_ENV` and `NEXT_PUBLIC_APP_URL`. CI uses the synthetic values `APP_ENV=test` and `NEXT_PUBLIC_APP_URL=http://127.0.0.1:3100`.
+`pnpm build` and `pnpm test:e2e` need `APP_ENV`, `NEXT_PUBLIC_APP_URL` and the two Supabase values. CI uses the synthetic values `APP_ENV=test`, `NEXT_PUBLIC_APP_URL=http://127.0.0.1:3100`, and the local stack's address and publishable key.
 
 ## Design tokens and components
 
@@ -124,6 +126,18 @@ Every cross-Home or cross-user rule needs a test with at least two actors, and a
 ### Without Docker: the PostgreSQL fallback
 
 Where the Supabase stack cannot start (no Docker, as in Claude's build containers; build plan decision D4), `pnpm test:db:fallback` creates a throwaway PostgreSQL cluster in a private temporary folder, listening only on `127.0.0.1` port 54339 with a random per-run password. It applies `tests/db/shim/supabase-shim.sql` (the Supabase roles, default grants, `auth.users` and `auth.uid()`), then every migration and the seed, runs the same tests and the database types check, and deletes the cluster. It needs the PostgreSQL 16+ server programs (`initdb`, `pg_ctl`; set `PG_BIN` to their folder if `pg_config --bindir` does not find them) and must not run as root. The shim imitates Supabase but is not Supabase: the CI job on the real stack is the binding check.
+
+## Accounts
+
+Sign-in uses Supabase Auth from the local stack (`pnpm db:start`). Put its address and publishable key in `apps/web/.env.local`; `pnpm exec supabase status` prints both (the API URL and the publishable key).
+
+To get a local account, open http://localhost:3000/sign-up and register with any address on the reserved `.test` domain (for example `you@madeora.test`). The confirmation email never leaves your machine: open the local mail catcher at http://127.0.0.1:54324, open the email and follow its link. Password reset emails arrive there too. The seed users have no password and cannot sign in.
+
+Local Supabase Auth has raised rate limits (`supabase/config.toml`) so the browser tests never trip them; hosted projects keep Supabase's defaults. Previews use a separate free Supabase project (`docs/supabase-preview-setup.md`, ADR 0007).
+
+### Browser tests without Docker
+
+`pnpm test:e2e:fallback` runs the same Playwright suite where the Supabase stack cannot start (Claude's build containers; build plan decision D4). It builds Supabase Auth (GoTrue) and Mailpit from source once, at the versions the pinned Supabase CLI uses, and caches them in `~/.cache/madeora/auth-fallback` (needs Go and network access to the Go module proxy the first time). Each run starts a throwaway PostgreSQL (port 54349; run as root, it switches to the `nobody` user), Supabase Auth, Mailpit (ports 54354/54355) and a small gateway for `/auth/v1` (port 54351), passes their addresses to the tests and stops everything afterwards. Arguments after `--` go to Playwright, for example `pnpm test:e2e:fallback -- specs/auth.spec.ts`. `node tests/e2e/scripts/auth-fallback.ts --serve` only starts the services and prints their settings. Like the database fallback, it is a stand-in: the CI job on the real stack is the binding check.
 
 ## Dependency audit exceptions
 

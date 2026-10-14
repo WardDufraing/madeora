@@ -4,8 +4,9 @@
 -- Only made-up data: fixed IDs, fixed timestamps, and addresses on the reserved `.test` domain,
 -- which can never receive mail. Never add real people, households or exported production data.
 --
--- The users have no password and cannot sign in. They exist so RLS tests have stable actors;
--- the sign-in step (S06) decides how local development accounts sign in.
+-- The users have no password and cannot sign in. They exist so RLS tests have stable actors.
+-- Local development accounts are registered in the app and confirmed through the local mail
+-- catcher (docs/development.md, "Accounts").
 
 insert into auth.users (
   instance_id,

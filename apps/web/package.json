@@ -13,13 +13,20 @@
     "test:boundary": "node scripts/check-server-env-boundary.ts"
   },
   "dependencies": {
+    "@hookform/resolvers": "5.9.1",
     "@madeora/config": "workspace:*",
+    "@madeora/database": "workspace:*",
     "@madeora/design-tokens": "workspace:*",
     "@madeora/icons": "workspace:*",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.2",
+    "@tanstack/react-query": "5.104.0",
     "next": "16.4.0",
     "next-intl": "4.14.7",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-hook-form": "7.89.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

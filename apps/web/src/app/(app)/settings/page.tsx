@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 
+import { requireIdentity } from "@/auth/identity";
 import { LanguageSetting } from "@/components/settings/language-setting";
 import { ThemeSetting } from "@/components/settings/theme-setting";
 import { PageHeader } from "@/components/shell/page-header";
@@ -14,6 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function SettingsPage() {
+  await requireIdentity();
   const [tNav, t, locale, { theme }] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),

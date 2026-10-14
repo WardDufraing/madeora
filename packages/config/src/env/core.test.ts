@@ -4,6 +4,12 @@ import { EnvValidationError, parseEnv } from "./core.ts";
 import { publicEnvSchema } from "./public.ts";
 import { serverEnvSchema } from "./server.ts";
 
+const validPublic = {
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+  NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic-test-key",
+};
+
 function captureError(fn: () => unknown): EnvValidationError {
   try {
     fn();
@@ -19,9 +25,7 @@ describe("parseEnv", () => {
     expect(parseEnv(serverEnvSchema, { APP_ENV: "development" })).toEqual({
       APP_ENV: "development",
     });
-    expect(parseEnv(publicEnvSchema, { NEXT_PUBLIC_APP_URL: "http://localhost:3000" })).toEqual({
-      NEXT_PUBLIC_APP_URL: "http://localhost:3000",
-    });
+    expect(parseEnv(publicEnvSchema, validPublic)).toEqual(validPublic);
   });
 
   it("names a missing variable", () => {
@@ -45,14 +49,18 @@ describe("parseEnv", () => {
 
   it("rejects non-http URLs for the public app URL without echoing them", () => {
     const value = "javascript:alert(1)";
-    const error = captureError(() => parseEnv(publicEnvSchema, { NEXT_PUBLIC_APP_URL: value }));
+    const error = captureError(() =>
+      parseEnv(publicEnvSchema, { ...validPublic, NEXT_PUBLIC_APP_URL: value }),
+    );
     expect(error.problems).toEqual([{ variable: "NEXT_PUBLIC_APP_URL", reason: "invalid" }]);
     expect(error.message).not.toContain(value);
   });
 
   it("reports every failing variable once", () => {
     const schema = serverEnvSchema.extend(publicEnvSchema.shape);
-    const error = captureError(() => parseEnv(schema, { NEXT_PUBLIC_APP_URL: "not a url" }));
+    const error = captureError(() =>
+      parseEnv(schema, { ...validPublic, NEXT_PUBLIC_APP_URL: "not a url" }),
+    );
     expect(error.problems).toEqual([
       { variable: "APP_ENV", reason: "missing" },
       { variable: "NEXT_PUBLIC_APP_URL", reason: "invalid" },
