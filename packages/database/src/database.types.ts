@@ -5,6 +5,44 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      home_member_profiles: {
+        Row: {
+          accent_color: string | null;
+          created_at: string;
+          display_name: string | null;
+          home_id: string;
+          nickname: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          accent_color?: string | null;
+          created_at?: string;
+          display_name?: string | null;
+          home_id: string;
+          nickname?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          accent_color?: string | null;
+          created_at?: string;
+          display_name?: string | null;
+          home_id?: string;
+          nickname?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "home_member_profiles_membership_fkey";
+            columns: ["home_id", "user_id"];
+            isOneToOne: true;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
       home_memberships: {
         Row: {
           created_at: string;
@@ -69,6 +107,7 @@ export type Database = {
       };
       user_preferences: {
         Row: {
+          accent_color: string | null;
           created_at: string;
           date_format: string | null;
           display_name: string | null;
@@ -82,6 +121,7 @@ export type Database = {
           week_start: string | null;
         };
         Insert: {
+          accent_color?: string | null;
           created_at?: string;
           date_format?: string | null;
           display_name?: string | null;
@@ -95,6 +135,7 @@ export type Database = {
           week_start?: string | null;
         };
         Update: {
+          accent_color?: string | null;
           created_at?: string;
           date_format?: string | null;
           display_name?: string | null;
@@ -145,6 +186,17 @@ export type Database = {
       decide_join_request: {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
+      };
+      home_directory: {
+        Args: { p_home_id: string };
+        Returns: {
+          accent_color: string;
+          is_self: boolean;
+          joined_at: string;
+          membership_id: string;
+          name: string;
+          role: string;
+        }[];
       };
       list_home_invitations: {
         Args: { p_home_id: string };

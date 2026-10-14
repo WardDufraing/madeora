@@ -15,7 +15,7 @@ import {
 
 /** The columns the app reads and writes; created_at and updated_at belong to the database. */
 export const PREFERENCE_COLUMNS =
-  "display_name, locale, date_format, time_format, week_start, number_format, measurement_system, timezone";
+  "display_name, locale, date_format, time_format, week_start, number_format, measurement_system, timezone, accent_color";
 
 type PreferenceRow = Pick<
   Tables<"user_preferences">,
@@ -27,6 +27,7 @@ type PreferenceRow = Pick<
   | "number_format"
   | "measurement_system"
   | "timezone"
+  | "accent_color"
 >;
 
 export function preferencesFromRow(row: PreferenceRow): StoredPreferences {
@@ -39,6 +40,7 @@ export function preferencesFromRow(row: PreferenceRow): StoredPreferences {
     numberFormat: row.number_format,
     measurementSystem: row.measurement_system,
     timeZone: row.timezone,
+    accentColor: row.accent_color,
   });
 }
 
@@ -88,5 +90,6 @@ export function patchToColumns(patch: PreferencesPatch): Partial<PreferenceRow> 
   if (patch.numberFormat !== undefined) columns.number_format = patch.numberFormat;
   if (patch.measurementSystem !== undefined) columns.measurement_system = patch.measurementSystem;
   if (patch.timeZone !== undefined) columns.timezone = patch.timeZone;
+  if (patch.accentColor !== undefined) columns.accent_color = patch.accentColor;
   return columns;
 }

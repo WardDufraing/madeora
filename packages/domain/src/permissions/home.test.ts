@@ -46,6 +46,9 @@ const matrix: readonly {
           "home.invitations.manage": owner || (admin && has("manageInvitations")),
           // Owner-only, whatever was granted.
           "home.invitations.manageAdministrators": owner,
+          // Every member sees the directory and edits only their own presentation.
+          "home.members.view": true,
+          "home.profile.editOwn": true,
         },
       };
     }),

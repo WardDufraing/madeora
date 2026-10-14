@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { accentPalette } from "@madeora/design-tokens";
 import { createTranslator } from "next-intl";
 
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
@@ -130,7 +131,11 @@ describe("message dictionaries", () => {
     walk(sourceRoot);
     const sources = files.map((file) => readFileSync(file, "utf8"));
     // Navigation labels are looked up by item id (tNav(item.id)), so the ids are the keys.
-    const dynamic = { Nav: [...primaryNav, ...secondaryNav].map((item) => item.id) };
+    const dynamic = {
+      Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
+      // Each palette colour's name, looked up by its id (S11).
+      Accent: accentPalette.map((entry) => entry.id),
+    };
     expect(unusedKeys([...english.keys()], sources, dynamic)).toEqual([]);
   });
 });

@@ -15,6 +15,7 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261015090000_sign_in_methods.sql`  | S08  | `sign_in_methods_table` is not `NULL`                  |
 | `supabase/migrations/20261016090000_homes.sql`            | S09  | `homes_table` is `homes` (not `NULL`)                  |
 | `supabase/migrations/20261017090000_home_invitations.sql` | S10  | `invitations_table` is not `NULL`                      |
+| `supabase/migrations/20261018090000_member_profiles.sql`  | S11  | `member_profiles_table` is not `NULL`                  |
 
 Check query (read-only, safe to run any time):
 
@@ -24,7 +25,8 @@ select
   to_regclass('public.user_preferences') as preferences_table,
   to_regclass('private.sign_in_method_grants') as sign_in_methods_table,
   to_regclass('public.homes') as homes_table,
-  to_regclass('private.home_invitations') as invitations_table;
+  to_regclass('private.home_invitations') as invitations_table,
+  to_regclass('public.home_member_profiles') as member_profiles_table;
 ```
 
 ## Apply a migration
@@ -88,6 +90,39 @@ Do this for `madeora-preview` first; for production, the same steps in `madeora-
 
 2. Then continue with [`docs/google-sign-in-setup.md`](google-sign-in-setup.md).
 
+## Check S11 (`20261018090000_member_profiles.sql`)
+
+This file also makes the display-name rule stricter. Before applying it, you can see whether it will clear anyone's display name (names with invisible or text-direction characters; the person can type their name again afterwards). This query only reads:
+
+```sql
+select count(*) as names_to_clear
+from public.user_preferences
+where display_name ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u180B-\u180F\u200B-\u200F\u2028-\u202E\u2060-\u206F\u2800\u3164\uFEFF\uFFA0]';
+```
+
+It counts names with the usual invisible characters (the full rule also catches a few rarer cases, such as a joiner at the start). It usually shows `0`. After applying:
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     c.relrowsecurity as rls_on,
+     (select count(*) from pg_policies
+       where schemaname = 'public' and tablename = 'home_member_profiles') as policies,
+     has_table_privilege('anon', 'public.home_member_profiles', 'select') as visitors_can_read,
+     has_table_privilege('authenticated', 'public.home_member_profiles', 'delete') as members_can_delete,
+     has_function_privilege('anon', 'public.home_directory(uuid)', 'execute') as visitors_can_list,
+     has_function_privilege('authenticated', 'public.home_directory(uuid)', 'execute') as members_can_list,
+     has_column_privilege('authenticated', 'public.user_preferences', 'accent_color', 'update')
+       as accent_saveable
+   from pg_class c
+   where c.oid = 'public.home_member_profiles'::regclass;
+   ```
+
+   It must show `rls_on` **true**, `policies` **3**, `visitors_can_read` **false**, `members_can_delete` **false**, `visitors_can_list` **false**, `members_can_list` **true** and `accent_saveable` **true**.
+
+2. In the app, open a Home, click **Members**: you are listed with "(you)". Click **How you appear here**, type a nickname and click **Save**: "Nickname saved." appears, and the Members page shows the nickname.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:
@@ -127,6 +162,17 @@ drop function if exists private.lock_sign_in_methods(uuid);
 drop function if exists private.sign_in_method_grant_lifetime();
 drop function if exists private.sign_in_method_reauth_window();
 drop table if exists private.sign_in_method_grants;
+```
+
+## If you need to undo S11
+
+Only if the S11 pull request is abandoned, or Claude asks for it. This deletes every nickname, Home display name and accent colour in that project. The stricter name rule stays (the older app accepts it, and names it cleared are not restored). Applying the S11 file again afterwards works.
+
+```sql
+drop function if exists public.home_directory(uuid);
+drop table if exists public.home_member_profiles;
+drop function if exists private.keep_home_member_profile_owner();
+alter table public.user_preferences drop column if exists accent_color;
 ```
 
 ## What not to do

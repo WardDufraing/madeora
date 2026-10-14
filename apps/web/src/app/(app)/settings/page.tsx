@@ -5,6 +5,7 @@ import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
 import { describeSignInMethods } from "@/auth/sign-in-methods";
 import { FormAlert } from "@/components/auth/form-alert";
+import { AccentSetting } from "@/components/settings/accent-setting";
 import { DisplayNameSetting } from "@/components/settings/display-name-setting";
 import { LanguageSetting } from "@/components/settings/language-setting";
 import { RegionalSetting } from "@/components/settings/regional-setting";
@@ -68,8 +69,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         {account.status === "unavailable" ? (
           <FormAlert tone="error">{t("loadFailed")}</FormAlert>
         ) : null}
-        <Card title={t("profile")}>
+        <Card title={t("profile")} description={t("profileHint")}>
           <DisplayNameSetting initialName={stored.displayName} />
+        </Card>
+        <Card title={t("accent")} description={t("accentHint")}>
+          <AccentSetting initialColor={stored.accentColor} />
         </Card>
         <Card title={t("languageAndRegion")} description={t("languageAndRegionHint")}>
           <div className="flex flex-col gap-8">

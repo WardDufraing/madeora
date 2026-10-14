@@ -32,7 +32,8 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
 /**
  * A Home's dashboard (S09): the Home context made explicit, with the person's role there. Widgets
  * arrive with S17 and the modules. Nothing personal is shown here. Invitation managers get an
- * "Invite people" link with the number of join requests waiting (S10).
+ * "Invite people" link with the number of join requests waiting (S10). Every member gets the
+ * member directory and their own "How you appear here" page (S11).
  */
 export default async function HomeDashboardPage({ params }: HomePageProps) {
   const { userId } = await requireIdentity();
@@ -43,9 +44,10 @@ export default async function HomeDashboardPage({ params }: HomePageProps) {
   }
   const { home, membership, permissions } = context;
   const canInvite = permissions["home.invitations.manage"];
-  const [pendingRequests, tInvitations] = await Promise.all([
+  const [pendingRequests, tInvitations, tMembers] = await Promise.all([
     canInvite ? countPendingJoinRequests(home.id) : Promise.resolve(0),
     getTranslations("Invitations"),
+    getTranslations("Members"),
   ]);
 
   return (
@@ -56,6 +58,19 @@ export default async function HomeDashboardPage({ params }: HomePageProps) {
         <p className="text-body text-fg-muted" data-testid="home-role">
           <RoleLabel role={membership.role} />
         </p>
+        <Link
+          href={`/homes/${home.id}/members`}
+          className="text-body font-medium text-accent-fg underline"
+          data-testid="members-link"
+        >
+          {tMembers("directoryLink")}
+        </Link>
+        <Link
+          href={`/homes/${home.id}/profile`}
+          className="text-body font-medium text-accent-fg underline"
+        >
+          {tMembers("profileLink")}
+        </Link>
         <Link
           href={`/homes/${home.id}/settings`}
           className="text-body font-medium text-accent-fg underline"

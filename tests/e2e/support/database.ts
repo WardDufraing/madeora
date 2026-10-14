@@ -70,3 +70,14 @@ export function removeMember(homeId: string, email: string): void {
     { home: homeId, email },
   );
 }
+
+/** Sets `email`'s global display name and accent directly, as if they had saved them (S11). */
+export function setGlobalProfile(email: string, displayName: string, accentColor: string): void {
+  sql(
+    `insert into public.user_preferences (user_id, display_name, accent_color)
+     select id, :'name', :'colour' from auth.users where email = :'email'
+     on conflict (user_id) do update
+       set display_name = excluded.display_name, accent_color = excluded.accent_color;`,
+    { email, name: displayName, colour: accentColor },
+  );
+}
