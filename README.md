@@ -4,7 +4,7 @@ Madeora is a modular personal-life and household coordination application. A per
 
 The code is a Turborepo + pnpm monorepo:
 
-- `apps/web`: the Next.js web app (App Router, strict TypeScript, Tailwind CSS).
+- `apps/web`: the Next.js web app (App Router, strict TypeScript, Tailwind CSS, next-intl for Dutch and English).
 - `packages/config`: shared TypeScript and ESLint configuration and the validated environment settings (server-only and public kept apart).
 - `packages/database`: TypeScript types generated from the database schema.
 - `packages/design-tokens`: colours (light and dark, accent derived from one colour), type, spacing, radii, motion; generates the CSS and Tailwind theme.
@@ -14,7 +14,7 @@ The code is a Turborepo + pnpm monorepo:
 - `tests/db`: database and RLS tests, with the multi-actor test helpers.
 - `tools/repo-checks`: repository guards run by CI (product-specification guard, dependency audit).
 
-No product features exist yet.
+The app shell exists (sidebar, small-screen menu, light/dark/system theme, Dutch and English). No product modules exist yet.
 
 ## Where to start
 

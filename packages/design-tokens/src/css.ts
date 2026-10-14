@@ -9,6 +9,7 @@ import {
   fontSize,
   iconSize,
   radius,
+  shell,
 } from "./scale.ts";
 import { semantic, tones } from "./semantic.ts";
 
@@ -85,6 +86,7 @@ function staticVariables(): [string, string][] {
     vars.push([`--md-text-${name}-line-height`, value.lineHeight]);
   }
   for (const [name, value] of Object.entries(radius)) vars.push([`--md-radius-${name}`, value]);
+  for (const [name, value] of Object.entries(shell)) vars.push([`--md-shell-${name}`, value]);
   for (const [name, value] of Object.entries(iconSize))
     vars.push([`--md-icon-${name}`, `${String(value)}px`]);
   for (const [name, value] of Object.entries(duration)) vars.push([`--md-duration-${name}`, value]);

@@ -1,0 +1,60 @@
+{
+  "Metadata": {
+    "pageTitle": "{page} · Madeora"
+  },
+  "Shell": {
+    "skipToContent": "Skip to main content",
+    "mainNavigation": "Main",
+    "brandLink": "Madeora, go to the dashboard",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "openMenu": "Open menu",
+    "menuTitle": "Menu",
+    "currentContext": "Current context",
+    "personalContext": "Personal"
+  },
+  "Nav": {
+    "dashboard": "Dashboard",
+    "calendar": "Calendar",
+    "tasks": "Tasks",
+    "chores": "Chores",
+    "meals": "Meals",
+    "shopping": "Shopping",
+    "habits": "Habits",
+    "pets": "Pets",
+    "photos": "Photos",
+    "integrations": "Integrations",
+    "settings": "Settings",
+    "help": "Help"
+  },
+  "Dashboard": {
+    "emptyTitle": "Your dashboard is on its way",
+    "emptyDescription": "Widgets for your tasks, calendar and more will appear here once those parts of Madeora are built."
+  },
+  "Placeholder": {
+    "title": "Not built yet",
+    "description": "{section} is part of Madeora but has not been built yet."
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "description": "This address does not exist in Madeora. Use the menu to find what you were looking for."
+  },
+  "Settings": {
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "Same as this device",
+    "language": "Language",
+    "savedOnDevice": "Saved on this device."
+  },
+  "Components": {
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "notifications": "Notifications",
+    "toneInfo": "Information",
+    "toneSuccess": "Success",
+    "toneWarning": "Warning",
+    "toneError": "Error"
+  }
+}

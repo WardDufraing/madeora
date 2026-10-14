@@ -2,6 +2,10 @@ import { getPublicEnv } from "@madeora/config/env/public";
 import { applyVercelPreviewDefaults } from "@madeora/config/env/vercel";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// Locale and messages are resolved per request in src/i18n/request.ts.
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source.
@@ -18,5 +22,5 @@ export default function config(phase: string): NextConfig {
   if (phase === PHASE_PRODUCTION_BUILD) {
     getPublicEnv(process.env);
   }
-  return nextConfig;
+  return withNextIntl(nextConfig);
 }

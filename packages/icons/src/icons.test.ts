@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -11,16 +13,11 @@ describe("icons", () => {
     expect(Object.keys(icons)).not.toContain("createIcon");
   });
 
-  it("exports every icon in the inventory", () => {
-    expect(iconComponents.map(([name]) => name).sort()).toEqual([
-      "CheckIcon",
-      "CloseIcon",
-      "ErrorIcon",
-      "InfoIcon",
-      "SpinnerIcon",
-      "SuccessIcon",
-      "WarningIcon",
-    ]);
+  it("exports exactly the icons listed in the README inventory", () => {
+    const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8");
+    const listed = [...readme.matchAll(/^\| `(\w+Icon)` +\|/gm)].map((match) => match[1]);
+    expect(listed.length).toBeGreaterThan(0);
+    expect(iconComponents.map(([name]) => name).sort()).toEqual(listed.sort());
   });
 
   for (const [name, Icon] of iconComponents) {

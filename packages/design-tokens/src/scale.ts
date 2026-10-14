@@ -43,6 +43,15 @@ export const elevation: Readonly<
   },
 };
 
+/**
+ * App shell (spec: persistent desktop sidebar, expanded approximately 240px, collapsed
+ * approximately 72px).
+ */
+export const shell = {
+  "sidebar-expanded": "15rem",
+  "sidebar-collapsed": "4.5rem",
+} as const;
+
 /** Icon sizes in px. Icons are drawn on a 24px grid with a 2px stroke. */
 export const iconSize = { sm: 16, md: 20, lg: 24 } as const;
 export type IconSize = keyof typeof iconSize;
