@@ -12,13 +12,15 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | --------------------------------------------------------- | ---- | ------------------------------------------------------ |
 | `supabase/migrations/20261013000000_private_schema.sql`   | S03  | `private_schema` is `true`                             |
 | `supabase/migrations/20261014120000_user_preferences.sql` | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
+| `supabase/migrations/20261015090000_sign_in_methods.sql`  | S08  | `sign_in_methods_table` is not `NULL`                  |
 
 Check query (read-only, safe to run any time):
 
 ```sql
 select
   exists (select 1 from pg_namespace where nspname = 'private') as private_schema,
-  to_regclass('public.user_preferences') as preferences_table;
+  to_regclass('public.user_preferences') as preferences_table,
+  to_regclass('private.sign_in_method_grants') as sign_in_methods_table;
 ```
 
 ## Apply a migration
@@ -59,6 +61,29 @@ Do this for `madeora-preview` first; for production, the same steps in `madeora-
 
 2. In the app (the preview, or `https://www.madeora.studio` after the release), sign in, open **Settings**, type a display name and click **Save** under it. "Display name saved." appears. Reload the page: the name is still there, and the dashboard says "Welcome, _your name_".
 
+## Check S08 (`20261015090000_sign_in_methods.sql`)
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     (select count(*) from pg_trigger
+       where tgrelid = 'auth.identities'::regclass
+         and tgname in ('madeora_guard_identity_insert', 'madeora_guard_identity_delete',
+                        'madeora_check_identity_link_flow')
+         and tgenabled = 'O') as identity_guards,
+     has_function_privilege('anon', 'public.authorize_sign_in_method_change(text, text)', 'execute')
+       as visitors_can_ask,
+     has_function_privilege('authenticated', 'public.authorize_sign_in_method_change(text, text)', 'execute')
+       as members_can_ask,
+     has_table_privilege('authenticated', 'private.sign_in_method_grants', 'select')
+       as members_can_read_grants;
+   ```
+
+   It must show `identity_guards` **3**, `visitors_can_ask` **false**, `members_can_ask` **true** and `members_can_read_grants` **false**. If `identity_guards` is not 3, do not switch Google on in that project; tell Claude.
+
+2. Then continue with [`docs/google-sign-in-setup.md`](google-sign-in-setup.md).
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:
@@ -79,6 +104,26 @@ drop function if exists private.set_updated_at();
 ```
 
 The app keeps working without the table: everyone gets the default preferences, and saving shows an error.
+
+## If you need to undo S08
+
+Only if the S08 pull request is abandoned, or Claude asks for it, and **only after** switching Google off in that project (`docs/google-sign-in-setup.md`, "If you need to switch Google sign-in off"). Without these rules Supabase would attach Google to any account with the same email address.
+
+```sql
+drop trigger if exists madeora_guard_identity_insert on auth.identities;
+drop trigger if exists madeora_guard_identity_delete on auth.identities;
+drop trigger if exists madeora_check_identity_link_flow on auth.identities;
+drop function if exists public.authorize_sign_in_method_change(text, text);
+drop function if exists private.guard_identity_insert();
+drop function if exists private.guard_identity_delete();
+drop function if exists private.check_identity_link_flow();
+drop function if exists private.consume_sign_in_method_grant(uuid, text, text);
+drop function if exists private.has_usable_password(uuid);
+drop function if exists private.lock_sign_in_methods(uuid);
+drop function if exists private.sign_in_method_grant_lifetime();
+drop function if exists private.sign_in_method_reauth_window();
+drop table if exists private.sign_in_method_grants;
+```
 
 ## What not to do
 

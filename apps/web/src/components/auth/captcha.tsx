@@ -17,7 +17,8 @@ import { loadTurnstile } from "@/auth/turnstile";
 import { FormAlert } from "./form-alert";
 
 /** Where the check runs; shown in Cloudflare's Turnstile analytics. */
-export type CaptchaAction = "sign-in" | "sign-up" | "forgot-password" | "resend-confirmation";
+export type CaptchaAction =
+  "sign-in" | "sign-up" | "forgot-password" | "resend-confirmation" | "reauthenticate";
 
 export interface TurnstileCheckHandle {
   /** Clears the current token and asks Turnstile for a new one. */

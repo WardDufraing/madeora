@@ -85,6 +85,7 @@ Do these steps twice, once for `main` and once for `production`.
      - `Format, lint, typecheck, unit tests, build`
      - `E2E smoke tests`
      - `Database and RLS tests`
+     - `E2E Google sign-in (built Supabase Auth)` (from S08)
      - For the **production** ruleset only, also add `Release source`.
    - **Block force pushes**
 8. Click **Create**.

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { User } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -22,6 +23,15 @@ export interface VerifiedIdentity {
  * count as signed in. Cached for the rest of this request only (React `cache`).
  */
 export const getVerifiedIdentity = cache(async (): Promise<VerifiedIdentity | null> => {
+  const user = await getVerifiedUser();
+  return user ? { userId: user.id } : null;
+});
+
+/**
+ * The confirmed account's record from Supabase Auth itself (email, sign-in identities), for the
+ * account holder's own settings. Same checks and request cache as `getVerifiedIdentity`.
+ */
+export const getVerifiedUser = cache(async (): Promise<User | null> => {
   const supabase = await createSupabaseServerClient();
   const {
     data: { session },
@@ -30,8 +40,7 @@ export const getVerifiedIdentity = cache(async (): Promise<VerifiedIdentity | nu
 
   const { data, error } = await supabase.auth.getUser(session.access_token);
   if (error || !data.user.email_confirmed_at) return null;
-
-  return { userId: data.user.id };
+  return data.user;
 });
 
 /**

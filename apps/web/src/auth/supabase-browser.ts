@@ -15,11 +15,17 @@ export function getSupabaseBrowserClient(): SupabaseClient<Database> {
   return createBrowserClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    { cookieOptions: sessionCookieOptions(env.NEXT_PUBLIC_APP_URL), isSingleton: true },
+    {
+      cookieOptions: sessionCookieOptions(env.NEXT_PUBLIC_APP_URL),
+      isSingleton: true,
+      // Never act on a `?code=` in the address by itself: the Google callback page (S08) decides
+      // whether to exchange it, and a linking callback must not replace the current session.
+      auth: { detectSessionInUrl: false },
+    },
   );
 }
 
-type MemoryOnlyPurpose = "email-requests" | "password-reset";
+type MemoryOnlyPurpose = "email-requests" | "password-reset" | "reauthentication";
 const memoryOnlyClients = new Map<MemoryOnlyPurpose, SupabaseClient<Database>>();
 
 /**
@@ -30,6 +36,9 @@ const memoryOnlyClients = new Map<MemoryOnlyPurpose, SupabaseClient<Database>>()
  * - `password-reset`: the one-time session a reset link opens lives only here, so an unfinished
  *   reset never becomes a sign-in that the server or other tabs would accept. Reloading the page
  *   drops it; the person then asks for a new link.
+ * - `reauthentication`: a fresh password sign-in that proves, just before linking or unlinking a
+ *   sign-in method, that the person at the keyboard knows the password (S08). It is signed out
+ *   again at once and never replaces the browser's own session.
  *
  * One client per purpose and tab, each under its own storage key, so they never share state or
  * cross-tab messages with each other or with the cookie client.

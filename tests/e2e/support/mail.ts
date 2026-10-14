@@ -35,6 +35,22 @@ export async function emailLink(address: string, subject: string): Promise<URL> 
   throw new Error(`No email "${subject}" to ${address} arrived`);
 }
 
+/** Waits until an email to `address` whose subject contains `subject` has arrived. */
+export async function waitForEmail(address: string, subject: string): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const search = await fetch(
+      `${e2eEnv.mailpitUrl}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`,
+    );
+    if (search.ok) {
+      const { messages } = (await search.json()) as { messages: MailpitSummary[] };
+      if (messages.some((message) => message.Subject.includes(subject))) return;
+    }
+    await new Promise((done) => setTimeout(done, 250));
+  }
+  throw new Error(`No email "${subject}" to ${address} arrived`);
+}
+
 /** How many emails `address` has received. */
 export async function emailCount(address: string): Promise<number> {
   const search = await fetch(
@@ -47,4 +63,6 @@ export async function emailCount(address: string): Promise<number> {
 export const subjects = {
   confirmation: "Confirm your Madeora email address",
   recovery: "Reset your Madeora password",
+  identityLinked: "A sign-in method was linked to your Madeora account",
+  identityUnlinked: "A sign-in method was removed from your Madeora account",
 } as const;

@@ -4,9 +4,11 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { getVerifiedIdentity } from "@/auth/identity";
+import { isGoogleSignInEnabled } from "@/auth/providers";
 import { safeNextPath } from "@/auth/redirects";
 import { AnnounceSignedOut } from "@/components/auth/announce-signed-out";
 import { FormAlert } from "@/components/auth/form-alert";
+import { GoogleSignIn, SignInDivider } from "@/components/auth/google-sign-in";
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { pageTitle } from "@/i18n/page-title";
 
@@ -27,7 +29,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const identity = await getVerifiedIdentity();
   if (identity) redirect(next);
 
-  const t = await getTranslations("Auth");
+  const [t, googleEnabled] = await Promise.all([getTranslations("Auth"), isGoogleSignInEnabled()]);
   return (
     <>
       <AuthPageTitle title={t("signInTitle")} />
@@ -45,6 +47,12 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </FormAlert>
       ) : null}
       <SignInForm next={next} />
+      {googleEnabled ? (
+        <>
+          <SignInDivider />
+          <GoogleSignIn next={next} />
+        </>
+      ) : null}
       <div className="mt-6 flex flex-col gap-2 text-body">
         <Link href="/forgot-password" className="font-medium text-accent-fg underline">
           {t("forgotPasswordLink")}
