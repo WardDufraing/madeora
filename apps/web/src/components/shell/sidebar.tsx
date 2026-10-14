@@ -11,7 +11,14 @@ import type { SidebarState } from "@/preferences/preferences";
 
 import { Brand } from "./brand";
 import { NavLink } from "./nav-link";
-import { isActive, primaryNav, secondaryNav, type NavItem } from "./nav-items";
+import {
+  contextHref,
+  homeIdFromPath,
+  isActive,
+  primaryNav,
+  secondaryNav,
+  type NavItem,
+} from "./nav-items";
 
 export interface SidebarProps {
   /** The state saved on this device, read by the server so the first paint is right. */
@@ -67,14 +74,16 @@ export function Sidebar({ initialState }: SidebarProps) {
     </button>
   );
 
+  const homeId = homeIdFromPath(pathname);
   const renderItems = (items: readonly NavItem[]) => (
     <ul className="flex flex-col gap-1">
       {items.map((item) => (
         <li key={item.id}>
           <NavLink
             item={item}
+            href={contextHref(item, homeId)}
             label={tNav(item.id)}
-            active={isActive(item.href, pathname)}
+            active={isActive(contextHref(item, homeId), pathname)}
             collapsed={collapsed}
             tooltipHidden={tooltipHidden}
             onPointerEnter={showTooltips}

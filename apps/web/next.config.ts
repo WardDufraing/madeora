@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@madeora/config",
     "@madeora/database",
+    "@madeora/domain",
     "@madeora/design-tokens",
     "@madeora/icons",
   ],

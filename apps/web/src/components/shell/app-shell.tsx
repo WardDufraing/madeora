@@ -3,13 +3,17 @@ import type { ReactNode } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ToastProvider } from "@/components/ui/toast";
+import type { MyHome } from "@/homes/types";
 import type { SidebarState } from "@/preferences/preferences";
 
+import { ContextSwitcher } from "./context-switcher";
 import { MobileNav } from "./mobile-nav";
 import { Sidebar } from "./sidebar";
 
 export interface AppShellProps {
   readonly sidebar: SidebarState;
+  /** The Homes the person belongs to, for the context switcher; `null` if they could not be read. */
+  readonly homes: readonly MyHome[] | null;
   readonly children: ReactNode;
 }
 
@@ -17,7 +21,7 @@ export interface AppShellProps {
  * The signed-in application frame: skip link, sidebar (desktop), top bar with the context
  * switcher slot and the small-screen menu, and the main landmark.
  */
-export function AppShell({ sidebar, children }: AppShellProps) {
+export function AppShell({ sidebar, homes, children }: AppShellProps) {
   const t = useTranslations("Shell");
   const tComponents = useTranslations("Components");
 
@@ -43,13 +47,9 @@ export function AppShell({ sidebar, children }: AppShellProps) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-16 items-center gap-3 px-4 md:px-8">
             <MobileNav />
-            {/* Context switcher slot. Only the Personal context exists until Homes do (S09);
-                the spec requires a clearly identified Personal context even with zero Homes. */}
-            <div className="flex items-center gap-2" role="group" aria-label={t("currentContext")}>
-              <span className="rounded-control border border-line bg-surface px-3 py-1.5 text-body font-semibold text-fg">
-                {t("personalContext")}
-              </span>
-            </div>
+            {/* Personal or one Home (S09); the spec requires a clearly identified Personal
+                context even with zero Homes. */}
+            <ContextSwitcher homes={homes} />
             <div className="ms-auto">
               <SignOutButton />
             </div>

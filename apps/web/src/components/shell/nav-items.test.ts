@@ -1,4 +1,13 @@
-import { isActive, primaryNav, secondaryNav, unbuiltSections } from "./nav-items";
+import {
+  contextHref,
+  homeIdFromPath,
+  isActive,
+  primaryNav,
+  secondaryNav,
+  unbuiltSections,
+} from "./nav-items";
+
+const HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
 
 describe("navigation items", () => {
   it("marks the dashboard active only on the dashboard itself", () => {
@@ -27,5 +36,31 @@ describe("navigation items", () => {
 
   it("keeps Trash out of the sidebar (spec: reached from settings)", () => {
     expect([...primaryNav, ...secondaryNav].map((item) => item.href)).not.toContain("/trash");
+  });
+
+  it("reads the open Home from the address, and nothing else", () => {
+    expect(homeIdFromPath(`/homes/${HOME}`)).toBe(HOME);
+    expect(homeIdFromPath(`/homes/${HOME}/settings`)).toBe(HOME);
+    expect(homeIdFromPath(`/homes/${HOME.toUpperCase()}`)).toBe(HOME);
+    expect(homeIdFromPath("/homes/new")).toBeNull();
+    expect(homeIdFromPath("/homes/join")).toBeNull();
+    expect(homeIdFromPath(`/homes/${HOME}x`)).toBeNull();
+    expect(homeIdFromPath("/")).toBeNull();
+    expect(homeIdFromPath("/settings")).toBeNull();
+  });
+
+  it("points Dashboard at the open Home, and leaves every other item alone", () => {
+    const [dashboard, calendar] = primaryNav;
+    if (!dashboard || !calendar) throw new Error("navigation items missing");
+    expect(contextHref(dashboard, HOME)).toBe(`/homes/${HOME}`);
+    expect(contextHref(dashboard, null)).toBe("/?context=personal");
+    expect(isActive(contextHref(dashboard, null), "/")).toBe(true);
+    expect(isActive(contextHref(dashboard, null), "/settings")).toBe(false);
+    expect(contextHref(calendar, HOME)).toBe("/calendar");
+  });
+
+  it("marks a Home's dashboard active only on that page, not on its settings", () => {
+    expect(isActive(`/homes/${HOME}`, `/homes/${HOME}`)).toBe(true);
+    expect(isActive(`/homes/${HOME}`, `/homes/${HOME}/settings`)).toBe(false);
   });
 });

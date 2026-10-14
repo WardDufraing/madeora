@@ -69,7 +69,7 @@ test.describe("registration and email confirmation", () => {
     await page.getByRole("button", { name: "Confirm my email address" }).click();
     await expect(dashboardHeading(page)).toBeVisible();
     // Personal context with zero Homes (spec: Home-independent onboarding).
-    await expect(page.getByRole("group", { name: "Current context" })).toHaveText("Personal");
+    await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/sign-in\?status=signed-out$/);

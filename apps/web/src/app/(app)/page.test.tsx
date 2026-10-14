@@ -5,19 +5,48 @@ import { noPreferences, type StoredPreferences } from "@/preferences/schema";
 import { axeViolations } from "@/test/axe";
 import { renderWithIntl } from "@/test/intl";
 
-import DashboardPage from "./page";
+import Dashboard from "./page";
 
 interface State {
   locale: "en" | "nl";
   stored: StoredPreferences | null;
   timeZone: string;
   zoneSource: "chosen" | "device" | "fallback";
+  homes: { id: string; name: string; timeZone: string; role: string }[];
+  remembered: { kind: "personal" } | { kind: "home"; homeId: string } | null;
+  memberOf: Set<string>;
 }
 const state = vi.hoisted((): State => ({
   locale: "en",
   stored: null,
   timeZone: "UTC",
   zoneSource: "device",
+  homes: [],
+  remembered: null,
+  memberOf: new Set(),
+}));
+
+const HOME_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
+
+class Redirect extends Error {
+  constructor(readonly url: string) {
+    super(`redirect ${url}`);
+  }
+}
+vi.mock("next/navigation", () => ({
+  redirect: (url: string) => {
+    throw new Redirect(url);
+  },
+}));
+vi.mock("@/homes/server", () => ({
+  listMyHomes: () => Promise.resolve({ status: "ok", homes: state.homes }),
+  getRememberedContext: () => Promise.resolve(state.remembered),
+  getHomeContext: (homeId: string) =>
+    Promise.resolve(
+      state.memberOf.has(homeId)
+        ? { status: "ok", context: { home: { id: homeId, name: "Thuis", timeZone: "UTC" } } }
+        : { status: "not-found" },
+    ),
 }));
 
 vi.mock("next-intl/server", async () => {
@@ -62,6 +91,9 @@ beforeEach(() => {
   state.stored = noPreferences;
   state.timeZone = "UTC";
   state.zoneSource = "device";
+  state.homes = [];
+  state.remembered = null;
+  state.memberOf = new Set();
   vi.useFakeTimers({ toFake: ["Date"] });
   // 31 December 2026, 23:30 UTC: already 1 January 2027 in Brussels.
   vi.setSystemTime(new Date(Date.UTC(2026, 11, 31, 23, 30)));
@@ -69,6 +101,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+function DashboardPage(params: { context?: string; notice?: string } = {}) {
+  return Dashboard({ searchParams: Promise.resolve(params) });
+}
 
 describe("DashboardPage", () => {
   it("welcomes a new adult with zero Homes: honest empty widgets and optional Home actions", async () => {
@@ -119,6 +155,47 @@ describe("DashboardPage", () => {
     expect(
       screen.getByText(/\(in UTC, until this device reports its timezone\)/),
     ).toBeInTheDocument();
+  });
+
+  it("hides the Create/Join card once the person has a Home (the switcher offers Create a Home)", async () => {
+    state.homes = [{ id: HOME_ID, name: "Thuis", timeZone: "UTC", role: "owner" }];
+    renderWithIntl(await DashboardPage({ context: "personal" }));
+    expect(screen.queryByRole("region", { name: "Homes" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Your widgets" })).toBeInTheDocument();
+  });
+
+  it("returns to the Home this device used last while the person still belongs to it", async () => {
+    state.remembered = { kind: "home", homeId: HOME_ID };
+    state.memberOf = new Set([HOME_ID]);
+    await expect(DashboardPage()).rejects.toEqual(new Redirect(`/homes/${HOME_ID}`));
+  });
+
+  it("stays personal when the remembered Home is no longer theirs, and says nothing about it", async () => {
+    state.remembered = { kind: "home", homeId: HOME_ID };
+    renderWithIntl(await DashboardPage());
+    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("stays personal when Personal was chosen, even with a remembered Home", async () => {
+    state.remembered = { kind: "home", homeId: HOME_ID };
+    state.memberOf = new Set([HOME_ID]);
+    renderWithIntl(await DashboardPage({ context: "personal" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+  });
+
+  it("explains neutrally that a Home could not be opened", async () => {
+    state.remembered = { kind: "home", homeId: HOME_ID };
+    state.memberOf = new Set([HOME_ID]);
+    renderWithIntl(await DashboardPage({ notice: "home-unavailable" }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "That Home isn't available to you. You're in your personal space.",
+    );
+  });
+
+  it("ignores unknown notices", async () => {
+    renderWithIntl(await DashboardPage({ notice: "<script>" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("has no axe violations", async () => {

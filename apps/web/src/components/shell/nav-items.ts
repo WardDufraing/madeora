@@ -80,8 +80,30 @@ export function isUnbuiltSection(value: string): value is NavId {
   return (unbuiltSections as ReadonlySet<string>).has(value);
 }
 
+const homePath =
+  /^\/homes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
+
+/** The Home whose pages are open (`/homes/{id}/...`), or `null` in the Personal context. */
+export function homeIdFromPath(pathname: string): string | null {
+  return homePath.exec(pathname)?.[1]?.toLowerCase() ?? null;
+}
+
+/**
+ * Where an item leads in the current context: Dashboard opens the Home's dashboard while a Home is
+ * open (S09), the personal dashboard otherwise. Other sections are not Home-aware yet; each
+ * module's step decides when it adds its pages.
+ */
+export function contextHref(item: NavItem, homeId: string | null): string {
+  if (item.id !== "dashboard") return item.href;
+  // In Personal, Dashboard says so, so a Home remembered from earlier cannot pull the person back.
+  return homeId !== null ? `/homes/${homeId}` : "/?context=personal";
+}
+
 /** Whether `href` is the current page or a page inside it. */
-export function isActive(href: string, pathname: string): boolean {
+export function isActive(target: string, pathname: string): boolean {
+  const href = target.split("?")[0] ?? target;
   if (href === "/") return pathname === "/";
+  // A Home's dashboard is current only on itself; its settings page belongs to no nav item yet.
+  if (homeIdFromPath(href) !== null) return pathname.toLowerCase() === href.toLowerCase();
   return pathname === href || pathname.startsWith(`${href}/`);
 }

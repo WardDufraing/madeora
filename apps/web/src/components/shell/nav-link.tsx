@@ -8,6 +8,8 @@ import type { NavItem } from "./nav-items";
 
 export interface NavLinkProps {
   readonly item: NavItem;
+  /** Where the link leads in the current context (see `contextHref`). */
+  readonly href: string;
   readonly label: string;
   readonly active: boolean;
   /** Collapsed sidebar: icon only, with the label kept as the accessible name and a tooltip. */
@@ -22,6 +24,7 @@ export interface NavLinkProps {
 /** One navigation destination, used by the sidebar and the small-screen menu. */
 export function NavLink({
   item,
+  href,
   label,
   active,
   collapsed = false,
@@ -33,7 +36,7 @@ export function NavLink({
   const Icon = item.icon;
   return (
     <Link
-      href={item.href}
+      href={href}
       aria-current={active ? "page" : undefined}
       {...(onNavigate ? { onClick: onNavigate } : {})}
       {...(onPointerEnter ? { onPointerEnter } : {})}

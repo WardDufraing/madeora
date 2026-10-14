@@ -5,6 +5,68 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      home_memberships: {
+        Row: {
+          created_at: string;
+          home_id: string;
+          id: string;
+          role: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          home_id: string;
+          id?: string;
+          role: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          home_id?: string;
+          id?: string;
+          role?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "home_memberships_home_id_fkey";
+            columns: ["home_id"];
+            isOneToOne: false;
+            referencedRelation: "homes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      homes: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          creation_request_id: string;
+          id: string;
+          name: string;
+          timezone: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          creation_request_id: string;
+          id?: string;
+          name: string;
+          timezone: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          creation_request_id?: string;
+          id?: string;
+          name?: string;
+          timezone?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       user_preferences: {
         Row: {
           created_at: string;
@@ -54,6 +116,10 @@ export type Database = {
     Functions: {
       authorize_sign_in_method_change: {
         Args: { p_action: string; p_provider: string };
+        Returns: string;
+      };
+      create_home: {
+        Args: { p_name: string; p_request_id: string; p_timezone: string };
         Returns: string;
       };
     };
