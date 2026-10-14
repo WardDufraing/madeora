@@ -67,7 +67,7 @@ Check: **Clients** lists `Madeora preview` with type Web application.
    - **Skip nonce checks:** off. **Allow users without an email:** off.
    - The **Callback URL (for OAuth)** shown there must be exactly the redirect URI you entered in step 4.4.
    - Click **Save**.
-5. Nothing to change under **Authentication** › **URL Configuration**: the entries ending in `/**` from the preview setup already allow Madeora's `/auth/callback` page.
+5. Click **Authentication**, then **URL Configuration**. Under **Redirect URLs**, check that the preview you will test on is listed with `/**` at the end. For the S08 pull request, click **Add URL**, paste `https://madeora-git-feat-google-sign-in-warddufraings-projects.vercel.app/**` and click **Save URLs** (remove it again once the pull request is merged, as for other branches in `docs/supabase-preview-setup.md`). Without it, Supabase sends you back to the `main` preview after Google instead of to the S08 preview. The `main` entry already covers Madeora's `/auth/callback` page after the merge.
 
 Check: reopen **Google**; it shows Enabled, and the Client ID matches the one in Google Cloud.
 
