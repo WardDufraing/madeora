@@ -22,6 +22,18 @@
   --md-duration-fast: 120ms;
   --md-duration-base: 200ms;
   --md-duration-slow: 240ms;
+  --md-color-palette-purple: #8057f5;
+  --md-color-palette-blue: #2563eb;
+  --md-color-palette-sky: #0284c7;
+  --md-color-palette-teal: #0d9488;
+  --md-color-palette-green: #16a34a;
+  --md-color-palette-ochre: #a16207;
+  --md-color-palette-amber: #d97706;
+  --md-color-palette-orange: #ea580c;
+  --md-color-palette-red: #dc2626;
+  --md-color-palette-pink: #db2777;
+  --md-color-palette-magenta: #c026d3;
+  --md-color-palette-slate: #475569;
   --md-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --md-ease-enter: cubic-bezier(0, 0, 0, 1);
   --md-ease-exit: cubic-bezier(0.3, 0, 1, 1);

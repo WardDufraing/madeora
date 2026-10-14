@@ -44,7 +44,10 @@ select tests.assert_true(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'private'
-      and p.oid::regprocedure::text <> all (array[]::text[])
+      and p.oid::regprocedure::text <> all (array[
+        -- S11: the pure visible-name rule that check constraints on names call; it reads nothing.
+        'private.is_visible_name(text,integer)'
+      ]::text[])
       and (
         has_function_privilege('anon', p.oid, 'execute')
         or has_function_privilege('authenticated', p.oid, 'execute')

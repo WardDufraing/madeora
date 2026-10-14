@@ -33,6 +33,8 @@ export const homeActions = [
   "home.updateSettings",
   "home.invitations.manage",
   "home.invitations.manageAdministrators",
+  "home.members.view",
+  "home.profile.editOwn",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -72,6 +74,12 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // Inviting or admitting Administrators: assigning Administrators is a non-delegable Owner power
   // (spec "Confirmed customizable Administrator permissions"), so no capability reaches it.
   "home.invitations.manageAdministrators": { roles: ["owner"] },
+  // The member directory (S11): every current member sees who else belongs to the Home, with only
+  // the effective name, colour and role (SQL: public.home_directory).
+  "home.members.view": { roles: ["owner", "administrator", "member"] },
+  // Your own nickname, Home display name and accent in this Home (S11). Only ever your own: no
+  // action exists to edit another adult's presentation, and RLS allows only the person's own row.
+  "home.profile.editOwn": { roles: ["owner", "administrator", "member"] },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -110,5 +118,7 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.updateSettings": can("home.updateSettings"),
     "home.invitations.manage": can("home.invitations.manage"),
     "home.invitations.manageAdministrators": can("home.invitations.manageAdministrators"),
+    "home.members.view": can("home.members.view"),
+    "home.profile.editOwn": can("home.profile.editOwn"),
   };
 }

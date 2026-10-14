@@ -1,5 +1,6 @@
 import { defaultAccent, deriveAccent, type AccentTokens } from "./accent.ts";
 import { neutral, overlay, type NeutralTokens, type Theme } from "./neutral.ts";
+import { accentPalette } from "./palette.ts";
 import {
   atmosphere,
   duration,
@@ -79,6 +80,46 @@ export function themeVariables(theme: Theme): [string, string][] {
   return vars;
 }
 
+function accentVariables(colour: string, theme: Theme): [string, string][] {
+  const accent = deriveAccent(colour, theme);
+  return accentKeys.map((key) => [
+    `--md-color-${key === "focusRing" ? "focus" : kebab(key)}`,
+    accent[key],
+  ]);
+}
+
+/**
+ * A person's accent (S11) as CSS that overrides the default accent tokens in light, dark and
+ * follow-the-system themes. Without `scope` it recolours the whole page, with the same selectors
+ * as `tokens.css` so it wins by coming later; with `scope` (a selector such as
+ * `[data-accent-preview="x"]`) only that element and its children, for a preview. Only the accent
+ * tokens change; the atmospheric background follows because it is drawn from
+ * `--md-color-accent`. `null` stands for the default accent of each theme. Throws unless `colour`
+ * is a solid `#rgb` or `#rrggbb`, so nothing but a validated colour can reach a style sheet;
+ * callers pass only fixed selectors as `scope`.
+ */
+export function renderAccentCss(colour: string | null, scope?: string): string {
+  // `null` is the default accent, which differs per theme (the spec's purple for each).
+  const light = accentVariables(colour ?? defaultAccent.light, "light");
+  const dark = accentVariables(colour ?? defaultAccent.dark, "dark");
+  if (scope === undefined) {
+    return [
+      block(':root,\n[data-theme="light"]', light),
+      "@media (prefers-color-scheme: dark) {",
+      block(':root:not([data-theme="light"])', dark, "  "),
+      "}",
+      block('[data-theme="dark"]', dark),
+    ].join("\n");
+  }
+  return [
+    block(scope, light),
+    "@media (prefers-color-scheme: dark) {",
+    block(`:root:not([data-theme="light"]) ${scope}`, dark, "  "),
+    "}",
+    block(`[data-theme="dark"] ${scope}`, dark),
+  ].join("\n");
+}
+
 function staticVariables(): [string, string][] {
   const vars: [string, string][] = [["--md-font-sans", fontFamily.sans]];
   for (const [name, value] of Object.entries(fontSize)) {
@@ -90,6 +131,9 @@ function staticVariables(): [string, string][] {
   for (const [name, value] of Object.entries(iconSize))
     vars.push([`--md-icon-${name}`, `${String(value)}px`]);
   for (const [name, value] of Object.entries(duration)) vars.push([`--md-duration-${name}`, value]);
+  // The curated accent palette, for swatches. The same in every theme: a swatch shows the colour
+  // a person picks, never text on it.
+  for (const { id, color } of accentPalette) vars.push([`--md-color-palette-${id}`, color]);
   for (const [name, value] of Object.entries(easing)) vars.push([`--md-ease-${name}`, value]);
   return vars;
 }

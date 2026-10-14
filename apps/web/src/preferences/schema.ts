@@ -1,6 +1,8 @@
 import { z } from "zod";
 
+import { accentColorSchema, parseAccentColor, type AccentColor } from "@/accent/accent";
 import { isLocale, locales, type Locale } from "@/i18n/locales";
+import { nameProblem, normalizeName } from "@/names/visible-name";
 
 import { normalizeTimeZone } from "./timezone";
 
@@ -62,6 +64,8 @@ export interface StoredPreferences extends RegionalOverrides {
   readonly locale: Locale | null;
   /** A chosen IANA timezone, or `null` for Automatic (this device's zone). */
   readonly timeZone: string | null;
+  /** The global personal accent (S11), or `null` for the default accent. */
+  readonly accentColor: AccentColor | null;
 }
 
 export const noPreferences: StoredPreferences = {
@@ -73,42 +77,40 @@ export const noPreferences: StoredPreferences = {
   numberFormat: null,
   measurementSystem: null,
   timeZone: null,
+  accentColor: null,
 };
 
 /** Error message keys, translated in the `Settings` namespace. */
 export type DisplayNameError = "displayNameTooLong" | "displayNameInvalid";
 
-// At least one letter, digit, symbol (emoji included) or punctuation mark, so a name can never be
-// made only of invisible characters (zero-width spaces, fillers, lone combining marks).
-const visibleCharacter = /[\p{L}\p{N}\p{S}\p{P}]/u;
-// Hangul fillers count as letters but show nothing.
-const fillers = /[\u115F\u1160\u3164\uFFA0]/gu;
-
-// Control characters, line and paragraph separators, and the direction marks, overrides and
-// isolates that could make a name look like someone else's. Zero-width joiners stay allowed: emoji
-// sequences need them. The database's check constraint lists exactly the same code points.
-const forbiddenInName =
-  // eslint-disable-next-line no-control-regex -- refusing control characters is the point
-  /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/u;
-
 /**
- * A display name as typed: NFC-normalized and trimmed. An empty result clears the name (`null`).
- * Length counts characters (code points), as the database does, not bytes.
+ * An optional name other people see, as typed: a display name, nickname or Home display name.
+ * NFC-normalized and trimmed; an empty result clears it (`null`). Otherwise it must pass the
+ * visible-name rule (S11; the S09 Home-name policy in `@/names/visible-name`, which the database
+ * checks too): no zero-width, direction or padding characters, emoji allowed. Length counts
+ * characters (code points), as the database does, not bytes.
  */
-export const displayNameSchema = z
+export const optionalNameSchema = z
   .string()
   .max(1000, { error: "displayNameTooLong" satisfies DisplayNameError })
-  .transform((value) => value.normalize("NFC").trim())
-  .refine((value) => Array.from(value).length <= DISPLAY_NAME_MAX_LENGTH, {
-    error: "displayNameTooLong" satisfies DisplayNameError,
-  })
-  .refine((value) => !forbiddenInName.test(value), {
-    error: "displayNameInvalid" satisfies DisplayNameError,
-  })
-  .refine((value) => value === "" || visibleCharacter.test(value.replace(fillers, "")), {
-    error: "displayNameInvalid" satisfies DisplayNameError,
-  })
-  .transform((value) => (value === "" ? null : value));
+  .transform((value, context) => {
+    const name = normalizeName(value);
+    if (name === "") return null;
+    const problem = nameProblem(name, DISPLAY_NAME_MAX_LENGTH);
+    if (problem) {
+      context.addIssue({
+        code: "custom",
+        message: (problem === "tooLong"
+          ? "displayNameTooLong"
+          : "displayNameInvalid") satisfies DisplayNameError,
+      });
+      return z.NEVER;
+    }
+    return name;
+  });
+
+/** The account's global display name (S07, stricter from S11). */
+export const displayNameSchema = optionalNameSchema;
 
 const timeZoneSchema = z
   .string()
@@ -133,6 +135,7 @@ export const preferencesPatchSchema = z
     numberFormat: z.enum(numberFormats).nullable().optional(),
     measurementSystem: z.enum(measurementSystems).nullable().optional(),
     timeZone: z.union([z.null(), timeZoneSchema]).optional(),
+    accentColor: accentColorSchema.nullable().optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { error: "empty" });
 
@@ -164,5 +167,6 @@ export function parseStoredPreferences(
     numberFormat: oneOf(numberFormats, value.numberFormat),
     measurementSystem: oneOf(measurementSystems, value.measurementSystem),
     timeZone: typeof zone === "string" ? normalizeTimeZone(zone) : null,
+    accentColor: parseAccentColor(value.accentColor),
   };
 }

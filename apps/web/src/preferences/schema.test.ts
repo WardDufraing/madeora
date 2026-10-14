@@ -1,3 +1,5 @@
+import { acceptedNames, refusedNames } from "@/names/visible-name-cases";
+
 import {
   displayNameSchema,
   noPreferences,
@@ -49,6 +51,18 @@ describe("displayNameSchema", () => {
     },
   );
 
+  // S11: display names follow the visible-name rule, held to the shared list (also run against
+  // the database in tests/db/rls/visible-names.test.ts).
+  it.each(acceptedNames)("accepts %s (shared name list)", (_label, name) => {
+    expect(displayNameSchema.safeParse(name).success).toBe(true);
+  });
+
+  it.each(refusedNames)("refuses %s (shared name list)", (_label, name) => {
+    const result = displayNameSchema.safeParse(name);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("displayNameInvalid");
+  });
+
   it("accepts what the database accepts: inner no-break spaces and emoji joiners", () => {
     // The same strings as tests/db/rls/user_preferences.test.sql, so app and database agree.
     expect(displayNameSchema.parse("Ali\u00A0ce \u{1F469}\u200D\u{1F467}")).toBe(
@@ -86,6 +100,11 @@ describe("preferencesPatchSchema", () => {
       timeZone: "Europe/Brussels",
     });
     expect(preferencesPatchSchema.parse({ timeZone: null })).toEqual({ timeZone: null });
+    expect(preferencesPatchSchema.parse({ accentColor: "#2563EB" })).toEqual({
+      accentColor: "#2563eb",
+    });
+    expect(preferencesPatchSchema.parse({ accentColor: null })).toEqual({ accentColor: null });
+    expect(preferencesPatchSchema.safeParse({ accentColor: "blue" }).success).toBe(false);
     expect(preferencesPatchSchema.parse({ displayName: null })).toEqual({ displayName: null });
   });
 
@@ -118,6 +137,7 @@ describe("parseStoredPreferences", () => {
       numberFormat: "comma-dot",
       measurementSystem: "metric",
       timeZone: "Asia/Tokyo",
+      accentColor: "#2563eb",
     };
     expect(parseStoredPreferences(stored)).toEqual(stored);
   });
@@ -133,6 +153,7 @@ describe("parseStoredPreferences", () => {
         numberFormat: undefined,
         measurementSystem: "imperial",
         timeZone: "+01:00",
+        accentColor: "#2563EB",
       }),
     ).toEqual(noPreferences);
   });

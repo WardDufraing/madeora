@@ -89,6 +89,7 @@ describe("PATCH /api/v1/me/preferences", () => {
         numberFormat: null,
         measurementSystem: null,
         timeZone: "Europe/Brussels",
+        accentColor: null,
       },
     });
   });

@@ -1,0 +1,48 @@
+# S11 independent review: member directory, Home-specific names and personal accents
+
+- **Branch:** `feat/member-directory-and-profiles`
+- **Date:** 2026-10-14
+- **Reviewer:** one independent reviewer subagent acting as a senior developer/architect, with fresh context. It received only the branch diff (without the generated `database.types.ts`), `plans/steps/S11-brief.md` and the spec excerpts (`docs/product/Project-specification.md` lines 270–275, 444–526, 2451, 3239). It did not run tests.
+- **Verdict:** **PASS**. No BLOCKER or HIGH findings. Two MEDIUM and five LOW findings. The implementer fixed both MEDIUM findings and four LOW findings, and checked the fixes without a second full review (owner's process for S11).
+
+## Findings and resolution
+
+| ID  | Severity | Finding                                                                                                                                                                                                                                                     | Resolution                                                                                                                                                                                                                                                                                                                                     |
+| --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1  | MEDIUM   | The owner guide's "undo, then apply again" flow fails: the undo block keeps `private.is_visible_name`, which the migration created without `or replace`.                                                                                                    | **Fixed.** The migration uses `create or replace function`, with a comment explaining why. The guide says applying the file again works. Verified with a temporary database test (undo block, then the whole migration again, then a check): it passed. The test was not kept.                                                                 |
+| M2  | MEDIUM   | Invisible and bidi characters were written literally (not as escapes) in the migration's regexes and in three test files. The regexes were functionally equal to S09, but they could not be checked by eye, and GitHub would flag them as hidden bidi text. | **Fixed.** The function's regex block is now rebuilt from the S09 `homes_name_check` text, so the escapes are identical to S09. The SQL tests use `E'\u200B'` style and the TypeScript tests use `\u{200B}`. A scan of every changed file finds no invisible, bidi or control characters. The database tests, including the shared-list test, pass. |
+| L1  | LOW      | In the accent picker, choosing "Your own colour" from a palette colour sent the same palette colour back, so the radio did not stay selected.                                                                                                               | **Fixed.** The picker now keeps a separate "your own colour" mode. A new component test covers choosing it, and switching back to a palette colour.                                                                                                                                                                                            |
+| L2  | LOW      | The duplicate-name qualifier switched between date and date-time with the role filter: same-day detection counted only the filtered list.                                                                                                                   | **Fixed.** Same-day detection runs over all members (new `all` prop). A test checks that a filtered list keeps the date-time qualifier.                                                                                                                                                                                                        |
+| L3  | LOW      | The colour clash notice was not announced. Two members still on the default colour always trigger it.                                                                                                                                                       | **Partly fixed.** The notice is now a polite status message. Whether default-versus-default should warn is left to the owner: the spec makes no colour unique and assigns none automatically.                                                                                                                                                  |
+| L4  | LOW      | `home.members.view` existed in the engine but no page checked it.                                                                                                                                                                                           | **Fixed.** The members page asks the engine before reading the directory. The database function checks membership again.                                                                                                                                                                                                                       |
+| L5  | LOW      | Clearing invalid display names cannot be undone, and the guide's pre-check counts fewer names than the real rule catches.                                                                                                                                   | **Accepted.** Brief decision 2. The guide already says the pre-check is approximate: the exact rule only exists once the function is created.                                                                                                                                                                                                  |
+
+## Reviewer's explicit checks (summary)
+
+- **Requirements:** matches brief scope 1–6 and decisions 1–11. Out-of-scope items (image avatars, children, Home theme, management actions) are correctly left out.
+- **Cross-Home isolation:** `home_directory` checks the caller's membership of exactly that Home. Colour comparisons use only that Home. The Home accent override applies only inside that Home's layout. SQL and E2E tests cover a third Home.
+- **Permissions:** profiles can only be read and written as your own row, while you are a current member. There is no delete grant. A trigger stops a row moving to another Home or person. Owner and Administrator writes are refused (tested). A former member loses access (tested). The API takes the user id from the verified session only.
+- **Security-definer function:** empty `search_path`; checks membership itself; gives the same 42501 error for a missing, unknown or foreign Home; returns only the six directory columns (asserted in a test); execute for `authenticated` only.
+- **Secrets:** none added. Logs carry error codes only.
+- **Input validation:** Zod on the client and the API (strict object, same-origin, JSON, 2 KB limit). Database checks (`is_visible_name`, `^#[0-9a-f]{6}$`). Values are validated again when read.
+- **CSS injection:** only validated hex colours and fixed or sanitized selectors reach a `<style>` element. A test tries an injection payload.
+- **Caching:** request-scoped reads, `no-store` API answers, `router.refresh()` after saves. No cross-user cache.
+- **Migration safety:** the replaced Home-name check is equivalent to S09's. Display names are cleared before the new check is added. The new column is nullable. Undo, then apply again, works after the M1 fix.
+- **Test coverage:** unit, component (with axe), route, SQL RLS, shared-list database test, and E2E in two themes and at phone width.
+- **Accessibility:** labelled swatches, the avatar hidden next to the name, native controls, a GET form that works without JavaScript, `bdi` isolation, announced results.
+- **Performance:** one RPC per directory page and one extra row per Home page, cached per request.
+- **Maintainability:** ADR 0013, one shared name rule, one shared test list.
+
+## Verification after the fixes (implementer)
+
+- Web unit and component tests for components, members and API routes: 488 passed. Lint and typecheck clean. Prettier check clean.
+- Database fallback: 28 passed (27, plus the temporary undo-and-apply-again test). Database types up to date.
+- E2E fallback for `members`, `shell` and `preferences`: 51 passed.
+- The full suite ran once before the review: format, lint, typecheck, unit tests (all workspaces), build, database tests and E2E. The full E2E run had 113 of 114 passing. The one failure, a dark-theme preview colour, was fixed before the review, and the affected specs then passed (51 of 51).
+
+## Remaining risks and test gaps
+
+- The owner must apply the migration to `madeora-preview` and `madeora-production`, in order. Display names it clears cannot be restored.
+- Not tested: a re-join starts with no overrides (follows from the cascade), and a profile save racing a membership removal (the foreign key answers 23503, which the route turns into 404).
+- When children and Household Displays arrive, `home_directory` will need their privacy rules.
+- Owner decision: should two members who both have the default colour see the "same colour" notice?
