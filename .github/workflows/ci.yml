@@ -95,6 +95,11 @@ jobs:
     name: Format, lint, typecheck, unit tests, build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      # Synthetic: the local Supabase stack's address and its fixed, public development key. Nothing
+      # in this job contacts Supabase; the build only needs well-formed values.
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,7 +121,10 @@ jobs:
   e2e:
     name: E2E smoke tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      SUPABASE_TELEMETRY_DISABLED: "1"
+      DO_NOT_TRACK: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -129,8 +137,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Installs the Chromium build that matches the pinned @playwright/test version.
       - run: pnpm --filter @madeora/e2e exec playwright install --with-deps chromium
+      # Accounts need Supabase Auth: a fresh local stack with only the database, Auth, the API
+      # gateway and the mail catcher that Playwright reads confirmation and reset emails from.
+      - name: Start a fresh local Supabase stack (Auth and mail catcher)
+        run: pnpm exec supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - name: Point the app at the local Supabase stack
+        run: |
+          status="$(pnpm exec supabase status -o env)"
+          value() { printf '%s\n' "$status" | sed -n "s/^$1=\"\(.*\)\"$/\1/p"; }
+          url="$(value API_URL)"
+          key="$(value PUBLISHABLE_KEY)"
+          if [ -z "$key" ]; then key="$(value ANON_KEY)"; fi
+          if [ -z "$url" ] || [ -z "$key" ]; then echo "supabase status did not report the API URL and key" >&2; exit 1; fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$url"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$key"
+          } >> "$GITHUB_ENV"
       # Builds the web app first (Turborepo dependency), then runs Playwright against it.
       - run: pnpm test:e2e
+      - name: Show Supabase Auth logs when a step fails
+        if: failure()
+        run: docker logs supabase_auth_madeora --tail 200 || true
       - name: Keep the Playwright report when tests fail
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

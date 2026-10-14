@@ -43,7 +43,13 @@ describe("getServerEnv", () => {
 describe("getPublicEnv", () => {
   it("reads NEXT_PUBLIC_ values from process.env", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://madeora.test");
-    expect(getPublicEnv()).toEqual({ NEXT_PUBLIC_APP_URL: "https://madeora.test" });
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_synthetic");
+    expect(getPublicEnv()).toEqual({
+      NEXT_PUBLIC_APP_URL: "https://madeora.test",
+      NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.test",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic",
+    });
   });
 
   it("names a missing public variable", () => {
@@ -53,8 +59,12 @@ describe("getPublicEnv", () => {
   });
 
   it("validates an explicit source", () => {
-    expect(() => getPublicEnv({ NEXT_PUBLIC_APP_URL: "ftp://example.test" })).toThrow(
-      "NEXT_PUBLIC_APP_URL (invalid)",
-    );
+    expect(() =>
+      getPublicEnv({
+        NEXT_PUBLIC_APP_URL: "ftp://example.test",
+        NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.test",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic",
+      }),
+    ).toThrow("NEXT_PUBLIC_APP_URL (invalid)");
   });
 });

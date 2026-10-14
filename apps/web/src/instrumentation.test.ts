@@ -6,6 +6,8 @@ describe("register", () => {
     vi.stubEnv("VERCEL_ENV", "");
     vi.stubEnv("VERCEL_BRANCH_URL", "");
     vi.stubEnv("VERCEL_TARGET_ENV", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_synthetic");
   });
 
   afterEach(() => {

@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ToastProvider } from "@/components/ui/toast";
 import type { SidebarState } from "@/preferences/preferences";
 
@@ -48,6 +49,9 @@ export function AppShell({ sidebar, children }: AppShellProps) {
               <span className="rounded-control border border-line bg-surface px-3 py-1.5 text-body font-semibold text-fg">
                 {t("personalContext")}
               </span>
+            </div>
+            <div className="ms-auto">
+              <SignOutButton />
             </div>
           </header>
           <main id="main" tabIndex={-1} className="flex-1 px-4 pb-10 md:px-8 focus:outline-none">

@@ -12,7 +12,7 @@ export interface TextFieldProps extends Omit<
   /** Helper text under the label. */
   readonly description?: string;
   /** Validation message. When set, the field is marked invalid and the message is linked to it. */
-  readonly error?: string;
+  readonly error?: string | undefined;
   readonly className?: string;
   readonly ref?: Ref<HTMLInputElement>;
 }
