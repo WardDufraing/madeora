@@ -38,13 +38,16 @@ export function negotiateLocale(header: string | null | undefined): Locale | und
 }
 
 /**
- * The interface language for a request: the person's saved choice on this device, else the
- * browser's preferred languages, else English. Invalid saved values are ignored.
+ * The interface language for a request: the language saved on the account (the same on every
+ * device and in every Home), else the choice saved on this device, else the browser's preferred
+ * languages, else English. Invalid saved values are ignored.
  */
 export function resolveLocale(input: {
+  readonly account?: string | null | undefined;
   readonly saved: string | undefined;
   readonly acceptLanguage: string | null | undefined;
 }): Locale {
+  if (isLocale(input.account)) return input.account;
   if (isLocale(input.saved)) return input.saved;
   return negotiateLocale(input.acceptLanguage) ?? defaultLocale;
 }

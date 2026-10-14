@@ -9,6 +9,8 @@ import {
 } from "./preferences";
 import type { Locale } from "@/i18n/locales";
 
+import { TIMEZONE_COOKIE } from "./timezone";
+
 // Browser-only helpers. Each takes an already-typed value, so only allow-listed values are written.
 
 function write(name: string, value: string): void {
@@ -30,4 +32,9 @@ export function saveSidebar(state: SidebarState): void {
 /** Saves the language; the caller refreshes the page data so the server renders it. */
 export function saveLocale(locale: Locale): void {
   write(LOCALE_COOKIE, locale);
+}
+
+/** Remembers the zone this device reports, so the server renders times in it (Automatic mode). */
+export function saveDeviceTimeZone(timeZone: string): void {
+  write(TIMEZONE_COOKIE, timeZone);
 }

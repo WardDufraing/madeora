@@ -5,7 +5,48 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never;
+      user_preferences: {
+        Row: {
+          created_at: string;
+          date_format: string | null;
+          display_name: string | null;
+          locale: string | null;
+          measurement_system: string | null;
+          number_format: string | null;
+          time_format: string | null;
+          timezone: string | null;
+          updated_at: string;
+          user_id: string;
+          week_start: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          date_format?: string | null;
+          display_name?: string | null;
+          locale?: string | null;
+          measurement_system?: string | null;
+          number_format?: string | null;
+          time_format?: string | null;
+          timezone?: string | null;
+          updated_at?: string;
+          user_id?: string;
+          week_start?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          date_format?: string | null;
+          display_name?: string | null;
+          locale?: string | null;
+          measurement_system?: string | null;
+          number_format?: string | null;
+          time_format?: string | null;
+          timezone?: string | null;
+          updated_at?: string;
+          user_id?: string;
+          week_start?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

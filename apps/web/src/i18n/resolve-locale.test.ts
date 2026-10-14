@@ -32,6 +32,18 @@ describe("negotiateLocale", () => {
 });
 
 describe("resolveLocale", () => {
+  it("prefers the account's language over this device's and the browser's", () => {
+    expect(resolveLocale({ account: "nl", saved: "en", acceptLanguage: "en" })).toBe("nl");
+    expect(resolveLocale({ account: "en", saved: "nl", acceptLanguage: "nl" })).toBe("en");
+  });
+
+  it.each([null, undefined, "fr", "NL"])(
+    "uses this device's language when the account has none or an invalid one (%j)",
+    (account) => {
+      expect(resolveLocale({ account, saved: "nl", acceptLanguage: "en" })).toBe("nl");
+    },
+  );
+
   it("prefers the language saved on this device", () => {
     expect(resolveLocale({ saved: "nl", acceptLanguage: "en" })).toBe("nl");
   });

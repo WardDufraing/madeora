@@ -44,7 +44,9 @@ export async function settle(page: Page) {
       document
         .getAnimations()
         .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
-        .map((animation) => animation.finished),
+        // A cancelled animation (for example when React re-renders its element) is at rest too;
+        // its `finished` promise rejects with AbortError.
+        .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
 }

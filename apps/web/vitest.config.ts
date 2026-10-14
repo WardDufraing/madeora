@@ -16,5 +16,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Tests that read "this device's" timezone see UTC on every machine, not the developer's zone.
+    env: { TZ: "UTC" },
   },
 });

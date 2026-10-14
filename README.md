@@ -14,7 +14,7 @@ The code is a Turborepo + pnpm monorepo:
 - `tests/db`: database and RLS tests, with the multi-actor test helpers.
 - `tools/repo-checks`: repository guards run by CI (product-specification guard, dependency audit).
 
-The app shell exists (sidebar, small-screen menu, light/dark/system theme, Dutch and English). No product modules exist yet.
+The app shell exists (sidebar, small-screen menu, light/dark/system theme, Dutch and English), with adult accounts, a personal dashboard for people without a Home, and account preferences (display name, language, regional formats, timezone). No product modules exist yet.
 
 ## Where to start
 
