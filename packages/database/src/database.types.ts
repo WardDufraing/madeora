@@ -52,7 +52,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      authorize_sign_in_method_change: {
+        Args: { p_action: string; p_provider: string };
+        Returns: string;
+      };
     };
     Enums: {
       [_ in never]: never;

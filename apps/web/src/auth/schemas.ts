@@ -71,3 +71,9 @@ export function parseTokenHash(value: string | string[] | undefined): string | n
   if (typeof value !== "string") return null;
   return /^(?:pkce_)?[a-f0-9]{20,128}$/i.test(value) ? value : null;
 }
+
+/** Typing the current password again before a sensitive change (S08). */
+export const reauthenticateSchema = z.object({
+  password: z.string().min(1, { error: "passwordRequired" satisfies AuthFieldError }),
+});
+export type ReauthenticateValues = z.infer<typeof reauthenticateSchema>;

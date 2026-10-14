@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { requireIdentity } from "@/auth/identity";
+import { getVerifiedUser, requireIdentity } from "@/auth/identity";
+import { isGoogleSignInEnabled } from "@/auth/providers";
+import { describeSignInMethods } from "@/auth/sign-in-methods";
 import { FormAlert } from "@/components/auth/form-alert";
 import { DisplayNameSetting } from "@/components/settings/display-name-setting";
 import { LanguageSetting } from "@/components/settings/language-setting";
 import { RegionalSetting } from "@/components/settings/regional-setting";
+import { SignInMethodsSetting } from "@/components/settings/sign-in-methods-setting";
 import { ThemeSetting } from "@/components/settings/theme-setting";
 import { TimeZoneSetting } from "@/components/settings/time-zone-setting";
 import { PageHeader } from "@/components/shell/page-header";
@@ -22,13 +25,29 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: await pageTitle(t("settings")) };
 }
 
+interface SettingsPageProps {
+  readonly searchParams: Promise<{ readonly linked?: string; readonly unlinked?: string }>;
+}
+
 /**
- * Account preferences (the same on every device, S07) and this device's appearance (S05).
- * Each form saves on its own, so a failed save never loses what was typed in another.
+ * Account preferences (the same on every device, S07), sign-in methods (S08) and this device's
+ * appearance (S05). Each form saves on its own, so a failed save never loses what was typed in
+ * another.
  */
-export default async function SettingsPage() {
-  await requireIdentity();
-  const [tNav, t, locale, account, { theme }, deviceTimeZone, regional] = await Promise.all([
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
+  const { userId } = await requireIdentity();
+  const [
+    tNav,
+    t,
+    locale,
+    account,
+    { theme },
+    deviceTimeZone,
+    regional,
+    user,
+    googleEnabled,
+    params,
+  ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
     getLocale(),
@@ -36,6 +55,9 @@ export default async function SettingsPage() {
     getDevicePreferences(),
     getDeviceTimeZone(),
     getRegionalFormats(),
+    getVerifiedUser(),
+    isGoogleSignInEnabled(),
+    searchParams,
   ]);
   const stored = account.status === "ok" ? account.preferences : noPreferences;
 
@@ -66,6 +88,24 @@ export default async function SettingsPage() {
             />
           </div>
         </Card>
+        {user ? (
+          <div id="sign-in-methods" className="scroll-mt-20">
+            <Card title={t("signInMethods")} description={t("signInMethodsHint")}>
+              <SignInMethodsSetting
+                userId={userId}
+                methods={describeSignInMethods(user)}
+                googleAvailable={googleEnabled}
+                notice={
+                  params.linked === "google"
+                    ? "linked"
+                    : params.unlinked === "google"
+                      ? "unlinked"
+                      : null
+                }
+              />
+            </Card>
+          </div>
+        ) : null}
         <Card title={t("appearance")}>
           <ThemeSetting initialTheme={theme} />
         </Card>

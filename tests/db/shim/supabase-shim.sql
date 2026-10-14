@@ -10,11 +10,14 @@
 --   * Supabase's default grants on schema public, so RLS is the only barrier, exactly as on Supabase;
 --   * auth.users (only the columns seeds use) and auth.uid() / auth.role() / auth.jwt(), which read
 --     the same request.jwt.* settings as on Supabase;
+--   * auth.identities, auth.sessions, auth.mfa_amr_claims and auth.flow_state with the columns,
+--     keys and cascades Supabase Auth uses (S08 guards identities and reads sessions and link flows);
 --   * the `extensions` schema with pgcrypto and uuid-ossp.
 -- Runs as the cluster superuser (supabase_admin), like Supabase's own image setup.
 --
--- Known differences from Supabase: PostgreSQL 16 here, 17 there; auth.users is a small subset
--- owned by supabase_admin (Supabase: supabase_auth_admin, many more columns); no GoTrue, PostgREST,
+-- Known differences from Supabase: PostgreSQL 16 here, 17 there; auth.users, auth.identities,
+-- auth.sessions, auth.mfa_amr_claims and auth.flow_state are small subsets owned by supabase_admin (Supabase:
+-- supabase_auth_admin, more columns and RLS on); no GoTrue, PostgREST,
 -- Realtime or other extensions. A test that passes here but fails in CI is a shim gap: fix the shim.
 
 \set ON_ERROR_STOP on
@@ -70,6 +73,56 @@ create table auth.users (
   deleted_at timestamptz
 );
 grant all on auth.users to postgres;
+
+-- Supabase Auth's identities: one row per sign-in method of an account (email, google, ...).
+create table auth.identities (
+  provider_id text not null,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  identity_data jsonb not null,
+  provider text not null,
+  last_sign_in_at timestamptz,
+  created_at timestamptz,
+  updated_at timestamptz,
+  email text generated always as (lower(identity_data ->> 'email')) stored,
+  id uuid primary key default gen_random_uuid(),
+  constraint identities_provider_id_provider_unique unique (provider_id, provider)
+);
+grant all on auth.identities to postgres;
+
+create table auth.sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz,
+  updated_at timestamptz,
+  not_after timestamptz
+);
+grant all on auth.sessions to postgres;
+
+-- How each session was authenticated (the `amr` claim of its access tokens).
+create table auth.mfa_amr_claims (
+  session_id uuid not null references auth.sessions (id) on delete cascade,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  authentication_method text not null,
+  id uuid primary key,
+  constraint mfa_amr_claims_session_id_authentication_method_pkey
+    unique (session_id, authentication_method)
+);
+grant all on auth.mfa_amr_claims to postgres;
+
+-- The PKCE flow states of OAuth sign-ins and links (no foreign keys, as on Supabase).
+create table auth.flow_state (
+  id uuid primary key,
+  user_id uuid,
+  auth_code text,
+  provider_type text not null,
+  authentication_method text not null,
+  created_at timestamptz,
+  updated_at timestamptz,
+  auth_code_issued_at timestamptz,
+  linking_target_id uuid
+);
+grant all on auth.flow_state to postgres;
 
 create function auth.uid() returns uuid
   language sql stable

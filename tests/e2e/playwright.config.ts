@@ -27,6 +27,17 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState },
     },
+    // Google sign-in (S08) needs the stand-in Google that only `pnpm test:e2e:fallback` runs
+    // (tests/e2e/scripts/fake-google.ts); CI runs it in its own job.
+    ...(process.env.PLAYWRIGHT_FAKE_GOOGLE === "1"
+      ? [
+          {
+            name: "google",
+            testMatch: /google\/.*\.spec\.ts$/,
+            use: { ...devices["Desktop Chrome"] },
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: `pnpm --filter @madeora/web exec next start --hostname 127.0.0.1 --port ${String(port)}`,

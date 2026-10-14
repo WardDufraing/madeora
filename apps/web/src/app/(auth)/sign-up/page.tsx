@@ -4,6 +4,8 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { getVerifiedIdentity } from "@/auth/identity";
+import { isGoogleSignInEnabled } from "@/auth/providers";
+import { GoogleSignIn, SignInDivider } from "@/components/auth/google-sign-in";
 import { SignUpForm } from "@/components/auth/sign-up-form";
 import { pageTitle } from "@/i18n/page-title";
 
@@ -18,11 +20,17 @@ export default async function SignUpPage() {
   const identity = await getVerifiedIdentity();
   if (identity) redirect("/");
 
-  const t = await getTranslations("Auth");
+  const [t, googleEnabled] = await Promise.all([getTranslations("Auth"), isGoogleSignInEnabled()]);
   return (
     <>
       <AuthPageTitle title={t("signUpTitle")} />
       <SignUpForm />
+      {googleEnabled ? (
+        <>
+          <SignInDivider />
+          <GoogleSignIn next="/" />
+        </>
+      ) : null}
       <p className="mt-6 text-body text-fg-muted">
         {t("haveAccount")}{" "}
         <Link href="/sign-in" className="font-medium text-accent-fg underline">
