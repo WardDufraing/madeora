@@ -18,7 +18,7 @@ Checked on 14 October 2026:
 ## Decision
 
 - **Production deploys from the `production` branch only,** as ADR 0002 already says. `apps/web/vercel.json` no longer switches production off; its Ignored Build Step now skips any production build whose Git branch is not `production` (including deploys without Git), and a repository test checks that rule. A release is still the owner's pull request from `main` into `production` (`docs/github-setup.md` section D).
-- **Production is public** at its Vercel production domain. Previews stay behind Vercel Authentication.
+- **Production is public** at its Vercel production domain, the owner's own `www.madeora.studio` (registered by the owner, about €20 a year). Previews stay behind Vercel Authentication.
 - **A separate free Supabase project, `madeora-production`** (EU, Frankfurt), used only by production. Production gets its public URL and publishable key, never a secret key, and its own Resend API key for SMTP. Owner guide: `docs/production-setup.md`.
 - **Demo data only.** Until S49 decides backups, recovery and the privacy position (`architecture.md` §25), production holds the owner's own and demo accounts, never real household data.
 - **Sign-up closed on production until S10** (default; the owner can switch it on with one Supabase setting). Until S10 production email reaches only the owner's own address, so anyone else who signs up would wait for a confirmation that never arrives, and their address would be stored before the privacy position is settled. The owner creates demo accounts in the Supabase dashboard. The sign-up page answers "New accounts can't be created here yet."

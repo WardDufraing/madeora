@@ -8,7 +8,7 @@ Production holds **demo accounts only**: your own and accounts you create for pe
 
 Write down three things as you go; later steps ask for them:
 
-- **Production address**, from step 2, for example `https://madeora.vercel.app`
+- **Production address**, from step 2: `https://www.madeora.studio`
 - **Turnstile site key**, from step 3
 - **Supabase project address** of `madeora-production`, from step 4.7, for example `https://abcdefghijklmnop.supabase.co`
 
@@ -23,17 +23,17 @@ The free plan allows 2 active projects; `madeora-preview` uses one.
 
 Check: apart from `madeora-preview`, no other project shows as active. If another one is active (for example an old experiment), open it, click **Project Settings**, then **General**, then **Pause project**, or tell Claude if you want to keep it running.
 
-## 2. Find the production address
+## 2. The production address
+
+Production uses the owner's own domain, `madeora.studio` (registered by the owner, about €20 a year; see `docs/provider-cost-register.md`). The **production address** is `https://www.madeora.studio`.
 
 1. Open https://vercel.com/dashboard, click **madeora**, then **Settings**, then **Domains**.
-2. Look for an address that ends in `.vercel.app` and has no `-git-` in it, for example `madeora.vercel.app`.
-3. If there is none:
-   1. Click **Add Domain**.
-   2. Type `madeora.vercel.app` and click **Add**. If Vercel says it is taken, try `madeora-app.vercel.app` (or another short name ending in `.vercel.app`).
-   3. If Vercel asks which environment, choose **Production**.
-4. Write it down with `https://` in front and nothing after it, for example `https://madeora.vercel.app`. That is the **production address**.
+2. Check that `www.madeora.studio` is listed, connected to **Production**, with a valid configuration, and that `madeora.studio` redirects to it.
+3. If the domain is ever missing: click **Add Domain**, type `www.madeora.studio`, click **Add**, choose **Production**, and follow the DNS records Vercel shows at your domain registrar.
 
-Check: the Domains page lists the address, connected to **Production**.
+Check: opening `https://madeora.studio` in a browser ends up at `https://www.madeora.studio`.
+
+If you set up production earlier with a `.vercel.app` address, follow "Address changes" under **Later** to switch every setting to `https://www.madeora.studio`.
 
 ## 3. Create the Turnstile widget (Cloudflare)
 
@@ -41,7 +41,7 @@ Check: the Domains page lists the address, connected to **Production**.
 2. In the Cloudflare dashboard, click **Turnstile** in the left sidebar (under **Application security** on newer dashboards).
 3. Click **Add widget** and fill in:
    - **Widget name:** `madeora-production`
-   - **Hostname management:** click **Add hostnames**, type the production address **without** `https://` (for example `madeora.vercel.app`), click **Add**, tick it and click **Add**.
+   - **Hostname management:** click **Add hostnames**, type `www.madeora.studio` (the production address **without** `https://`), click **Add**, tick it and click **Add**.
    - **Widget Mode:** `Managed`
    - **Would you like to opt for pre-clearance for this site?** `No`
 4. Click **Create**.
@@ -82,7 +82,7 @@ Check: reopen the page. Confirm email is on, the minimum length is 12, Allow new
 
 1. Click **Authentication**, then **URL Configuration**.
 2. **Site URL:** paste the production address and click **Save**.
-3. Under **Redirect URLs**, click **Add URL**, paste the production address followed by `/**` (for example `https://madeora.vercel.app/**`) and click **Save URLs**.
+3. Under **Redirect URLs**, click **Add URL**, paste `https://www.madeora.studio/**` and click **Save URLs**.
 
 Check: Redirect URLs shows exactly one entry, the production address ending in `/**`, with no other `*`.
 
@@ -161,7 +161,7 @@ Check: the Users list shows the address. To take a demo account away later, clic
    | Key                                    | Value                                       |
    | -------------------------------------- | ------------------------------------------- |
    | `APP_ENV`                              | `production`                                |
-   | `NEXT_PUBLIC_APP_URL`                  | the production address                      |
+   | `NEXT_PUBLIC_APP_URL`                  | `https://www.madeora.studio`                |
    | `NEXT_PUBLIC_SUPABASE_URL`             | the Supabase project address                |
    | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | the `madeora-production` publishable key    |
    | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | the Turnstile **Site Key** (not the secret) |
@@ -187,7 +187,7 @@ If the deployment says **Error**, click it and open **Build Logs**. A line namin
 
 ## 8. Check that it works
 
-Always share exactly the production address from step 2. Vercel also serves production on longer `.vercel.app` addresses, but Turnstile only works on the hostname you gave it in step 3, so on any other address the security check fails.
+Always share `https://www.madeora.studio`. Vercel also serves production on `.vercel.app` addresses, but Turnstile only works on the hostname you gave it in step 3, so on any other address the security check fails.
 
 1. **Public:** open the production address in a private browser window. The Madeora sign-in page opens, without a Vercel login, and shows the Turnstile check above the **Sign in** button.
 2. **Sign in:** wait until Turnstile shows a tick, sign in with your own account from step 5, and you land on the dashboard. Sign out again.
