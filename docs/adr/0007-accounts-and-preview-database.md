@@ -1,6 +1,6 @@
 # ADR 0007: Adult email/password accounts and the preview database
 
-- **Status:** Accepted for S06 (build-plan defaults; the owner may still choose Turnstile now or a hosted development project, see "Open owner choices").
+- **Status:** Accepted for S06 (build-plan defaults where the owner has not chosen; see "Open owner choices").
 - **Date:** 2026-10-14
 - **Step:** S06, adult email/password accounts
 
@@ -18,7 +18,7 @@ Facts checked on 2026-10-13 (supabase.com/pricing, Supabase Auth docs and the Su
 
 - The cookie client (`@supabase/ssr`) for sign-in and email confirmation, the only flows that should leave the browser signed in.
 - A memory-only client for sign-up, resend and reset requests, which never sign anyone in and so leave no cookies behind.
-- A separate memory-only client for the password reset. Supabase marks a session opened from a reset link exactly like one opened from a confirmation link (`amr: otp`), so the server cannot tell a half-finished reset from a sign-in. Keeping the reset session in the page's memory means an unfinished reset never counts as signed in anywhere. Finishing the reset saves the password, then signs out every session of the account (`scope: global`), this one included; if that fails the page says so and offers a retry, and never reports success.
+- A separate memory-only client for the password reset. Supabase marks a session opened from a reset link exactly like one opened from a confirmation link (`amr: otp`), so the server cannot tell a half-finished reset from a sign-in. Keeping the reset session in the page's memory means an unfinished reset never counts as signed in anywhere. Saving the new password makes Supabase Auth sign out every other session of the account in the same transaction (it does this for every password change made from a session; the E2E suite re-checks it on each Supabase upgrade). The page then also ends the reset session (`scope: global`); if that fails it says so and offers a retry, and never reports success.
 
 **Server identity** (`identity.ts`): read the session from the cookies, then ask Supabase Auth to confirm the access token (`auth.getUser(token)`), which also rejects a revoked session. The cookie's user object is never trusted; an unconfirmed email does not count as signed in. Every `(app)` page calls `requireIdentity()`, because a layout is not rendered again on client navigation.
 
@@ -30,7 +30,7 @@ Facts checked on 2026-10-13 (supabase.com/pricing, Supabase Auth docs and the Su
 
 **Passwords:** 12 to 72 bytes (bcrypt's limit), no composition rules, not equal to the email address. Supabase enforces the minimum on the server; Zod mirrors the rules for messages.
 
-**Emails** link to the app with a one-time `token_hash` and the redirect address the app sent, so each preview's links come back to that preview. Pages use the token only when a button is pressed, so link scanners cannot use it up. English only until Resend (S10).
+**Emails** link to the app with a one-time `token_hash`. The return address is always `NEXT_PUBLIC_APP_URL` (on a preview, its branch address), never the address the browser is on, so Supabase's allow-list holds exact addresses. A wildcard such as `madeora-*-<scope>.vercel.app` is not used: any Vercel user could create a project matching it and receive reset links. Confirmation links are checked as type `signup`, which only accepts confirmation tokens; type `email` would also accept a password-reset token and turn a reset link into a plain sign-in. Pages use a token only when a button is pressed, so link scanners cannot use it up. English only until Resend (S10).
 
 **Preview database:** one free Supabase project, `madeora-preview` (EU, Frankfurt), used only by Vercel previews and holding synthetic accounts only. Previews get its URL and publishable key, both public; never a secret key. The schema follows `main`: the first step that adds app tables also adds the way migrations reach this project. Owner guide: `docs/supabase-preview-setup.md`. The second free project slot stays open for staging later.
 
@@ -42,10 +42,15 @@ Facts checked on 2026-10-13 (supabase.com/pricing, Supabase Auth docs and the Su
 - A revoked session's access token still works against the Supabase Data API until it expires (up to one hour); Madeora's own server rejects it at once. S09, which adds the first tables, decides whether RLS also checks the session.
 - Server-side token refreshes share the server's rate-limit bucket; browsers normally refresh first. Re-check before release (S49).
 - Reloading the reset page after using its link loses the reset; the person asks for a new link.
+- If Supabase Auth refuses a return address (not on the allow-list), the link falls back to the Site URL and opens the dashboard instead; the guide lists each branch address explicitly.
+- A Server Component can refresh an expired session it cannot save (cookies are read-only there) if the proxy's refresh failed moments earlier; the browser may then be signed out by refresh-token reuse detection. Rare; revisit if it shows up.
+- If Supabase Auth is unreachable during sign-out, this browser's session cookies are still deleted, but the session itself expires on its own instead of being ended at once.
+- One-time token hashes appear in page addresses, so they can reach request logs and browser history; they are single-use and expire.
 - Preview email only reaches the owner's address, two emails an hour. Real delivery arrives with Resend (S10).
 - Local developers register through the local mail catcher (http://127.0.0.1:54324); seed users have no password.
 
 ## Open owner choices
 
 - **CAPTCHA:** Cloudflare Turnstile (free, approved stack) now or before release. Default: before release.
-- **Hosted development project:** whether everyday development also uses a hosted Supabase project (`madeora-dev`, the second free slot) instead of the local stack. Default: no; the local stack (or the fallback) stays the development database.
+- **Hosted development project:** not used (owner, 2026-10-14: "previews only"). The local stack, or the fallback, stays the development database.
+- **Early production:** the owner wants to deploy to production occasionally to share progress. That changes ADR 0005 (no production before the release step), so it is a separate step and pull request after S06, with its own Supabase project and owner guide.

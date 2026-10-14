@@ -109,7 +109,7 @@
     "resetSubmit": "Save new password",
     "resetMissingToken": "This reset link is incomplete or has expired. Ask for a new one.",
     "requestNewLink": "Ask for a new link",
-    "signOutEverywhereFailed": "Your password was changed, but not every device could be signed out yet. Try again to finish.",
+    "signOutEverywhereFailed": "Your password was changed and your other devices were signed out, but this browser's reset could not be closed yet. Try again to finish.",
     "retrySignOut": "Sign out every device",
     "signOut": "Sign out"
   }

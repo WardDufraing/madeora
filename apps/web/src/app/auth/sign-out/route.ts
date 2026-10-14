@@ -1,4 +1,5 @@
 import { getPublicEnv } from "@madeora/config/env/public";
+import { cookies } from "next/headers";
 
 import { isSameOriginRequest } from "@/auth/same-origin";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
@@ -13,7 +14,15 @@ export async function POST(request: Request): Promise<Response> {
     return new Response(null, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
   const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut({ scope: "local" });
+  const { error } = await supabase.auth.signOut({ scope: "local" });
+  if (error) {
+    // Supabase Auth could not be reached, so it kept the session. Still delete this browser's
+    // session cookies, so "signed out" is true on this device (the session then expires unused).
+    const cookieStore = await cookies();
+    for (const { name } of cookieStore.getAll()) {
+      if (/^sb-.+-auth-token(?:\.\d+)?$/.test(name)) cookieStore.delete(name);
+    }
+  }
   // 303: the browser follows with a GET, so a reload never repeats the POST. A relative address
   // keeps the browser on the origin it used (`request.url` can name the server's own host instead).
   return new Response(null, {

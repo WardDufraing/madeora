@@ -109,7 +109,7 @@
     "resetSubmit": "Nieuw wachtwoord opslaan",
     "resetMissingToken": "Deze link is onvolledig of verlopen. Vraag een nieuwe aan.",
     "requestNewLink": "Nieuwe link aanvragen",
-    "signOutEverywhereFailed": "Je wachtwoord is gewijzigd, maar nog niet elk apparaat kon worden afgemeld. Probeer het opnieuw om af te ronden.",
+    "signOutEverywhereFailed": "Je wachtwoord is gewijzigd en je andere apparaten zijn afgemeld, maar de reset in deze browser kon nog niet worden afgesloten. Probeer het opnieuw om af te ronden.",
     "retrySignOut": "Elk apparaat afmelden",
     "signOut": "Afmelden"
   }

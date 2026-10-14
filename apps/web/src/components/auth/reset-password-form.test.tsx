@@ -51,7 +51,7 @@ describe("ResetPasswordForm", () => {
     await submit("correct horse battery");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Your password was changed, but not every device could be signed out yet.",
+      "Your password was changed and your other devices were signed out, but this browser's reset",
     );
     expect(assign).not.toHaveBeenCalled();
 

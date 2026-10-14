@@ -2,7 +2,7 @@
 
 One-time setup for the owner (Ward), so Vercel previews can create accounts and sign in. It uses a free Supabase project that holds synthetic test accounts only and is used by nothing else. It costs nothing and should not ask for a card; if Supabase asks for one at any point, stop and tell Claude (€0 rule). Background: `docs/adr/0007-accounts-and-preview-database.md`.
 
-Do this after the S06 pull request is open, because its preview is what you test with.
+Do this after the S06 pull request is open and Vercel has built its preview, because that preview is what you test with.
 
 ## 1. Create the Supabase account and organization
 
@@ -44,18 +44,24 @@ Check: reopen the page; Confirm email is on and the minimum length shows 12.
 
 ## 4. Allowed addresses
 
-Email links must lead back to your previews. First find your preview address:
+Email links always lead to a preview's **branch address**, the one with `-git-` in it. Supabase only sends links to addresses on its list, so each branch you want to test sign-up or password reset on gets its own entry. Use exact addresses, never a wildcard such as `madeora-*`: anyone on Vercel could create a project whose address matches a wildcard and receive your links.
 
-1. Open the S06 pull request on GitHub and click **Visit Preview** in the Vercel comment. Copy the address from the browser, for example `https://madeora-git-feat-email-password-accounts-warddufraings-projects.vercel.app`.
-2. The part after `madeora-git-…-` and before `.vercel.app` is your Vercel scope; above it is `warddufraings-projects`. If yours is different, use yours in the two values below.
+First find the branch addresses:
+
+1. Open https://vercel.com/dashboard, click **madeora**, then **Deployments**.
+2. Click the newest preview of `feat/email-password-accounts`. Under **Domains**, copy the address with `-git-` in it, for example `https://madeora-git-feat-email-password-accounts-warddufraings-projects.vercel.app`.
+3. Do the same for the newest preview of `main`, for example `https://madeora-git-main-warddufraings-projects.vercel.app`. (If `main` has no preview yet, write the address the same way as the example: only the part after `-git-` and before `-warddufraings-projects` changes.)
 
 Then in Supabase:
 
 1. Click **Authentication**, then **URL Configuration**.
-2. **Site URL:** `https://madeora-git-main-warddufraings-projects.vercel.app` and click **Save**.
-3. Under **Redirect URLs** click **Add URL**, paste `https://madeora-*-warddufraings-projects.vercel.app/**` and click **Save URLs**.
+2. **Site URL:** paste the `main` branch address and click **Save**.
+3. Under **Redirect URLs** click **Add URL**, paste the `main` branch address followed by `/**` (for example `https://madeora-git-main-warddufraings-projects.vercel.app/**`) and click **Save URLs**.
+4. Click **Add URL** again, paste the `feat/email-password-accounts` branch address followed by `/**` and click **Save URLs**.
 
-Check: the Redirect URLs list shows exactly that one entry.
+Check: the Redirect URLs list shows exactly those two entries, each ending in `/**`, and no `*` anywhere else.
+
+Later: to test sign-up or reset on another pull request, add that branch's address the same way, and remove it once the pull request is merged.
 
 ## 5. Email templates
 
@@ -96,7 +102,7 @@ Check: the redeployed preview opens on the sign-in page instead of an error page
 
 Supabase's built-in email sender only delivers to members of your Supabase organization, at most 2 emails an hour. So test with your own address, `warddufraing@gmail.com`, and expect to wait an hour between more than two emails.
 
-1. Open the preview, click **Create an account**, enter `warddufraing@gmail.com` and a password of at least 12 characters, and click **Create account**.
+1. Open the S06 preview at its branch address (step 4), click **Create an account**, enter `warddufraing@gmail.com` and a password of at least 12 characters, and click **Create account**.
 2. Open the email "Confirm your Madeora email address" in Gmail and click **Confirm my email address**. On the page that opens, click the **Confirm my email address** button. You land on the dashboard.
 3. Click **Sign out**, then sign in again with the same address and password.
 

@@ -43,7 +43,7 @@ export async function registerConfirmed(baseURL: string): Promise<Account> {
   const account = await registerUnconfirmed(baseURL);
   const link = await emailLink(account.email, subjects.confirmation);
   const response = await authApi("/verify", {
-    type: "email",
+    type: "signup",
     token_hash: link.searchParams.get("token_hash"),
   });
   if (!response.ok) throw new Error(`confirmation failed: ${String(response.status)}`);

@@ -38,9 +38,11 @@ export function ConfirmEmail({ tokenHash }: ConfirmEmailProps) {
   async function confirm(token: string) {
     setPending(true);
     setFailure(null);
+    // "signup" matches confirmation tokens only. Never "email": Supabase Auth would also accept a
+    // password-reset token for it, turning a reset link into a plain sign-in (S06 review H1).
     const { error } = await getSupabaseBrowserClient().auth.verifyOtp({
       token_hash: token,
-      type: "email",
+      type: "signup",
     });
     if (error) {
       setFailure(classifyAuthError(error));

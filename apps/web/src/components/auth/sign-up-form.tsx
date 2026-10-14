@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { classifyAuthError, type AuthFailure } from "@/auth/auth-errors";
 import { signUpSchema, type SignUpValues } from "@/auth/schemas";
+import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,7 +40,7 @@ export function SignUpForm() {
     const { error } = await getMemoryOnlySupabaseClient("email-requests").auth.signUp({
       email: values.email,
       password: values.password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+      options: { emailRedirectTo: emailLinkTarget("/auth/confirm") },
     });
     if (error) {
       setFailure(classifyAuthError(error));

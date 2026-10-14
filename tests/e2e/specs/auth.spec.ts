@@ -275,6 +275,27 @@ test.describe("password reset", () => {
     await expect(page).toHaveURL(/\/sign-in\?status=password-changed$/);
   });
 
+  test("a reset link cannot be used to confirm an email address and sign in", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    const account = await registerConfirmed(baseURL ?? "");
+    await page.goto("/forgot-password");
+    await page.getByLabel("Email address").fill(account.email);
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    const link = await emailLink(account.email, subjects.recovery);
+
+    await page.goto(`/auth/confirm${link.search.replace("type=recovery", "type=signup")}`);
+    await page.getByRole("button", { name: "Confirm my email address" }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toContainText(
+      "This link has expired or has already been used.",
+    );
+    expect((await context.cookies()).filter((cookie) => cookie.name.startsWith("sb-"))).toEqual([]);
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/sign-in$/);
+  });
+
   test("a reset page without a valid link says so", async ({ page }) => {
     await page.goto("/reset-password");
     await expect(page.getByText("This reset link is incomplete or has expired.")).toBeVisible();

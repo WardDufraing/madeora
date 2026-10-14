@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { classifyAuthError, type AuthFailure } from "@/auth/auth-errors";
 import { emailOnlySchema, type EmailOnlyValues } from "@/auth/schemas";
+import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
@@ -37,7 +38,7 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
     const { error } = await getMemoryOnlySupabaseClient("email-requests").auth.resend({
       type: "signup",
       email: values.email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+      options: { emailRedirectTo: emailLinkTarget("/auth/confirm") },
     });
     const failure = error ? classifyAuthError(error) : null;
     // Only failures that say nothing about the account are shown; anything else reads as "sent".

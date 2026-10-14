@@ -30,9 +30,12 @@ type Stage = "form" | "signOutFailed" | "done";
  * 1. The link's one-time token is used only when the form is submitted, so mail scanners that
  *    open links cannot use it up. Using it opens a session that lives only in this page's memory
  *    (never in cookies), so an unfinished reset never signs the browser in.
- * 2. The new password is saved.
- * 3. **Every** session of the account is signed out, this one included, and the person signs in
- *    again. If that sign-out fails, the page says so and offers a retry; it never reports success.
+ * 2. The new password is saved. Supabase Auth signs out every other session of the account in the
+ *    same step (it does so for any password change made from a session; re-check on Supabase
+ *    upgrades, which the E2E suite does).
+ * 3. The reset session itself is then ended too (`scope: global`, which also catches any session
+ *    created in between), and the person signs in again. If that fails, the page says so and
+ *    offers a retry; it never reports success.
  */
 export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
   const t = useTranslations("Auth");

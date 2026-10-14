@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { classifyAuthError, type AuthFailure } from "@/auth/auth-errors";
 import { emailOnlySchema, type EmailOnlyValues } from "@/auth/schemas";
+import { emailLinkTarget } from "@/auth/email-links";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
@@ -32,7 +33,7 @@ export function ForgotPasswordForm() {
     const { error } = await getMemoryOnlySupabaseClient(
       "email-requests",
     ).auth.resetPasswordForEmail(values.email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: emailLinkTarget("/reset-password"),
     });
     const kind = error ? classifyAuthError(error) : null;
     // Rate limits and connection problems say nothing about the account; anything else reads as sent.
