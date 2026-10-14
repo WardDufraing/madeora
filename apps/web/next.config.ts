@@ -1,4 +1,4 @@
-import { getPublicEnv } from "@madeora/config/env/public";
+import { checkPublicEnvForBuild } from "@madeora/config/env/public";
 import { applyVercelPreviewDefaults } from "@madeora/config/env/vercel";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
@@ -24,8 +24,9 @@ export default function config(phase: string): NextConfig {
   applyVercelPreviewDefaults(process.env);
 
   // NEXT_PUBLIC_ values are inlined into the bundle at build time, so check them before building.
+  // A production build also needs the Turnstile site key (ADR 0008).
   if (phase === PHASE_PRODUCTION_BUILD) {
-    getPublicEnv(process.env);
+    checkPublicEnvForBuild(process.env);
   }
   return withNextIntl(nextConfig);
 }

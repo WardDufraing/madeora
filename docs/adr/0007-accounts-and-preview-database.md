@@ -52,6 +52,6 @@ Facts checked on 2026-10-13 (supabase.com/pricing, Supabase Auth docs and the Su
 
 ## Open owner choices
 
-- **CAPTCHA:** Cloudflare Turnstile (free, approved stack) now or before release. Default: before release.
+- **CAPTCHA:** decided in ADR 0008 (S06b): Cloudflare Turnstile through Supabase Auth's CAPTCHA protection, on production; previews stay without it.
 - **Hosted development project:** not used (owner, 2026-10-14: "previews only"). The local stack, or the fallback, stays the development database.
-- **Early production:** the owner wants to deploy to production occasionally to share progress. That changes ADR 0005 (no production before the release step), so it is a separate step and pull request after S06, with its own Supabase project and owner guide.
+- **Early production:** decided in ADR 0008 (S06b): production deploys from the `production` branch with its own Supabase project, `madeora-production`.

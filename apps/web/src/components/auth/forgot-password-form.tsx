@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 
+import { useCaptcha } from "./captcha";
 import { FormAlert } from "./form-alert";
 import { useAuthMessages } from "./use-auth-messages";
 
@@ -21,6 +22,7 @@ export function ForgotPasswordForm() {
   const t = useTranslations("Auth");
   const hydrated = useHydrated();
   const messages = useAuthMessages();
+  const captcha = useCaptcha("forgot-password");
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [failure, setFailure] = useState<AuthFailure | null>(null);
   const form = useForm<EmailOnlyValues>({
@@ -30,16 +32,21 @@ export function ForgotPasswordForm() {
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // Turnstile has no token yet (the button shows busy); Supabase Auth would refuse the request.
+    if (!captcha.ready) return;
     setFailure(null);
     setSentTo(null);
     const { error } = await getMemoryOnlySupabaseClient(
       "email-requests",
     ).auth.resetPasswordForEmail(values.email, {
       redirectTo: emailLinkTarget("/reset-password"),
+      ...captcha.options,
     });
+    captcha.reset();
     const kind = error ? classifyAuthError(error) : null;
-    // Rate limits and connection problems say nothing about the account; anything else reads as sent.
-    if (kind === "rateLimited" || kind === "network") setFailure(kind);
+    // Rate limits, connection problems and a failed security check say nothing about the account;
+    // anything else reads as sent.
+    if (kind === "rateLimited" || kind === "network" || kind === "captchaFailed") setFailure(kind);
     else setSentTo(values.email);
   });
 
@@ -71,7 +78,8 @@ export function ForgotPasswordForm() {
         error={messages.field(errors.email?.message)}
         {...form.register("email")}
       />
-      <Button type="submit" disabled={!hydrated} loading={isSubmitting}>
+      {captcha.check}
+      <Button type="submit" disabled={!hydrated} loading={isSubmitting || !captcha.ready}>
         {t("forgotSubmit")}
       </Button>
     </form>

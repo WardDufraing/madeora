@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 
+import { useCaptcha } from "./captcha";
 import { FormAlert } from "./form-alert";
 import { useAuthMessages } from "./use-auth-messages";
 
@@ -29,6 +30,7 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
   const t = useTranslations("Auth");
   const hydrated = useHydrated();
   const messages = useAuthMessages();
+  const captcha = useCaptcha("resend-confirmation");
   const [result, setResult] = useState<"sent" | AuthFailure | null>(null);
   const form = useForm<EmailOnlyValues>({
     resolver: zodResolver(emailOnlySchema),
@@ -36,15 +38,25 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // Turnstile has no token yet (the button shows busy); Supabase Auth would refuse the request.
+    if (!captcha.ready) return;
     setResult(null);
     const { error } = await getMemoryOnlySupabaseClient("email-requests").auth.resend({
       type: "signup",
       email: values.email,
-      options: { emailRedirectTo: emailLinkTarget("/auth/confirm") },
+      options: {
+        emailRedirectTo: emailLinkTarget("/auth/confirm"),
+        ...captcha.options,
+      },
     });
+    captcha.reset();
     const failure = error && !hidesAccountExistence(error) ? classifyAuthError(error) : null;
     // Only failures that say nothing about the account are shown; anything else reads as "sent".
-    setResult(failure === "rateLimited" || failure === "network" ? failure : "sent");
+    setResult(
+      failure === "rateLimited" || failure === "network" || failure === "captchaFailed"
+        ? failure
+        : "sent",
+    );
   });
 
   return (
@@ -66,11 +78,12 @@ export function ResendConfirmation({ email }: ResendConfirmationProps) {
           {...form.register("email")}
         />
       ) : null}
+      {captcha.check}
       <Button
         type="submit"
         variant="secondary"
         disabled={!hydrated}
-        loading={form.formState.isSubmitting}
+        loading={form.formState.isSubmitting || !captcha.ready}
       >
         {t("resendSubmit")}
       </Button>

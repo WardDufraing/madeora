@@ -102,10 +102,10 @@ Claude creates `production` from `main`'s seed commit `33e0576`, and only after 
 
 **Check it worked:** open https://github.com/WardDufraing/madeora/branches. `production` is listed. Its latest commit is "docs: seed repository with specification and references".
 
-## D. How a release works (after S49 wires up deployment)
+## D. How a release works (production deploys since S06b, ADR 0008)
 
 1. Open https://github.com/WardDufraing/madeora/compare/production...main.
 2. Click **Create pull request**. The title is `release: <date>`.
 3. Wait until every check is green, including `Release source`.
 4. Read the list of commits and the diff. This is exactly what ships.
-5. Click **Merge pull request** → **Confirm merge**. Only a merge into `production` deploys to production.
+5. Click **Merge pull request** → **Confirm merge**. Only a merge into `production` deploys to production. Vercel's **Deployments** page then shows the new **Production** deployment (`docs/production-setup.md`, step 7).
