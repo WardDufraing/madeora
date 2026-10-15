@@ -25,14 +25,18 @@ Defined and validated in `packages/config/src/env/`, documented in `apps/web/.en
 - `public.ts` (`@madeora/config/env/public`): `NEXT_PUBLIC_` values and `getPublicEnv()`. Next.js copies these into browser code, so never put a secret here.
 - `core.ts` (`@madeora/config/env`): the shared parser and error type.
 
-| Variable                               | Where                    | Required        | Meaning                                                                                                                                                                                                                          |
-| -------------------------------------- | ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ENV`                              | server only              | yes             | `development`, `test`, `preview`, `staging` or `production`                                                                                                                                                                      |
-| `NEXT_PUBLIC_APP_URL`                  | public (in browser code) | yes             | Absolute `http` or `https` URL of the web app                                                                                                                                                                                    |
-| `NEXT_PUBLIC_SUPABASE_URL`             | public (in browser code) | yes             | Supabase API address; locally `http://127.0.0.1:54321`                                                                                                                                                                           |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public (in browser code) | yes             | Supabase publishable key (`pnpm exec supabase status`). A secret or `service_role` key is refused at once                                                                                                                        |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | public (in browser code) | production only | Cloudflare Turnstile site key (ADR 0008). Unset locally, in CI and on previews: no security check. A secret key is refused                                                                                                       |
-| `EMAIL_TRANSPORT`                      | server only              | no              | `resend`, `mailpit` or `off` (the default): whether the app's own email is sent in this environment. The web app only reads this flag; a Trigger.dev job sends the email with its own settings (ADR 0018, `docs/email-setup.md`) |
+| Variable                                                        | Where                    | Required        | Meaning                                                                                                                                                                                                                          |
+| --------------------------------------------------------------- | ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`                                                       | server only              | yes             | `development`, `test`, `preview`, `staging` or `production`                                                                                                                                                                      |
+| `NEXT_PUBLIC_APP_URL`                                           | public (in browser code) | yes             | Absolute `http` or `https` URL of the web app                                                                                                                                                                                    |
+| `NEXT_PUBLIC_SUPABASE_URL`                                      | public (in browser code) | yes             | Supabase API address; locally `http://127.0.0.1:54321`                                                                                                                                                                           |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`                          | public (in browser code) | yes             | Supabase publishable key (`pnpm exec supabase status`). A secret or `service_role` key is refused at once                                                                                                                        |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`                                | public (in browser code) | production only | Cloudflare Turnstile site key (ADR 0008). Unset locally, in CI and on previews: no security check. A secret key is refused                                                                                                       |
+| `EMAIL_TRANSPORT`                                               | server only              | no              | `resend`, `mailpit` or `off` (the default): whether the app's own email is sent in this environment. The web app only reads this flag; a Trigger.dev job sends the email with its own settings (ADR 0018, `docs/email-setup.md`) |
+| `STORAGE_DRIVER`                                                | server only              | no              | `s3` or `off` (the default): whether files can be uploaded here (S15, ADR 0019, `docs/file-storage.md`). Off: pictures cannot be uploaded and the app says so                                                                    |
+| `STORAGE_S3_ENDPOINT`, `STORAGE_S3_REGION`, `STORAGE_S3_BUCKET` | server only              | with `s3`       | The S3-compatible store: R2 once approved, locally the S3 stand-in (`http://127.0.0.1:54390`). Plain `http` only for this machine                                                                                                |
+| `STORAGE_S3_ACCESS_KEY_ID`, `STORAGE_S3_SECRET_ACCESS_KEY`      | server only (secret)     | with `s3`       | An access key limited to that one bucket. Never logged or sent to the browser                                                                                                                                                    |
+| `SUPABASE_SERVICE_ROLE_KEY`                                     | server only (secret)     | with `s3`       | This environment's Supabase secret key, used for one call only: recording a verified upload (`finalize_upload`, ADR 0019)                                                                                                        |
 
 A file that starts with `"use client"` must not import `@madeora/config/env/server` or `server-only`: ESLint (`madeora/no-server-env-in-client`) flags a direct import, and `pnpm test:boundary` proves with a real build that an indirect one fails too.
 
@@ -160,6 +164,18 @@ The Google tests (`tests/e2e/google`) cannot run against the Supabase CLI stack,
 ## Background jobs
 
 Conventions, adding a job, logs and the recovery runbook: [`background-jobs.md`](background-jobs.md). The rules run in unit tests with fakes (`pnpm --filter @madeora/jobs test`) and the outbox functions in the database tests (`tests/db/rls/job_outbox.test.sql`, `tests/db/rls/job-outbox-concurrency.test.ts`). Running real tasks locally needs a free Trigger.dev account and `pnpm dlx trigger.dev@4.6.4 dev` in `packages/jobs` (settings in `packages/jobs/.env.example`); hosted setup is the owner's ([`trigger-setup.md`](trigger-setup.md)).
+
+## File storage
+
+Pictures (S15) go to an S3-compatible store through short-lived signed links; Madeora checks and re-encodes every upload before it is used (ADR 0019, owner guide and runbook in [`file-storage.md`](file-storage.md)). Locally, without any account, run the in-memory S3 stand-in in its own terminal with the `STORAGE_*` values from `apps/web/.env.example` in its environment:
+
+```sh
+STORAGE_DRIVER=s3 STORAGE_S3_ENDPOINT=http://127.0.0.1:54390 STORAGE_S3_BUCKET=madeora-dev \
+  STORAGE_S3_ACCESS_KEY_ID=DevSyntheticAccessKey STORAGE_S3_SECRET_ACCESS_KEY=DevSyntheticSecretKey0123456789 \
+  pnpm --filter @madeora/s3-stand-in start
+```
+
+and put the same values plus `SUPABASE_SERVICE_ROLE_KEY` (the local stack's secret key) in `apps/web/.env.local`. Objects vanish when the stand-in stops; the database rows stay, so restart with `pnpm db:reset` for a clean slate. The browser tests start the stand-in themselves (`tests/e2e/playwright.config.ts`).
 
 ## Dependency audit exceptions
 

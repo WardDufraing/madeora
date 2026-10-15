@@ -46,3 +46,21 @@ describe("validateStartupEnv in production", () => {
     });
   });
 });
+
+describe("validateStartupEnv with file storage (S15)", () => {
+  it("refuses to start with storage on but no Supabase secret key for finalizing", () => {
+    expect(() =>
+      validateStartupEnv({
+        APP_ENV: "test",
+        NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic",
+        STORAGE_DRIVER: "s3",
+        STORAGE_S3_ENDPOINT: "http://127.0.0.1:54390",
+        STORAGE_S3_BUCKET: "madeora-test",
+        STORAGE_S3_ACCESS_KEY_ID: "SyntheticAccessKey01",
+        STORAGE_S3_SECRET_ACCESS_KEY: "SyntheticSecretAccessKey0123456789abcd",
+      }),
+    ).toThrow(/SUPABASE_SERVICE_ROLE_KEY \(/);
+  });
+});

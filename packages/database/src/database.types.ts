@@ -8,6 +8,7 @@ export type Database = {
       home_member_profiles: {
         Row: {
           accent_color: string | null;
+          avatar_file_id: string | null;
           created_at: string;
           display_name: string | null;
           home_id: string;
@@ -17,6 +18,7 @@ export type Database = {
         };
         Insert: {
           accent_color?: string | null;
+          avatar_file_id?: string | null;
           created_at?: string;
           display_name?: string | null;
           home_id: string;
@@ -26,6 +28,7 @@ export type Database = {
         };
         Update: {
           accent_color?: string | null;
+          avatar_file_id?: string | null;
           created_at?: string;
           display_name?: string | null;
           home_id?: string;
@@ -246,6 +249,7 @@ export type Database = {
       user_preferences: {
         Row: {
           accent_color: string | null;
+          avatar_file_id: string | null;
           created_at: string;
           date_format: string | null;
           display_name: string | null;
@@ -260,6 +264,7 @@ export type Database = {
         };
         Insert: {
           accent_color?: string | null;
+          avatar_file_id?: string | null;
           created_at?: string;
           date_format?: string | null;
           display_name?: string | null;
@@ -274,6 +279,7 @@ export type Database = {
         };
         Update: {
           accent_color?: string | null;
+          avatar_file_id?: string | null;
           created_at?: string;
           date_format?: string | null;
           display_name?: string | null;
@@ -293,6 +299,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      abandon_my_upload: { Args: { p_file_id: string; p_reason: string }; Returns: boolean };
       accept_ownership_recovery: {
         Args: { p_home_id: string; p_recovery_id: string };
         Returns: string;
@@ -300,6 +307,15 @@ export type Database = {
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
+      };
+      authorize_file_read: {
+        Args: { p_file_id: string };
+        Returns: {
+          content_type: string;
+          object_key: string;
+          sha256: string;
+          size_bytes: number;
+        }[];
       };
       authorize_sign_in_method_change: {
         Args: { p_action: string; p_provider: string };
@@ -347,7 +363,9 @@ export type Database = {
           payload: Json;
         }[];
       };
+      claim_my_upload: { Args: { p_file_id: string }; Returns: string };
       complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
+      complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
       create_home: {
         Args: { p_name: string; p_request_id: string; p_timezone: string };
@@ -372,6 +390,15 @@ export type Database = {
           token: string;
         }[];
       };
+      create_upload_intent: {
+        Args: { p_content_type: string; p_purpose: string; p_request_id: string; p_size: number };
+        Returns: {
+          expires_at: string;
+          file_id: string;
+          outcome: string;
+          upload_key: string;
+        }[];
+      };
       decide_join_request: {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
@@ -380,8 +407,19 @@ export type Database = {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
       };
+      expire_upload: { Args: { p_file_id: string }; Returns: string };
       fail_job_outbox: {
         Args: { p_error_code: string; p_id: string; p_permanent: boolean };
+        Returns: string;
+      };
+      finalize_upload: {
+        Args: {
+          p_content_type: string;
+          p_file_id: string;
+          p_sha256: string;
+          p_size: number;
+          p_user_id: string;
+        };
         Returns: string;
       };
       finish_job_execution: {
@@ -405,6 +443,18 @@ export type Database = {
           recipient_email: string;
           role: string;
           token: string;
+        }[];
+      };
+      get_my_upload: {
+        Args: { p_file_id: string };
+        Returns: {
+          declared_size: number;
+          declared_type: string;
+          expires_at: string;
+          object_key: string;
+          purpose: string;
+          status: string;
+          upload_key: string;
         }[];
       };
       get_notification_email: {
@@ -431,6 +481,13 @@ export type Database = {
           overridden: boolean;
         }[];
       };
+      get_storage_object_deletion: {
+        Args: { p_deletion_id: string };
+        Returns: {
+          done: boolean;
+          object_key: string;
+        }[];
+      };
       home_capabilities: {
         Args: { p_home_id: string };
         Returns: {
@@ -443,6 +500,7 @@ export type Database = {
         Args: { p_home_id: string };
         Returns: {
           accent_color: string;
+          avatar_file_id: string;
           is_self: boolean;
           joined_at: string;
           membership_id: string;
@@ -473,6 +531,16 @@ export type Database = {
           is_sender: boolean;
           recipient_membership_id: string;
           state: string;
+        }[];
+      };
+      home_storage_usage: {
+        Args: { p_home_id: string };
+        Returns: {
+          allowance_bytes: number;
+          deleted_bytes: number;
+          reserved_bytes: number;
+          used_bytes: number;
+          warning_level: number;
         }[];
       };
       is_madeora_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -553,6 +621,16 @@ export type Database = {
           still_member: boolean;
         }[];
       };
+      my_storage_usage: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          allowance_bytes: number;
+          deleted_bytes: number;
+          reserved_bytes: number;
+          used_bytes: number;
+          warning_level: number;
+        }[];
+      };
       object_to_ownership_recovery: {
         Args: { p_home_id: string; p_reason: string };
         Returns: string;
@@ -569,6 +647,7 @@ export type Database = {
           role: string;
         }[];
       };
+      purge_stored_file: { Args: { p_file_id: string }; Returns: string };
       record_invitation_email: {
         Args: { p_invitation_id: string; p_send: number; p_status: string };
         Returns: boolean;
@@ -578,6 +657,7 @@ export type Database = {
         Returns: boolean;
       };
       release_job_outbox: { Args: { p_ids: string[] }; Returns: number };
+      release_my_upload: { Args: { p_file_id: string }; Returns: boolean };
       remove_home_member: {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
@@ -629,6 +709,8 @@ export type Database = {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
       };
+      set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
+      set_my_home_avatar: { Args: { p_file_id?: string; p_home_id: string }; Returns: string };
       set_notification_preference: {
         Args: { p_category: string; p_channel: string; p_enabled: boolean; p_home_id?: string };
         Returns: string;
@@ -642,6 +724,10 @@ export type Database = {
           p_time_zone: string;
         };
         Returns: string;
+      };
+      set_storage_allowance: {
+        Args: { p_bytes: number; p_home_id: string; p_user_id: string };
+        Returns: boolean;
       };
       staff_close_recovery_appeal: {
         Args: { p_appeal_id: string; p_notes: string };
@@ -703,6 +789,14 @@ export type Database = {
         Returns: {
           outcome: string;
           transfer_id: string;
+        }[];
+      };
+      storage_stats: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          oldest_open_deletion_seconds: number;
+          open_deletions: number;
+          pending_uploads: number;
         }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };

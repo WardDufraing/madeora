@@ -128,6 +128,7 @@ export default async function MemberPage({ params }: MemberPageProps) {
               name={member.name}
               accentColor={member.accentColor}
               locale={formats.locale}
+              avatarFileId={member.avatarFileId ?? null}
             />
             <div className="flex flex-col">
               <span className="text-body font-semibold text-fg" data-testid="member-name">

@@ -3,6 +3,13 @@
  * are covered by tests/db/rls/notifications.test.sql.
  */
 import type { EmailTransport, OutgoingEmail, SendResult } from "@madeora/email";
+import {
+  StorageUnavailableError,
+  type ObjectFacts,
+  type ObjectRead,
+  type ObjectStore,
+  type PresignedUpload,
+} from "@madeora/storage";
 
 import type {
   EmailRecordStatus,
@@ -10,6 +17,7 @@ import type {
   JobDataPort,
   JobServices,
   NotificationEmailRead,
+  StoredFileStatus,
 } from "../services.ts";
 
 export class FakeJobData implements JobDataPort {
@@ -22,6 +30,11 @@ export class FakeJobData implements JobDataPort {
     [];
   readonly invitationRecords: { id: string; send: number; status: EmailRecordStatus }[] = [];
   readonly readyCalls: { recoveryId: string; endsAt: Date }[] = [];
+  /** Storage (S15): file statuses the database functions return, and the deletion queue. */
+  expireStatus: StoredFileStatus = "failed";
+  purgeStatus: StoredFileStatus = "purged";
+  readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
+  readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
 
   private check(): void {
     if (this.unavailable) throw new Error("database unavailable");
@@ -58,6 +71,78 @@ export class FakeJobData implements JobDataPort {
     this.readyCalls.push({ recoveryId, endsAt });
     return Promise.resolve(this.readyOutcome);
   }
+
+  expireUpload(fileId: string): Promise<StoredFileStatus> {
+    this.check();
+    this.fileCalls.push({ operation: "expire", fileId });
+    return Promise.resolve(this.expireStatus);
+  }
+
+  purgeStoredFile(fileId: string): Promise<StoredFileStatus> {
+    this.check();
+    this.fileCalls.push({ operation: "purge", fileId });
+    return Promise.resolve(this.purgeStatus);
+  }
+
+  getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {
+    this.check();
+    const deletion = this.deletions.get(id);
+    return Promise.resolve(deletion ? { ...deletion } : null);
+  }
+
+  completeStorageObjectDeletion(id: string): Promise<boolean> {
+    this.check();
+    const deletion = this.deletions.get(id);
+    if (!deletion || deletion.done) return Promise.resolve(false);
+    deletion.done = true;
+    return Promise.resolve(true);
+  }
+}
+
+/** An in-memory object store; `down` makes every call fail like an outage. */
+export class FakeObjects implements ObjectStore {
+  readonly objects = new Map<string, Uint8Array>();
+  readonly deleted: string[] = [];
+  down = false;
+
+  private check(): void {
+    if (this.down) throw new StorageUnavailableError("network");
+  }
+
+  presignPut(key: string): PresignedUpload {
+    return { url: `https://store.test/${key}?signed`, headers: {} };
+  }
+
+  presignGet(key: string): string {
+    return `https://store.test/${key}?signed`;
+  }
+
+  head(key: string): Promise<ObjectFacts | null> {
+    this.check();
+    const bytes = this.objects.get(key);
+    return Promise.resolve(bytes ? { size: bytes.byteLength, contentType: null } : null);
+  }
+
+  get(key: string): Promise<ObjectRead> {
+    this.check();
+    const bytes = this.objects.get(key);
+    return Promise.resolve(
+      bytes ? { status: "ok", bytes, contentType: null } : { status: "missing" },
+    );
+  }
+
+  put(key: string, bytes: Uint8Array): Promise<void> {
+    this.check();
+    this.objects.set(key, bytes);
+    return Promise.resolve();
+  }
+
+  delete(key: string): Promise<void> {
+    this.check();
+    this.objects.delete(key);
+    this.deleted.push(key);
+    return Promise.resolve();
+  }
 }
 
 /**
@@ -89,6 +174,7 @@ export function fakeServices(
     data: new FakeJobData(),
     mail: new FakeMail(),
     appUrl: "https://app.madeora.test",
+    objects: null,
     ...overrides,
   } as JobServices & { data: FakeJobData; mail: FakeMail | null };
 }

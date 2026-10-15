@@ -38,7 +38,11 @@ export async function generateMetadata({ params }: HomeSettingsPageProps): Promi
 export default async function HomeSettingsPage({ params }: HomeSettingsPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t] = await Promise.all([loadHomeForPage(homeId), getTranslations("Homes")]);
+  const [context, t, tStorage] = await Promise.all([
+    loadHomeForPage(homeId),
+    getTranslations("Homes"),
+    getTranslations("Storage"),
+  ]);
   if (!context) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -72,6 +76,18 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           </div>
         )}
       </Card>
+      {/* Only decides whether to show the link; the storage page and the database check again. */}
+      {permissions["home.storage.view"] ? (
+        <Card title={tStorage("settingsCardTitle")} className="mt-6 max-w-2xl">
+          <Link
+            href={`/homes/${home.id}/storage`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="home-storage-link"
+          >
+            {tStorage("homeSettingsLink")}
+          </Link>
+        </Card>
+      ) : null}
     </>
   );
 }

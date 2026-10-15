@@ -147,6 +147,7 @@ export default async function LeavePage({ params }: LeavePageProps) {
                     name={member.name}
                     accentColor={member.accentColor}
                     locale={formats.locale}
+                    avatarFileId={member.avatarFileId ?? null}
                   />
                   <span className="min-w-0 flex-1 text-body text-fg">
                     {member.name === null ? tMembers("noName") : <bdi>{member.name}</bdi>}

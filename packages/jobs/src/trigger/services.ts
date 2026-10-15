@@ -1,4 +1,5 @@
 import { createMailpitTransport, createResendTransport, type EmailTransport } from "@madeora/email";
+import { createObjectStore, storageConfigFromEnv, type StorageEnv } from "@madeora/storage";
 
 import type { JobsSupabaseClient } from "../supabase-store.ts";
 import { createSupabaseJobData } from "../supabase-data.ts";
@@ -16,8 +17,21 @@ export function createWorkerMail(env: WorkerEnv): EmailTransport | null {
   return null;
 }
 
-/** What the email jobs run with: narrow database functions, the transport and the app address. */
-export function createJobServices(client: JobsSupabaseClient, env: WorkerEnv): JobServices {
+/**
+ * What the jobs run with: narrow database functions, the email transport and the app address, and
+ * the object store (S15) where storage is configured.
+ */
+export function createJobServices(
+  client: JobsSupabaseClient,
+  env: WorkerEnv,
+  storageEnv: StorageEnv,
+): JobServices {
   const mail = createWorkerMail(env);
-  return { data: createSupabaseJobData(client), mail, appUrl: mail ? (env.APP_URL ?? null) : null };
+  const storage = storageConfigFromEnv(storageEnv);
+  return {
+    data: createSupabaseJobData(client),
+    mail,
+    appUrl: mail ? (env.APP_URL ?? null) : null,
+    objects: storage ? createObjectStore(storage) : null,
+  };
 }

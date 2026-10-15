@@ -173,6 +173,7 @@ export async function MemberDirectory({
                   name={member.name}
                   accentColor={member.accentColor}
                   locale={formats.locale}
+                  avatarFileId={member.avatarFileId ?? null}
                 />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="text-body font-semibold text-fg" data-testid="member-name">

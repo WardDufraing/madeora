@@ -65,7 +65,12 @@ export async function axeViolations(page: Page): Promise<string[]> {
   );
 }
 
-/** Colours painted on visible elements that are not a `--md-color-*` token value. */
+/**
+ * Colours painted on visible elements that are not a `--md-color-*` token value. A member's own
+ * identifying colour (an avatar, marked `data-member-colour`) is personal data, not design, and is
+ * left out (its text, fill and the outline that defaults to its text colour); its border still
+ * has to be a token.
+ */
 export async function nonTokenColours(page: Page): Promise<string[]> {
   await settle(page);
   return page.evaluate(() => {
@@ -88,12 +93,10 @@ export async function nonTokenColours(page: Page): Promise<string[]> {
     for (const element of document.querySelectorAll("body, body *")) {
       const style = getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden") continue;
-      for (const colour of [
-        style.color,
-        style.backgroundColor,
-        style.borderTopColor,
-        style.outlineColor,
-      ]) {
+      const memberColour = element.closest("[data-member-colour]") !== null;
+      for (const colour of memberColour
+        ? [style.borderTopColor]
+        : [style.color, style.backgroundColor, style.borderTopColor, style.outlineColor]) {
         found.add(colour);
       }
       if (element instanceof SVGElement && style.stroke !== "none") found.add(style.stroke);
