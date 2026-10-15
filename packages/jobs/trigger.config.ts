@@ -7,9 +7,9 @@
 import { defineConfig } from "@trigger.dev/sdk";
 
 const project = process.env.TRIGGER_PROJECT_REF ?? "proj_yhkmlscenxkikqvgfnvs";
-if (!project || !/^proj_[a-z0-9]{10,40}$/.test(project)) {
+if (!/^proj_[a-z0-9]{10,40}$/.test(project)) {
   throw new Error(
-    "Set TRIGGER_PROJECT_REF (proj_...) to the Trigger.dev project, see docs/trigger-setup.md",
+    "TRIGGER_PROJECT_REF must be a Trigger.dev project ref (proj_...), see docs/trigger-setup.md",
   );
 }
 

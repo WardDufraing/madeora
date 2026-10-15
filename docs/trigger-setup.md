@@ -43,7 +43,7 @@ From a clone of the repository on your computer, with `main` checked out and `pn
 2. `pnpm dlx trigger.dev@4.6.4 login` and approve the login in the browser.
 3. `pnpm dlx trigger.dev@4.6.4 deploy --env prod`. The project ref is the default in `packages/jobs/trigger.config.ts` because the remote build does not see your shell environment; to use another Trigger.dev project, change that default in a PR.
 
-Without a browser, `TRIGGER_ACCESS_TOKEN=tr_pat_…` (a personal access token from Trigger.dev → Account → Personal Access Tokens) replaces step 2. Revoke the token afterwards.
+Without a browser, `TRIGGER_ACCESS_TOKEN=tr_pat_…` (a personal access token from Trigger.dev → Account → Personal Access Tokens) replaces step 2. Never commit the token or paste it into chat; revoke it afterwards.
 
 **Check:** Trigger.dev → **Tasks** lists `sample-ping` and `outbox-dispatch`, and **Schedules** shows `outbox-dispatch` every 5 minutes.
 
