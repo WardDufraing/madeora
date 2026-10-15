@@ -15,11 +15,13 @@ import {
 } from "../dispatcher.ts";
 import { PermanentJobError, RetryableJobError } from "../errors.ts";
 import { runJob, type RunResult } from "../executor.ts";
+import type { JobServices } from "../services.ts";
 import type { ExecutionStore, OutboxStore } from "../store.ts";
 
 export interface TriggerRunDependencies {
   readonly store: ExecutionStore & OutboxStore;
   readonly logger: Logger;
+  readonly services: JobServices;
 }
 
 /**

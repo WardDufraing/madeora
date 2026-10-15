@@ -523,6 +523,9 @@ try {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_e2e-fallback",
     // For the few test set-ups the app cannot do yet (tests/e2e/support/database.ts).
     E2E_DATABASE_URL: `postgresql://postgres@127.0.0.1:${String(PG_PORT)}/postgres`,
+    // For the background jobs the tests run (tests/e2e/support/jobs.ts, S14): this stack
+    // accepts a service-role token signed with its own throwaway secret.
+    E2E_SERVICE_ROLE_KEY: signServiceJwt(jwtSecret, "service_role"),
     PLAYWRIGHT_MAILPIT_URL: `http://127.0.0.1:${String(MAILPIT_HTTP_PORT)}`,
     // Turns on the Google browser tests (tests/e2e/google), which need the stand-in Google.
     PLAYWRIGHT_FAKE_GOOGLE: "1",

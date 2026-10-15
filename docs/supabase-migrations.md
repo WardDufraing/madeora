@@ -479,3 +479,7 @@ alter table private.audit_events add constraint audit_events_subject_type_check
 - Do not edit a migration in the SQL Editor before running it, and do not run SQL from anywhere else than a file in `supabase/migrations/` (or this guide).
 - Do not copy the database password, the `service_role` key or a Secret key anywhere.
 - Do not create tables or policies by clicking in the **Table Editor**: anything not in a migration file is lost when the database is rebuilt, and the local and CI databases would differ from the hosted ones.
+
+## Order for the S14 release (notifications, ADR 0018)
+
+The S14 migration moves invitation emails from the web request to a database trigger plus a Trigger.dev job. To avoid a double or a lost invitation email, apply in this order per environment: (1) deploy the Trigger.dev tasks with the email variables (`docs/trigger-setup.md`, steps 3 and 4); (2) apply the migration and release the web build together, with no invitations sent between the two. Applying the migration before the new web build is live makes the old build send the email as well as the job (two emails, different idempotency keys); releasing the web build first leaves new invitations on "Sending" with no job.

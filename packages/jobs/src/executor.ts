@@ -18,6 +18,7 @@ import { isCorrelationId, newCorrelationId, type Logger } from "@madeora/observa
 
 import { jobEnvelopeSchema, type AnyJobDefinition } from "./definition.ts";
 import { classifyError, PermanentJobError, RetryableJobError } from "./errors.ts";
+import type { JobServices } from "./services.ts";
 import type { ExecutionOutcome, ExecutionStore } from "./store.ts";
 
 export type RunResult =
@@ -27,12 +28,13 @@ export type RunResult =
 export interface RunJobDependencies {
   readonly store: ExecutionStore;
   readonly logger: Logger;
+  readonly services: JobServices;
 }
 
 export async function runJob(
   definition: AnyJobDefinition,
   rawEnvelope: unknown,
-  { store, logger: baseLogger }: RunJobDependencies,
+  { store, logger: baseLogger, services }: RunJobDependencies,
 ): Promise<RunResult> {
   const envelope = jobEnvelopeSchema.safeParse(rawEnvelope);
   const rawCorrelation =
@@ -132,6 +134,7 @@ export async function runJob(
       idempotencyKey,
       attempt,
       logger,
+      services,
     });
   } catch (error) {
     const { kind, code } = classifyError(error);

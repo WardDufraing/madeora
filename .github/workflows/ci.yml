@@ -151,9 +151,14 @@ jobs:
           key="$(value PUBLISHABLE_KEY)"
           if [ -z "$key" ]; then key="$(value ANON_KEY)"; fi
           if [ -z "$url" ] || [ -z "$key" ]; then echo "supabase status did not report the API URL and key" >&2; exit 1; fi
+          # The local stack's own service-role key, for the background jobs the tests run.
+          service="$(value SERVICE_ROLE_KEY)"
+          if [ -z "$service" ]; then service="$(value SECRET_KEY)"; fi
+          if [ -z "$service" ]; then echo "supabase status did not report a service-role key" >&2; exit 1; fi
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=$url"
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$key"
+            echo "E2E_SERVICE_ROLE_KEY=$service"
           } >> "$GITHUB_ENV"
       # Builds the web app first (Turborepo dependency), then runs Playwright against it.
       - run: pnpm test:e2e

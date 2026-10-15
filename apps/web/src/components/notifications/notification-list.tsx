@@ -1,0 +1,122 @@
+import { notificationPath } from "@madeora/domain/notifications";
+import { getTranslations } from "next-intl/server";
+import Link from "next/link";
+
+import { FormAlert } from "@/components/auth/form-alert";
+import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
+import type { NotificationView } from "@/notifications/types";
+
+import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
+
+/**
+ * The message for a notification: its kind names the event for one kind of reader, the words
+ * come from the reader's language. A kind this build does not know still reads as a sentence.
+ */
+const kindMessage = {
+  "recovery.owner_requested": "kindRecoveryOwnerRequested",
+  "recovery.owner_review_started": "kindRecoveryOwnerReviewStarted",
+  "recovery.owner_approved": "kindRecoveryOwnerApproved",
+  "recovery.claimant_review_started": "kindRecoveryClaimantReviewStarted",
+  "recovery.claimant_approved": "kindRecoveryClaimantApproved",
+  "recovery.claimant_paused": "kindRecoveryClaimantPaused",
+  "recovery.claimant_resumed": "kindRecoveryClaimantResumed",
+  "recovery.claimant_rejected": "kindRecoveryClaimantRejected",
+  "recovery.claimant_ended_owner_access": "kindRecoveryClaimantEndedOwnerAccess",
+  "recovery.claimant_invalid": "kindRecoveryClaimantInvalid",
+  "recovery.claimant_completed": "kindRecoveryClaimantCompleted",
+  "recovery.claimant_ready": "kindRecoveryClaimantReady",
+  "recovery.member_requested": "kindRecoveryMemberRequested",
+  "recovery.member_objection_open": "kindRecoveryMemberObjectionOpen",
+  "recovery.member_ended": "kindRecoveryMemberEnded",
+  "recovery.member_completed": "kindRecoveryMemberCompleted",
+  "recovery.former_owner_completed": "kindRecoveryFormerOwnerCompleted",
+  "recovery.former_owner_completed_removed": "kindRecoveryFormerOwnerCompletedRemoved",
+  "join_request.received": "kindJoinRequestReceived",
+} as const;
+
+type MessageKey =
+  | (typeof kindMessage)[keyof typeof kindMessage]
+  | "kindJoinRequestApproved"
+  | "kindJoinRequestDeclined"
+  | "kindUnknown";
+
+/** The message key for a notification (exported for tests). */
+export function messageKeyFor(item: Pick<NotificationView, "kind" | "decision">): MessageKey {
+  if (item.kind === "join_request.decided") {
+    return item.decision === "declined" ? "kindJoinRequestDeclined" : "kindJoinRequestApproved";
+  }
+  return (kindMessage as Readonly<Record<string, MessageKey>>)[item.kind] ?? "kindUnknown";
+}
+
+/**
+ * The person's notifications, newest first, with where each came from (its source Home), when it
+ * arrived, whether it is unread and whether it arrived during their quiet hours. Server-rendered
+ * from rows the database already limited to this person and their current Homes.
+ */
+export async function NotificationList({
+  items,
+  formats,
+}: {
+  readonly items: readonly NotificationView[];
+  readonly formats: DateTimeFormats;
+}) {
+  const t = await getTranslations("Notifications");
+  if (items.length === 0) {
+    return (
+      <FormAlert tone="info">
+        <p data-testid="notifications-empty">{t("empty")}</p>
+      </FormAlert>
+    );
+  }
+  const unread = items.some((item) => item.readAt === null);
+
+  return (
+    <div className="flex max-w-3xl flex-col gap-4">
+      {unread ? <MarkAllReadButton /> : null}
+      <ol className="flex flex-col gap-3">
+        {items.map((item) => {
+          const text = t(messageKeyFor(item), {
+            home: item.homeName ? isolate(item.homeName) : t("homeFallback"),
+            date: item.objectionEndsAt ? formatDateTime(item.objectionEndsAt, formats) : "",
+          });
+          const href = notificationPath(item.kind, item.homeId);
+          const isUnread = item.readAt === null;
+          return (
+            <li
+              key={item.id}
+              id={`notification-${item.id}`}
+              tabIndex={-1}
+              data-testid="notification"
+              data-unread={isUnread ? "true" : "false"}
+              className={
+                isUnread
+                  ? "flex flex-col gap-2 rounded-card border border-accent-edge bg-accent-subtle p-4"
+                  : "flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
+              }
+            >
+              <p className="text-body text-fg">
+                {isUnread ? (
+                  <span className="me-2 font-semibold text-accent-fg">{t("unread")}.</span>
+                ) : null}
+                {text}
+              </p>
+              <p className={isUnread ? "text-helper text-fg" : "text-helper text-fg-muted"}>
+                {item.homeName ? `${t("fromHome", { home: isolate(item.homeName) })} · ` : ""}
+                <time dateTime={item.createdAt}>{formatDateTime(item.createdAt, formats)}</time>
+                {item.duringQuietHours ? ` · ${t("quietMarker")}` : ""}
+              </p>
+              <div className="flex flex-wrap items-start gap-3">
+                <Link href={href} className="text-body font-medium text-accent-fg underline">
+                  {t("open")}
+                </Link>
+                {isUnread ? (
+                  <MarkReadButton id={item.id} text={text} rowId={`notification-${item.id}`} />
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}

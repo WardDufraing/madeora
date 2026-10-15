@@ -66,7 +66,11 @@ export function InvitationList({
       setConfirming(null);
       const email = invitation.recipientEmail ?? "";
       if (action === "revoke") setNotice(t("revoked"));
-      else if (result?.delivery === "sent") {
+      else if (result?.delivery === "pending") {
+        setNotice(
+          action === "renew" ? t("renewedQueued", { email }) : t("resentQueued", { email }),
+        );
+      } else if (result?.delivery === "sent") {
         setNotice(action === "renew" ? t("renewedSent", { email }) : t("resent", { email }));
       } else {
         setNotice(

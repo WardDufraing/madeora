@@ -320,6 +320,12 @@ importers:
       '@madeora/database':
         specifier: workspace:*
         version: link:../database
+      '@madeora/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@madeora/email':
+        specifier: workspace:*
+        version: link:../email
       '@madeora/observability':
         specifier: workspace:*
         version: link:../observability
@@ -329,6 +335,12 @@ importers:
       '@trigger.dev/sdk':
         specifier: 4.6.4
         version: 4.6.4(react@19.3.0)(zod@4.6.7)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
       zod:
         specifier: 4.6.7
         version: 4.6.7

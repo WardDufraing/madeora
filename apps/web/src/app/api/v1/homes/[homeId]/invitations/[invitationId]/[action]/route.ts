@@ -1,21 +1,15 @@
-import { randomUUID } from "node:crypto";
-
 import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
-import { sendHomeInvitationEmail } from "@/email/send";
 import type { EmailSentResponse } from "@/invitations/api";
-import { joinUrl } from "@/invitations/links";
 import {
   databaseFailure,
   failure,
   json,
-  logFailure,
   outcomeFailure,
   readMutation,
   requireHomeAction,
 } from "@/invitations/route-helpers";
-import { emailLanguages, invitationRoles } from "@/invitations/schema";
 import { isOneOf } from "@/invitations/types";
 
 const MAX_BODY_BYTES = 256;
@@ -37,6 +31,8 @@ interface InvitationActionRouteContext {
  * - revoke: the link or code stops working at once.
  * - resend: the same email, link and expiry again (rate-limited in the database).
  * - renew: a new link with a fresh 7 days; the old link is dead before this answers.
+ *
+ * Resend and renew queue the email in the database transaction (S14); a background job sends it.
  */
 export async function POST(
   request: Request,
@@ -70,29 +66,9 @@ export async function POST(
   const row = data[0];
   if (!row) return failure(500, "failed");
   if (row.outcome !== "ok") return outcomeFailure(row.outcome);
-  if (!isOneOf(invitationRoles, row.role) || !isOneOf(emailLanguages, row.email_locale)) {
-    return failure(500, "failed");
-  }
+  if (!row.expires_at) return failure(500, "failed");
 
-  const delivery = await sendHomeInvitationEmail(
-    {
-      locale: row.email_locale,
-      homeName: row.home_name,
-      role: row.role,
-      recipientEmail: row.recipient_email,
-      url: joinUrl(row.token),
-      expiresAt: new Date(row.expires_at),
-      timeZone: home.timeZone,
-    },
-    // Each resend or renewal is a new email; the database allows one a minute.
-    `invitation-${invitationId}-${action}-${randomUUID()}`,
-  );
-  const recorded = await supabase.rpc("record_home_invitation_delivery", {
-    p_home_id: home.id,
-    p_invitation_id: invitationId,
-    p_status: delivery,
-  });
-  if (recorded.error) logFailure("invitations.delivery_record_failed", recorded.error.code);
-  const response: EmailSentResponse = { delivery, expiresAt: row.expires_at };
+  // The database queued the email with this change; a background job sends it (S14).
+  const response: EmailSentResponse = { delivery: "pending", expiresAt: row.expires_at };
   return json(200, response);
 }

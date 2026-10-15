@@ -8,12 +8,15 @@ import type { SidebarState } from "@/preferences/preferences";
 
 import { ContextSwitcher } from "./context-switcher";
 import { MobileNav } from "./mobile-nav";
+import { NotificationBell } from "./notification-bell";
 import { Sidebar } from "./sidebar";
 
 export interface AppShellProps {
   readonly sidebar: SidebarState;
   /** The Homes the person belongs to, for the context switcher; `null` if they could not be read. */
   readonly homes: readonly MyHome[] | null;
+  /** Unread notifications, for the bell (S14). */
+  readonly unreadNotifications?: number;
   readonly children: ReactNode;
 }
 
@@ -21,7 +24,7 @@ export interface AppShellProps {
  * The signed-in application frame: skip link, sidebar (desktop), top bar with the context
  * switcher slot and the small-screen menu, and the main landmark.
  */
-export function AppShell({ sidebar, homes, children }: AppShellProps) {
+export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: AppShellProps) {
   const t = useTranslations("Shell");
   const tComponents = useTranslations("Components");
 
@@ -50,7 +53,8 @@ export function AppShell({ sidebar, homes, children }: AppShellProps) {
             {/* Personal or one Home (S09); the spec requires a clearly identified Personal
                 context even with zero Homes. */}
             <ContextSwitcher homes={homes} />
-            <div className="ms-auto">
+            <div className="ms-auto flex items-center gap-2">
+              <NotificationBell unread={unreadNotifications} />
               <SignOutButton />
             </div>
           </header>

@@ -607,12 +607,18 @@ insert into secrets
   select 'gus-before', token from private.home_invitations where id = (select id from ids where name = 'email-gus');
 select tests.act_as('alice');
 select tests.assert_true(
-  (select outcome = 'ok' and token = (select token from secrets where name = 'gus-before')
-     and recipient_email = 'gus@madeora.test' and role = 'administrator' and home_name = 'Thuis'
+  (select outcome = 'ok' and expires_at is not null
    from public.resend_home_invitation((select id from ids where name = 'home-a'),
      (select id from ids where name = 'email-gus'))),
-  'Resend returns the same link, recipient and role'
+  'Resend succeeds and returns only the outcome and the expiry, never the address or the link'
 );
+select tests.act_as_owner();
+select tests.assert_true(
+  (select token from private.home_invitations where id = (select id from ids where name = 'email-gus'))
+    = (select token from secrets where name = 'gus-before'),
+  'Resend keeps the same link'
+);
+select tests.act_as('alice');
 select tests.act_as('carol');
 select tests.assert_true(
   (select outcome from public.resend_home_invitation((select id from ids where name = 'home-a'),
@@ -624,9 +630,14 @@ update private.home_invitations
   set last_sent_at = now() - interval '2 minutes', expires_at = now() + interval '1 day'
   where id = (select id from ids where name = 'email-gus');
 select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome from public.renew_home_invitation(
+    (select id from ids where name = 'home-a'), (select id from ids where name = 'email-gus'))) = 'ok',
+  'Alice renews');
+select tests.act_as_owner();
 insert into secrets
-  select 'gus-after', token from public.renew_home_invitation(
-    (select id from ids where name = 'home-a'), (select id from ids where name = 'email-gus'));
+  select 'gus-after', token from private.home_invitations where id = (select id from ids where name = 'email-gus');
+select tests.act_as('alice');
 select tests.assert_true(
   (select token from secrets where name = 'gus-after') <> (select token from secrets where name = 'gus-before'),
   'Renew issues a new link'
@@ -664,16 +675,36 @@ select tests.assert_true(
      where kind = 'link' and state = 'active' limit 1))) = 'not_email',
   'Only email invitations can be resent'
 );
+-- The emails are queued in the same transaction (S14): one job per send, ids only, and nobody can
+-- write the delivery status through the API any more.
+select tests.assert_denied(
+  $$select public.record_home_invitation_delivery(gen_random_uuid(), gen_random_uuid(), 'sent')$$,
+  'The delivery status can no longer be written through the API', '42883'
+);
+select tests.act_as_owner();
 select tests.assert_true(
-  public.record_home_invitation_delivery((select id from ids where name = 'home-a'),
-    (select id from ids where name = 'email-gus'), 'failed') = 'ok',
-  'A failed delivery is recorded'
+  (select count(*) from private.job_outbox o
+   where o.job_name = 'invitation-email'
+     and o.payload ->> 'invitationId' = (select id::text from ids where name = 'email-gus')) = 3,
+  'Creating, resending and renewing each queued exactly one email job (the refused renewal none)'
 );
 select tests.assert_true(
-  (select delivery_status from public.list_home_invitations((select id from ids where name = 'home-a'))
-   where id = (select id from ids where name = 'email-gus')) = 'failed',
-  'The failed delivery shows on the invitation'
+  not exists (
+    select 1 from private.job_outbox o
+    where o.job_name = 'invitation-email'
+      and o.payload ->> 'invitationId' = (select id::text from ids where name = 'email-gus')
+      and (o.payload <> jsonb_build_object(
+             'invitationId', o.payload ->> 'invitationId', 'send', (o.payload ->> 'send')::integer)
+           or o.idempotency_key <> 'invitation-email:' || (o.payload ->> 'invitationId') || ':' || (o.payload ->> 'send'))
+  ),
+  'The email jobs carry ids and the send number only, and are keyed by invitation and send number'
 );
+select tests.assert_true(
+  (select delivery_status from private.home_invitations
+   where id = (select id from ids where name = 'email-gus')) = 'pending',
+  'The delivery status stays pending until the job records the outcome'
+);
+select tests.act_as('alice');
 
 -- The 25-invitation limit ---------------------------------------------------------------------------
 

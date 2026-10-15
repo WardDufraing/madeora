@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./permissions": "./src/permissions/index.ts"
+    "./permissions": "./src/permissions/index.ts",
+    "./notifications": "./src/notifications/index.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

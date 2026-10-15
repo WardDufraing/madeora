@@ -4,6 +4,11 @@ import { createElement } from "react";
 import { HomeInvitationEmail, isolate, type HomeInvitationEmailProps } from "./home-invitation.tsx";
 import { fill, invitationMessages } from "./messages.ts";
 import {
+  NotificationEmail,
+  notificationSubject,
+  type NotificationEmailProps,
+} from "./notification.tsx";
+import {
   OwnershipRecoveryEmail,
   ownershipRecoverySubject,
   type OwnershipRecoveryEmailProps,
@@ -39,4 +44,13 @@ export async function renderOwnershipRecoveryEmail(
   const element = createElement(OwnershipRecoveryEmail, props);
   const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
   return { subject: ownershipRecoverySubject(props).subject, html, text };
+}
+
+/** Renders the email behind a notification (S14), as HTML and plain text. */
+export async function renderNotificationEmail(
+  props: NotificationEmailProps,
+): Promise<RenderedEmail> {
+  const element = createElement(NotificationEmail, props);
+  const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
+  return { subject: notificationSubject(props).subject, html, text };
 }

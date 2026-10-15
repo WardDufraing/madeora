@@ -1,11 +1,9 @@
-import { sendHomeInvitationEmail } from "@/email/send";
 import type { CreatedInvitationResponse } from "@/invitations/api";
 import { joinUrl } from "@/invitations/links";
 import {
   databaseFailure,
   failure,
   json,
-  logFailure,
   outcomeFailure,
   readMutation,
   requireHomeAction,
@@ -26,8 +24,9 @@ interface InvitationsRouteContext {
  * The permission engine decides first (Administrator invitations are Owner-only); the database
  * function decides again with the person's own session, enforces the 25-invitation limit under a
  * lock, and returns the invitation an earlier attempt with the same request id created. For an
- * email invitation the email is sent here and its outcome recorded. The answer is the same for
- * any address: nothing here looks up whether it has an account.
+ * email invitation the database queues the email in the same transaction (a background job sends
+ * it, S14), so a retried request never sends a second one. The answer is the same for any
+ * address: nothing here looks up whether it has an account.
  */
 export async function POST(
   request: Request,
@@ -65,32 +64,14 @@ export async function POST(
   if (!row) return failure(500, "failed");
   if (row.outcome !== "created" && row.outcome !== "existing") return outcomeFailure(row.outcome);
 
-  let delivery: DeliveryStatus | null = null;
-  if (body.kind === "email") {
-    delivery = isOneOf(deliveryStatuses, row.delivery_status) ? row.delivery_status : "pending";
-    // A retried request whose email already went out is not sent twice; one that failed is.
-    if (row.outcome === "created" || delivery !== "sent") {
-      delivery = await sendHomeInvitationEmail(
-        {
-          locale: body.language,
-          homeName: home.name,
-          role,
-          recipientEmail: body.email,
-          url: joinUrl(row.token),
-          expiresAt: new Date(row.expires_at),
-          timeZone: home.timeZone,
-        },
-        // The same key for every attempt at this first email, so the provider sends it once.
-        `invitation-${row.invitation_id}-first`,
-      );
-      const recorded = await supabase.rpc("record_home_invitation_delivery", {
-        p_home_id: home.id,
-        p_invitation_id: row.invitation_id,
-        p_status: delivery,
-      });
-      if (recorded.error) logFailure("invitations.delivery_record_failed", recorded.error.code);
-    }
-  }
+  // The email is queued by the database in the transaction that created the invitation (S14);
+  // a background job sends it and records the outcome, so this answer is the status so far.
+  const delivery: DeliveryStatus | null =
+    body.kind === "email"
+      ? isOneOf(deliveryStatuses, row.delivery_status)
+        ? row.delivery_status
+        : "pending"
+      : null;
 
   const response: CreatedInvitationResponse = {
     invitation: {

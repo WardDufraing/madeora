@@ -17,7 +17,7 @@ Use a job only for work that is durable, scheduled, retryable, long-running or f
    - `version`: start at 1. A job handles exactly one payload version. For an incompatible payload change, prefer a **new job name** (`send-invitation-email-v2`) and keep the old job registered until `select count(*) from private.job_outbox where job_name = '<old>' and status in ('pending', 'dispatching')` is 0. Raising `version` instead works only when no old-version rows remain: rows of a newer version than the deployed code are retried until the deploy arrives, but rows of an older version are dead (`version_retired`).
    - **Deploy order:** deploy the tasks to Trigger.dev before, or together with, the migration that starts enqueueing a new job. Rows that arrive first are retried (`unknown_job`, `version_not_deployed`) and dead after 8 attempts, about 2.5 hours.
    - `payload`: `z.strictObject({...})` with **ids only**. Payloads appear in Trigger.dev's dashboard and in Postgres: no names, email addresses, tokens, sessions, URLs or household content.
-   - `handle(data, { idempotencyKey, correlationId, logger, attempt })`: load what you need through narrow `security definer` functions granted to the service role (never by reading or writing household tables directly with the service-role client, which bypasses RLS), **re-check that the people and resources involved still allow the work** (membership revoked, account deactivated, integration disabled: spec lines 309, 315), and throw `PermanentJobError("code")` when it can never succeed or `RetryableJobError("code")` when it may later. Pass `idempotencyKey` on to providers (Resend's idempotency key) so a repeated run cannot repeat an external effect.
+   - `handle(data, { idempotencyKey, correlationId, logger, attempt, services })`: `services` is the job's window on the outside world (S14): `services.data` (the narrow database functions, `packages/jobs/src/services.ts`), `services.mail` (the email transport, or null where email is off) and `services.appUrl`. Load what you need through narrow `security definer` functions granted to the service role (never by reading or writing household tables directly with the service-role client, which bypasses RLS), **re-check that the people and resources involved still allow the work** (membership revoked, account deactivated, integration disabled: spec lines 309, 315), and throw `PermanentJobError("code")` when it can never succeed or `RetryableJobError("code")` when it may later. Pass `idempotencyKey` on to providers (Resend's idempotency key) so a repeated run cannot repeat an external effect.
 2. List it in `packages/jobs/src/registry.ts` and export its task from `packages/jobs/src/trigger/tasks.ts` (`export const xTask = jobTask(x)`). A unit test fails if a job has no task.
 3. Enqueue it from the SQL function that makes the business change:
 
@@ -31,7 +31,18 @@ Use a job only for work that is durable, scheduled, retryable, long-running or f
    );
    ```
 
-4. Test the handler with `FakeJobStore` (`packages/jobs/src/testing/fake-store.ts`): success, duplicate delivery, retryable and permanent failures, revoked access.
+4. Test the handler with `FakeJobStore` (`packages/jobs/src/testing/fake-store.ts`) and `fakeServices()` (`testing/fake-services.ts`, a fake data port and a mail fake that sends once per idempotency key): success, duplicate delivery, retryable and permanent failures, revoked access. See `src/jobs/email-jobs.test.ts`.
+
+## The jobs
+
+| Job                  | Enqueued by                                                                              | What it does                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `sample-ping`        | an operator (smoke test)                                                                 | Logs a label.                                                                                                          |
+| `notification-email` | `private.notify_user` (S14)                                                              | Emails one notification after rechecking membership, the person's choice and their address. Records the email's state. |
+| `invitation-email`   | a trigger on `home_invitations` (first send), `prepare_invitation_email` (resend, renew) | Emails a Home invitation with the link read at send time. Records `sent`, `failed` or `not_configured`.                |
+| `recovery-ready`     | the recovery trigger, delayed to the end of an objection period                          | Tells the person who asked that they can accept, if the case is still ready.                                           |
+
+Email jobs pass their idempotency key to Resend (`sendJobEmail`), record the outcome on the notification or invitation, and treat a Resend refusal as permanent and an outage as retryable. In-app delivery never waits for them.
 
 ## Logs and correlation IDs
 
@@ -122,4 +133,6 @@ pnpm dlx trigger.dev@4.6.4 login
 pnpm dlx trigger.dev@4.6.4 dev
 ```
 
-`trigger.dev dev` runs tasks on your machine in the Dev environment (free). Without an account, the unit tests (`pnpm --filter @madeora/jobs test`) and database tests cover the same rules with fakes.
+`trigger.dev dev` runs tasks on your machine in the Dev environment (free). For email, also set `EMAIL_TRANSPORT=mailpit`, `MAILPIT_URL=http://127.0.0.1:54324`, `EMAIL_FROM` and `APP_URL` in `packages/jobs/.env`. Without an account, the unit tests (`pnpm --filter @madeora/jobs test`) and database tests cover the same rules with fakes.
+
+**Without Trigger.dev at all** (tests, CI): `@madeora/jobs/local` (`createLocalJobRunner`) runs the same outbox, dispatcher, executor and handlers in one process (`packages/jobs/src/local-run`, run under Vitest because Node cannot run the TSX email templates), against the local Supabase stack and the local Mailpit only (it refuses anything else). The browser tests use it (`tests/e2e/support/jobs.ts`, needs `E2E_SERVICE_ROLE_KEY`, which CI and `pnpm test:e2e:fallback` provide) so a test that expects an email runs the due jobs first.

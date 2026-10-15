@@ -13,10 +13,11 @@ Madeora's own SVG icons (`architecture.md` §16). No general-purpose icon pack i
 
 ## Inventory
 
-All icons were drawn for Madeora on 13 October 2026 (S04 and S05; `chevron-down.svg` on 14 October 2026, S09) as original artwork: simple geometric shapes, not copied or adapted from any icon set. A test checks that this table lists exactly the exported icons.
+All icons were drawn for Madeora on 13 October 2026 (S04 and S05; `chevron-down.svg` on 14 October 2026, S09; `bell.svg` on 15 October 2026, S14) as original artwork: simple geometric shapes, not copied or adapted from any icon set. A test checks that this table lists exactly the exported icons.
 
 | Component             | File                   | Used for                                                        |
 | --------------------- | ---------------------- | --------------------------------------------------------------- |
+| `BellIcon`            | `bell.svg`             | Notification centre link in the top bar (S14)                   |
 | `CheckIcon`           | `check.svg`            | Checked checkbox                                                |
 | `CloseIcon`           | `close.svg`            | Close and dismiss buttons (dialog, toast)                       |
 | `InfoIcon`            | `info.svg`             | Information messages                                            |

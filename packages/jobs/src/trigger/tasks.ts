@@ -10,10 +10,14 @@ import type { Database } from "@madeora/database";
 
 import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
+import { invitationEmail } from "../jobs/invitation-email.ts";
+import { notificationEmail } from "../jobs/notification-email.ts";
+import { recoveryReady } from "../jobs/recovery-ready.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
 import { jobRegistry } from "../registry.ts";
 import { createSupabaseJobStore, JobStoreError } from "../supabase-store.ts";
 import { parseWorkerEnv } from "./env.ts";
+import { createJobServices } from "./services.ts";
 import { jobLogger, retryTiming, runJobTask, sweepOutbox, triggerDispatchClient } from "./run.ts";
 
 // Created on first use inside a run, so loading the tasks (deploys, indexing) needs no secrets.
@@ -24,7 +28,12 @@ function createServices() {
   const client = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
-  return { client, store: createSupabaseJobStore(client), logger: jobLogger(env.APP_ENV) };
+  return {
+    client,
+    store: createSupabaseJobStore(client),
+    services: createJobServices(client, env),
+    logger: jobLogger(env.APP_ENV),
+  };
 }
 
 function getServices() {
@@ -45,14 +54,17 @@ function jobTask<const Name extends string>(definition: AnyJobDefinition & { nam
     // A run may never outlive its execution lease, or a second run could take the key over.
     maxDuration: definition.leaseSeconds,
     run: async (payload: unknown) => {
-      const { store, logger } = getServices();
-      return runJobTask(definition, payload, { store, logger });
+      const { store, logger, services } = getServices();
+      return runJobTask(definition, payload, { store, logger, services });
     },
     catchError: ({ error }) => retryTiming(error),
   });
 }
 
 export const samplePingTask = jobTask(samplePing);
+export const notificationEmailTask = jobTask(notificationEmail);
+export const invitationEmailTask = jobTask(invitationEmail);
+export const recoveryReadyTask = jobTask(recoveryReady);
 
 export const outboxDispatch = schedules.task({
   id: "outbox-dispatch",

@@ -105,6 +105,144 @@ export type Database = {
         };
         Relationships: [];
       };
+      notification_preferences: {
+        Row: {
+          category: string;
+          channel: string;
+          enabled: boolean;
+          home_id: string | null;
+          id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          category: string;
+          channel: string;
+          enabled: boolean;
+          home_id?: string | null;
+          id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          category?: string;
+          channel?: string;
+          enabled?: boolean;
+          home_id?: string | null;
+          id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_home_id_fkey";
+            columns: ["home_id"];
+            isOneToOne: false;
+            referencedRelation: "homes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notification_quiet_hours: {
+        Row: {
+          enabled: boolean;
+          end_time: string;
+          home_id: string | null;
+          id: string;
+          start_time: string;
+          time_zone: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          enabled: boolean;
+          end_time: string;
+          home_id?: string | null;
+          id?: string;
+          start_time: string;
+          time_zone: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          enabled?: boolean;
+          end_time?: string;
+          home_id?: string | null;
+          id?: string;
+          start_time?: string;
+          time_zone?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_quiet_hours_home_id_fkey";
+            columns: ["home_id"];
+            isOneToOne: false;
+            referencedRelation: "homes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notifications: {
+        Row: {
+          category: string;
+          correlation_id: string;
+          created_at: string;
+          dedupe_key: string;
+          during_quiet_hours: boolean;
+          email_error_code: string | null;
+          email_status: string;
+          home_id: string | null;
+          id: string;
+          kind: string;
+          params: NonNullable<Json>;
+          read_at: string | null;
+          show_in_app: boolean;
+          user_id: string;
+        };
+        Insert: {
+          category: string;
+          correlation_id: string;
+          created_at?: string;
+          dedupe_key: string;
+          during_quiet_hours?: boolean;
+          email_error_code?: string | null;
+          email_status?: string;
+          home_id?: string | null;
+          id?: string;
+          kind: string;
+          params?: NonNullable<Json>;
+          read_at?: string | null;
+          show_in_app: boolean;
+          user_id: string;
+        };
+        Update: {
+          category?: string;
+          correlation_id?: string;
+          created_at?: string;
+          dedupe_key?: string;
+          during_quiet_hours?: boolean;
+          email_error_code?: string | null;
+          email_status?: string;
+          home_id?: string | null;
+          id?: string;
+          kind?: string;
+          params?: NonNullable<Json>;
+          read_at?: string | null;
+          show_in_app?: boolean;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_home_id_fkey";
+            columns: ["home_id"];
+            isOneToOne: false;
+            referencedRelation: "homes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_preferences: {
         Row: {
           accent_color: string | null;
@@ -238,6 +376,10 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
       };
+      deliver_recovery_ready: {
+        Args: { p_objection_ends_at: string; p_recovery_id: string };
+        Returns: string;
+      };
       fail_job_outbox: {
         Args: { p_error_code: string; p_id: string; p_permanent: boolean };
         Returns: string;
@@ -251,6 +393,43 @@ export type Database = {
           p_outcome: string;
         };
         Returns: boolean;
+      };
+      get_invitation_email: {
+        Args: { p_invitation_id: string; p_send: number };
+        Returns: {
+          email_locale: string;
+          expires_at: string;
+          home_name: string;
+          home_time_zone: string;
+          outcome: string;
+          recipient_email: string;
+          role: string;
+          token: string;
+        }[];
+      };
+      get_notification_email: {
+        Args: { p_notification_id: string };
+        Returns: {
+          category: string;
+          home_id: string;
+          home_name: string;
+          home_time_zone: string;
+          kind: string;
+          locale: string;
+          outcome: string;
+          params: Json;
+          recipient_email: string;
+        }[];
+      };
+      get_notification_settings: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          category: string;
+          channel: string;
+          enabled: boolean;
+          home_id: string;
+          overridden: boolean;
+        }[];
       };
       home_capabilities: {
         Args: { p_home_id: string };
@@ -357,6 +536,13 @@ export type Database = {
           state: string;
         }[];
       };
+      mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
+      my_notification_channels: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          email_verified: boolean;
+        }[];
+      };
       my_recovered_homes: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -383,9 +569,13 @@ export type Database = {
           role: string;
         }[];
       };
-      record_home_invitation_delivery: {
-        Args: { p_home_id: string; p_invitation_id: string; p_status: string };
-        Returns: string;
+      record_invitation_email: {
+        Args: { p_invitation_id: string; p_send: number; p_status: string };
+        Returns: boolean;
+      };
+      record_notification_email: {
+        Args: { p_error_code?: string; p_notification_id: string; p_status: string };
+        Returns: boolean;
       };
       release_job_outbox: { Args: { p_ids: string[] }; Returns: number };
       remove_home_member: {
@@ -395,13 +585,8 @@ export type Database = {
       renew_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: {
-          email_locale: string;
           expires_at: string;
-          home_name: string;
           outcome: string;
-          recipient_email: string;
-          role: string;
-          token: string;
         }[];
       };
       request_ownership_recovery: {
@@ -423,15 +608,15 @@ export type Database = {
       resend_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: {
-          email_locale: string;
           expires_at: string;
-          home_name: string;
           outcome: string;
-          recipient_email: string;
-          role: string;
-          token: string;
         }[];
       };
+      reset_notification_preference: {
+        Args: { p_category: string; p_channel: string; p_home_id?: string };
+        Returns: boolean;
+      };
+      reset_notification_quiet_hours: { Args: { p_home_id?: string }; Returns: boolean };
       respond_to_ownership_transfer: {
         Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
         Returns: string;
@@ -442,6 +627,20 @@ export type Database = {
       };
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
+        Returns: string;
+      };
+      set_notification_preference: {
+        Args: { p_category: string; p_channel: string; p_enabled: boolean; p_home_id?: string };
+        Returns: string;
+      };
+      set_notification_quiet_hours: {
+        Args: {
+          p_enabled: boolean;
+          p_end: string;
+          p_home_id?: string;
+          p_start: string;
+          p_time_zone: string;
+        };
         Returns: string;
       };
       staff_close_recovery_appeal: {

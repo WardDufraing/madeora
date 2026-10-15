@@ -7,13 +7,11 @@ interface State {
   identity: { userId: string } | null;
   context: { status: "ok"; role: Role } | { status: "not-found" } | { status: "unavailable" };
   rpc: Mock<(name: string, args: Record<string, unknown>) => { data: unknown; error: unknown }>;
-  send: Mock<(props: Record<string, unknown>, key: string) => Promise<string>>;
 }
 const state = vi.hoisted((): State => ({
   identity: { userId: "user-a" },
   context: { status: "ok", role: "owner" },
   rpc: vi.fn(),
-  send: vi.fn(),
 }));
 
 const HOME_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
@@ -41,9 +39,6 @@ vi.mock("@/auth/supabase-server", () => ({
     Promise.resolve({
       rpc: (name: string, args: Record<string, unknown>) => Promise.resolve(state.rpc(name, args)),
     }),
-}));
-vi.mock("@/email/send", () => ({
-  sendHomeInvitationEmail: (props: Record<string, unknown>, key: string) => state.send(props, key),
 }));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
@@ -105,13 +100,11 @@ beforeEach(() => {
   state.rpc.mockImplementation((name) =>
     name === "create_home_invitation" ? created("created") : { data: "ok", error: null },
   );
-  state.send.mockReset();
-  state.send.mockResolvedValue("sent");
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 describe("POST /api/v1/homes/{homeId}/invitations", () => {
-  it("creates an email invitation, sends it once with a stable key and records the delivery", async () => {
+  it("creates an email invitation and sends nothing itself: the database queues the email", async () => {
     const response = await post(emailBody);
     expect(response.status).toBe(201);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -122,7 +115,7 @@ describe("POST /api/v1/homes/{homeId}/invitations", () => {
         expiresAt: "2026-10-21T10:00:00+00:00",
         url: null,
         code: null,
-        delivery: "sent",
+        delivery: "pending",
       },
     });
     expect(state.rpc).toHaveBeenCalledWith("create_home_invitation", {
@@ -134,23 +127,13 @@ describe("POST /api/v1/homes/{homeId}/invitations", () => {
       p_email_locale: "nl",
       p_max_admissions: 1,
     });
-    expect(state.send).toHaveBeenCalledTimes(1);
-    expect(state.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        locale: "nl",
-        homeName: "Thuis",
-        role: "member",
-        recipientEmail: "someone@example.com",
-        url: `https://madeora.example/join/${TOKEN}`,
-        timeZone: "Europe/Brussels",
-      }),
-      `invitation-${INVITATION_ID}-first`,
-    );
-    expect(state.rpc).toHaveBeenCalledWith("record_home_invitation_delivery", {
-      p_home_id: HOME_ID,
-      p_invitation_id: INVITATION_ID,
-      p_status: "sent",
-    });
+    expect(state.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("never puts the secret link of an email invitation in the answer", async () => {
+    const text = await (await post(emailBody)).text();
+    expect(text).not.toContain(TOKEN);
+    expect(text).not.toContain("someone@example.com");
   });
 
   it("gives the same answer shape for any address: nothing looks up accounts", async () => {
@@ -160,48 +143,25 @@ describe("POST /api/v1/homes/{homeId}/invitations", () => {
     ).json();
     expect(first).toEqual(second);
     const names = state.rpc.mock.calls.map(([name]) => name);
-    expect(new Set(names)).toEqual(
-      new Set(["create_home_invitation", "record_home_invitation_delivery"]),
-    );
+    expect(new Set(names)).toEqual(new Set(["create_home_invitation"]));
   });
 
-  it("does not send again when a retry finds the email already sent", async () => {
-    state.rpc.mockImplementation((name) =>
-      name === "create_home_invitation"
-        ? created("existing", { delivery_status: "sent" })
-        : { data: "ok", error: null },
-    );
-    const response = await post(emailBody);
-    expect(response.status).toBe(200);
-    expect((await invitationOf(response)).delivery).toBe("sent");
-    expect(state.send).not.toHaveBeenCalled();
-  });
-
-  it("sends again with the same key when a retry finds the first send failed", async () => {
-    state.rpc.mockImplementation((name) =>
-      name === "create_home_invitation"
-        ? created("existing", { delivery_status: "failed" })
-        : { data: "ok", error: null },
-    );
-    await post(emailBody);
-    expect(state.send).toHaveBeenCalledWith(expect.anything(), `invitation-${INVITATION_ID}-first`);
-  });
-
-  it.each(["failed", "not_configured"])(
-    "reports a %s delivery instead of hiding it",
+  it.each(["pending", "sent", "failed", "not_configured"])(
+    "returns the %s delivery status of a retried request and does nothing else",
     async (status) => {
-      state.send.mockResolvedValue(status);
-      const response = await post(emailBody);
-      expect(response.status).toBe(201);
-      expect((await invitationOf(response)).delivery).toBe(status);
-      expect(state.rpc).toHaveBeenCalledWith(
-        "record_home_invitation_delivery",
-        expect.objectContaining({ p_status: status }),
+      state.rpc.mockImplementation((name) =>
+        name === "create_home_invitation"
+          ? created("existing", { delivery_status: status })
+          : { data: "ok", error: null },
       );
+      const response = await post(emailBody);
+      expect(response.status).toBe(200);
+      expect((await invitationOf(response)).delivery).toBe(status);
+      expect(state.rpc).toHaveBeenCalledTimes(1);
     },
   );
 
-  it("creates a multi-use link and returns its address, never sending email", async () => {
+  it("creates a multi-use link and returns its address", async () => {
     const response = await post(linkBody);
     expect(response.status).toBe(201);
     expect(await invitationOf(response)).toMatchObject({
@@ -218,7 +178,6 @@ describe("POST /api/v1/homes/{homeId}/invitations", () => {
       p_expires_in: "24h",
       p_max_admissions: 3,
     });
-    expect(state.send).not.toHaveBeenCalled();
   });
 
   it("creates a join code for Members only, formatted for reading", async () => {
@@ -292,7 +251,6 @@ describe("POST /api/v1/homes/{homeId}/invitations", () => {
     const response = await post(emailBody);
     expect(response.status).toBe(status);
     expect(await response.json()).toEqual({ error });
-    expect(state.send).not.toHaveBeenCalled();
   });
 
   it.each([

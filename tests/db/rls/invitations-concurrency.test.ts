@@ -93,7 +93,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (homeId) {
-    await psql(`delete from public.homes where id = '${homeId}';
+    await psql(`delete from private.job_outbox
+      where (payload ->> 'invitationId')::uuid in
+        (select id from private.home_invitations where home_id = '${homeId}');
+      delete from public.homes where id = '${homeId}';
       delete from private.audit_events where home_id = '${homeId}';`);
   }
   await psql(

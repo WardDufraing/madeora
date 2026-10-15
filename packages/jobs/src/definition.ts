@@ -16,6 +16,8 @@ import type { Logger } from "@madeora/observability";
 import { isCorrelationId } from "@madeora/observability";
 import { z } from "zod";
 
+import type { JobServices } from "./services.ts";
+
 export const JOB_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 export const IDEMPOTENCY_KEY = /^[A-Za-z0-9:_.-]{1,200}$/;
 
@@ -43,6 +45,8 @@ export interface JobContext {
   readonly attempt: number;
   /** Already carries the job name and correlation ID. */
   readonly logger: Logger;
+  /** Data access and email for jobs that need them (S14); the sample job ignores it. */
+  readonly services: JobServices;
 }
 
 // Zod's strict object: `z.strictObject({...})` or `z.object({...}).strict()`.

@@ -8,6 +8,7 @@ import { RetryableJobError } from "../errors.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
 import { jobRegistry, jobs } from "../registry.ts";
 import { FakeJobStore } from "../testing/fake-store.ts";
+import { fakeServices } from "../testing/fake-services.ts";
 import { parseWorkerEnv } from "./env.ts";
 
 const sdk = vi.hoisted(() => ({
@@ -52,7 +53,9 @@ describe("Trigger.dev tasks", () => {
 describe("runJobTask", () => {
   it("returns the run result", async () => {
     const store = new FakeJobStore();
-    await expect(runJobTask(samplePing, envelope, { store, logger })).resolves.toEqual({
+    await expect(
+      runJobTask(samplePing, envelope, { store, logger, services: fakeServices() }),
+    ).resolves.toEqual({
       status: "succeeded",
       attempt: 1,
     });
@@ -60,7 +63,11 @@ describe("runJobTask", () => {
 
   it("turns a permanent failure into AbortTaskRunError, so Trigger.dev stops retrying", async () => {
     const store = new FakeJobStore();
-    const failure = runJobTask(samplePing, { ...envelope, data: { label: 42 } }, { store, logger });
+    const failure = runJobTask(
+      samplePing,
+      { ...envelope, data: { label: 42 } },
+      { store, logger, services: fakeServices() },
+    );
     await expect(failure).rejects.toBeInstanceOf(AbortTaskRunError);
     await expect(failure).rejects.toThrow("invalid_payload");
   });
@@ -68,9 +75,9 @@ describe("runJobTask", () => {
   it("rethrows a retryable failure for Trigger.dev's retry policy", async () => {
     const store = new FakeJobStore();
     store.unavailable = true;
-    await expect(runJobTask(samplePing, envelope, { store, logger })).rejects.toBeInstanceOf(
-      RetryableJobError,
-    );
+    await expect(
+      runJobTask(samplePing, envelope, { store, logger, services: fakeServices() }),
+    ).rejects.toBeInstanceOf(RetryableJobError);
   });
 });
 

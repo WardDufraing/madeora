@@ -89,7 +89,15 @@ beforeEach(async () => {
 afterAll(async () => {
   const list = homes.map((id) => `'${id}'`).join(", ");
   if (list) {
-    await psql(`delete from public.homes where id in (${list});
+    await psql(`delete from private.job_outbox
+      where (payload ->> 'recoveryId')::uuid in
+        (select id from private.home_ownership_recoveries where home_id in (${list}))
+      or (payload ->> 'notificationId')::uuid in
+        (select n.id from public.notifications n
+         where n.home_id in (${list})
+            or n.params ->> 'recoveryId' in
+              (select id::text from private.home_ownership_recoveries where home_id in (${list})));
+      delete from public.homes where id in (${list});
       delete from private.audit_events where home_id in (${list});`);
   }
   await psql(`delete from auth.users where id in (${everyone.map((id) => `'${id}'`).join(", ")});`);

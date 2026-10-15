@@ -1,6 +1,7 @@
 // Generated from packages/icons/svg by `pnpm --filter @madeora/icons generate`. Do not edit.
 import { createIcon } from "../create-icon.ts";
 
+export const BellIcon = createIcon("Bell", [["path",{"d":"M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15Z"}],["path",{"d":"M10 21h4"}]]);
 export const CalendarIcon = createIcon("Calendar", [["rect",{"x":"4","y":"5","width":"16","height":"15","rx":"2"}],["path",{"d":"M4 10h16"}],["path",{"d":"M8 3v4M16 3v4"}]]);
 export const CheckIcon = createIcon("Check", [["polyline",{"points":"5 12.5 10 17.5 19 7"}]]);
 export const ChevronDownIcon = createIcon("ChevronDown", [["path",{"d":"m6 9 6 6 6-6"}]]);
