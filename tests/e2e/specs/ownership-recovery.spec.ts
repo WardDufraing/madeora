@@ -3,6 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import { registerConfirmed, signIn, type Account } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
 import { addMember, createHomeFor, setGlobalProfile, sql } from "../support/database";
+import { runJobs } from "../support/jobs";
 import { waitForEmail } from "../support/mail";
 
 // S12b: verified Home ownership recovery. A long-standing member asks Madeora to make them the
@@ -102,7 +103,12 @@ test("a member recovers ownership through staff review, an objection and the wai
   await expect(samPage.getByText(alice.email)).toBeVisible();
   await expectNoAxeViolations(samPage, "staff case page");
   await samPage.getByRole("button", { name: "Save decision" }).click();
-  await expect(samPage.getByText("Decision saved. The Owner was emailed.")).toBeVisible();
+  await expect(
+    samPage.getByText(
+      "Decision saved. The people involved are being notified; emails go out within a few minutes.",
+    ),
+  ).toBeVisible();
+  runJobs();
   await waitForEmail(alice.email, "Someone asked to take over ownership of");
   await expect(samPage.getByTestId("staff-case-state")).toHaveText("In review");
 
@@ -112,7 +118,12 @@ test("a member recovers ownership through staff review, an objection and the wai
     .getByRole("textbox", { name: "Note" })
     .fill("Video call with Dave, ID checked; Alice's sister confirmed by phone.");
   await samPage.getByRole("button", { name: "Save decision" }).click();
-  await expect(samPage.getByText("Decision saved. The Owner was emailed.")).toBeVisible();
+  await expect(
+    samPage.getByText(
+      "Decision saved. The people involved are being notified; emails go out within a few minutes.",
+    ),
+  ).toBeVisible();
+  runJobs();
   await waitForEmail(alice.email, "will move unless you act");
   await expect(samPage.getByTestId("staff-case-state")).toHaveText(
     "Approved, objection period running",
@@ -133,7 +144,11 @@ test("a member recovers ownership through staff review, an objection and the wai
   await expect(samPage.getByText("I want to hear from Alice first.")).toBeVisible();
   await samPage.getByRole("radio", { name: "Resume" }).check();
   await samPage.getByRole("button", { name: "Save decision" }).click();
-  await expect(samPage.getByText("Decision saved. The Owner was emailed.")).toBeVisible();
+  await expect(
+    samPage.getByText(
+      "Decision saved. The people involved are being notified; emails go out within a few minutes.",
+    ),
+  ).toBeVisible();
   await expect(samPage.getByTestId("staff-case-state")).toHaveText(
     "Approved, objection period running",
   );

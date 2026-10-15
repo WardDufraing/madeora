@@ -1,15 +1,11 @@
-import { getPublicEnv } from "@madeora/config/env/public";
-import type { OwnershipRecoveryEmailKind } from "@madeora/email";
 import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
-import { sendOwnershipRecoveryEmail } from "@/email/send";
-import type { EmailDelivery, StaffDecisionResponse } from "@/recovery/api";
+import type { StaffDecisionResponse } from "@/recovery/api";
 import { staffDecisionSchema } from "@/recovery/schema";
 import {
   databaseFailure,
   failure,
-  getStaffCase,
   json,
   outcomeFailure,
   readRecoveryMutation,
@@ -26,9 +22,10 @@ interface DecisionRouteContext {
  * architecture.md §43). The database checks the caller is staff and signed in within 15 minutes,
  * re-checks the case under the Home's lock and audits the decision with the staff account.
  *
- * When the review starts, and whenever the case (re)enters its objection period, the Owner is
- * emailed at their confirmed address. That happens here, not at submission, so the session of the
- * member who asked never handles the Owner's address.
+ * Notifying people is the database's job (S14): a trigger on the case creates the in-app
+ * notifications and queues the emails (the Owner when the review starts and when the objection
+ * period begins, the person who asked at every step), in the decision's own transaction. No
+ * session here ever handles anyone's address.
  */
 export async function POST(request: Request, { params }: DecisionRouteContext): Promise<Response> {
   const input = await readRecoveryMutation(request, staffDecisionSchema, MAX_BODY_BYTES);
@@ -49,40 +46,8 @@ export async function POST(request: Request, { params }: DecisionRouteContext): 
   if (error) return databaseFailure("recovery.staff_decision_failed", error, { staff: true });
   if (data !== "ok") return outcomeFailure(data);
 
-  const response: StaffDecisionResponse = {
-    ownerEmail: await emailOwner(parsedId.data, input.data.action),
-  };
+  // The notifications to the Owner, the person who asked and the members were created by the
+  // database in the same transaction as the decision (S14); background jobs send the emails.
+  const response: StaffDecisionResponse = { notified: true };
   return json(200, response);
-}
-
-async function emailOwner(recoveryId: string, action: string): Promise<EmailDelivery | null> {
-  if (action !== "start_review" && action !== "approve" && action !== "resume") return null;
-  const read = await getStaffCase(recoveryId);
-  if (read.status !== "ok" || !read.value) return "failed";
-  const recovery = read.value;
-  let kind: OwnershipRecoveryEmailKind;
-  if (action === "start_review" && recovery.state === "in_review") kind = "review_started";
-  else if (recovery.state === "approved" && recovery.objectionEndsAt) kind = "approved";
-  else return null;
-  if (!recovery.ownerIsOwner || !recovery.ownerEmail) return "failed";
-
-  const url = new URL(
-    `/homes/${encodeURIComponent(recovery.homeId)}`,
-    getPublicEnv().NEXT_PUBLIC_APP_URL,
-  ).toString();
-  return sendOwnershipRecoveryEmail(
-    recovery.ownerEmail,
-    {
-      kind,
-      locale: recovery.ownerLocale ?? "en",
-      homeName: recovery.homeName,
-      url,
-      objectionEndsAt: kind === "approved" ? new Date(recovery.objectionEndsAt ?? "") : null,
-      timeZone: recovery.homeTimeZone,
-    },
-    // One email per review start and per objection period, however often staff retry.
-    kind === "approved"
-      ? `ownership-recovery-${recoveryId}-approved-${recovery.objectionEndsAt ?? ""}`
-      : `ownership-recovery-${recoveryId}-review`,
-  );
 }

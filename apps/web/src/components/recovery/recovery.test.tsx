@@ -196,9 +196,9 @@ describe("StaffDecisionForm", () => {
     expect(staffActionsFor("completed")).toEqual([]);
   });
 
-  it("approves with a note and the former Owner's outcome, and reports the email", async () => {
+  it("approves with a note and the former Owner's outcome, and says the people involved are notified", async () => {
     const user = userEvent.setup();
-    fetchMock.mockReturnValue(answer(200, { ownerEmail: "sent" }));
+    fetchMock.mockReturnValue(answer(200, { notified: true }));
     const { container } = renderWithQuery(
       <StaffDecisionForm recoveryId={CASE_ID} actions={staffActionsFor("in_review")} />,
     );
@@ -211,7 +211,7 @@ describe("StaffDecisionForm", () => {
     await user.type(screen.getByRole("textbox", { name: "Note" }), "Video call with ID done.");
     await user.click(screen.getByRole("button", { name: "Save decision" }));
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Decision saved. The Owner was emailed.",
+      "Decision saved. The people involved are being notified; emails go out within a few minutes.",
     );
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       `/api/v1/staff/ownership-recoveries/${CASE_ID}/decision`,
@@ -225,7 +225,7 @@ describe("StaffDecisionForm", () => {
 
   it("keeps the confirmation and selects an action that still fits after the state changes", async () => {
     const user = userEvent.setup();
-    fetchMock.mockReturnValue(answer(200, { ownerEmail: "sent" }));
+    fetchMock.mockReturnValue(answer(200, { notified: true }));
     const { rerender } = renderWithQuery(
       <StaffDecisionForm recoveryId={CASE_ID} actions={staffActionsFor("submitted")} />,
     );

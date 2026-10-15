@@ -7,6 +7,7 @@ import { PermanentJobError, RetryableJobError } from "./errors.ts";
 import { runJob } from "./executor.ts";
 import { samplePing } from "./jobs/sample-ping.ts";
 import { FakeJobStore } from "./testing/fake-store.ts";
+import { fakeServices } from "./testing/fake-services.ts";
 
 const CORRELATION = "0b6f3f2e-5d7a-4c1b-9e2f-1a2b3c4d5e6f";
 
@@ -50,7 +51,11 @@ function scriptedJob(...script: (() => Promise<void>)[]) {
 describe("runJob: the sample job", () => {
   it("runs, records success and logs with the correlation ID", async () => {
     const { store, logger, lines, events } = setup();
-    const result = await runJob(samplePing, envelope(), { store, logger });
+    const result = await runJob(samplePing, envelope(), {
+      store,
+      logger,
+      services: fakeServices(),
+    });
     expect(result).toEqual({ status: "succeeded", attempt: 1 });
     expect(store.execution("sample-ping", "ping:1")?.status).toBe("succeeded");
     expect(events()).toEqual(["jobs.run.started", "jobs.sample_ping.ran", "jobs.run.succeeded"]);
@@ -61,8 +66,12 @@ describe("runJob: the sample job", () => {
 
   it("skips a duplicate execution of the same key", async () => {
     const { store, logger, events } = setup();
-    await runJob(samplePing, envelope(), { store, logger });
-    const second = await runJob(samplePing, envelope(), { store, logger });
+    await runJob(samplePing, envelope(), { store, logger, services: fakeServices() });
+    const second = await runJob(samplePing, envelope(), {
+      store,
+      logger,
+      services: fakeServices(),
+    });
     expect(second).toEqual({ status: "skipped", reason: "already_succeeded" });
     expect(events().filter((event) => event === "jobs.sample_ping.ran")).toHaveLength(1);
     expect(events()).toContain("jobs.run.duplicate_skipped");
@@ -70,10 +79,11 @@ describe("runJob: the sample job", () => {
 
   it("runs a different key separately", async () => {
     const { store, logger } = setup();
-    await runJob(samplePing, envelope(), { store, logger });
+    await runJob(samplePing, envelope(), { store, logger, services: fakeServices() });
     const other = await runJob(samplePing, envelope({ idempotencyKey: "ping:2" }), {
       store,
       logger,
+      services: fakeServices(),
     });
     expect(other.status).toBe("succeeded");
   });
@@ -84,7 +94,8 @@ describe("runJob: duplicate execution", () => {
     const { store, logger } = setup();
     const { job, calls } = scriptedJob();
     const results = [];
-    for (let i = 0; i < 5; i += 1) results.push(await runJob(job, envelope(), { store, logger }));
+    for (let i = 0; i < 5; i += 1)
+      results.push(await runJob(job, envelope(), { store, logger, services: fakeServices() }));
     expect(calls).toHaveLength(1);
     expect(results.filter((result) => result.status === "skipped")).toHaveLength(4);
   });
@@ -98,11 +109,11 @@ describe("runJob: duplicate execution", () => {
           release = resolve;
         }),
     );
-    const first = runJob(job, envelope(), { store, logger });
+    const first = runJob(job, envelope(), { store, logger, services: fakeServices() });
     await vi.waitFor(() => {
       expect(calls).toHaveLength(1);
     });
-    const second = runJob(job, envelope(), { store, logger });
+    const second = runJob(job, envelope(), { store, logger, services: fakeServices() });
     await expect(second).rejects.toMatchObject({
       name: "RetryableJobError",
       code: "execution_in_progress",
@@ -119,7 +130,7 @@ describe("runJob: duplicate execution", () => {
     // A run that claimed the execution and then vanished (process killed).
     const crashed = await store.begin("scripted-job", "ping:1", 60);
     store.now += 61_000;
-    const result = await runJob(job, envelope(), { store, logger });
+    const result = await runJob(job, envelope(), { store, logger, services: fakeServices() });
     expect(result).toEqual({ status: "succeeded", attempt: 2 });
     expect(calls).toEqual([{ label: "hello", attempt: 2 }]);
     if (crashed.state !== "claimed") throw new Error("expected a claim");
@@ -136,7 +147,9 @@ describe("runJob: retry", () => {
     const { job, calls } = scriptedJob(() =>
       Promise.reject(new RetryableJobError("provider_down")),
     );
-    await expect(runJob(job, envelope(), { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(job, envelope(), { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "RetryableJobError",
       code: "provider_down",
     });
@@ -151,7 +164,9 @@ describe("runJob: retry", () => {
       attempt: 1,
     });
 
-    await expect(runJob(job, envelope(), { store, logger })).resolves.toEqual({
+    await expect(
+      runJob(job, envelope(), { store, logger, services: fakeServices() }),
+    ).resolves.toEqual({
       status: "succeeded",
       attempt: 2,
     });
@@ -163,7 +178,7 @@ describe("runJob: retry", () => {
     const { job } = scriptedJob(() =>
       Promise.reject(new Error("connect to alice@example.com failed with token=secret")),
     );
-    const failure = runJob(job, envelope(), { store, logger });
+    const failure = runJob(job, envelope(), { store, logger, services: fakeServices() });
     await expect(failure).rejects.toBeInstanceOf(RetryableJobError);
     await expect(failure).rejects.toMatchObject({ code: "unexpected_error" });
     expect(JSON.stringify(lines)).not.toContain("alice@example.com");
@@ -175,12 +190,16 @@ describe("runJob: retry", () => {
     const { job, calls } = scriptedJob(() =>
       Promise.reject(new PermanentJobError("access_revoked")),
     );
-    await expect(runJob(job, envelope(), { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(job, envelope(), { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "PermanentJobError",
       code: "access_revoked",
     });
     expect(store.execution("scripted-job", "ping:1")?.status).toBe("failed_permanent");
-    await expect(runJob(job, envelope(), { store, logger })).resolves.toEqual({
+    await expect(
+      runJob(job, envelope(), { store, logger, services: fakeServices() }),
+    ).resolves.toEqual({
       status: "skipped",
       reason: "failed_permanently",
     });
@@ -191,7 +210,9 @@ describe("runJob: retry", () => {
     const { store, logger } = setup();
     const { job, calls } = scriptedJob();
     store.unavailable = true;
-    await expect(runJob(job, envelope(), { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(job, envelope(), { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "RetryableJobError",
       code: "execution_store_unavailable",
     });
@@ -204,7 +225,9 @@ describe("runJob: retry", () => {
       store.unavailable = true;
       return Promise.resolve();
     });
-    await expect(runJob(job, envelope(), { store, logger })).resolves.toEqual({
+    await expect(
+      runJob(job, envelope(), { store, logger, services: fakeServices() }),
+    ).resolves.toEqual({
       status: "succeeded",
       attempt: 1,
     });
@@ -222,7 +245,9 @@ describe("runJob: invalid input is a permanent failure", () => {
     ["extra envelope field", { ...envelope(), session: "token" }],
   ])("%s", async (_name, raw) => {
     const { store, logger } = setup();
-    await expect(runJob(samplePing, raw, { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(samplePing, raw, { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "PermanentJobError",
       code: "invalid_envelope",
     });
@@ -231,7 +256,9 @@ describe("runJob: invalid input is a permanent failure", () => {
 
   it("retries a payload version newer than the deployed code, without recording a failure", async () => {
     const { store, logger } = setup();
-    await expect(runJob(samplePing, envelope({ v: 2 }), { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(samplePing, envelope({ v: 2 }), { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "RetryableJobError",
       code: "version_not_deployed",
     });
@@ -246,7 +273,9 @@ describe("runJob: invalid input is a permanent failure", () => {
       payload: z.strictObject({ label: z.string() }),
       handle: () => Promise.resolve(),
     });
-    await expect(runJob(v2, envelope({ v: 1 }), { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(v2, envelope({ v: 1 }), { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "PermanentJobError",
       code: "version_retired",
     });
@@ -262,7 +291,9 @@ describe("runJob: invalid input is a permanent failure", () => {
     ["unsafe label", { label: "Alice Smith" }],
   ])("refuses an invalid payload: %s", async (_name, data) => {
     const { store, logger } = setup();
-    await expect(runJob(samplePing, envelope({ data }), { store, logger })).rejects.toMatchObject({
+    await expect(
+      runJob(samplePing, envelope({ data }), { store, logger, services: fakeServices() }),
+    ).rejects.toMatchObject({
       name: "PermanentJobError",
       code: "invalid_payload",
     });
@@ -277,7 +308,11 @@ describe("runJob: invalid input is a permanent failure", () => {
     const { store, logger, events } = setup();
     store.unavailable = true;
     await expect(
-      runJob(samplePing, envelope({ data: { label: 42 } }), { store, logger }),
+      runJob(samplePing, envelope({ data: { label: 42 } }), {
+        store,
+        logger,
+        services: fakeServices(),
+      }),
     ).rejects.toMatchObject({ name: "PermanentJobError", code: "invalid_payload" });
     expect(events()).toContain("jobs.run.outcome_unrecorded");
   });

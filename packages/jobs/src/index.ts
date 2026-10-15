@@ -44,3 +44,12 @@ export {
   JobStoreError,
   type JobsSupabaseClient,
 } from "./supabase-store.ts";
+export { createSupabaseJobData } from "./supabase-data.ts";
+export type {
+  EmailLanguage,
+  EmailRecordStatus,
+  InvitationEmailRead,
+  JobDataPort,
+  JobServices,
+  NotificationEmailRead,
+} from "./services.ts";

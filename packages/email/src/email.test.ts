@@ -121,6 +121,7 @@ describe("createResendTransport", () => {
   it.each([
     [403, "rejected"],
     [422, "rejected"],
+    [409, "unavailable"],
     [429, "unavailable"],
     [500, "unavailable"],
   ] as const)("maps HTTP %i to %s", async (status, reason) => {

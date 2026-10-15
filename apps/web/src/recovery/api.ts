@@ -33,9 +33,9 @@ import {
  *
  * Madeora staff (architecture.md §43):
  * - `POST /api/v1/staff/ownership-recoveries/{recoveryId}/decision`
- *   `{ action, notes, formerOwnerOutcome }` → `200 { ownerEmail }` where `ownerEmail` says
- *   whether the Owner was emailed (`sent`, `failed`, `not_configured`, or `null` when the action
- *   sends none); `409 not-allowed`, `409 owner-returned`, `409 no-longer-valid`;
+ *   `{ action, notes, formerOwnerOutcome }` → `200 { notified: true }` (the database notified
+ *   the people involved in the decision's transaction, S14); `409 not-allowed`,
+ *   `409 owner-returned`, `409 no-longer-valid`;
  *   `401 reauthenticate` when the staff member's last sign-in is older than 15 minutes.
  * - `POST /api/v1/staff/recovery-appeals/{appealId}/close` `{ notes }` → `200 {}`.
  *
@@ -98,10 +98,9 @@ export interface CancelRecoveriesResponse {
   readonly cancelled: number;
 }
 
-export type EmailDelivery = "sent" | "failed" | "not_configured";
-
 export interface StaffDecisionResponse {
-  readonly ownerEmail: EmailDelivery | null;
+  /** The people involved were notified in the decision's own transaction (S14). */
+  readonly notified: true;
 }
 
 /** Why a recovery action did not happen, for the interface. */
@@ -169,9 +168,7 @@ async function send(url: string, body: unknown): Promise<unknown> {
 // The answers are checked before use, so a changed server never yields half-understood data.
 const requestResponseSchema = z.object({ recovery: z.object({ id: z.string() }) });
 const cancelResponseSchema = z.object({ cancelled: z.number().int().nonnegative() });
-const decisionResponseSchema = z.object({
-  ownerEmail: z.enum(["sent", "failed", "not_configured"]).nullable(),
-});
+const decisionResponseSchema = z.object({ notified: z.literal(true) });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body);

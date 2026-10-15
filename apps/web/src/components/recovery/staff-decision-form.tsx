@@ -15,7 +15,6 @@ import { TextArea } from "@/components/ui/text-area";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import {
   decideRecovery,
-  type EmailDelivery,
   type RecoveryActionError,
   type StaffDecisionResponse,
 } from "@/recovery/api";
@@ -51,12 +50,6 @@ const actionKey = {
   resume: "staffActionResume",
   reject: "staffActionReject",
 } as const satisfies Record<StaffAction, string>;
-
-const emailKey = {
-  sent: "staffEmailSent",
-  failed: "staffEmailFailed",
-  not_configured: "staffEmailNotConfigured",
-} as const satisfies Record<EmailDelivery, string>;
 
 /**
  * Madeora staff act on a recovery case (S12b; architecture.md §43). Only the actions that fit the
@@ -116,8 +109,7 @@ export function StaffDecisionForm({
     >
       {result ? (
         <FormAlert tone="success" announce>
-          {t("staffDecided")}
-          {result.ownerEmail ? ` ${t(emailKey[result.ownerEmail])}` : null}
+          {t("staffDecided")} {t("staffNotified")}
         </FormAlert>
       ) : null}
       <RecoveryFailureAlert failure={mutation.error?.failure ?? null} />

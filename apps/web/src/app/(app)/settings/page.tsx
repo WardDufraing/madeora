@@ -120,6 +120,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             </Card>
           </div>
         ) : null}
+        <Card title={t("notificationsTitle")} description={t("notificationsHint")}>
+          <Link
+            href="/settings/notifications"
+            className="text-body font-medium text-accent-fg underline"
+          >
+            {t("notificationsLink")}
+          </Link>
+        </Card>
         <Card title={t("appearance")}>
           <ThemeSetting initialTheme={theme} />
         </Card>

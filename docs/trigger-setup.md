@@ -30,8 +30,9 @@ Do this for each Supabase project that will run jobs (`madeora-production` now; 
    - `APP_ENV` = `production`
    - `SUPABASE_URL` = the `madeora-production` API URL (`https://<project-ref>.supabase.co`, from Supabase → Project Settings → Data API)
    - `SUPABASE_SERVICE_ROLE_KEY` = the `trigger-dev` secret key from step 2
+   - For email (S14), also `EMAIL_TRANSPORT` = `resend`, `EMAIL_FROM` = `Madeora <no-reply@mail.madeora.studio>`, `RESEND_API_KEY` = the `madeora-production-app` key and `APP_URL` = the production address (`https://…`, no path). Creating the Resend key is `docs/email-setup.md`, step 5. Without them the jobs still run and record emails as "not configured"; in-app notifications are unaffected.
 3. If the environment list also shows **Staging** on the Free plan, you may set it up the same way with `APP_ENV` = `preview` and the `madeora-preview` project. If it is not there, previews run no jobs; nothing in the app needs them yet.
-4. Do not add anything to Vercel. The web app gets a Trigger.dev key only when a feature needs it (S14), with its own steps.
+4. Do not add a Trigger.dev key or the Supabase secret key to Vercel. The web app needs no Trigger.dev key yet: emails go out on the 5-minute schedule. (Vercel only gets the flag `EMAIL_TRANSPORT`, `docs/email-setup.md` step 6.)
 
 **Check:** the variables are listed under Production with their values hidden.
 
@@ -58,6 +59,17 @@ Without a browser, `TRIGGER_ACCESS_TOKEN=tr_pat_…` (a personal access token fr
 2. Wait up to 5 minutes.
 3. In Trigger.dev → **Runs**, an `outbox-dispatch` run succeeded and a `sample-ping` run succeeded; its log shows `jobs.sample_ping.ran`.
 4. In the SQL Editor: `select status, attempts, last_error_code from private.job_outbox order by created_at desc limit 1;` shows `dispatched`, `1` and an empty error code.
+
+## 6. Email smoke test (S14)
+
+Needs step 3's email variables and a redeploy of the tasks (step 4).
+
+1. In the app, sign in, open a Home you own, **Invite people**, choose **Email invitation** and invite a mailbox you can read.
+2. Wait up to 5 minutes. In Trigger.dev → **Runs**, an `invitation-email` run succeeded; its log shows `jobs.invitation_email.sent` and no address.
+3. The invitation shows **Sent**, and the email arrives from `no-reply@mail.madeora.studio`.
+4. Try the in-app side: open `/settings/notifications`, turn **By email** on under **Your defaults**, and ask a second account to request to join your Home with an invitation link. You get a notification in the bell at once and an email within about 5 minutes. A `notification-email` run is listed in Trigger.dev.
+
+Check in the SQL Editor: `select kind, email_status from public.notifications order by created_at desc limit 5;` shows `sent` for the emailed one.
 
 ## 6. Alerts
 

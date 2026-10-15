@@ -53,7 +53,12 @@ async function post(
   // The body may contain the address; it is read only to free the connection.
   await response.body?.cancel().catch(() => undefined);
   if (response.ok) return { ok: true };
-  const reason = response.status === 429 || response.status >= 500 ? "unavailable" : "rejected";
+  // 409 is Resend saying another request with the same idempotency key is still in flight: the
+  // email may yet be sent, so trying again later is right (and safe, with the same key).
+  const reason =
+    response.status === 429 || response.status === 409 || response.status >= 500
+      ? "unavailable"
+      : "rejected";
   return { ok: false, reason, status: response.status };
 }
 

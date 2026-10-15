@@ -326,16 +326,20 @@ export function InviteForm({
             {created.kind === "email"
               ? created.delivery === "sent"
                 ? t("createdEmailSent", { email: created.email ?? "" })
-                : t("createdEmailNotSent", { email: created.email ?? "" })
+                : created.delivery === "pending"
+                  ? t("createdEmailQueued", { email: created.email ?? "" })
+                  : t("createdEmailNotSent", { email: created.email ?? "" })
               : created.kind === "link"
                 ? t("createdLink")
                 : t("createdCode")}
           </h3>
           {created.kind === "email" && created.delivery !== "sent" ? (
             <p className="text-body text-fg-muted">
-              {created.delivery === "not_configured"
-                ? t("deliveryNotConfiguredHint")
-                : t("deliveryFailedHint")}
+              {created.delivery === "pending"
+                ? t("deliveryQueuedHint")
+                : created.delivery === "not_configured"
+                  ? t("deliveryNotConfiguredHint")
+                  : t("deliveryFailedHint")}
             </p>
           ) : null}
           {created.code ? (

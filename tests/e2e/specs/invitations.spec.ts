@@ -3,6 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import { newAccount, registerConfirmed, signIn, type Account } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
 import { sql } from "../support/database";
+import { runJobs } from "../support/jobs";
 import { emailLink } from "../support/mail";
 
 // S10: the "Join Home" journey. An Owner invites by email, link or join code; the invited person
@@ -44,11 +45,19 @@ async function createHome(page: Page, name: string): Promise<string> {
   return page.url().split("/").pop() ?? "";
 }
 
+/** The link in the invitation email: the email goes out through a background job, so run the jobs first. */
+async function invitationLink(email: string): Promise<URL> {
+  runJobs();
+  return emailLink(email, invitationSubject);
+}
+
 async function inviteByEmail(page: Page, homeId: string, email: string) {
   await page.goto(`/homes/${homeId}/invitations`);
   await page.getByRole("textbox", { name: /Email address/ }).fill(email);
   await page.getByRole("button", { name: "Send invitation" }).click();
-  await expect(page.getByRole("heading", { name: `Invitation sent to ${email}.` })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: `Invitation on its way to ${email}.` }),
+  ).toBeVisible();
 }
 
 /** Creates an invitation link (one person, or `maxUses` people); returns its address. */
@@ -102,10 +111,13 @@ test("an emailed invitation: the invitee signs in, asks to join, and becomes a M
   const invitee = newAccount();
   await inviteByEmail(owner.page, homeId, invitee.email);
   const row = owner.page.getByTestId("invitation-row").filter({ hasText: invitee.email });
-  await expect(row.getByTestId("invitation-delivery")).toHaveText("Sent");
+  // Queued with the invitation; a background job sends it and records the outcome.
+  await expect(row.getByTestId("invitation-delivery")).toHaveText("Sending");
 
-  const link = await emailLink(invitee.email, invitationSubject);
+  const link = await invitationLink(invitee.email);
   expect(link.pathname).toMatch(/^\/join\//);
+  await owner.page.reload();
+  await expect(row.getByTestId("invitation-delivery")).toHaveText("Sent");
 
   // They create the account, then open the invitation: sign-in first, then back to it.
   const registered = await registerConfirmed(baseURL ?? "", invitee);
@@ -267,7 +279,7 @@ test("a forwarded email invitation is refused for another account, without showi
   const homeId = await createHome(owner.page, "Thuis");
   const invitee = await registerConfirmed(baseURL ?? "");
   await inviteByEmail(owner.page, homeId, invitee.email);
-  const link = await emailLink(invitee.email, invitationSubject);
+  const link = await invitationLink(invitee.email);
 
   const other = await person(browser, baseURL);
   await other.page.goto(link.pathname);
@@ -286,7 +298,7 @@ test("renewing an email invitation sends a new link and kills the old one", asyn
   const homeId = await createHome(owner.page, "Thuis");
   const invitee = await registerConfirmed(baseURL ?? "");
   await inviteByEmail(owner.page, homeId, invitee.email);
-  const oldLink = await emailLink(invitee.email, invitationSubject);
+  const oldLink = await invitationLink(invitee.email);
 
   // Sends are limited to one a minute; move the first one back rather than wait.
   sql(
@@ -299,12 +311,12 @@ test("renewing an email invitation sends a new link and kills the old one", asyn
   const dialog = owner.page.getByRole("dialog", { name: "Renew this invitation?" });
   await expect(dialog).toContainText(/valid until \d{2}\/\d{2}\/\d{4}/);
   await dialog.getByRole("button", { name: "Renew and send" }).click();
-  await expect(owner.page.getByText(/New invitation sent to/)).toBeVisible();
+  await expect(owner.page.getByText(/A new link is on its way to/)).toBeVisible();
 
   await expect
-    .poll(async () => (await emailLink(invitee.email, invitationSubject)).pathname)
+    .poll(async () => (await invitationLink(invitee.email)).pathname)
     .not.toBe(oldLink.pathname);
-  const newLink = await emailLink(invitee.email, invitationSubject);
+  const newLink = await invitationLink(invitee.email);
 
   const context = await browser.newContext({ baseURL: baseURL ?? "" });
   const page = await context.newPage();
@@ -344,7 +356,7 @@ test("inviting an address with an account and one without gives the same answer"
   await inviteByEmail(owner.page, homeId, unknown.email);
   await expect.poll(() => answers.length).toBe(2);
   expect(answers[0]).toEqual(answers[1]);
-  expect(answers[0]).toMatchObject({ status: 201, delivery: "sent", url: null, code: null });
+  expect(answers[0]).toMatchObject({ status: 201, delivery: "pending", url: null, code: null });
 });
 
 test("the invitation pages are accessible in both themes", async ({ browser, baseURL }) => {

@@ -12,6 +12,7 @@ import { RetryableJobError } from "./errors.ts";
 import { runJob } from "./executor.ts";
 import { jobRegistry } from "./registry.ts";
 import { FakeJobStore, MAX_DISPATCH_ATTEMPTS } from "./testing/fake-store.ts";
+import { fakeServices } from "./testing/fake-services.ts";
 
 /**
  * A stand-in for Trigger.dev: one run per idempotency key (as Trigger.dev returns the existing run
@@ -302,13 +303,18 @@ describe("the sample job end to end: outbox, dispatch, run, retry and duplicate 
     const retryWhileLeased = runJob(jobRegistry.get("sample-ping") ?? fail(), run.envelope, {
       store,
       logger,
+      services: fakeServices(),
     });
     await expect(retryWhileLeased).rejects.toBeInstanceOf(RetryableJobError);
 
     // Attempt 2, after the lease: runs.
     store.now += 61_000;
     await expect(
-      runJob(jobRegistry.get("sample-ping") ?? fail(), run.envelope, { store, logger }),
+      runJob(jobRegistry.get("sample-ping") ?? fail(), run.envelope, {
+        store,
+        logger,
+        services: fakeServices(),
+      }),
     ).resolves.toEqual({ status: "succeeded", attempt: 2 });
 
     // A duplicate delivery (replay from the dashboard, or a requeue of the dispatched row).
@@ -319,7 +325,11 @@ describe("the sample job end to end: outbox, dispatch, run, retry and duplicate 
       dispatchKey({ jobName: "sample-ping", id: outboxId, generation: 1 }),
     );
     await expect(
-      runJob(jobRegistry.get("sample-ping") ?? fail(), replay?.envelope, { store, logger }),
+      runJob(jobRegistry.get("sample-ping") ?? fail(), replay?.envelope, {
+        store,
+        logger,
+        services: fakeServices(),
+      }),
     ).resolves.toEqual({ status: "skipped", reason: "already_succeeded" });
 
     expect(lines.filter((line) => line.event === "jobs.sample_ping.ran")).toHaveLength(1);

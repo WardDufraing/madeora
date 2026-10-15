@@ -3,7 +3,7 @@
 Madeora sends two kinds of email:
 
 - **Account emails** (confirmations and password resets). Supabase Auth sends these through Resend's SMTP.
-- **Invitation emails** (S10). The app sends these through Resend's API.
+- **Invitation and notification emails** (S10, S14). The app queues these in the database and Trigger.dev jobs send them through Resend's API ([ADR 0018](adr/0018-notifications-core.md)).
 
 Both come from **`no-reply@mail.madeora.studio`**. This guide verifies that domain in Resend, points the account emails at it, and gives the app its own keys. Everything is free. If Resend, Vercel or your registrar asks for a card at any point, stop and tell Claude (€0 rule). Background: [ADR 0012](adr/0012-invitations-and-join-requests.md).
 
@@ -87,41 +87,34 @@ The app gets its own keys, separate from the Supabase SMTP keys, so each can be 
 3. Click **Add**, copy the key (it starts with `re_`) and keep it for step 6. Resend shows it only once.
 4. Repeat 1 to 3 with **Name** `madeora-production-app`. Keep this key apart from the preview key.
 
-## 6. Give the keys to Vercel
+## 6. Give the keys to Trigger.dev (and one flag to Vercel)
 
-1. Open https://vercel.com/dashboard, click **madeora**, then **Settings**, then **Environment Variables**.
-2. Add the three **Preview** variables below. For each one:
-   1. Click **Add New** (or **Add Environment Variable**).
-   2. Fill in **Key** and **Value**.
-   3. Tick **Preview** only (untick Production and Development).
-   4. For `RESEND_API_KEY`, also turn on **Sensitive**.
-   5. Click **Save**.
+Since S14 the app queues each email in the database and a Trigger.dev job sends it, so the **Resend keys live in Trigger.dev, not in Vercel**. Vercel only needs to know that email is on, so the invitation form offers "by email". Set up Trigger.dev first ([`trigger-setup.md`](trigger-setup.md), steps 1 to 4).
 
-   | Key               | Value                                            |
-   | ----------------- | ------------------------------------------------ |
-   | `EMAIL_TRANSPORT` | `resend`                                         |
-   | `EMAIL_FROM`      | `Madeora Preview <no-reply@mail.madeora.studio>` |
-   | `RESEND_API_KEY`  | the `madeora-preview-app` key from step 5        |
+1. Open https://cloud.trigger.dev, open the **madeora** project, then **Environment Variables**.
+2. For **Production**, add these (the values are hidden once saved):
 
-3. Add the same three keys again with **Production** ticked only (untick Preview and Development):
+   | Key               | Value                                                   |
+   | ----------------- | ------------------------------------------------------- |
+   | `EMAIL_TRANSPORT` | `resend`                                                |
+   | `EMAIL_FROM`      | `Madeora <no-reply@mail.madeora.studio>`                |
+   | `RESEND_API_KEY`  | the `madeora-production-app` key from step 5            |
+   | `APP_URL`         | the production address, `https://` and no trailing path |
 
-   | Key               | Value                                        |
-   | ----------------- | -------------------------------------------- |
-   | `EMAIL_TRANSPORT` | `resend`                                     |
-   | `EMAIL_FROM`      | `Madeora <no-reply@mail.madeora.studio>`     |
-   | `RESEND_API_KEY`  | the `madeora-production-app` key from step 5 |
+3. If the environment list also has **Staging** on the free plan, add the same four with the `madeora-preview-app` key, `Madeora Preview <no-reply@mail.madeora.studio>` and the address of a preview you want links to open. If it has not, previews queue emails that no job sends: the invitation shows **Sending** and stays so. Nothing else breaks.
+4. In Vercel (https://vercel.com/dashboard, **madeora**, **Settings**, **Environment Variables**), set `EMAIL_TRANSPORT` = `resend` for **Preview** and for **Production**. **Delete** `EMAIL_FROM` and `RESEND_API_KEY` from Vercel if they are there from S10: the web app no longer reads them, and a key that nothing uses should not be in Vercel. New values apply to new deployments; for production open **Deployments**, click **⋯** next to the newest Production deployment, then **Redeploy**.
+5. Re-deploy the jobs so they carry the email code: `docs/trigger-setup.md`, step 4.
 
-4. New values apply to new deployments only. For previews, the next push to a pull request picks them up. For production, open **Deployments**, click **⋯** next to the newest Production deployment, then **Redeploy**.
-
-Check: the Environment Variables list shows each of the three keys twice, once for Preview and once for Production, and the two `RESEND_API_KEY` entries have different values. If a preview or production deployment fails to start with a message naming `EMAIL_FROM` or `RESEND_API_KEY`, one value was mistyped. The message names the variable but never shows its value.
+Check: Trigger.dev lists the four variables under Production, Vercel lists only `EMAIL_TRANSPORT` for email, and `RESEND_API_KEY` appears nowhere in Vercel. If a job run fails at once with a message naming `APP_URL`, `EMAIL_FROM` or `RESEND_API_KEY`, one value is missing or mistyped; the message names the variable but never shows its value.
 
 ## 7. Try it
 
 1. Open a preview of the S10 pull request and sign in.
 2. Open a Home, click **Invite people**, choose **Email invitation**, enter a second mailbox you can read, and click **Send invitation**.
-3. The page says "Invitation sent to …", and the invitation's email status is **Sent**.
+3. The page says "Invitation on its way to …", and the invitation's email status is **Sending**.
+4. Wait up to 5 minutes (the jobs run on a 5-minute schedule) and reload the page: the status is **Sent**.
 
-Check: the email arrives from **Madeora Preview** `<no-reply@mail.madeora.studio>`, and its button opens the invitation in the same preview. If the status says **Not sent**, check step 6 for that environment, then use **Resend** on the invitation.
+Check: the email arrives from **Madeora Preview** (or **Madeora** in production) `<no-reply@mail.madeora.studio>`, and its button opens the invitation. If the status stays **Sending** for more than 10 minutes, open Trigger.dev, **Runs**, and look for a failed `invitation-email` run (`docs/background-jobs.md`, "Recovery runbook"). If it says **Not sent**, check step 6 for that environment, then use **Resend** on the invitation.
 
 ## 8. Open production sign-up
 
