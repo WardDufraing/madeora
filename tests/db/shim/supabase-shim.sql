@@ -60,6 +60,7 @@ create table auth.users (
   email varchar(255),
   encrypted_password varchar(255),
   email_confirmed_at timestamptz,
+  last_sign_in_at timestamptz,
   confirmation_token varchar(255),
   recovery_token varchar(255),
   email_change_token_new varchar(255),

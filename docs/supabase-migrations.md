@@ -17,6 +17,7 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261017090000_home_invitations.sql`    | S10  | `invitations_table` is not `NULL`                      |
 | `supabase/migrations/20261018090000_member_profiles.sql`     | S11  | `member_profiles_table` is not `NULL`                  |
 | `supabase/migrations/20261019090000_roles_and_ownership.sql` | S12  | `ownership_transfers_table` is not `NULL`              |
+| `supabase/migrations/20261020090000_ownership_recovery.sql`  | S12b | `ownership_recoveries_table` is not `NULL`             |
 
 Check query (read-only, safe to run any time):
 
@@ -28,7 +29,8 @@ select
   to_regclass('public.homes') as homes_table,
   to_regclass('private.home_invitations') as invitations_table,
   to_regclass('public.home_member_profiles') as member_profiles_table,
-  to_regclass('private.home_ownership_transfers') as ownership_transfers_table;
+  to_regclass('private.home_ownership_transfers') as ownership_transfers_table,
+  to_regclass('private.home_ownership_recoveries') as ownership_recoveries_table;
 ```
 
 ## Apply a migration
@@ -159,6 +161,33 @@ From S12 an Administrator manages Member invitations and join requests only when
    2. Under **Administrator rights** tick **Remove members**, click **Save rights** and confirm. "_Name_'s rights are saved." appears.
    3. Sign in as the other person (another browser, or a private window), open the Home, click **Members**, then **How you appear here**: the **Your role and rights** card lists "Remove members".
    4. Back as the Owner, on the same Manage page, untick the right and save again, so the preview is back as it was.
+
+## Check S12b (`20261020090000_ownership_recovery.sql`)
+
+From S12b a member who cannot reach their Home's Owner can ask Madeora to review an ownership recovery, and Madeora staff review it on the staff pages. Nothing changes for existing Homes. Apply it only after the staff-operations change (ADR 0015) is merged.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     (select count(*) from pg_trigger
+       where tgrelid = 'public.home_memberships'::regclass
+         and tgname = 'home_memberships_invalidate_recoveries') as recovery_trigger,
+     has_table_privilege('authenticated', 'private.home_ownership_recoveries', 'select')
+       as members_can_read_cases,
+     has_table_privilege('authenticated', 'private.madeora_staff', 'select')
+       as members_can_read_staff,
+     has_function_privilege('anon', 'public.staff_ownership_recoveries()', 'execute')
+       as visitors_can_list_cases,
+     has_function_privilege('authenticated', 'public.request_ownership_recovery(uuid, text, uuid)', 'execute')
+       as members_can_ask,
+     (select count(*) from public.home_memberships where role = 'owner')
+       = (select count(*) from public.homes) as one_owner_per_home;
+   ```
+
+   It must show `recovery_trigger` **1**, **false** for `members_can_read_cases`, `members_can_read_staff` and `visitors_can_list_cases`, and **true** for `members_can_ask` and `one_owner_per_home`.
+
+2. Add yourself as staff in this project (`docs/staff-operations.md`, "Add a staff member"), then in the app open **Settings**: a **Madeora staff** card with **Ownership recovery requests** appears. Click it: the list opens (empty, or with requests made on this project).
 
 ## If a migration file changed after you applied it
 
@@ -408,6 +437,41 @@ drop function if exists private.has_home_capability(uuid, uuid, text);
 drop table if exists private.home_admin_capabilities;
 drop function if exists private.check_capability_holder();
 drop function if exists private.is_delegable_capability(text);
+```
+
+## If you need to undo S12b
+
+Only if the S12b pull request is abandoned, or Claude asks for it. This deletes every ownership recovery request, objection and appeal, the staff list, and their entries in the history log, in that project. Ownership that already moved through a completed recovery stays moved. Applying the S12b file again afterwards works.
+
+```sql
+drop function if exists public.staff_close_recovery_appeal(uuid, text);
+drop function if exists public.staff_decide_ownership_recovery(uuid, text, text, text);
+drop function if exists public.staff_ownership_recovery(uuid);
+drop function if exists public.staff_ownership_recoveries();
+drop function if exists public.appeal_ownership_recovery(uuid, text);
+drop function if exists public.my_recovered_homes();
+drop function if exists public.accept_ownership_recovery(uuid, uuid);
+drop function if exists public.object_to_ownership_recovery(uuid, text);
+drop function if exists public.cancel_ownership_recoveries(uuid);
+drop function if exists public.withdraw_ownership_recovery(uuid, uuid);
+drop function if exists public.request_ownership_recovery(uuid, text, uuid);
+drop function if exists public.home_ownership_recovery_status(uuid);
+drop function if exists public.is_madeora_staff();
+drop trigger if exists home_memberships_invalidate_recoveries on public.home_memberships;
+drop function if exists private.invalidate_ownership_recoveries();
+drop function if exists private.can_request_recovery(uuid, uuid);
+drop function if exists private.settle_owner_returned(uuid);
+drop function if exists private.recovery_state(private.home_ownership_recoveries);
+drop function if exists private.staff_is_involved(uuid, uuid, uuid, uuid);
+drop function if exists private.require_staff(boolean);
+drop table if exists private.home_ownership_recovery_appeals;
+drop table if exists private.home_ownership_recovery_objections;
+drop table if exists private.home_ownership_recoveries;
+drop table if exists private.madeora_staff;
+delete from private.audit_events where subject_type = 'ownership_recovery';
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in ('home', 'user', 'invitation', 'join_request', 'ownership_transfer'));
 ```
 
 ## What not to do

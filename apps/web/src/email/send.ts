@@ -5,8 +5,10 @@ import {
   createMailpitTransport,
   createResendTransport,
   renderHomeInvitationEmail,
+  renderOwnershipRecoveryEmail,
   type EmailTransport,
   type HomeInvitationEmailProps,
+  type OwnershipRecoveryEmailProps,
 } from "@madeora/email";
 
 /** What happened to an email, as recorded on the invitation. */
@@ -55,6 +57,35 @@ export async function sendHomeInvitationEmail(
     return "failed";
   } catch {
     console.error(JSON.stringify({ event: "email.invitation_failed", reason: "render" }));
+    return "failed";
+  }
+}
+
+/**
+ * Renders and sends an ownership recovery email to a Home's Owner (S12b). As above: synchronous,
+ * a failure is returned and shown to staff, and the log names the outcome only.
+ */
+export async function sendOwnershipRecoveryEmail(
+  to: string,
+  props: OwnershipRecoveryEmailProps,
+  idempotencyKey: string,
+): Promise<DeliveryOutcome> {
+  const sender = transport();
+  if (!sender) return "not_configured";
+  try {
+    const email = await renderOwnershipRecoveryEmail(props);
+    const result = await sender.send({ to, idempotencyKey, ...email });
+    if (result.ok) return "sent";
+    console.error(
+      JSON.stringify({
+        event: "email.recovery_failed",
+        reason: result.reason,
+        status: result.status ?? null,
+      }),
+    );
+    return "failed";
+  } catch {
+    console.error(JSON.stringify({ event: "email.recovery_failed", reason: "render" }));
     return "failed";
   }
 }

@@ -3,6 +3,11 @@ import { createElement } from "react";
 
 import { HomeInvitationEmail, isolate, type HomeInvitationEmailProps } from "./home-invitation.tsx";
 import { fill, invitationMessages } from "./messages.ts";
+import {
+  OwnershipRecoveryEmail,
+  ownershipRecoverySubject,
+  type OwnershipRecoveryEmailProps,
+} from "./ownership-recovery.tsx";
 
 /** A rendered email: subject, HTML and the plain-text alternative (CLAUDE.md email strategy A). */
 export interface RenderedEmail {
@@ -22,4 +27,16 @@ export async function renderHomeInvitationEmail(
     html,
     text,
   };
+}
+
+/** Renders an ownership recovery email to a Home's Owner, as HTML and plain text. */
+export async function renderOwnershipRecoveryEmail(
+  props: OwnershipRecoveryEmailProps,
+): Promise<RenderedEmail> {
+  if (props.kind === "approved" && !props.objectionEndsAt) {
+    throw new Error("An approved recovery email needs the end of the objection period.");
+  }
+  const element = createElement(OwnershipRecoveryEmail, props);
+  const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
+  return { subject: ownershipRecoverySubject(props).subject, html, text };
 }
