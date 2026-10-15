@@ -1,0 +1,89 @@
+/**
+ * Trigger.dev tasks (architecture.md §11). `trigger.config.ts` points the Trigger.dev CLI at this
+ * folder; every exported task is deployed. One task per job, with the job's retry policy, plus the
+ * scheduled outbox dispatcher.
+ */
+import { createClient } from "@supabase/supabase-js";
+import { schedules, task } from "@trigger.dev/sdk";
+
+import type { Database } from "@madeora/database";
+
+import type { AnyJobDefinition } from "../definition.ts";
+import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
+import { samplePing } from "../jobs/sample-ping.ts";
+import { jobRegistry } from "../registry.ts";
+import { createSupabaseJobStore, JobStoreError } from "../supabase-store.ts";
+import { parseWorkerEnv } from "./env.ts";
+import { jobLogger, retryTiming, runJobTask, sweepOutbox, triggerDispatchClient } from "./run.ts";
+
+// Created on first use inside a run, so loading the tasks (deploys, indexing) needs no secrets.
+let services: ReturnType<typeof createServices> | undefined;
+
+function createServices() {
+  const env = parseWorkerEnv(process.env);
+  const client = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  return { client, store: createSupabaseJobStore(client), logger: jobLogger(env.APP_ENV) };
+}
+
+function getServices() {
+  services ??= createServices();
+  return services;
+}
+
+function jobTask<const Name extends string>(definition: AnyJobDefinition & { name: Name }) {
+  return task({
+    id: definition.name,
+    retry: {
+      maxAttempts: definition.retry.maxAttempts,
+      factor: definition.retry.factor,
+      minTimeoutInMs: definition.retry.minTimeoutMs,
+      maxTimeoutInMs: definition.retry.maxTimeoutMs,
+      randomize: true,
+    },
+    // A run may never outlive its execution lease, or a second run could take the key over.
+    maxDuration: definition.leaseSeconds,
+    run: async (payload: unknown) => {
+      const { store, logger } = getServices();
+      return runJobTask(definition, payload, { store, logger });
+    },
+    catchError: ({ error }) => retryTiming(error),
+  });
+}
+
+export const samplePingTask = jobTask(samplePing);
+
+export const outboxDispatch = schedules.task({
+  id: "outbox-dispatch",
+  cron: "*/5 * * * *",
+  // One sweep at a time; claims are safe concurrently, but overlapping sweeps only waste runs.
+  queue: { concurrencyLimit: 1 },
+  retry: { maxAttempts: 2, minTimeoutInMs: 5_000, maxTimeoutInMs: 30_000, factor: 2 },
+  // Below the 120-second claim lease, so a sweep never holds rows past their lease.
+  maxDuration: 90,
+  run: async () => {
+    const { client, store, logger } = getServices();
+    return sweepOutbox({
+      store,
+      client: triggerDispatchClient,
+      registry: jobRegistry,
+      logger,
+      batchSize: DISPATCH_BATCH_SIZE,
+      stats: async () => {
+        const { data, error } = await client.rpc("job_outbox_stats");
+        if (error) throw new JobStoreError("job_outbox_stats", error.code);
+        const [row] = data;
+        return {
+          pending: row?.pending ?? 0,
+          dispatching: row?.dispatching ?? 0,
+          dead: row?.dead ?? 0,
+          oldestPendingSeconds: row?.oldest_pending_seconds ?? 0,
+          failedExecutions: row?.failed_executions ?? 0,
+          stalledExecutions: row?.stalled_executions ?? 0,
+          unexecutedDispatches: row?.unexecuted_dispatches ?? 0,
+        };
+      },
+    });
+  },
+});

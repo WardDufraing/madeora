@@ -160,6 +160,10 @@ Local Supabase Auth has raised rate limits (`supabase/config.toml`) so the brows
 
 The Google tests (`tests/e2e/google`) cannot run against the Supabase CLI stack, because Supabase Auth only talks to the real Google. The fallback points Supabase Auth's real Google code at a stand-in (`tests/e2e/scripts/fake-google.ts`): a throwaway certificate authority, created per run and trusted only by that Supabase Auth process, lets a small proxy answer Google's discovery document for `accounts.google.com`, and a local server plays Google's consent page, token endpoint and signing keys. Nothing reaches Google. The fallback sets `PLAYWRIGHT_FAKE_GOOGLE=1`, which adds the Playwright project `google`; run only those tests with `pnpm test:e2e:fallback -- --project=google`. CI runs exactly that in the "E2E Google sign-in" job. To try real Google locally, see the comment in `supabase/config.toml` and `docs/google-sign-in-setup.md`.
 
+## Background jobs
+
+Conventions, adding a job, logs and the recovery runbook: [`background-jobs.md`](background-jobs.md). The rules run in unit tests with fakes (`pnpm --filter @madeora/jobs test`) and the outbox functions in the database tests (`tests/db/rls/job_outbox.test.sql`, `tests/db/rls/job-outbox-concurrency.test.ts`). Running real tasks locally needs a free Trigger.dev account and `pnpm dlx trigger.dev@4.6.4 dev` in `packages/jobs` (settings in `packages/jobs/.env.example`); hosted setup is the owner's ([`trigger-setup.md`](trigger-setup.md)).
+
 ## Dependency audit exceptions
 
 `pnpm audit:deps` runs `pnpm audit` and fails on any **high** or **critical** advisory. Moderate and low advisories are printed as warnings. When an advisory cannot be fixed yet (for example, no patched version exists) and does not affect Madeora, record a time-limited exception in `tools/repo-checks/audit-exceptions.json`:

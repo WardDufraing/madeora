@@ -9,6 +9,8 @@ The code is a Turborepo + pnpm monorepo:
 - `packages/database`: TypeScript types generated from the database schema.
 - `packages/design-tokens`: colours (light and dark, accent derived from one colour), type, spacing, radii, motion; generates the CSS and Tailwind theme.
 - `packages/icons`: Madeora's own SVG icons as typed React components.
+- `packages/jobs`: background job conventions, the outbox dispatcher and the Trigger.dev tasks (`docs/background-jobs.md`).
+- `packages/observability`: correlation IDs and the structured, redacting logger.
 - `supabase/`: Supabase CLI project: `migrations/` (schema and RLS policies, in order) and `seed.sql` (synthetic data only).
 - `tests/e2e`: Playwright browser tests.
 - `tests/db`: database and RLS tests, with the multi-actor test helpers.

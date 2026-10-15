@@ -167,6 +167,15 @@ export type Database = {
         Args: { p_action: string; p_provider: string };
         Returns: string;
       };
+      begin_job_execution: {
+        Args: { p_idempotency_key: string; p_job_name: string; p_lease_seconds: number };
+        Returns: {
+          attempt: number;
+          claim_token: string;
+          lease_until: string;
+          state: string;
+        }[];
+      };
       cancel_ownership_recoveries: {
         Args: { p_home_id: string };
         Returns: {
@@ -187,6 +196,20 @@ export type Database = {
         };
         Returns: string;
       };
+      claim_job_outbox: {
+        Args: { p_lease_seconds: number; p_limit: number };
+        Returns: {
+          attempts: number;
+          correlation_id: string;
+          generation: number;
+          id: string;
+          idempotency_key: string;
+          job_name: string;
+          job_version: number;
+          payload: Json;
+        }[];
+      };
+      complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
       create_home: {
         Args: { p_name: string; p_request_id: string; p_timezone: string };
@@ -214,6 +237,20 @@ export type Database = {
       decide_join_request: {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
+      };
+      fail_job_outbox: {
+        Args: { p_error_code: string; p_id: string; p_permanent: boolean };
+        Returns: string;
+      };
+      finish_job_execution: {
+        Args: {
+          p_claim_token: string;
+          p_error_code?: string;
+          p_idempotency_key: string;
+          p_job_name: string;
+          p_outcome: string;
+        };
+        Returns: boolean;
       };
       home_capabilities: {
         Args: { p_home_id: string };
@@ -260,6 +297,18 @@ export type Database = {
         }[];
       };
       is_madeora_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
+      job_outbox_stats: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          dead: number;
+          dispatching: number;
+          failed_executions: number;
+          oldest_pending_seconds: number;
+          pending: number;
+          stalled_executions: number;
+          unexecuted_dispatches: number;
+        }[];
+      };
       leave_home: { Args: { p_home_id: string }; Returns: string };
       list_home_invitations: {
         Args: { p_home_id: string };
@@ -338,6 +387,7 @@ export type Database = {
         Args: { p_home_id: string; p_invitation_id: string; p_status: string };
         Returns: string;
       };
+      release_job_outbox: { Args: { p_ids: string[] }; Returns: number };
       remove_home_member: {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
@@ -369,6 +419,7 @@ export type Database = {
           request_id: string;
         }[];
       };
+      requeue_job_outbox: { Args: { p_id: string }; Returns: boolean };
       resend_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: {

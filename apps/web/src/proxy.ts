@@ -1,4 +1,5 @@
 import { getPublicEnv } from "@madeora/config/env/public";
+import { CORRELATION_HEADER, newCorrelationId } from "@madeora/observability";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -13,13 +14,18 @@ import { PATH_HEADER } from "@/auth/path-header";
  *    decide access: pages confirm the identity with Supabase Auth themselves (`requireIdentity`).
  * 2. Marks every response `Cache-Control: private, no-store`, so no shared cache (CDN, proxy) can
  *    store one person's page and serve it to someone else (architecture.md §7, §9).
+ * 3. Gives the request a fresh correlation ID (architecture.md §22), always generated here: one
+ *    sent by the client is replaced, so nobody can choose the ID their requests are logged under.
+ *    Route handlers read it with `requestCorrelationId`; the response carries it for support.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const env = getPublicEnv();
+  const correlationId = newCorrelationId();
 
   const forward = (): NextResponse => {
     const headers = new Headers(request.headers);
     headers.set(PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    headers.set(CORRELATION_HEADER, correlationId);
     return NextResponse.next({ request: { headers } });
   };
 
@@ -47,6 +53,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   await supabase.auth.getSession();
 
   response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set(CORRELATION_HEADER, correlationId);
   return response;
 }
 
