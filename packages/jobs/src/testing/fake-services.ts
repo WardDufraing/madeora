@@ -18,6 +18,7 @@ import type {
   JobServices,
   NotificationEmailRead,
   StoredFileStatus,
+  TrashEntryStatus,
 } from "../services.ts";
 
 export class FakeJobData implements JobDataPort {
@@ -33,6 +34,8 @@ export class FakeJobData implements JobDataPort {
   /** Storage (S15): file statuses the database functions return, and the deletion queue. */
   expireStatus: StoredFileStatus = "failed";
   purgeStatus: StoredFileStatus = "purged";
+  trashStatus: TrashEntryStatus = "purged";
+  readonly trashCalls: string[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
   readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
 
@@ -82,6 +85,12 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.fileCalls.push({ operation: "purge", fileId });
     return Promise.resolve(this.purgeStatus);
+  }
+
+  purgeExpiredTrashEntry(entryId: string): Promise<TrashEntryStatus> {
+    this.check();
+    this.trashCalls.push(entryId);
+    return Promise.resolve(this.trashStatus);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

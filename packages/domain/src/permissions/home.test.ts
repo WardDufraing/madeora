@@ -49,6 +49,9 @@ const matrix: readonly {
           "home.view": true,
           "home.updateSettings": owner || (admin && has("manageHomeSettings")),
           "home.storage.view": owner || (admin && has("manageHomeSettings")),
+          // Every member opens the Home trash; the whole of it only the Owner and storage managers.
+          "home.trash.view": true,
+          "home.trash.viewAll": owner || (admin && has("manageHomeSettings")),
           "home.invitations.manage": owner || (admin && has("manageInvitations")),
           // Owner-only, whatever was granted.
           "home.invitations.manageAdministrators": owner,

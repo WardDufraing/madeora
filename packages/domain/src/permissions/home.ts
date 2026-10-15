@@ -36,6 +36,8 @@ export const homeActions = [
   "home.view",
   "home.updateSettings",
   "home.storage.view",
+  "home.trash.view",
+  "home.trash.viewAll",
   "home.invitations.manage",
   "home.invitations.manageAdministrators",
   "home.members.view",
@@ -85,6 +87,13 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // warnings": only authorized Home storage managers). Storage is a Home setting, so the same
   // grant reaches it (SQL: private.can_view_home_storage).
   "home.storage.view": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
+  // The Home's trash (S16; spec "Confirmed central personal and Home trash organization"). Every
+  // current member may open it, but sees only what they deleted themselves; the Owner and
+  // Administrators granted manageHomeSettings see everything in it. The database applies the same
+  // rule (SQL: private.can_see_trash_entry). The per-module matrix is open in the spec, so a module
+  // step may refine it for its own item type.
+  "home.trash.view": { roles: ["owner", "administrator", "member"] },
+  "home.trash.viewAll": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
   // Member invitations, links and join codes, and deciding Member join requests (S10). The SQL
   // function private.can_manage_invitations makes the same decision for every database call.
   "home.invitations.manage": { roles: ["owner"], delegatedThrough: "manageInvitations" },
@@ -159,6 +168,8 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.view": can("home.view"),
     "home.updateSettings": can("home.updateSettings"),
     "home.storage.view": can("home.storage.view"),
+    "home.trash.view": can("home.trash.view"),
+    "home.trash.viewAll": can("home.trash.viewAll"),
     "home.invitations.manage": can("home.invitations.manage"),
     "home.invitations.manageAdministrators": can("home.invitations.manageAdministrators"),
     "home.members.view": can("home.members.view"),

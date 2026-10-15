@@ -37,6 +37,8 @@ const invitationSkips = ["not_found", "superseded", "not_active"] as const;
 
 const fileStatuses = ["pending", "ready", "failed", "deleted", "purged", "missing"] as const;
 
+const trashStatuses = ["trashed", "restored", "purged", "missing"] as const;
+
 function fileStatus(operation: string, value: string | null): StoredFileStatus {
   const status = oneOf(fileStatuses, value);
   if (!status) throw new JobStoreError(operation, "unexpected_result");
@@ -148,6 +150,16 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       const { data, error } = await client.rpc("purge_stored_file", { p_file_id: fileId });
       if (error) throw new JobStoreError("purge_stored_file", error.code);
       return fileStatus("purge_stored_file", data);
+    },
+
+    async purgeExpiredTrashEntry(entryId) {
+      const { data, error } = await client.rpc("purge_expired_trash_entry", {
+        p_entry_id: entryId,
+      });
+      if (error) throw new JobStoreError("purge_expired_trash_entry", error.code);
+      const status = oneOf(trashStatuses, data);
+      if (!status) throw new JobStoreError("purge_expired_trash_entry", "unexpected_result");
+      return status;
     },
 
     async getStorageObjectDeletion(deletionId) {
