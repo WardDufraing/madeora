@@ -8,14 +8,15 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 - **`madeora-production`:** just before you merge a release pull request (`production` ← `main`) whose commit list contains a migration. Apply it first, then merge: the code already in production ignores new tables, and the new code needs them.
 - Apply every file you have not applied yet, **oldest first** (the file names start with the date). Never apply a file twice. The table below says how to check whether a file is already in.
 
-| File                                                      | Step | Already applied when the check query says              |
-| --------------------------------------------------------- | ---- | ------------------------------------------------------ |
-| `supabase/migrations/20261013000000_private_schema.sql`   | S03  | `private_schema` is `true`                             |
-| `supabase/migrations/20261014120000_user_preferences.sql` | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
-| `supabase/migrations/20261015090000_sign_in_methods.sql`  | S08  | `sign_in_methods_table` is not `NULL`                  |
-| `supabase/migrations/20261016090000_homes.sql`            | S09  | `homes_table` is `homes` (not `NULL`)                  |
-| `supabase/migrations/20261017090000_home_invitations.sql` | S10  | `invitations_table` is not `NULL`                      |
-| `supabase/migrations/20261018090000_member_profiles.sql`  | S11  | `member_profiles_table` is not `NULL`                  |
+| File                                                         | Step | Already applied when the check query says              |
+| ------------------------------------------------------------ | ---- | ------------------------------------------------------ |
+| `supabase/migrations/20261013000000_private_schema.sql`      | S03  | `private_schema` is `true`                             |
+| `supabase/migrations/20261014120000_user_preferences.sql`    | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
+| `supabase/migrations/20261015090000_sign_in_methods.sql`     | S08  | `sign_in_methods_table` is not `NULL`                  |
+| `supabase/migrations/20261016090000_homes.sql`               | S09  | `homes_table` is `homes` (not `NULL`)                  |
+| `supabase/migrations/20261017090000_home_invitations.sql`    | S10  | `invitations_table` is not `NULL`                      |
+| `supabase/migrations/20261018090000_member_profiles.sql`     | S11  | `member_profiles_table` is not `NULL`                  |
+| `supabase/migrations/20261019090000_roles_and_ownership.sql` | S12  | `ownership_transfers_table` is not `NULL`              |
 
 Check query (read-only, safe to run any time):
 
@@ -26,7 +27,8 @@ select
   to_regclass('private.sign_in_method_grants') as sign_in_methods_table,
   to_regclass('public.homes') as homes_table,
   to_regclass('private.home_invitations') as invitations_table,
-  to_regclass('public.home_member_profiles') as member_profiles_table;
+  to_regclass('public.home_member_profiles') as member_profiles_table,
+  to_regclass('private.home_ownership_transfers') as ownership_transfers_table;
 ```
 
 ## Apply a migration
@@ -123,6 +125,41 @@ It counts names with the usual invisible characters (the full rule also catches 
 
 2. In the app, open a Home, click **Members**: you are listed with "(you)". Click **How you appear here**, type a nickname and click **Save**: "Nickname saved." appears, and the Members page shows the nickname.
 
+## Check S12 (`20261019090000_roles_and_ownership.sql`)
+
+From S12 an Administrator manages Member invitations and join requests only when the Owner has given them the right "Manage invitations" (before S12 only the Owner could). Nothing else changes for existing Homes: everyone keeps their role, and Administrators start without extra rights.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     (select count(*) from pg_policies
+       where schemaname = 'public' and tablename = 'homes' and policyname = 'homes_update_manager')
+       as settings_policy,
+     (select count(*) from pg_trigger
+       where tgrelid = 'public.home_memberships'::regclass
+         and tgname in ('home_memberships_drop_capabilities', 'home_memberships_invalidate_transfers',
+                        'home_memberships_forget_departed')) as membership_triggers,
+     has_table_privilege('authenticated', 'private.home_admin_capabilities', 'select')
+       as members_can_read_rights,
+     has_table_privilege('authenticated', 'private.home_ownership_transfers', 'select')
+       as members_can_read_transfers,
+     has_function_privilege('anon', 'public.remove_home_member(uuid, uuid, text)', 'execute')
+       as visitors_can_remove,
+     has_function_privilege('authenticated', 'public.remove_home_member(uuid, uuid, text)', 'execute')
+       as members_can_ask_removal,
+     (select count(*) from public.home_memberships where role = 'owner')
+       = (select count(*) from public.homes) as one_owner_per_home;
+   ```
+
+   It must show `settings_policy` **1**, `membership_triggers` **3**, **false** for `members_can_read_rights`, `members_can_read_transfers` and `visitors_can_remove`, and **true** for `members_can_ask_removal` and `one_owner_per_home`.
+
+2. In the app you need two accounts in one Home (the second one joined through an invitation, S10). As the Owner, open the Home, click **Members**, then **Manage** next to the other person:
+   1. Under **Role** choose **Administrator**, click **Change role** and confirm. "_Name_ is now Administrator." appears.
+   2. Under **Administrator rights** tick **Remove members**, click **Save rights** and confirm. "_Name_'s rights are saved." appears.
+   3. Sign in as the other person (another browser, or a private window), open the Home, click **Members**, then **How you appear here**: the **Your role and rights** card lists "Remove members".
+   4. Back as the Owner, on the same Manage page, untick the right and save again, so the preview is back as it was.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:
@@ -173,6 +210,204 @@ drop function if exists public.home_directory(uuid);
 drop table if exists public.home_member_profiles;
 drop function if exists private.keep_home_member_profile_owner();
 alter table public.user_preferences drop column if exists accent_color;
+```
+
+## If you need to undo S12
+
+Only if the S12 pull request is abandoned, or Claude asks for it. This deletes every Administrator right and every ownership transfer request in that project; roles and memberships stay as they are, and ownership that already moved stays moved. Two small things stay (the older app ignores them): the history log keeps the reason a membership ended, and accepts the ownership-transfer entries it already has. Applying the S12 file again afterwards works.
+
+```sql
+drop function if exists public.respond_to_ownership_transfer(uuid, uuid, text);
+drop function if exists public.cancel_ownership_transfer(uuid, uuid);
+drop function if exists public.start_ownership_transfer(uuid, uuid, uuid);
+drop function if exists public.leave_home(uuid);
+drop function if exists public.remove_home_member(uuid, uuid, text);
+drop function if exists public.set_administrator_capabilities(uuid, uuid, text[]);
+drop function if exists public.change_home_member_role(uuid, uuid, text, text);
+drop function if exists public.home_ownership_transfer(uuid);
+drop function if exists public.home_capabilities(uuid);
+drop trigger if exists home_memberships_invalidate_transfers on public.home_memberships;
+drop trigger if exists home_memberships_forget_departed on public.home_memberships;
+drop trigger if exists home_memberships_drop_capabilities on public.home_memberships;
+drop function if exists private.invalidate_ownership_transfers();
+drop function if exists private.forget_departed_member();
+drop function if exists private.drop_capabilities_on_role_change();
+drop function if exists private.expire_ownership_transfers(uuid);
+drop function if exists private.transfer_state(private.home_ownership_transfers);
+drop function if exists private.home_role(uuid, uuid);
+drop table if exists private.home_ownership_transfers;
+drop policy if exists homes_update_manager on public.homes;
+create policy homes_update_owner on public.homes
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = homes.id and m.user_id = (select auth.uid()) and m.role = 'owner'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = homes.id and m.user_id = (select auth.uid()) and m.role = 'owner'
+    )
+  );
+create or replace function private.can_manage_invitations(p_home_id uuid, p_user_id uuid, p_role text)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and p_role in ('member', 'administrator') and exists (
+    select 1 from public.home_memberships m
+    where m.home_id = p_home_id and m.user_id = p_user_id and m.role = 'owner'
+  );
+  $$;
+create or replace function public.decide_join_request(p_home_id uuid, p_request_id uuid, p_decision text)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_request private.home_join_requests;
+    v_inv private.home_invitations;
+  begin
+    if p_decision is null or p_decision not in ('approve', 'decline') then
+      raise exception 'invalid decision' using errcode = '22023';
+    end if;
+    if not exists (
+      select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      return 'not_found';
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      return 'not_permitted';
+    end if;
+
+    -- Lock order everywhere: request, then invitation.
+    select * into v_request from private.home_join_requests r
+      where r.id = p_request_id and r.home_id = p_home_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, v_request.role) then
+      return 'not_permitted';
+    end if;
+    if v_request.status <> 'pending' then
+      return 'already_decided';
+    end if;
+    select * into v_inv from private.home_invitations i where i.id = v_request.invitation_id
+      for update;
+
+    if p_decision = 'decline' then
+      update private.home_join_requests
+        set status = 'declined', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      -- An email invitation has one possible recipient: once they are declined it is finished.
+      if v_inv.kind = 'email' and v_inv.end_reason is null then
+        update private.home_invitations
+          set ended_at = pg_catalog.now(), ended_by = v_user_id, end_reason = 'declined'
+          where id = v_inv.id;
+      end if;
+      perform private.audit('join_request.declined', p_home_id, 'join_request', p_request_id,
+        pg_catalog.jsonb_build_object('role', v_request.role));
+      return 'declined';
+    end if;
+
+    if exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_request.applicant_id
+    ) then
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      perform private.audit('join_request.expired', p_home_id, 'join_request', p_request_id,
+        pg_catalog.jsonb_build_object('reason', 'already_member'));
+      return 'already_member';
+    end if;
+
+    if private.invitation_state(v_inv) <> 'active'
+       or v_request.role <> v_inv.role
+       or private.confirmed_email(v_request.applicant_id) is null
+       or (v_inv.kind = 'email'
+           and v_inv.recipient_email is distinct from private.confirmed_email(v_request.applicant_id))
+    then
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      perform private.audit('join_request.expired', p_home_id, 'join_request', p_request_id);
+      return 'no_longer_valid';
+    end if;
+
+    -- The S09 trigger audits the new membership with the approver as the actor.
+    insert into public.home_memberships (home_id, user_id, role)
+      values (p_home_id, v_request.applicant_id, v_request.role);
+    update private.home_invitations set admissions = admissions + 1 where id = v_inv.id;
+    update private.home_join_requests
+      set status = 'approved', decided_at = pg_catalog.now(), decided_by = v_user_id
+      where id = p_request_id;
+    perform private.audit('join_request.approved', p_home_id, 'join_request', p_request_id,
+      pg_catalog.jsonb_build_object('role', v_request.role, 'kind', v_inv.kind));
+    return 'approved';
+  end
+  $$;
+create or replace function public.list_home_invitations(p_home_id uuid)
+returns table (
+  id uuid, kind text, role text, recipient_email text, email_locale text, state text,
+  created_at timestamptz, expires_at timestamptz, ended_at timestamptz,
+  max_admissions integer, admissions integer, pending_requests integer,
+  delivery_status text, last_sent_at timestamptz, token text
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select i.id, i.kind, i.role, i.recipient_email, i.email_locale, s.state,
+        i.created_at, i.expires_at, i.ended_at, i.max_admissions, i.admissions,
+        (select pg_catalog.count(*)::integer from private.home_join_requests r
+          where r.invitation_id = i.id and r.status = 'pending'),
+        i.delivery_status, i.last_sent_at,
+        case when s.state = 'active' and i.kind <> 'email' then i.token end
+      from private.home_invitations i
+      cross join lateral (select private.invitation_state(i) as state) s
+      where i.home_id = p_home_id
+        and (s.state = 'active' or coalesce(i.ended_at, i.expires_at) > pg_catalog.now() - interval '30 days'
+             or i.created_at > pg_catalog.now() - interval '30 days')
+      order by (s.state = 'active') desc, i.created_at desc
+      limit 200;
+  end
+  $$;
+create or replace function public.list_home_join_requests(p_home_id uuid)
+returns table (
+  id uuid, applicant_name text, applicant_email text, role text, kind text, state text,
+  created_at timestamptz, decided_at timestamptz, can_decide boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select r.id, r.applicant_name, r.applicant_email, r.role, i.kind, s.state,
+        r.created_at, r.decided_at,
+        s.state = 'pending' and private.can_manage_invitations(p_home_id, v_user_id, r.role)
+      from private.home_join_requests r
+      join private.home_invitations i on i.id = r.invitation_id
+      cross join lateral (select private.request_state(r) as state) s
+      where r.home_id = p_home_id
+        and (r.status = 'pending' or r.decided_at > pg_catalog.now() - interval '30 days')
+      order by (s.state = 'pending') desc, r.created_at desc
+      limit 200;
+  end
+  $$;
+drop function if exists private.lock_home(uuid);
+drop function if exists private.caller_has_home_capability(uuid, text);
+drop function if exists private.has_home_capability(uuid, uuid, text);
+drop table if exists private.home_admin_capabilities;
+drop function if exists private.check_capability_holder();
+drop function if exists private.is_delegable_capability(text);
 ```
 
 ## What not to do

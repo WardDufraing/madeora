@@ -159,6 +159,19 @@ export type Database = {
         Args: { p_action: string; p_provider: string };
         Returns: string;
       };
+      cancel_ownership_transfer: {
+        Args: { p_home_id: string; p_transfer_id: string };
+        Returns: string;
+      };
+      change_home_member_role: {
+        Args: {
+          p_expected_role: string;
+          p_home_id: string;
+          p_membership_id: string;
+          p_role: string;
+        };
+        Returns: string;
+      };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
       create_home: {
         Args: { p_name: string; p_request_id: string; p_timezone: string };
@@ -187,6 +200,14 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
       };
+      home_capabilities: {
+        Args: { p_home_id: string };
+        Returns: {
+          capability: string;
+          is_self: boolean;
+          membership_id: string;
+        }[];
+      };
       home_directory: {
         Args: { p_home_id: string };
         Returns: {
@@ -198,6 +219,20 @@ export type Database = {
           role: string;
         }[];
       };
+      home_ownership_transfer: {
+        Args: { p_home_id: string };
+        Returns: {
+          created_at: string;
+          decided_at: string;
+          expires_at: string;
+          id: string;
+          is_recipient: boolean;
+          is_sender: boolean;
+          recipient_membership_id: string;
+          state: string;
+        }[];
+      };
+      leave_home: { Args: { p_home_id: string }; Returns: string };
       list_home_invitations: {
         Args: { p_home_id: string };
         Returns: {
@@ -261,6 +296,10 @@ export type Database = {
         Args: { p_home_id: string; p_invitation_id: string; p_status: string };
         Returns: string;
       };
+      remove_home_member: {
+        Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
+        Returns: string;
+      };
       renew_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: {
@@ -293,9 +332,24 @@ export type Database = {
           token: string;
         }[];
       };
+      respond_to_ownership_transfer: {
+        Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
+        Returns: string;
+      };
       revoke_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: string;
+      };
+      set_administrator_capabilities: {
+        Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
+        Returns: string;
+      };
+      start_ownership_transfer: {
+        Args: { p_home_id: string; p_membership_id: string; p_request_id: string };
+        Returns: {
+          outcome: string;
+          transfer_id: string;
+        }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };
     };

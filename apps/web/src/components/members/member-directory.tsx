@@ -26,6 +26,8 @@ export interface MemberDirectoryProps {
   readonly query: DirectoryQuery;
   /** Members whose visible name another member shares; they get a "joined" qualifier. */
   readonly sharedNames: ReadonlySet<string>;
+  /** Members the viewer may act on (S12): their row links to their page. */
+  readonly manageable: ReadonlySet<string>;
   readonly formats: DateTimeFormats;
 }
 
@@ -46,7 +48,8 @@ const sortKey = {
  * groups"): one list of the Home's current members with their avatar, effective Home name, role
  * and, when names are shared, the date they joined, so nobody is told apart by colour alone. The
  * view controls are a plain GET form: they work without JavaScript, live in the URL and change
- * only this viewer's view. Server-rendered; there is nothing to manage here until S12.
+ * only this viewer's view. Server-rendered. A member the viewer may manage (S12: change their role
+ * or rights, ask them to become Owner, remove them) gets a Manage link to their page.
  */
 export async function MemberDirectory({
   homeId,
@@ -55,9 +58,14 @@ export async function MemberDirectory({
   total,
   query,
   sharedNames,
+  manageable,
   formats,
 }: MemberDirectoryProps) {
-  const [t, tHomes] = await Promise.all([getTranslations("Members"), getTranslations("Homes")]);
+  const [t, tHomes, tManage] = await Promise.all([
+    getTranslations("Members"),
+    getTranslations("Homes"),
+    getTranslations("Manage"),
+  ]);
   const filtered = query.roles.size > 0;
 
   // A qualifier for each member who shares a name: the joining date, with the time as well when
@@ -189,6 +197,15 @@ export async function MemberDirectory({
                     className="shrink-0 text-body font-medium text-accent-fg underline"
                   >
                     {t("editYours")}
+                  </Link>
+                ) : manageable.has(member.membershipId) ? (
+                  <Link
+                    href={`/homes/${homeId}/members/${member.membershipId}`}
+                    className="shrink-0 text-body font-medium text-accent-fg underline"
+                    data-testid="manage-member-link"
+                    aria-label={tManage("manageLinkLabel", { name: member.name ?? t("noName") })}
+                  >
+                    {tManage("manageLink")}
                   </Link>
                 ) : null}
               </li>

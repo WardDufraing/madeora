@@ -9,6 +9,7 @@ import { FormAlert } from "@/components/auth/form-alert";
 import { HOME_UNAVAILABLE_PATH, loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
 import { HomeProfileForm } from "@/components/members/home-profile-form";
+import { YourPermissions } from "@/components/members/manage/your-permissions";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
@@ -37,15 +38,17 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
 /**
  * "How you appear in this Home" (S11): the signed-in person's own nickname, Home display name and
  * colour in this Home. There is no page for anyone else's: nobody edits another adult's
- * presentation. The colour clash warning compares only with this Home's members.
+ * presentation. The colour clash warning compares only with this Home's members. Below it, the
+ * person's own role and the rights the Owner granted them (S12), and the way to leave.
  */
 export default async function HomeProfilePage({ params }: ProfilePageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tHomes] = await Promise.all([
+  const [context, t, tHomes, tManage] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Members"),
     getTranslations("Homes"),
+    getTranslations("Manage"),
   ]);
   if (!context) {
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
@@ -82,6 +85,14 @@ export default async function HomeProfilePage({ params }: ProfilePageProps) {
         <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
           {tHomes("backToHome")}
         </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={`/homes/${home.id}/leave`}
+          className="font-medium text-accent-fg underline"
+          data-testid="leave-link"
+        >
+          {tManage("leaveLink")}
+        </Link>
       </p>
       <p className="mb-6 max-w-2xl text-body text-fg-muted">{t("profileIntro")}</p>
       {account.status === "unavailable" || directory.status === "unavailable" ? (
@@ -98,6 +109,7 @@ export default async function HomeProfilePage({ params }: ProfilePageProps) {
         overrides={profile.overrides}
         otherColors={otherColors}
       />
+      <YourPermissions membership={membership} className="mt-6 max-w-2xl" />
     </>
   );
 }

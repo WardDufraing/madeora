@@ -20,12 +20,16 @@ export function isHomeRole(value: unknown): value is HomeRole {
 }
 
 /**
- * Management capabilities the Owner may grant to an Administrator one at a time. Granting arrives
- * in S12; until then every Administrator's set is empty (least privilege). Owner-only powers
- * (ownership transfer, Home deletion, managing Administrators) are never in this list, so no grant
- * can confer them.
+ * Management capabilities the Owner may grant to an Administrator one at a time (S12). A new
+ * Administrator holds none (least privilege). Owner-only powers (ownership transfer, Home deletion,
+ * managing Administrators and their capabilities) are never in this list, so no grant can confer
+ * them. The SQL function private.is_delegable_capability lists the same names.
  */
-export const delegableCapabilities = ["manageHomeSettings", "manageInvitations"] as const;
+export const delegableCapabilities = [
+  "manageHomeSettings",
+  "manageInvitations",
+  "removeMembers",
+] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
 export const homeActions = [
@@ -35,6 +39,11 @@ export const homeActions = [
   "home.invitations.manageAdministrators",
   "home.members.view",
   "home.profile.editOwn",
+  "home.members.manageRoles",
+  "home.members.manageCapabilities",
+  "home.members.remove",
+  "home.leave",
+  "home.ownership.transfer",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -42,7 +51,7 @@ export type HomeAction = (typeof homeActions)[number];
 export interface HomeMembershipFacts {
   readonly homeId: string;
   readonly role: HomeRole;
-  /** What the Owner granted; only counts for Administrators. Empty until S12. */
+  /** What the Owner granted; only counts for Administrators. */
   readonly grantedCapabilities: ReadonlySet<DelegableCapability>;
 }
 
@@ -80,6 +89,20 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // Your own nickname, Home display name and accent in this Home (S11). Only ever your own: no
   // action exists to edit another adult's presentation, and RLS allows only the person's own row.
   "home.profile.editOwn": { roles: ["owner", "administrator", "member"] },
+  // Making Members Administrators and back (S12): assigning and removing Administrators is a
+  // non-delegable Owner power (SQL: public.change_home_member_role).
+  "home.members.manageRoles": { roles: ["owner"] },
+  // Granting and revoking an Administrator's capabilities: Owner only, never delegable (SQL:
+  // public.set_administrator_capabilities).
+  "home.members.manageCapabilities": { roles: ["owner"] },
+  // Removing someone: the Owner, or an Administrator granted removeMembers. Who may be removed
+  // depends on the target too: see decideMemberAction (SQL: public.remove_home_member).
+  "home.members.remove": { roles: ["owner"], delegatedThrough: "removeMembers" },
+  // Leaving without anyone's approval; the Owner must hand over ownership first (SQL:
+  // public.leave_home).
+  "home.leave": { roles: ["administrator", "member"] },
+  // Nominating the next Owner, and cancelling the nomination (SQL: start_ownership_transfer).
+  "home.ownership.transfer": { roles: ["owner"] },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -120,5 +143,87 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.invitations.manageAdministrators": can("home.invitations.manageAdministrators"),
     "home.members.view": can("home.members.view"),
     "home.profile.editOwn": can("home.profile.editOwn"),
+    "home.members.manageRoles": can("home.members.manageRoles"),
+    "home.members.manageCapabilities": can("home.members.manageCapabilities"),
+    "home.members.remove": can("home.members.remove"),
+    "home.leave": can("home.leave"),
+    "home.ownership.transfer": can("home.ownership.transfer"),
   };
+}
+
+/** Actions one member performs on another member of the same Home (S12). */
+export const memberActions = [
+  "member.changeRole",
+  "member.editCapabilities",
+  "member.remove",
+  "member.nominateOwner",
+] as const;
+export type MemberAction = (typeof memberActions)[number];
+
+/** The member acted on, as the database reports them now. */
+export interface MemberTargetFacts {
+  readonly homeId: string;
+  readonly role: HomeRole;
+  /** Whether the target is the acting person themselves. */
+  readonly isSelf: boolean;
+}
+
+/**
+ * Whether the holder of `actor` may perform `action` on `target` in the Home `homeId` (spec
+ * "Confirmed Home member-removal authority", "Confirmed customizable Administrator permissions",
+ * "Confirmed Home ownership transfer"):
+ * - nobody acts on the Owner, and nobody acts on themselves this way (you leave instead);
+ * - role changes and capability edits are Owner-only, capabilities only for Administrators;
+ * - the Owner removes Members and Administrators; an Administrator granted removeMembers removes
+ *   Members only;
+ * - only the Owner nominates the next Owner, from the Home's other members.
+ * The database functions make the same decisions under a lock, with the target's current role.
+ */
+export function decideMemberAction(
+  homeId: string,
+  actor: HomeMembershipFacts | null,
+  target: MemberTargetFacts,
+  action: MemberAction,
+): HomeDecision {
+  if (actor?.homeId !== homeId || target.homeId !== homeId) {
+    return { allowed: false, reason: "not-member" };
+  }
+  const denied: HomeDecision = { allowed: false, reason: "not-permitted" };
+  if (target.isSelf || target.role === "owner") return denied;
+  const homeAction = (name: HomeAction) => decideHomeAction(homeId, actor, name).allowed;
+  switch (action) {
+    case "member.changeRole":
+      return homeAction("home.members.manageRoles") ? allowed : denied;
+    case "member.editCapabilities":
+      return target.role === "administrator" && homeAction("home.members.manageCapabilities")
+        ? allowed
+        : denied;
+    case "member.remove":
+      if (!homeAction("home.members.remove")) return denied;
+      return actor.role === "owner" || target.role === "member" ? allowed : denied;
+    case "member.nominateOwner":
+      return homeAction("home.ownership.transfer") ? allowed : denied;
+  }
+}
+
+export type MemberPermissionProjection = { readonly [A in MemberAction]: boolean };
+
+/** Every member action's decision for one actor and target, for the interface. Never authoritative. */
+export function memberPermissions(
+  actor: HomeMembershipFacts,
+  target: MemberTargetFacts,
+): MemberPermissionProjection {
+  const can = (action: MemberAction) =>
+    decideMemberAction(actor.homeId, actor, target, action).allowed;
+  return {
+    "member.changeRole": can("member.changeRole"),
+    "member.editCapabilities": can("member.editCapabilities"),
+    "member.remove": can("member.remove"),
+    "member.nominateOwner": can("member.nominateOwner"),
+  };
+}
+
+/** Narrows a string to a delegable capability. */
+export function isDelegableCapability(value: unknown): value is DelegableCapability {
+  return typeof value === "string" && (delegableCapabilities as readonly string[]).includes(value);
 }
