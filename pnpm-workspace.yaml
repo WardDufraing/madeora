@@ -14,3 +14,7 @@ onlyBuiltDependencies:
 overrides:
   use-intl: 4.14.7
   icu-minify: 4.14.7
+  # S13: @trigger.dev/core 4.6.4 → socket.io-client 4.7.5 → engine.io-client 6.5.4 pins ws ~8.17.1,
+  # which has GHSA-96hv-2xvq-fx4p (high) and GHSA-58qx-3vcg-4xpx. Same major version; current
+  # engine.io-client releases use ~8.21.0 themselves. Remove once the SDK no longer pulls it in.
+  engine.io-client>ws: 8.21.3
