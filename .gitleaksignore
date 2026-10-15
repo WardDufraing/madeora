@@ -24,3 +24,7 @@ e35909d38f9a6ddfc7fc4af76f2af6cfa027a2f9:packages/config/src/env/email.test.ts:g
 9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:generic-api-key:109
 9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:generic-api-key:110
 9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:generic-api-key:111
+#
+# S14 email config test: the same made-up Resend key ("re_synthetic_" followed by digits), moved to
+# a new line of the test in the S14 commit. Not a credential.
+e8cd6f18910893ab62c66bfa7c35fea9c46ee296:packages/config/src/env/email.test.ts:generic-api-key:22

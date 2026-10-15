@@ -238,8 +238,6 @@ function ScopeSettings({ scope, zoneChoices, emailVerified, preferences, quietHo
       </fieldset>
 
       <QuietHoursForm
-        // Starts afresh whenever the stored values change (after a save, a reset or a refresh).
-        key={JSON.stringify(quiet ?? effectiveQuiet ?? null)}
         scope={scope}
         stored={quiet ?? null}
         inherited={effectiveQuiet && !quiet ? effectiveQuiet : null}
@@ -266,16 +264,44 @@ const formSchema = z
   .refine((value) => value.start !== value.end, { path: ["end"], message: "window" });
 type FormValues = z.infer<typeof formSchema>;
 
-function QuietHoursForm({
-  scope,
-  stored,
-  inherited,
-  zoneChoices,
-}: {
+type QuietHoursFormProps = {
   readonly scope: SettingsScope;
   readonly stored: QuietHoursRow | null;
   readonly inherited: QuietHoursRow | null;
   readonly zoneChoices: readonly string[];
+};
+
+/**
+ * Holds the save and reset state outside the keyed fields: a save changes the stored values, which
+ * remounts the fields, and the "Saved." confirmation must survive that remount.
+ */
+function QuietHoursForm(props: QuietHoursFormProps) {
+  const { scope } = props;
+  const save = useChange<FormValues>((values) =>
+    setNotificationQuietHours({ homeId: scope.id, ...values }),
+  );
+  const clear = useChange<undefined>(() => resetNotificationQuietHours({ homeId: scope.id }));
+  return (
+    <QuietHoursFields
+      // Starts afresh whenever the stored values change (after a save, a reset or a refresh).
+      key={JSON.stringify(props.stored ?? props.inherited ?? null)}
+      {...props}
+      save={save}
+      clear={clear}
+    />
+  );
+}
+
+function QuietHoursFields({
+  scope,
+  stored,
+  inherited,
+  zoneChoices,
+  save,
+  clear,
+}: QuietHoursFormProps & {
+  readonly save: ReturnType<typeof useChange<FormValues>>;
+  readonly clear: ReturnType<typeof useChange<undefined>>;
 }) {
   const t = useTranslations("NotificationSettings");
   const hydrated = useHydrated();
@@ -287,10 +313,6 @@ function QuietHoursForm({
     timeZone: source?.timeZone ?? scope.suggestedTimeZone,
   };
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: defaults });
-  const save = useChange<FormValues>((values) =>
-    setNotificationQuietHours({ homeId: scope.id, ...values }),
-  );
-  const clear = useChange<undefined>(() => resetNotificationQuietHours({ homeId: scope.id }));
   const zones = zoneChoices.includes(defaults.timeZone)
     ? zoneChoices
     : [...zoneChoices, defaults.timeZone].sort();
