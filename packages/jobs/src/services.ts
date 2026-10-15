@@ -5,6 +5,7 @@
  * `@madeora/email`.
  */
 import type { EmailTransport } from "@madeora/email";
+import type { ObjectStore } from "@madeora/storage";
 
 export type EmailLanguage = "en" | "nl";
 
@@ -60,7 +61,19 @@ export interface JobDataPort {
     recoveryId: string,
     objectionEndsAt: Date,
   ): Promise<"notified" | "not_ready">;
+  /** storage-upload-expire (S15): settles an upload after its intent ended; its status afterwards. */
+  expireUpload(fileId: string): Promise<StoredFileStatus>;
+  /** storage-file-purge (S15): purges a deleted file past its recovery window; its status afterwards. */
+  purgeStoredFile(fileId: string): Promise<StoredFileStatus>;
+  /** storage-object-delete (S15): the key to remove, or null when the row is gone. */
+  getStorageObjectDeletion(
+    deletionId: string,
+  ): Promise<{ readonly objectKey: string; readonly done: boolean } | null>;
+  /** False when it was already done. */
+  completeStorageObjectDeletion(deletionId: string): Promise<boolean>;
 }
+
+export type StoredFileStatus = "pending" | "ready" | "failed" | "deleted" | "purged" | "missing";
 
 export interface JobServices {
   readonly data: JobDataPort;
@@ -68,4 +81,6 @@ export interface JobServices {
   readonly mail: EmailTransport | null;
   /** The web app's address, for the links in emails; null when `mail` is. */
   readonly appUrl: string | null;
+  /** The object store (S15), or null where storage is off (`STORAGE_DRIVER` unset or `off`). */
+  readonly objects: ObjectStore | null;
 }

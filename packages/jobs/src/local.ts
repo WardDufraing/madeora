@@ -12,6 +12,7 @@
 import type { Database } from "@madeora/database";
 import { createMailpitTransport } from "@madeora/email";
 import { createLogger, type Logger } from "@madeora/observability";
+import { createObjectStore, type StorageConfig } from "@madeora/storage";
 import { createClient } from "@supabase/supabase-js";
 
 import { DispatchRejectedError, dispatchOutbox, type DispatchClient } from "./dispatcher.ts";
@@ -65,6 +66,8 @@ export interface LocalJobRunnerOptions {
   readonly from: string;
   /** The web app's address, for the links in emails. */
   readonly appUrl: string;
+  /** The local S3 stand-in (S15), if the run uses storage; never a hosted store. */
+  readonly storage?: StorageConfig;
 }
 
 export interface LocalJobRunner {
@@ -73,9 +76,15 @@ export interface LocalJobRunner {
 }
 
 export function createLocalJobRunner(options: LocalJobRunnerOptions): LocalJobRunner {
-  const hosts = [options.supabaseUrl, options.mailpitUrl].map((value) => new URL(value).hostname);
+  const hosts = [
+    options.supabaseUrl,
+    options.mailpitUrl,
+    ...(options.storage ? [options.storage.endpoint] : []),
+  ].map((value) => new URL(value).hostname);
   if (!hosts.every((host) => LOCAL_HOSTS.has(host))) {
-    throw new Error("The local job runner only works with Supabase and Mailpit on this machine.");
+    throw new Error(
+      "The local job runner only works with Supabase, Mailpit and storage on this machine.",
+    );
   }
   const client = createClient<Database>(options.supabaseUrl, options.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -90,6 +99,7 @@ export function createLocalJobRunner(options: LocalJobRunnerOptions): LocalJobRu
     data: createSupabaseJobData(client),
     mail: createMailpitTransport({ url: options.mailpitUrl, from: options.from }),
     appUrl: options.appUrl,
+    objects: options.storage ? createObjectStore(options.storage) : null,
   };
   const dispatchClient = createLocalDispatchClient({ store, services, logger });
   return {

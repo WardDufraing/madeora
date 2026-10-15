@@ -189,6 +189,28 @@ From S12b a member who cannot reach their Home's Owner can ask Madeora to review
 
 2. Add yourself as staff in this project (`docs/staff-operations.md`, "Add a staff member"), then in the app open **Settings**: a **Madeora staff** card with **Ownership recovery requests** appears. Click it: the list opens (empty, or with requests made on this project).
 
+## Check S15 (`20261023090000_file_storage.sql`)
+
+From S15 people can upload a profile picture, and each person and each Home has a storage allowance (1 GiB and 5 GiB, development placeholders; `docs/file-storage.md`). Nothing changes for existing data: nobody has a picture yet, and pools are created when first used. Uploads stay off until `STORAGE_DRIVER=s3` is set for that environment.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     (select count(*) from private.storage_defaults) as defaults_rows,
+     has_table_privilege('authenticated', 'private.stored_files', 'select') as members_can_read_files,
+     has_function_privilege('authenticated', 'public.finalize_upload(uuid, uuid, text, bigint, text)', 'execute')
+       as members_can_finalize,
+     has_function_privilege('authenticated', 'public.create_upload_intent(text, text, bigint, uuid)', 'execute')
+       as members_can_start_upload,
+     has_function_privilege('service_role', 'public.finalize_upload(uuid, uuid, text, bigint, text)', 'execute')
+       as server_can_finalize;
+   ```
+
+   It must show `defaults_rows` **2**, **false** for `members_can_read_files` and `members_can_finalize`, and **true** for `members_can_start_upload` and `server_can_finalize`.
+
+2. In the app open **Settings**: a **Profile picture** card and a **Storage** card appear. Without storage configured, the picture card says uploads aren't set up here yet; **View your storage** shows 0 of 1 GB used.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

@@ -35,6 +35,7 @@ export type DelegableCapability = (typeof delegableCapabilities)[number];
 export const homeActions = [
   "home.view",
   "home.updateSettings",
+  "home.storage.view",
   "home.invitations.manage",
   "home.invitations.manageAdministrators",
   "home.members.view",
@@ -80,6 +81,10 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.view": { roles: ["owner", "administrator", "member"] },
   // Name and scheduling timezone (spec: managed only by authorized Home managers).
   "home.updateSettings": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
+  // The Home's storage use and its 80%/95% warnings (S15; spec "Confirmed progressive storage
+  // warnings": only authorized Home storage managers). Storage is a Home setting, so the same
+  // grant reaches it (SQL: private.can_view_home_storage).
+  "home.storage.view": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
   // Member invitations, links and join codes, and deciding Member join requests (S10). The SQL
   // function private.can_manage_invitations makes the same decision for every database call.
   "home.invitations.manage": { roles: ["owner"], delegatedThrough: "manageInvitations" },
@@ -153,6 +158,7 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
   return {
     "home.view": can("home.view"),
     "home.updateSettings": can("home.updateSettings"),
+    "home.storage.view": can("home.storage.view"),
     "home.invitations.manage": can("home.invitations.manage"),
     "home.invitations.manageAdministrators": can("home.invitations.manageAdministrators"),
     "home.members.view": can("home.members.view"),

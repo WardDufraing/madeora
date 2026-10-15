@@ -12,6 +12,7 @@ import type {
   InvitationEmailRead,
   JobDataPort,
   NotificationEmailRead,
+  StoredFileStatus,
 } from "./services.ts";
 import { JobStoreError, type JobsSupabaseClient } from "./supabase-store.ts";
 
@@ -33,6 +34,14 @@ const notificationSkips = [
 ] as const;
 
 const invitationSkips = ["not_found", "superseded", "not_active"] as const;
+
+const fileStatuses = ["pending", "ready", "failed", "deleted", "purged", "missing"] as const;
+
+function fileStatus(operation: string, value: string | null): StoredFileStatus {
+  const status = oneOf(fileStatuses, value);
+  if (!status) throw new JobStoreError(operation, "unexpected_result");
+  return status;
+}
 
 function oneOf<T extends string>(list: readonly T[], value: string | null | undefined): T | null {
   return list.find((item) => item === value) ?? null;
@@ -127,6 +136,36 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       });
       if (error) throw new JobStoreError("deliver_recovery_ready", error.code);
       return data === "notified" ? "notified" : "not_ready";
+    },
+
+    async expireUpload(fileId) {
+      const { data, error } = await client.rpc("expire_upload", { p_file_id: fileId });
+      if (error) throw new JobStoreError("expire_upload", error.code);
+      return fileStatus("expire_upload", data);
+    },
+
+    async purgeStoredFile(fileId) {
+      const { data, error } = await client.rpc("purge_stored_file", { p_file_id: fileId });
+      if (error) throw new JobStoreError("purge_stored_file", error.code);
+      return fileStatus("purge_stored_file", data);
+    },
+
+    async getStorageObjectDeletion(deletionId) {
+      const { data, error } = await client.rpc("get_storage_object_deletion", {
+        p_deletion_id: deletionId,
+      });
+      if (error) throw new JobStoreError("get_storage_object_deletion", error.code);
+      const [row] = data;
+      if (!row) return null;
+      return { objectKey: row.object_key, done: row.done };
+    },
+
+    async completeStorageObjectDeletion(deletionId) {
+      const { data, error } = await client.rpc("complete_storage_object_deletion", {
+        p_deletion_id: deletionId,
+      });
+      if (error) throw new JobStoreError("complete_storage_object_deletion", error.code);
+      return data;
     },
   };
 }

@@ -212,7 +212,7 @@ select tests.assert_row_count(
 -- The directory's columns never include account ids or contact details.
 select tests.assert_true(
   pg_catalog.pg_get_function_result('public.home_directory(uuid)'::regprocedure)
-    = 'TABLE(membership_id uuid, role text, joined_at timestamp with time zone, is_self boolean, name text, accent_color text)',
+    = 'TABLE(membership_id uuid, role text, joined_at timestamp with time zone, is_self boolean, name text, accent_color text, avatar_file_id uuid)',
   'home_directory returns exactly the directory columns'
 );
 

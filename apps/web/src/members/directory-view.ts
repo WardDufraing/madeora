@@ -21,6 +21,8 @@ export interface DirectoryMember {
   readonly name: string | null;
   /** The effective identifying colour, or `null` for the default accent. */
   readonly accentColor: AccentColor | null;
+  /** The effective avatar picture (S15): the Home override, else the global one; or none. */
+  readonly avatarFileId?: string | null;
 }
 
 export const directorySorts = ["role", "name", "joined"] as const;

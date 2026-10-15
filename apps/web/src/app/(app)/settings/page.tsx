@@ -10,6 +10,7 @@ import { AccentSetting } from "@/components/settings/accent-setting";
 import { DisplayNameSetting } from "@/components/settings/display-name-setting";
 import { LanguageSetting } from "@/components/settings/language-setting";
 import { RegionalSetting } from "@/components/settings/regional-setting";
+import { AvatarSetting } from "@/components/storage/avatar-setting";
 import { SignInMethodsSetting } from "@/components/settings/sign-in-methods-setting";
 import { ThemeSetting } from "@/components/settings/theme-setting";
 import { TimeZoneSetting } from "@/components/settings/time-zone-setting";
@@ -22,6 +23,8 @@ import { regionalSamples } from "@/preferences/regional";
 import { noPreferences } from "@/preferences/schema";
 import { getDevicePreferences, getDeviceTimeZone, getRegionalFormats } from "@/preferences/server";
 import { timeZoneChoices } from "@/preferences/timezone";
+import { storageEnabled } from "@/storage/server";
+import { getMyAvatars } from "@/storage/usage";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Nav");
@@ -34,7 +37,7 @@ interface SettingsPageProps {
 
 /**
  * Account preferences (the same on every device, S07), sign-in methods (S08) and this device's
- * appearance (S05); for a former Owner, Homes taken over by recovery, and for Madeora staff, the
+ * appearance (S05); the profile picture and personal storage (S15); for a former Owner, Homes taken over by recovery, and for Madeora staff, the
  * staff pages (S12b). Each form saves on its own, so a failed save never loses what was typed in
  * another.
  */
@@ -54,6 +57,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     isStaff,
     recovered,
     tRecovery,
+    tStorage,
+    avatars,
   ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
@@ -68,6 +73,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getIsStaff(),
     getRecoveredHomes(),
     getTranslations("Recovery"),
+    getTranslations("Storage"),
+    getMyAvatars(),
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
@@ -81,6 +88,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         ) : null}
         <Card title={t("profile")} description={t("profileHint")}>
           <DisplayNameSetting initialName={stored.displayName} />
+        </Card>
+        <Card title={tStorage("avatarTitle")} description={tStorage("avatarHint")}>
+          <AvatarSetting
+            scope={{ kind: "global" }}
+            currentFileId={avatars.status === "ok" ? avatars.global : null}
+            name={stored.displayName}
+            accentColor={stored.accentColor}
+            locale={locale}
+            uploadsEnabled={storageEnabled()}
+          />
         </Card>
         <Card title={t("accent")} description={t("accentHint")}>
           <AccentSetting initialColor={stored.accentColor} />
@@ -126,6 +143,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             className="text-body font-medium text-accent-fg underline"
           >
             {t("notificationsLink")}
+          </Link>
+        </Card>
+        <Card title={tStorage("settingsCardTitle")} description={tStorage("settingsCardHint")}>
+          <Link
+            href="/settings/storage"
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="storage-link"
+          >
+            {tStorage("settingsCardLink")}
           </Link>
         </Card>
         <Card title={t("appearance")}>

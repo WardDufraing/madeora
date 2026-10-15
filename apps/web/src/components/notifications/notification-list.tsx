@@ -32,6 +32,10 @@ const kindMessage = {
   "recovery.former_owner_completed": "kindRecoveryFormerOwnerCompleted",
   "recovery.former_owner_completed_removed": "kindRecoveryFormerOwnerCompletedRemoved",
   "join_request.received": "kindJoinRequestReceived",
+  "storage.personal_warning": "kindStoragePersonalWarning",
+  "storage.personal_critical": "kindStoragePersonalCritical",
+  "storage.home_warning": "kindStorageHomeWarning",
+  "storage.home_critical": "kindStorageHomeCritical",
 } as const;
 
 type MessageKey =

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -11,13 +11,18 @@ import { RememberContext } from "@/components/homes/remember-context";
 import { HomeProfileForm } from "@/components/members/home-profile-form";
 import { YourPermissions } from "@/components/members/manage/your-permissions";
 import { PageHeader } from "@/components/shell/page-header";
+import { AvatarSetting } from "@/components/storage/avatar-setting";
+import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { getHomeDirectory } from "@/members/directory";
 import { getMyHomeProfile } from "@/members/profile";
+import { effectiveHomeName } from "@/members/profile-schema";
 import { getAccountPreferences } from "@/preferences/account";
 import { noPreferences } from "@/preferences/schema";
+import { storageEnabled } from "@/storage/server";
+import { getMyAvatars } from "@/storage/usage";
 
 interface ProfilePageProps {
   readonly params: Promise<{ readonly homeId: string }>;
@@ -37,27 +42,30 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
 
 /**
  * "How you appear in this Home" (S11): the signed-in person's own nickname, Home display name and
- * colour in this Home. There is no page for anyone else's: nobody edits another adult's
+ * colour in this Home, and their picture here (S15: their own, or the global one). There is no page for anyone else's: nobody edits another adult's
  * presentation. The colour clash warning compares only with this Home's members. Below it, the
  * person's own role and the rights the Owner granted them (S12), and the way to leave.
  */
 export default async function HomeProfilePage({ params }: ProfilePageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tHomes, tManage] = await Promise.all([
+  const [context, t, tHomes, tManage, tStorage, locale] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Members"),
     getTranslations("Homes"),
     getTranslations("Manage"),
+    getTranslations("Storage"),
+    getLocale(),
   ]);
   if (!context) {
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
   }
   const { home, membership } = context;
-  const [profile, account, directory] = await Promise.all([
+  const [profile, account, directory, avatars] = await Promise.all([
     getMyHomeProfile(home.id),
     getAccountPreferences(),
     getHomeDirectory(home.id),
+    getMyAvatars(home.id),
   ]);
   if (directory.status === "not-found") redirect(HOME_UNAVAILABLE_PATH);
   if (profile.status !== "ok") {
@@ -109,6 +117,21 @@ export default async function HomeProfilePage({ params }: ProfilePageProps) {
         overrides={profile.overrides}
         otherColors={otherColors}
       />
+      <Card
+        title={tStorage("avatarHomeTitle")}
+        description={tStorage("avatarHomeHint")}
+        className="mt-6 max-w-2xl"
+      >
+        <AvatarSetting
+          scope={{ kind: "home", homeId: home.id }}
+          currentFileId={avatars.status === "ok" ? avatars.home : null}
+          inheritedFileId={avatars.status === "ok" ? avatars.global : null}
+          name={effectiveHomeName(profile.overrides, stored.displayName).name}
+          accentColor={profile.overrides.accentColor ?? stored.accentColor}
+          locale={locale}
+          uploadsEnabled={storageEnabled()}
+        />
+      </Card>
       <YourPermissions membership={membership} className="mt-6 max-w-2xl" />
     </>
   );

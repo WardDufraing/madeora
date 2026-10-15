@@ -46,11 +46,11 @@ describe("notificationKinds", () => {
       "../../../../supabase/migrations",
     );
     const sql = readdirSync(migrations)
-      .filter((name) => name.endsWith("_notifications.sql"))
+      .filter((name) => name.endsWith("_notifications.sql") || name.endsWith("_file_storage.sql"))
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
     const written = new Set(
-      [...sql.matchAll(/'((?:recovery|join_request)\.[a-z_]+)'/g)].map((match) => match[1]),
+      [...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((match) => match[1]),
     );
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });

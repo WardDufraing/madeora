@@ -21,6 +21,7 @@
     "@madeora/email": "workspace:*",
     "@madeora/icons": "workspace:*",
     "@madeora/observability": "workspace:*",
+    "@madeora/storage": "workspace:*",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",
     "@tanstack/react-query": "5.104.0",
@@ -29,6 +30,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
+    "sharp": "0.35.5",
     "zod": "4.6.7"
   },
   "devDependencies": {

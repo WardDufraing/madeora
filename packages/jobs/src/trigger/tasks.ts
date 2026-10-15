@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { schedules, task } from "@trigger.dev/sdk";
 
 import type { Database } from "@madeora/database";
+import { parseStorageEnv } from "@madeora/storage";
 
 import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
@@ -14,6 +15,7 @@ import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
+import { storageFilePurge, storageObjectDelete, storageUploadExpire } from "../jobs/storage.ts";
 import { jobRegistry } from "../registry.ts";
 import { createSupabaseJobStore, JobStoreError } from "../supabase-store.ts";
 import { parseWorkerEnv } from "./env.ts";
@@ -31,7 +33,7 @@ function createServices() {
   return {
     client,
     store: createSupabaseJobStore(client),
-    services: createJobServices(client, env),
+    services: createJobServices(client, env, parseStorageEnv(process.env)),
     logger: jobLogger(env.APP_ENV),
   };
 }
@@ -65,6 +67,9 @@ export const samplePingTask = jobTask(samplePing);
 export const notificationEmailTask = jobTask(notificationEmail);
 export const invitationEmailTask = jobTask(invitationEmail);
 export const recoveryReadyTask = jobTask(recoveryReady);
+export const storageUploadExpireTask = jobTask(storageUploadExpire);
+export const storageFilePurgeTask = jobTask(storageFilePurge);
+export const storageObjectDeleteTask = jobTask(storageObjectDelete);
 
 export const outboxDispatch = schedules.task({
   id: "outbox-dispatch",

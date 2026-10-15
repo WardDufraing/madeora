@@ -28,3 +28,9 @@ e35909d38f9a6ddfc7fc4af76f2af6cfa027a2f9:packages/config/src/env/email.test.ts:g
 # S14 email config test: the same made-up Resend key ("re_synthetic_" followed by digits), moved to
 # a new line of the test in the S14 commit. Not a credential.
 e8cd6f18910893ab62c66bfa7c35fea9c46ee296:packages/config/src/env/email.test.ts:generic-api-key:22
+#
+# S15 file storage: a made-up Supabase secret key shape ("sb_secret_synthetic" followed by
+# characters) in a config unit test, and made-up stand-in credentials ("DevSynthetic…") in the
+# local S3 stand-in example of docs/development.md. Not credentials.
+0fc5b90dacb196a91c80a7ae03c3b6c106e1ce6a:apps/web/src/storage/config.test.ts:generic-api-key:5
+0fc5b90dacb196a91c80a7ae03c3b6c106e1ce6a:docs/development.md:generic-api-key:174
