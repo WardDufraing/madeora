@@ -625,3 +625,14 @@ Questions previously listed here that the product specification already answers 
 
 **Decision rule:** Never fill product gaps by inventing behavior. Surface a question, propose options with tradeoffs, and obtain owner approval before coding the affected behavior.
 
+
+## 43. Madeora staff operations — approved (owner, 2026-10-15)
+
+**Product source:** `Project-specification.md` "Confirmed verified Home ownership recovery" (13 October 2026), which requires a Madeora-side review of evidence before any recovery takeover. Decision record: `docs/adr/0015-staff-operations.md`.
+
+- **Staff identity.** A Madeora staff member is an ordinary Supabase Auth account listed in `private.madeora_staff` (account id, added at, note). The table has no API write path: the owner adds or removes staff only by running SQL in the hosted project's SQL Editor. There is no separate staff identity provider, session or token system (§7).
+- **No Home access.** Staff status grants no Home membership and no access to Home data through RLS. Staff operations are separate `security definer` functions that check staff status themselves and return only the fields a staff task needs. Each staff function is narrowly scoped to one task; the first and only one so far is ownership recovery review. Staff never see or decide a case about a Home they belong to or are a party to; another staff member handles it.
+- **Staff pages.** Under `/staff/*` in `apps/web`, server-rendered, behind the same verified-identity checks as the rest of the app plus a staff check. The client never decides staff status. Staff decisions require a sign-in within the last 15 minutes in the session making the decision (checked against the session in the access token, not the account's last sign-in anywhere); once two-factor sign-in exists (S37), staff accounts must use it and staff decisions require an AAL2 session.
+- **Audit.** Every staff read of a case and every staff decision is recorded in `private.audit_events` with the staff account id, ids only.
+- **Privileged keys.** Staff operations use the staff member's own Supabase session, never the service-role or secret key.
+- **Environments.** Staff lists are per Supabase project (preview and production separately); synthetic test accounts only in tests.
