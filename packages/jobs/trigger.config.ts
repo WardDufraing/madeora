@@ -2,10 +2,11 @@
 // this folder at the same version as @trigger.dev/sdk (the CLI is not a dependency of the repo):
 //   pnpm dlx trigger.dev@4.6.4 dev                   (local, Dev environment)
 //   pnpm dlx trigger.dev@4.6.4 deploy --env prod     (owner, docs/trigger-setup.md)
-// The project ref is not a secret, but it differs per account, so it comes from the environment.
+// The project ref is not a secret. Trigger.dev's remote build server loads this file without our
+// shell environment, so the Madeora project ref is the default; TRIGGER_PROJECT_REF overrides it.
 import { defineConfig } from "@trigger.dev/sdk";
 
-const project = process.env.TRIGGER_PROJECT_REF;
+const project = process.env.TRIGGER_PROJECT_REF ?? "proj_yhkmlscenxkikqvgfnvs";
 if (!project || !/^proj_[a-z0-9]{10,40}$/.test(project)) {
   throw new Error(
     "Set TRIGGER_PROJECT_REF (proj_...) to the Trigger.dev project, see docs/trigger-setup.md",
