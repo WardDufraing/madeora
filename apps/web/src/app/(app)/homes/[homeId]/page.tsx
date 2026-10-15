@@ -7,6 +7,7 @@ import { isolatedName, loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
 import { RoleLabel } from "@/components/homes/role-label";
 import { OwnershipTransferNotice } from "@/components/members/manage/ownership-transfer-notice";
+import { RecoveryNotice } from "@/components/recovery/recovery-notice";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -18,7 +19,10 @@ import { transferAnswers } from "@/members/manage-schema";
 // Typed here rather than with Next's generated PageProps, which only exist after `next typegen`.
 interface HomePageProps {
   readonly params: Promise<{ readonly homeId: string }>;
-  readonly searchParams: Promise<{ readonly transfer?: string | string[] }>;
+  readonly searchParams: Promise<{
+    readonly transfer?: string | string[];
+    readonly recovery?: string | string[];
+  }>;
 }
 
 export async function generateMetadata({ params }: HomePageProps): Promise<Metadata> {
@@ -37,12 +41,13 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
  * arrive with S17 and the modules. Nothing personal is shown here. Invitation managers get an
  * "Invite people" link with the number of join requests waiting (S10). Every member gets the
  * member directory and their own "How you appear here" page (S11). A pending ownership transfer
- * shows to the Owner who asked and the member asked, with its answers (S12).
+ * shows to the Owner who asked and the member asked, with its answers (S12). An ownership recovery
+ * request shows to the Owner, the member who asked, and as an open review to the others (S12b).
  */
 export default async function HomeDashboardPage({ params, searchParams }: HomePageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const { transfer } = await searchParams;
+  const { transfer, recovery } = await searchParams;
   const [context, t] = await Promise.all([loadHomeForPage(homeId), getTranslations("Homes")]);
   if (!context) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
@@ -65,6 +70,11 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
       <RememberContext userId={userId} context={{ kind: "home", homeId: home.id }} />
       <PageHeader title={isolatedName(home.name)} />
       <OwnershipTransferNotice homeId={home.id} homeName={home.name} done={transferDone} />
+      <RecoveryNotice
+        homeId={home.id}
+        homeName={home.name}
+        accepted={recovery === "accepted" && membership.role === "owner"}
+      />
       <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2">
         <p className="text-body text-fg-muted" data-testid="home-role">
           <RoleLabel role={membership.role} />

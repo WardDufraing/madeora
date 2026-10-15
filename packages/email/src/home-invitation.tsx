@@ -29,8 +29,8 @@ export interface HomeInvitationEmailProps {
 
 // Emails cannot use CSS variables or the theme: the light theme's tokens, with the default accent
 // (a Home's own accent is not known to an email client and is not shown before joining).
-const colours = neutral.light;
-const accent = deriveAccent(defaultAccent.light, "light");
+export const colours = neutral.light;
+export const accent = deriveAccent(defaultAccent.light, "light");
 
 /** "21 October 2026, 18:00 CEST" in the email's language and the Home's timezone. */
 export function formatExpiry(expiresAt: Date, locale: EmailLocale, timeZone: string): string {
@@ -48,7 +48,10 @@ export function formatExpiry(expiresAt: Date, locale: EmailLocale, timeZone: str
 }
 
 /** Fills `{name}` placeholders with React nodes, so names stay text and can be isolated. */
-function fillNodes(template: string, values: Readonly<Record<string, ReactNode>>): ReactNode[] {
+export function fillNodes(
+  template: string,
+  values: Readonly<Record<string, ReactNode>>,
+): ReactNode[] {
   return template.split(/(\{\w+\})/g).map((part, index) => {
     const match = /^\{(\w+)\}$/.exec(part);
     const value = match?.[1] === undefined ? undefined : values[match[1]];

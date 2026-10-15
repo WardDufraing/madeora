@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { accentPalette } from "@madeora/design-tokens";
 import { createTranslator } from "next-intl";
 
+import { stateKey } from "@/components/recovery/recovery-state-text";
+import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
 
 import { locales } from "./locales";
@@ -135,6 +137,8 @@ describe("message dictionaries", () => {
       Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
       // Each palette colour's name, looked up by its id (S11).
       Accent: accentPalette.map((entry) => entry.id),
+      // Each recovery state's sentence and staff label, looked up by state (S12b).
+      Recovery: [...Object.values(stateKey), ...Object.values(staffStateKey)],
     };
     expect(unusedKeys([...english.keys()], sources, dynamic)).toEqual([]);
   });

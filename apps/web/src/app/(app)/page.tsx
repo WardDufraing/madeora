@@ -6,6 +6,7 @@ import { requireIdentity } from "@/auth/identity";
 import { FormAlert } from "@/components/auth/form-alert";
 import { HomeSetupCard } from "@/components/dashboard/home-setup-card";
 import { RememberContext } from "@/components/homes/remember-context";
+import { RecoveredHomesNotice } from "@/components/recovery/recovered-homes-notice";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
@@ -76,6 +77,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {notice === "home-left" ? t("leftHome") : t("homeUnavailable")}
         </FormAlert>
       ) : null}
+      <RecoveredHomesNotice now={now} />
       <div className="mb-6 flex flex-col gap-1">
         <p className="text-section-title font-semibold text-fg">
           {stored.displayName

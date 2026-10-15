@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
+import Link from "next/link";
 
 import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
@@ -16,6 +17,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { pageTitle } from "@/i18n/page-title";
 import { getAccountPreferences } from "@/preferences/account";
+import { getIsStaff, getRecoveredHomes } from "@/recovery/server";
 import { regionalSamples } from "@/preferences/regional";
 import { noPreferences } from "@/preferences/schema";
 import { getDevicePreferences, getDeviceTimeZone, getRegionalFormats } from "@/preferences/server";
@@ -32,7 +34,8 @@ interface SettingsPageProps {
 
 /**
  * Account preferences (the same on every device, S07), sign-in methods (S08) and this device's
- * appearance (S05). Each form saves on its own, so a failed save never loses what was typed in
+ * appearance (S05); for a former Owner, Homes taken over by recovery, and for Madeora staff, the
+ * staff pages (S12b). Each form saves on its own, so a failed save never loses what was typed in
  * another.
  */
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
@@ -48,6 +51,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     user,
     googleEnabled,
     params,
+    isStaff,
+    recovered,
+    tRecovery,
   ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
@@ -59,7 +65,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getVerifiedUser(),
     isGoogleSignInEnabled(),
     searchParams,
+    getIsStaff(),
+    getRecoveredHomes(),
+    getTranslations("Recovery"),
   ]);
+  const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
 
   return (
@@ -113,6 +123,28 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Card title={t("appearance")}>
           <ThemeSetting initialTheme={theme} />
         </Card>
+        {hasRecovered ? (
+          <Card title={tRecovery("recoveredTitle")}>
+            <Link
+              href="/settings/recoveries"
+              className="text-body font-medium text-accent-fg underline"
+            >
+              {tRecovery("recoveredLink")}
+            </Link>
+          </Card>
+        ) : null}
+        {/* Only decides whether to show the link; every staff page and action checks again. */}
+        {isStaff ? (
+          <Card title={tRecovery("staffTitle")}>
+            <Link
+              href="/staff/ownership-recoveries"
+              className="text-body font-medium text-accent-fg underline"
+              data-testid="staff-link"
+            >
+              {tRecovery("staffQueueLink")}
+            </Link>
+          </Card>
+        ) : null}
       </div>
     </>
   );

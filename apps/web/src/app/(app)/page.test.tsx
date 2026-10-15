@@ -38,6 +38,10 @@ vi.mock("next/navigation", () => ({
     throw new Redirect(url);
   },
 }));
+// The former-Owner notice is an async server component with its own reads; covered on its own.
+vi.mock("@/components/recovery/recovered-homes-notice", () => ({
+  RecoveredHomesNotice: () => null,
+}));
 vi.mock("@/homes/server", () => ({
   listMyHomes: () => Promise.resolve({ status: "ok", homes: state.homes }),
   getRememberedContext: () => Promise.resolve(state.remembered),

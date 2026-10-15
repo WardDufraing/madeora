@@ -61,6 +61,11 @@ const matrix: readonly {
           "home.members.remove": owner || (admin && has("removeMembers")),
           // Everyone but the Owner may leave at any time.
           "home.leave": !owner,
+          // Recovery: anyone but the Owner may ask; only the Owner cancels; anyone objects.
+          // Grants never change these.
+          "home.recovery.request": !owner,
+          "home.recovery.cancel": owner,
+          "home.recovery.object": true,
         },
       };
     }),

@@ -44,6 +44,9 @@ export const homeActions = [
   "home.members.remove",
   "home.leave",
   "home.ownership.transfer",
+  "home.recovery.request",
+  "home.recovery.cancel",
+  "home.recovery.object",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -103,6 +106,17 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.leave": { roles: ["administrator", "member"] },
   // Nominating the next Owner, and cancelling the nomination (SQL: start_ownership_transfer).
   "home.ownership.transfer": { roles: ["owner"] },
+  // Asking Madeora to review a takeover when the Owner cannot be reached (S12b; spec "Confirmed
+  // verified Home ownership recovery"). The role is only the start: the database also requires a
+  // confirmed account and 30 days of membership, and staff verify the person outside the app.
+  // No capability or role ever approves a takeover (SQL: public.request_ownership_recovery).
+  "home.recovery.request": { roles: ["administrator", "member"] },
+  // The Owner, evidently able to sign in, ends every open recovery request about their Home
+  // (SQL: public.cancel_ownership_recoveries).
+  "home.recovery.cancel": { roles: ["owner"] },
+  // Any adult member may object to an open recovery; the case pauses for staff (SQL:
+  // public.object_to_ownership_recovery).
+  "home.recovery.object": { roles: ["owner", "administrator", "member"] },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -148,6 +162,9 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.members.remove": can("home.members.remove"),
     "home.leave": can("home.leave"),
     "home.ownership.transfer": can("home.ownership.transfer"),
+    "home.recovery.request": can("home.recovery.request"),
+    "home.recovery.cancel": can("home.recovery.cancel"),
+    "home.recovery.object": can("home.recovery.object"),
   };
 }
 

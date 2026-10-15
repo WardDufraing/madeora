@@ -155,9 +155,24 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_ownership_recovery: {
+        Args: { p_home_id: string; p_recovery_id: string };
+        Returns: string;
+      };
+      appeal_ownership_recovery: {
+        Args: { p_reason: string; p_recovery_id: string };
+        Returns: string;
+      };
       authorize_sign_in_method_change: {
         Args: { p_action: string; p_provider: string };
         Returns: string;
+      };
+      cancel_ownership_recoveries: {
+        Args: { p_home_id: string };
+        Returns: {
+          cancelled: number;
+          outcome: string;
+        }[];
       };
       cancel_ownership_transfer: {
         Args: { p_home_id: string; p_transfer_id: string };
@@ -219,6 +234,18 @@ export type Database = {
           role: string;
         }[];
       };
+      home_ownership_recovery_status: {
+        Args: { p_home_id: string };
+        Returns: {
+          claimant_membership_id: string;
+          created_at: string;
+          id: string;
+          objected: boolean;
+          objection_ends_at: string;
+          state: string;
+          viewer: string;
+        }[];
+      };
       home_ownership_transfer: {
         Args: { p_home_id: string };
         Returns: {
@@ -232,6 +259,7 @@ export type Database = {
           state: string;
         }[];
       };
+      is_madeora_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
       leave_home: { Args: { p_home_id: string }; Returns: string };
       list_home_invitations: {
         Args: { p_home_id: string };
@@ -280,6 +308,20 @@ export type Database = {
           state: string;
         }[];
       };
+      my_recovered_homes: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          appeal_status: string;
+          completed_at: string;
+          home_name: string;
+          recovery_id: string;
+          still_member: boolean;
+        }[];
+      };
+      object_to_ownership_recovery: {
+        Args: { p_home_id: string; p_reason: string };
+        Returns: string;
+      };
       preview_home_invitation: {
         Args: { p_token: string };
         Returns: {
@@ -310,6 +352,13 @@ export type Database = {
           recipient_email: string;
           role: string;
           token: string;
+        }[];
+      };
+      request_ownership_recovery: {
+        Args: { p_home_id: string; p_request_id: string; p_statement: string };
+        Returns: {
+          outcome: string;
+          recovery_id: string;
         }[];
       };
       request_to_join_home: {
@@ -344,6 +393,61 @@ export type Database = {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
       };
+      staff_close_recovery_appeal: {
+        Args: { p_appeal_id: string; p_notes: string };
+        Returns: string;
+      };
+      staff_decide_ownership_recovery: {
+        Args: {
+          p_action: string;
+          p_former_owner_outcome?: string;
+          p_notes: string;
+          p_recovery_id: string;
+        };
+        Returns: string;
+      };
+      staff_ownership_recoveries: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          created_at: string;
+          home_name: string;
+          id: string;
+          objection_ends_at: string;
+          objections: number;
+          open_appeals: number;
+          state: string;
+        }[];
+      };
+      staff_ownership_recovery: {
+        Args: { p_recovery_id: string };
+        Returns: {
+          appeals: Json;
+          approved_at: string;
+          claimant_email: string;
+          claimant_member_since: string;
+          claimant_name: string;
+          claimant_role: string;
+          created_at: string;
+          decided_at: string;
+          former_owner_outcome: string;
+          home_id: string;
+          home_name: string;
+          home_time_zone: string;
+          id: string;
+          member_count: number;
+          objection_ends_at: string;
+          objections: Json;
+          owner_email: string;
+          owner_is_owner: boolean;
+          owner_last_sign_in_at: string;
+          owner_locale: string;
+          owner_seen_at: string;
+          review_started_at: string;
+          staff_notes: string;
+          state: string;
+          statement: string;
+        }[];
+      };
       start_ownership_transfer: {
         Args: { p_home_id: string; p_membership_id: string; p_request_id: string };
         Returns: {
@@ -352,6 +456,10 @@ export type Database = {
         }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };
+      withdraw_ownership_recovery: {
+        Args: { p_home_id: string; p_recovery_id: string };
+        Returns: string;
+      };
     };
     Enums: {
       [_ in never]: never;

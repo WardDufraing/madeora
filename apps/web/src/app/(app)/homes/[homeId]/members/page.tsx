@@ -52,11 +52,12 @@ export async function generateMetadata({ params }: MembersPageProps): Promise<Me
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tHomes, tManage] = await Promise.all([
+  const [context, t, tHomes, tManage, tRecovery] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Members"),
     getTranslations("Homes"),
     getTranslations("Manage"),
+    getTranslations("Recovery"),
   ]);
   if (!context) {
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
@@ -143,6 +144,17 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         manageable={manageable}
         formats={formats}
       />
+      {permissions["home.recovery.request"] ? (
+        <p className="mt-6 text-body text-fg-muted" data-testid="recovery-link">
+          {tRecovery("cannotReachOwner")}{" "}
+          <Link
+            href={`/homes/${home.id}/recovery`}
+            className="font-medium text-accent-fg underline"
+          >
+            {tRecovery("cannotReachOwnerLink")}
+          </Link>
+        </p>
+      ) : null}
     </>
   );
 }
