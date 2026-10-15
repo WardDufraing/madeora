@@ -16,3 +16,11 @@ d33f06849d87ccef568828fe084b9d9e3fe41866:.gitleaksignore:generic-api-key:10
 # check the schema accepts the shape. Not a credential.
 e35909d38f9a6ddfc7fc4af76f2af6cfa027a2f9:packages/config/src/env/email.test.ts:generic-api-key:9
 e35909d38f9a6ddfc7fc4af76f2af6cfa027a2f9:packages/config/src/env/email.test.ts:generic-api-key:23
+#
+# S13 logger redaction tests: synthetic secrets the test feeds to the logger to prove they are
+# masked. A made-up JWT (payload {"role":"service_role"}, signature "signature-value") and made-up
+# Resend, Trigger.dev and Supabase key shapes ending in "AbCdEf123456789". Not credentials.
+9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:jwt:106
+9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:generic-api-key:109
+9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:generic-api-key:110
+9a28748aa35677fd90849b624c74c19afdb49b73:packages/observability/src/observability.test.ts:generic-api-key:111
