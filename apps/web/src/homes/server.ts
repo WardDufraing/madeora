@@ -2,7 +2,9 @@ import "server-only";
 
 import {
   homePermissions,
+  isDelegableCapability,
   isHomeRole,
+  type DelegableCapability,
   type HomeMembershipFacts,
   type HomePermissionProjection,
 } from "@madeora/domain/permissions";
@@ -99,12 +101,27 @@ export const getHomeContext = cache(async (homeId: string): Promise<HomeContextR
   const home = data ? toMyHome(data) : null;
   if (!home) return { status: "not-found" };
 
-  const membership: HomeMembershipFacts = {
-    homeId: home.id,
-    role: home.role,
-    // The Owner grants Administrators capabilities from S12; until then there are none.
-    grantedCapabilities: new Set(),
-  };
+  // What the Owner granted this person (S12). Only Administrators hold grants; the database drops
+  // them on any other role. Read fresh on every request, so a revocation applies at once.
+  let grantedCapabilities = new Set<DelegableCapability>();
+  if (home.role === "administrator") {
+    const grants = await supabase.rpc("home_capabilities", { p_home_id: home.id });
+    if (grants.error?.code === "42501") return { status: "not-found" };
+    if (grants.error) {
+      console.error(
+        JSON.stringify({ event: "homes.capabilities_failed", code: grants.error.code }),
+      );
+      return { status: "unavailable" };
+    }
+    grantedCapabilities = new Set(
+      grants.data
+        .filter((row) => row.is_self)
+        .map((row) => row.capability)
+        .filter(isDelegableCapability),
+    );
+  }
+
+  const membership: HomeMembershipFacts = { homeId: home.id, role: home.role, grantedCapabilities };
   return {
     status: "ok",
     context: {

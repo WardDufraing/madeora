@@ -35,12 +35,14 @@ interface DashboardPageProps {
  *
  * Opening `/` returns to the Home this device used last, if the person still belongs to it (S09);
  * `?context=personal` (the switcher's Personal link) stays here and makes Personal the default
- * again. `?notice=home-unavailable` explains, without saying why, that a Home could not be opened.
+ * again. `?notice=home-unavailable` explains, without saying why, that a Home could not be opened;
+ * `?notice=home-left` confirms that the person left a Home (S12), without naming it.
  */
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const { userId } = await requireIdentity();
   const params = await searchParams;
-  const notice = params.notice === "home-unavailable" ? "home-unavailable" : null;
+  const notice =
+    params.notice === "home-unavailable" || params.notice === "home-left" ? params.notice : null;
   if (params.context !== "personal" && notice === null) {
     const remembered = await getRememberedContext(userId);
     if (remembered?.kind === "home") {
@@ -71,7 +73,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <PageHeader title={tNav("dashboard")} />
       {notice ? (
         <FormAlert tone="info" announce className="mb-6">
-          {t("homeUnavailable")}
+          {notice === "home-left" ? t("leftHome") : t("homeUnavailable")}
         </FormAlert>
       ) : null}
       <div className="mb-6 flex flex-col gap-1">

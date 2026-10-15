@@ -1,3 +1,4 @@
+import { memberPermissions } from "@madeora/domain/permissions";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
@@ -6,6 +7,7 @@ import { redirect } from "next/navigation";
 import { requireIdentity } from "@/auth/identity";
 import { HOME_UNAVAILABLE_PATH, loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
+import { FormAlert } from "@/components/auth/form-alert";
 import { RoleLabel } from "@/components/homes/role-label";
 import { MemberDirectory } from "@/components/members/member-directory";
 import { PageHeader } from "@/components/shell/page-header";
@@ -26,6 +28,7 @@ interface MembersPageProps {
   readonly searchParams: Promise<{
     readonly sort?: string | string[];
     readonly role?: string | string[];
+    readonly removed?: string | string[];
   }>;
 }
 
@@ -49,10 +52,11 @@ export async function generateMetadata({ params }: MembersPageProps): Promise<Me
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tHomes] = await Promise.all([
+  const [context, t, tHomes, tManage] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Members"),
     getTranslations("Homes"),
+    getTranslations("Manage"),
   ]);
   if (!context) {
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
@@ -61,11 +65,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Every member may see the directory today; the engine decides, so later restrictions (children,
   // Household Displays) apply here too. The database function checks the membership again.
   if (!permissions["home.members.view"]) redirect(HOME_UNAVAILABLE_PATH);
-  const [directory, formats, query] = await Promise.all([
+  const [directory, formats, rawParams] = await Promise.all([
     getHomeDirectory(home.id),
     getDateTimeFormats(),
-    searchParams.then(parseDirectoryQuery),
+    searchParams,
   ]);
+  const query = parseDirectoryQuery(rawParams);
   // The membership ended between the two reads: the same neutral notice as any lost Home.
   if (directory.status === "not-found") redirect(HOME_UNAVAILABLE_PATH);
 
@@ -93,6 +98,11 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
           </>
         ) : null}
       </p>
+      {rawParams.removed === "1" ? (
+        <FormAlert tone="success" className="mb-6">
+          {tManage("removedNotice")}
+        </FormAlert>
+      ) : null}
     </>
   );
   if (directory.status === "unavailable") {
@@ -105,6 +115,21 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   }
 
   const collator = nameCollator(formats.locale);
+  // The members this viewer may act on, so their rows link to their page. The page and the API
+  // decide again for each action.
+  const manageable = new Set(
+    directory.members
+      .filter((member) =>
+        Object.values(
+          memberPermissions(membership, {
+            homeId: home.id,
+            role: member.role,
+            isSelf: member.isSelf,
+          }),
+        ).some(Boolean),
+      )
+      .map((member) => member.membershipId),
+  );
   return (
     <>
       {header}
@@ -115,6 +140,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         total={directory.members.length}
         query={query}
         sharedNames={sharedNameIds(directory.members, collator)}
+        manageable={manageable}
         formats={formats}
       />
     </>

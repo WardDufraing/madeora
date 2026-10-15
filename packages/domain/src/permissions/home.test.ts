@@ -2,15 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   decideHomeAction,
+  decideMemberAction,
   delegableCapabilities,
   homeActions,
   homePermissions,
   homeRoles,
+  isDelegableCapability,
   isHomeRole,
+  memberActions,
+  memberPermissions,
   type DelegableCapability,
   type HomeAction,
   type HomeMembershipFacts,
   type HomeRole,
+  type MemberAction,
 } from "./home";
 
 const HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
@@ -32,7 +37,7 @@ const matrix: readonly {
   readonly expected: { readonly [A in HomeAction]: boolean };
 }[] = [
   ...(["owner", "administrator", "member"] as const).flatMap((role) =>
-    [[], ["manageHomeSettings"], ["manageInvitations"]].map((granted) => {
+    [[], ["manageHomeSettings"], ["manageInvitations"], ["removeMembers"]].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
       const has = (capability: DelegableCapability) =>
@@ -49,6 +54,13 @@ const matrix: readonly {
           // Every member sees the directory and edits only their own presentation.
           "home.members.view": true,
           "home.profile.editOwn": true,
+          // Owner-only powers, whatever was granted.
+          "home.members.manageRoles": owner,
+          "home.members.manageCapabilities": owner,
+          "home.ownership.transfer": owner,
+          "home.members.remove": owner || (admin && has("removeMembers")),
+          // Everyone but the Owner may leave at any time.
+          "home.leave": !owner,
         },
       };
     }),
@@ -144,5 +156,134 @@ describe("isHomeRole", () => {
 
   it.each(["Owner", "admin", "guest", "display", "", null, undefined, 1])("refuses %s", (value) => {
     expect(isHomeRole(value)).toBe(false);
+  });
+});
+
+describe("isDelegableCapability", () => {
+  it.each(delegableCapabilities)("accepts %s", (value) => {
+    expect(isDelegableCapability(value)).toBe(true);
+  });
+
+  it.each(["transferOwnership", "deleteHome", "manageAdministrators", "", null, 1])(
+    "refuses %s",
+    (value) => {
+      expect(isDelegableCapability(value)).toBe(false);
+    },
+  );
+});
+
+describe("Owner-only powers stay Owner-only", () => {
+  const ownerOnly: readonly HomeAction[] = [
+    "home.members.manageRoles",
+    "home.members.manageCapabilities",
+    "home.ownership.transfer",
+    "home.invitations.manageAdministrators",
+  ];
+  it.each(ownerOnly)("no capability lets an Administrator %s", (action) => {
+    expect(
+      decideHomeAction(HOME, membership("administrator", [...delegableCapabilities]), action)
+        .allowed,
+    ).toBe(false);
+  });
+});
+
+// Member actions: every actor role and grant set against every target role, as self and not.
+describe("decideMemberAction", () => {
+  const grantSets: readonly (readonly DelegableCapability[])[] = [[], [...delegableCapabilities]];
+
+  function expected(
+    actor: HomeRole,
+    granted: readonly DelegableCapability[],
+    target: HomeRole,
+    isSelf: boolean,
+    action: MemberAction,
+  ): boolean {
+    if (isSelf || target === "owner") return false;
+    const owner = actor === "owner";
+    switch (action) {
+      case "member.changeRole":
+      case "member.nominateOwner":
+        return owner;
+      case "member.editCapabilities":
+        return owner && target === "administrator";
+      case "member.remove":
+        return (
+          owner ||
+          (actor === "administrator" && granted.includes("removeMembers") && target === "member")
+        );
+    }
+  }
+
+  for (const actor of homeRoles) {
+    for (const granted of grantSets) {
+      for (const target of homeRoles) {
+        for (const isSelf of [false, true]) {
+          // An Owner acting on an Owner who is not themselves cannot exist (one Owner per Home),
+          // but the rule must still refuse it.
+          for (const action of memberActions) {
+            const answer = expected(actor, granted, target, isSelf, action);
+            const label = `${actor}${granted.length > 0 ? " with every grant" : ""} → ${
+              isSelf ? "self as " : ""
+            }${target}: ${action} is ${answer ? "allowed" : "refused"}`;
+            it(label, () => {
+              const decision = decideMemberAction(
+                HOME,
+                membership(actor, granted),
+                { homeId: HOME, role: target, isSelf },
+                action,
+              );
+              expect(decision.allowed).toBe(answer);
+              if (!decision.allowed) expect(decision.reason).toBe("not-permitted");
+            });
+          }
+        }
+      }
+    }
+  }
+
+  it("refuses a target in another Home, and an actor without a membership", () => {
+    for (const action of memberActions) {
+      expect(
+        decideMemberAction(
+          HOME,
+          membership("owner"),
+          { homeId: OTHER_HOME, role: "member", isSelf: false },
+          action,
+        ),
+      ).toEqual({ allowed: false, reason: "not-member" });
+      expect(
+        decideMemberAction(HOME, null, { homeId: HOME, role: "member", isSelf: false }, action),
+      ).toEqual({ allowed: false, reason: "not-member" });
+      expect(
+        decideMemberAction(
+          HOME,
+          membership("owner", [], OTHER_HOME),
+          { homeId: HOME, role: "member", isSelf: false },
+          action,
+        ),
+      ).toEqual({ allowed: false, reason: "not-member" });
+    }
+  });
+
+  it("memberPermissions projects the same answers", () => {
+    const actor = membership("administrator", ["removeMembers"]);
+    expect(memberPermissions(actor, { homeId: HOME, role: "member", isSelf: false })).toEqual({
+      "member.changeRole": false,
+      "member.editCapabilities": false,
+      "member.remove": true,
+      "member.nominateOwner": false,
+    });
+    expect(
+      memberPermissions(membership("owner"), {
+        homeId: HOME,
+        role: "administrator",
+        isSelf: false,
+      }),
+    ).toEqual({
+      "member.changeRole": true,
+      "member.editCapabilities": true,
+      "member.remove": true,
+      "member.nominateOwner": true,
+    });
   });
 });

@@ -46,7 +46,10 @@ select tests.assert_true(
     where n.nspname = 'private'
       and p.oid::regprocedure::text <> all (array[
         -- S11: the pure visible-name rule that check constraints on names call; it reads nothing.
-        'private.is_visible_name(text,integer)'
+        'private.is_visible_name(text,integer)',
+        -- S12: the homes update policy asks whether the caller (auth.uid(), never another
+        -- account) holds a capability in a Home; it reveals nothing about anyone else.
+        'private.caller_has_home_capability(uuid,text)'
       ]::text[])
       and (
         has_function_privilege('anon', p.oid, 'execute')

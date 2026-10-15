@@ -218,7 +218,10 @@ const members = [
   member("m4", "administrator", null, "2026-10-04T08:00:00Z"),
 ];
 
-async function renderDirectory(params: { sort?: string; role?: string | string[] } = {}) {
+async function renderDirectory(
+  params: { sort?: string; role?: string | string[] } = {},
+  manageable: ReadonlySet<string> = new Set(),
+) {
   const query = parseDirectoryQuery(params);
   const collator = nameCollator("en");
   const ui = await MemberDirectory({
@@ -228,6 +231,7 @@ async function renderDirectory(params: { sort?: string; role?: string | string[]
     total: members.length,
     query,
     sharedNames: sharedNameIds(members, collator),
+    manageable,
     formats,
   });
   return render(
@@ -252,6 +256,7 @@ describe("MemberDirectory", () => {
       total: 2,
       query,
       sharedNames: sharedNameIds(twins, collator),
+      manageable: new Set(),
       formats,
     });
     render(
@@ -286,6 +291,19 @@ describe("MemberDirectory", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 
+  it("links the members the viewer may manage to their page (S12)", async () => {
+    const { container } = await renderDirectory({}, new Set(["m3", "m4"]));
+    const links = screen.getAllByTestId("manage-member-link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      `/homes/${HOME_ID}/members/m4`,
+      `/homes/${HOME_ID}/members/m3`,
+    ]);
+    // Each link names the member for screen readers, so "Manage" is never ambiguous.
+    expect(screen.getByRole("link", { name: "Manage: alex" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Manage: Member without a name" })).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
   it("filters by role with a count, and offers a way back", async () => {
     await renderDirectory({ role: "member", sort: "name" });
     expect(screen.getAllByTestId("directory-member")).toHaveLength(2);
@@ -307,6 +325,7 @@ describe("MemberDirectory", () => {
       total: 4,
       query,
       sharedNames: new Set(),
+      manageable: new Set(),
       formats,
     });
     const { container } = render(
@@ -332,6 +351,7 @@ describe("MemberDirectory", () => {
       total: 2,
       query,
       sharedNames: sharedNameIds(twins, nameCollator("en")),
+      manageable: new Set(),
       formats,
     });
     render(
