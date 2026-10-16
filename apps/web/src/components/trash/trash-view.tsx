@@ -8,6 +8,7 @@ import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog } from "@/components/ui/dialog";
+import { SelectField } from "@/components/ui/select-field";
 import { EmptyState } from "@/components/ui/states";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
@@ -21,7 +22,11 @@ import {
   type TrashEntry,
   type TrashFailure,
 } from "@/trash/api";
-import type { TrashResolution } from "@/trash/schema";
+import {
+  moveToListResolution,
+  type TrashResolution,
+  type TrashResolutionChoice,
+} from "@/trash/schema";
 
 export interface TrashViewProps {
   readonly entries: readonly TrashEntry[];
@@ -34,6 +39,8 @@ export interface TrashViewProps {
   readonly filtered: boolean;
   /** When the page was loaded: "Empty trash" only touches what was deleted before this. */
   readonly loadedAt: string;
+  /** The scope's active task lists, offered when a task's own list is gone (S18). */
+  readonly taskLists?: readonly { readonly id: string; readonly name: string }[];
 }
 
 interface Conflict {
@@ -51,6 +58,8 @@ type Confirm = "selected" | "empty" | null;
 const itemTypeKey = {
   sample: "itemTypeSample",
   dashboard_template: "itemTypeDashboardTemplate",
+  task: "itemTypeTask",
+  task_list: "itemTypeTaskList",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -58,6 +67,8 @@ function conflictMessage(kind: string) {
       return "conflictSlotTaken";
     case "parent_unavailable":
       return "conflictParentUnavailable";
+    case "list_unavailable":
+      return "conflictListUnavailable";
     default:
       return "conflictOther";
   }
@@ -65,7 +76,7 @@ function conflictMessage(kind: string) {
 const resolutionKey = {
   clear_slot: "resolveClearSlot",
   detach_parent: "resolveDetachParent",
-} as const;
+} as const satisfies Record<Exclude<TrashResolution, "move_to_list">, string>;
 const errorKey = {
   signedOut: "errorSignedOut",
   invalid: "errorInvalid",
@@ -92,6 +103,7 @@ export function TrashView({
   formats,
   filtered,
   loadedAt,
+  taskLists = [],
 }: TrashViewProps) {
   const t = useTranslations("Trash");
   const router = useRouter();
@@ -140,7 +152,10 @@ export function TrashView({
     }
   }
 
-  function restore(ids: readonly string[], resolutions: Record<string, TrashResolution> = {}) {
+  function restore(
+    ids: readonly string[],
+    resolutions: Record<string, TrashResolutionChoice> = {},
+  ) {
     return run(async () => {
       const results = await restoreEntries(ids, resolutions);
       setConflicts((previous) => {
@@ -274,17 +289,30 @@ export function TrashView({
                       >
                         <p className="text-body text-fg">{t(conflictMessage(conflict.kind))}</p>
                         <div className="flex flex-wrap gap-2">
-                          {conflict.options.map((option) => (
-                            <Button
-                              key={option}
-                              variant="secondary"
-                              size="sm"
-                              disabled={disabled}
-                              onClick={() => void restore([entry.id], { [entry.id]: option })}
-                            >
-                              {t(resolutionKey[option])}
-                            </Button>
-                          ))}
+                          {conflict.options.map((option) =>
+                            option === "move_to_list" ? (
+                              <MoveToList
+                                key={option}
+                                lists={taskLists}
+                                disabled={disabled}
+                                onChoose={(listId) =>
+                                  void restore([entry.id], {
+                                    [entry.id]: moveToListResolution(listId),
+                                  })
+                                }
+                              />
+                            ) : (
+                              <Button
+                                key={option}
+                                variant="secondary"
+                                size="sm"
+                                disabled={disabled}
+                                onClick={() => void restore([entry.id], { [entry.id]: option })}
+                              >
+                                {t(resolutionKey[option])}
+                              </Button>
+                            ),
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -366,6 +394,45 @@ export function TrashView({
           </>
         }
       />
+    </div>
+  );
+}
+
+/** Choosing another list of the same scope for a task whose list is gone (S18). */
+function MoveToList({
+  lists,
+  disabled,
+  onChoose,
+}: {
+  readonly lists: readonly { readonly id: string; readonly name: string }[];
+  readonly disabled: boolean;
+  readonly onChoose: (listId: string) => void;
+}) {
+  const t = useTranslations("Trash");
+  const [listId, setListId] = useState(lists[0]?.id ?? "");
+  if (lists.length === 0) return <p className="text-helper text-fg-muted">{t("resolveNoLists")}</p>;
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <SelectField
+        label={t("resolveMoveToListLabel")}
+        value={listId}
+        onChange={(event) => {
+          setListId(event.target.value);
+        }}
+        options={lists.map((list) => ({ value: list.id, label: list.name }))}
+        disabled={disabled}
+      />
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={disabled || listId === ""}
+        onClick={() => {
+          onChoose(listId);
+        }}
+        data-testid="trash-move-to-list"
+      >
+        {t("resolveMoveToList")}
+      </Button>
     </div>
   );
 }

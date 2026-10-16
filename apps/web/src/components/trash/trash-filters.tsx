@@ -13,10 +13,16 @@ export interface TrashFiltersFormProps {
   readonly filters: TrashFilters;
 }
 
-const moduleKey = { sample: "moduleSample", dashboard: "moduleDashboard" } as const;
+const moduleKey = {
+  sample: "moduleSample",
+  dashboard: "moduleDashboard",
+  tasks: "moduleTasks",
+} as const;
 const itemTypeKey = {
   sample: "itemTypeSample",
   dashboard_template: "itemTypeDashboardTemplate",
+  task: "itemTypeTask",
+  task_list: "itemTypeTaskList",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

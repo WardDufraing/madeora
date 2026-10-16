@@ -107,6 +107,7 @@ async function QuickActionsBody({ scope }: { readonly scope: WidgetScope }) {
     return (
       <ActionList
         items={[
+          { href: `${base}/tasks`, label: t("actionTasks") },
           { href: `${base}/members`, label: t("actionMembers") },
           ...(scope.permissions["home.invitations.manage"]
             ? [{ href: `${base}/invitations`, label: t("actionInvite") }]
@@ -120,6 +121,7 @@ async function QuickActionsBody({ scope }: { readonly scope: WidgetScope }) {
   return (
     <ActionList
       items={[
+        { href: "/tasks", label: t("actionTasks") },
         { href: "/homes/new", label: t("createHome") },
         { href: "/homes/join", label: t("joinHome") },
         { href: "/notifications", label: t("actionNotifications") },

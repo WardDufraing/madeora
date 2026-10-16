@@ -12,6 +12,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { getDateTimeFormats } from "@/invitations/server";
+import { listTaskLists } from "@/tasks/data";
 import { listTrash } from "@/trash/data";
 import { hasTrashFilters, parseTrashFilters, trashQuery } from "@/trash/filters";
 
@@ -54,9 +55,12 @@ export default async function HomeTrashPage({ params, searchParams }: HomeTrashP
   const { home, permissions } = context;
   const loadedAt = new Date().toISOString();
   const filters = parseTrashFilters(query);
-  const result = permissions["home.trash.view"]
-    ? await listTrash(trashQuery(filters, formats.timeZone, home.id))
-    : ({ status: "not-found" } as const);
+  const [result, lists] = await Promise.all([
+    permissions["home.trash.view"]
+      ? listTrash(trashQuery(filters, formats.timeZone, home.id))
+      : Promise.resolve({ status: "not-found" } as const),
+    listTaskLists(home.id, false),
+  ]);
   const path = `/homes/${home.id}/trash`;
 
   return (
@@ -87,6 +91,7 @@ export default async function HomeTrashPage({ params, searchParams }: HomeTrashP
             formats={formats}
             filtered={hasTrashFilters(filters)}
             loadedAt={loadedAt}
+            taskLists={lists.status === "ok" ? lists.value : []}
           />
         </>
       )}

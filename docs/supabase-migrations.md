@@ -18,6 +18,7 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261018090000_member_profiles.sql`     | S11  | `member_profiles_table` is not `NULL`                  |
 | `supabase/migrations/20261019090000_roles_and_ownership.sql` | S12  | `ownership_transfers_table` is not `NULL`              |
 | `supabase/migrations/20261020090000_ownership_recovery.sql`  | S12b | `ownership_recoveries_table` is not `NULL`             |
+| `supabase/migrations/20261026090000_tasks.sql`               | S18  | `tasks_table` is not `NULL`                            |
 
 Check query (read-only, safe to run any time):
 
@@ -30,7 +31,8 @@ select
   to_regclass('private.home_invitations') as invitations_table,
   to_regclass('public.home_member_profiles') as member_profiles_table,
   to_regclass('private.home_ownership_transfers') as ownership_transfers_table,
-  to_regclass('private.home_ownership_recoveries') as ownership_recoveries_table;
+  to_regclass('private.home_ownership_recoveries') as ownership_recoveries_table,
+  to_regclass('private.tasks') as tasks_table;
 ```
 
 ## Apply a migration
@@ -232,6 +234,28 @@ From S16 there is a trash for each person and each Home: deleted items stay reco
    It must show **false** for `members_can_read_entries` and `members_can_run_the_job`, **true** for `members_can_restore` and `server_can_run_the_job`, and `entries` **0**.
 
 2. In the app open **Settings** and click **Open your trash**: "The trash is empty" appears. Open a Home, click **Settings**, then **Open this Home's trash**: the same.
+
+## Check S18 (`20261026090000_tasks.sql`)
+
+From S18 there are tasks in the Personal space and in every Home (the **Tasks** item in the sidebar). Nothing changes for existing data: there are no lists or tasks until someone creates them. Apply it only after S16 (`20261024090000_trash_and_recovery.sql`) and S17 (`20261025090000_dashboards.sql`) are applied, because it extends their trash functions and the Administrator capabilities.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.tasks') as tasks_table,
+     has_table_privilege('authenticated', 'private.tasks', 'select') as members_can_read_tasks,
+     has_function_privilege('authenticated', 'public.set_task_completion(uuid, boolean)', 'execute')
+       as members_can_complete,
+     has_function_privilege('anon', 'public.list_tasks(uuid, uuid, date, text, text, boolean, text[], uuid[], text, uuid, text, integer, integer)', 'execute')
+       as signed_out_can_list,
+     private.is_delegable_capability('manageHomeTasks') as new_capability,
+     (select count(*) from private.tasks) as tasks;
+   ```
+
+   It must show `tasks_table` **private.tasks**, **false** for `members_can_read_tasks` and `signed_out_can_list`, **true** for `members_can_complete` and `new_capability`, and `tasks` **0**.
+
+2. In the app click **Tasks** in the sidebar: "No task lists yet" appears. Click **Lists and labels**, create a list, go back and add a task. Open a Home and click **Tasks**: the Home's own, empty, task page appears.
 
 ## If a migration file changed after you applied it
 

@@ -6,9 +6,9 @@ import { z } from "zod";
  */
 
 /** Each module step adds its own value here and in the database check constraints. */
-export const trashModules = ["sample", "dashboard"] as const;
+export const trashModules = ["sample", "dashboard", "tasks"] as const;
 export type TrashModule = (typeof trashModules)[number];
-export const trashItemTypes = ["sample", "dashboard_template"] as const;
+export const trashItemTypes = ["sample", "dashboard_template", "task", "task_list"] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 
 export function isTrashModule(value: unknown): value is TrashModule {
@@ -19,8 +19,28 @@ export function isTrashItemType(value: unknown): value is TrashItemType {
 }
 
 /** What the person may choose to resolve a restore conflict (the database names the options). */
-export const trashResolutions = ["clear_slot", "detach_parent"] as const;
+export const trashResolutions = ["clear_slot", "detach_parent", "move_to_list"] as const;
 export type TrashResolution = (typeof trashResolutions)[number];
+
+/**
+ * A chosen resolution as sent: a plain option, or an option with its argument after a colon
+ * (`move_to_list:<list id>`: restore a task into another list of the same context, S18).
+ */
+export type TrashResolutionChoice =
+  Exclude<TrashResolution, "move_to_list"> | `move_to_list:${string}`;
+
+const resolutionChoiceSchema = z.union([
+  z.enum(["clear_slot", "detach_parent"]),
+  z
+    .string()
+    .regex(/^move_to_list:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+    .transform((value) => value as `move_to_list:${string}`),
+]);
+
+/** The resolution that restores a task into the list `listId`. */
+export function moveToListResolution(listId: string): TrashResolutionChoice {
+  return `move_to_list:${listId}`;
+}
 
 /** Same limit as the database (`private.trash_limit('batch')`). */
 export const TRASH_BATCH_LIMIT = 100;
@@ -31,7 +51,7 @@ const entryIds = z.array(entryId).min(1).max(TRASH_BATCH_LIMIT);
 export const restoreSchema = z.strictObject({
   entryIds,
   /** Entry id → the resolution chosen for that entry; only for entries that reported a conflict. */
-  resolutions: z.record(entryId, z.enum(trashResolutions)).optional(),
+  resolutions: z.record(entryId, resolutionChoiceSchema).optional(),
 });
 export type RestoreInput = z.infer<typeof restoreSchema>;
 

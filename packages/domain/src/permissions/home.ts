@@ -30,6 +30,7 @@ export const delegableCapabilities = [
   "manageInvitations",
   "removeMembers",
   "manageHomeDashboard",
+  "manageHomeTasks",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -53,6 +54,10 @@ export const homeActions = [
   "home.recovery.object",
   "home.dashboard.view",
   "home.dashboard.edit",
+  "home.tasks.view",
+  "home.tasks.create",
+  "home.tasks.comment",
+  "home.tasks.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -139,6 +144,15 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // Home-dashboard templates (owner decision, 2026-10-16). SQL: private.can_edit_home_dashboard.
   "home.dashboard.view": { roles: ["owner", "administrator", "member"] },
   "home.dashboard.edit": { roles: ["owner"], delegatedThrough: "manageHomeDashboard" },
+  // Home tasks (S18; default picked in the S18 brief, the per-module matrix is open in the spec):
+  // every current member sees the Home's lists, tasks, labels and comments, creates tasks and
+  // comments; task managers (the Owner, Administrators granted manageHomeTasks) set assignees
+  // (spec: "the Home task-management permission"), manage lists and labels and edit or delete any
+  // task. Per-task rights (creator, assignee) are in ./tasks.ts. SQL: private.can_manage_tasks.
+  "home.tasks.view": { roles: ["owner", "administrator", "member"] },
+  "home.tasks.create": { roles: ["owner", "administrator", "member"] },
+  "home.tasks.comment": { roles: ["owner", "administrator", "member"] },
+  "home.tasks.manage": { roles: ["owner"], delegatedThrough: "manageHomeTasks" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -192,6 +206,10 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.recovery.object": can("home.recovery.object"),
     "home.dashboard.view": can("home.dashboard.view"),
     "home.dashboard.edit": can("home.dashboard.edit"),
+    "home.tasks.view": can("home.tasks.view"),
+    "home.tasks.create": can("home.tasks.create"),
+    "home.tasks.comment": can("home.tasks.comment"),
+    "home.tasks.manage": can("home.tasks.manage"),
   };
 }
 

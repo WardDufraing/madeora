@@ -19,3 +19,11 @@ export {
   type MemberPermissionProjection,
   type MemberTargetFacts,
 } from "./home";
+export {
+  decideTaskAction,
+  taskActions,
+  taskPermissions,
+  type TaskAction,
+  type TaskFacts,
+  type TaskPermissionProjection,
+} from "./tasks";
