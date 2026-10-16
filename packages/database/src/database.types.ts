@@ -407,6 +407,13 @@ export type Database = {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
       };
+      empty_trash: {
+        Args: { p_deleted_before?: string; p_home_id?: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       expire_upload: { Args: { p_file_id: string }; Returns: string };
       fail_job_outbox: {
         Args: { p_error_code: string; p_id: string; p_permanent: boolean };
@@ -604,6 +611,25 @@ export type Database = {
           state: string;
         }[];
       };
+      list_trash: {
+        Args: {
+          p_deleted_from?: string;
+          p_deleted_to?: string;
+          p_home_id?: string;
+          p_item_type?: string;
+          p_module?: string;
+        };
+        Returns: {
+          deleted_at: string;
+          deleted_by_me: boolean;
+          entry_id: string;
+          expires_at: string;
+          file_count: number;
+          item_type: string;
+          label: string;
+          module: string;
+        }[];
+      };
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
       my_notification_channels: {
         Args: Record<PropertyKey, never>;
@@ -647,7 +673,15 @@ export type Database = {
           role: string;
         }[];
       };
+      purge_expired_trash_entry: { Args: { p_entry_id: string }; Returns: string };
       purge_stored_file: { Args: { p_file_id: string }; Returns: string };
+      purge_trash_entries: {
+        Args: { p_entry_ids: string[] };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       record_invitation_email: {
         Args: { p_invitation_id: string; p_send: number; p_status: string };
         Returns: boolean;
@@ -700,6 +734,16 @@ export type Database = {
       respond_to_ownership_transfer: {
         Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
         Returns: string;
+      };
+      restore_trash_entries: {
+        Args: { p_entry_ids: string[]; p_resolutions?: Json };
+        Returns: {
+          attachments_lost: number;
+          conflict: string;
+          entry_id: string;
+          options: string[];
+          outcome: string;
+        }[];
       };
       revoke_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
@@ -797,6 +841,14 @@ export type Database = {
           oldest_open_deletion_seconds: number;
           open_deletions: number;
           pending_uploads: number;
+        }[];
+      };
+      trash_stats: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          oldest_overdue_seconds: number;
+          open_entries: number;
+          overdue_entries: number;
         }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };

@@ -211,6 +211,28 @@ From S15 people can upload a profile picture, and each person and each Home has 
 
 2. In the app open **Settings**: a **Profile picture** card and a **Storage** card appear. Without storage configured, the picture card says uploads aren't set up here yet; **View your storage** shows 0 of 1 GB used.
 
+## Check S16 (`20261024090000_trash_and_recovery.sql`)
+
+From S16 there is a trash for each person and each Home: deleted items stay recoverable for 7 days (the **Trash** link in Settings and in a Home's settings). No module deletes anything into it yet (tasks arrive in S18), so nothing changes for existing data and the trash is empty. Apply it only after S15 (`20261023090000_file_storage.sql`) is applied.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     has_table_privilege('authenticated', 'private.trash_entries', 'select') as members_can_read_entries,
+     has_function_privilege('authenticated', 'public.restore_trash_entries(uuid[], jsonb)', 'execute')
+       as members_can_restore,
+     has_function_privilege('authenticated', 'public.purge_expired_trash_entry(uuid)', 'execute')
+       as members_can_run_the_job,
+     has_function_privilege('service_role', 'public.purge_expired_trash_entry(uuid)', 'execute')
+       as server_can_run_the_job,
+     (select count(*) from private.trash_entries) as entries;
+   ```
+
+   It must show **false** for `members_can_read_entries` and `members_can_run_the_job`, **true** for `members_can_restore` and `server_can_run_the_job`, and `entries` **0**.
+
+2. In the app open **Settings** and click **Open your trash**: "The trash is empty" appears. Open a Home, click **Settings**, then **Open this Home's trash**: the same.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

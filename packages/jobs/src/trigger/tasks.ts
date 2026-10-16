@@ -16,6 +16,7 @@ import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
 import { storageFilePurge, storageObjectDelete, storageUploadExpire } from "../jobs/storage.ts";
+import { trashEntryPurge } from "../jobs/trash.ts";
 import { jobRegistry } from "../registry.ts";
 import { createSupabaseJobStore, JobStoreError } from "../supabase-store.ts";
 import { parseWorkerEnv } from "./env.ts";
@@ -70,6 +71,7 @@ export const recoveryReadyTask = jobTask(recoveryReady);
 export const storageUploadExpireTask = jobTask(storageUploadExpire);
 export const storageFilePurgeTask = jobTask(storageFilePurge);
 export const storageObjectDeleteTask = jobTask(storageObjectDelete);
+export const trashEntryPurgeTask = jobTask(trashEntryPurge);
 
 export const outboxDispatch = schedules.task({
   id: "outbox-dispatch",

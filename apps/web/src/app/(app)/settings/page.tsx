@@ -58,6 +58,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     recovered,
     tRecovery,
     tStorage,
+    tTrash,
     avatars,
   ] = await Promise.all([
     getTranslations("Nav"),
@@ -74,6 +75,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getRecoveredHomes(),
     getTranslations("Recovery"),
     getTranslations("Storage"),
+    getTranslations("Trash"),
     getMyAvatars(),
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
@@ -152,6 +154,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             data-testid="storage-link"
           >
             {tStorage("settingsCardLink")}
+          </Link>
+        </Card>
+        <Card title={tTrash("settingsCardTitle")} description={tTrash("settingsCardHint")}>
+          <Link
+            href="/settings/trash"
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="trash-link"
+          >
+            {tTrash("settingsCardLink")}
           </Link>
         </Card>
         <Card title={t("appearance")}>

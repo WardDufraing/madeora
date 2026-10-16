@@ -38,10 +38,11 @@ export async function generateMetadata({ params }: HomeSettingsPageProps): Promi
 export default async function HomeSettingsPage({ params }: HomeSettingsPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tStorage] = await Promise.all([
+  const [context, t, tStorage, tTrash] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Homes"),
     getTranslations("Storage"),
+    getTranslations("Trash"),
   ]);
   if (!context) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
@@ -76,6 +77,18 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           </div>
         )}
       </Card>
+      {/* The Home's trash: every member may open it and sees what they may (S16). */}
+      {permissions["home.trash.view"] ? (
+        <Card title={tTrash("settingsCardTitle")} className="mt-6 max-w-2xl">
+          <Link
+            href={`/homes/${home.id}/trash`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="home-trash-link"
+          >
+            {tTrash("homeSettingsLink")}
+          </Link>
+        </Card>
+      ) : null}
       {/* Only decides whether to show the link; the storage page and the database check again. */}
       {permissions["home.storage.view"] ? (
         <Card title={tStorage("settingsCardTitle")} className="mt-6 max-w-2xl">

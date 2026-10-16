@@ -71,7 +71,11 @@ export interface JobDataPort {
   ): Promise<{ readonly objectKey: string; readonly done: boolean } | null>;
   /** False when it was already done. */
   completeStorageObjectDeletion(deletionId: string): Promise<boolean>;
+  /** trash-entry-purge (S16): purges a trash entry past its recovery window; its status afterwards. */
+  purgeExpiredTrashEntry(entryId: string): Promise<TrashEntryStatus>;
 }
+
+export type TrashEntryStatus = "trashed" | "restored" | "purged" | "missing";
 
 export type StoredFileStatus = "pending" | "ready" | "failed" | "deleted" | "purged" | "missing";
 
