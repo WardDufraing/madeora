@@ -367,6 +367,13 @@ export type Database = {
       complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
+      create_dashboard_template: {
+        Args: { p_kind: string; p_layout: Json; p_name: string };
+        Returns: {
+          outcome: string;
+          template_id: string;
+        }[];
+      };
       create_home: {
         Args: { p_name: string; p_request_id: string; p_timezone: string };
         Returns: string;
@@ -403,6 +410,7 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
       };
+      delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
       deliver_recovery_ready: {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
@@ -438,6 +446,16 @@ export type Database = {
           p_outcome: string;
         };
         Returns: boolean;
+      };
+      get_dashboard: {
+        Args: { p_home_id?: string };
+        Returns: {
+          can_edit: boolean;
+          can_undo: boolean;
+          layout: Json;
+          revision: number;
+          updated_at: string;
+        }[];
       };
       get_invitation_email: {
         Args: { p_invitation_id: string; p_send: number };
@@ -564,6 +582,18 @@ export type Database = {
         }[];
       };
       leave_home: { Args: { p_home_id: string }; Returns: string };
+      list_dashboard_templates: {
+        Args: { p_home_id?: string };
+        Returns: {
+          is_mine: boolean;
+          kind: string;
+          layout: Json;
+          name: string;
+          shared_home_ids: string[];
+          template_id: string;
+          updated_at: string;
+        }[];
+      };
       list_home_invitations: {
         Args: { p_home_id: string };
         Returns: {
@@ -696,6 +726,10 @@ export type Database = {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
       };
+      rename_dashboard_template: {
+        Args: { p_name: string; p_template_id: string };
+        Returns: string;
+      };
       renew_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: {
@@ -749,6 +783,18 @@ export type Database = {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: string;
       };
+      save_dashboard: {
+        Args: {
+          p_expected_revision: number;
+          p_home_id?: string;
+          p_layout: Json;
+          p_previous?: Json;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
@@ -772,6 +818,10 @@ export type Database = {
       set_storage_allowance: {
         Args: { p_bytes: number; p_home_id: string; p_user_id: string };
         Returns: boolean;
+      };
+      share_dashboard_template: {
+        Args: { p_home_id: string; p_template_id: string };
+        Returns: string;
       };
       staff_close_recovery_appeal: {
         Args: { p_appeal_id: string; p_notes: string };
@@ -850,6 +900,17 @@ export type Database = {
           open_entries: number;
           overdue_entries: number;
         }[];
+      };
+      undo_dashboard_change: {
+        Args: { p_expected_revision: number; p_home_id?: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      unshare_dashboard_template: {
+        Args: { p_home_id: string; p_template_id: string };
+        Returns: string;
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };
       withdraw_ownership_recovery: {

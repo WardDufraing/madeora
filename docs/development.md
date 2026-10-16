@@ -177,6 +177,10 @@ STORAGE_DRIVER=s3 STORAGE_S3_ENDPOINT=http://127.0.0.1:54390 STORAGE_S3_BUCKET=m
 
 and put the same values plus `SUPABASE_SERVICE_ROLE_KEY` (the local stack's secret key) in `apps/web/.env.local`. Objects vanish when the stand-in stops; the database rows stay, so restart with `pnpm db:reset` for a clean slate. The browser tests start the stand-in themselves (`tests/e2e/playwright.config.ts`).
 
+## Dashboards
+
+Dashboards (S17, ADR 0021) store one versioned layout per person and per Home. To add a widget type: add it to the registry in `apps/web/src/dashboard/widgets.ts` (surfaces, size bounds per breakpoint, a settings schema with defaults), its body and title in `apps/web/src/components/dashboard/widget-content.tsx`, its name and description in `use-widget-labels.ts`, any settings controls in `widget-settings.tsx`, and its texts in both dictionaries. The layout rules and keyboard moves are unit-tested in `src/dashboard/layout.test.ts`; the database rules in `tests/db/rls/dashboards.test.sql` and `dashboards-concurrency.test.ts`; the journeys in `tests/e2e/specs/dashboard.spec.ts`. Normal use is a plain CSS grid; only edit mode loads React Grid Layout, whose structural styles are in `apps/web/src/app/globals.css`.
+
 ## Dependency audit exceptions
 
 `pnpm audit:deps` runs `pnpm audit` and fails on any **high** or **critical** advisory. Moderate and low advisories are printed as warnings. When an advisory cannot be fixed yet (for example, no patched version exists) and does not affect Madeora, record a time-limited exception in `tools/repo-checks/audit-exceptions.json`:

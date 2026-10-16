@@ -70,9 +70,7 @@ test("a new adult lands on the personal dashboard with zero Homes, without being
   await expect(main.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   await expect(main.getByText("Welcome to Madeora")).toBeVisible();
   await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
-  await expect(
-    main.getByRole("region", { name: "Your widgets" }).getByText("No widgets yet"),
-  ).toBeVisible();
+  await expect(main.getByTestId("dashboard-grid")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   const homes = main.getByRole("region", { name: "Homes" });

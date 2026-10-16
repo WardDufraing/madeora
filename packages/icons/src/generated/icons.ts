@@ -8,6 +8,7 @@ export const ChevronDownIcon = createIcon("ChevronDown", [["path",{"d":"m6 9 6 6
 export const ChoresIcon = createIcon("Chores", [["path",{"d":"M4 11 12 4l8 7"}],["path",{"d":"M6 9.5V20h12V9.5"}],["path",{"d":"M10 20v-5h4v5"}]]);
 export const CloseIcon = createIcon("Close", [["path",{"d":"M6 6 18 18M18 6 6 18"}]]);
 export const DashboardIcon = createIcon("Dashboard", [["rect",{"x":"4","y":"4","width":"7","height":"7","rx":"1.5"}],["rect",{"x":"13","y":"4","width":"7","height":"7","rx":"1.5"}],["rect",{"x":"4","y":"13","width":"7","height":"7","rx":"1.5"}],["rect",{"x":"13","y":"13","width":"7","height":"7","rx":"1.5"}]]);
+export const DragHandleIcon = createIcon("DragHandle", [["circle",{"cx":"9","cy":"6","r":"1"}],["circle",{"cx":"15","cy":"6","r":"1"}],["circle",{"cx":"9","cy":"12","r":"1"}],["circle",{"cx":"15","cy":"12","r":"1"}],["circle",{"cx":"9","cy":"18","r":"1"}],["circle",{"cx":"15","cy":"18","r":"1"}]]);
 export const ErrorIcon = createIcon("Error", [["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M15 9 9 15M9 9l6 6"}]]);
 export const HabitsIcon = createIcon("Habits", [["path",{"d":"M6 20v-7M12 20V7M18 20v-10"}]]);
 export const HelpIcon = createIcon("Help", [["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"}],["path",{"d":"M12 17h.01"}]]);

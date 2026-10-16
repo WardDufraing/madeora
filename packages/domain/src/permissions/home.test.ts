@@ -37,7 +37,13 @@ const matrix: readonly {
   readonly expected: { readonly [A in HomeAction]: boolean };
 }[] = [
   ...(["owner", "administrator", "member"] as const).flatMap((role) =>
-    [[], ["manageHomeSettings"], ["manageInvitations"], ["removeMembers"]].map((granted) => {
+    [
+      [],
+      ["manageHomeSettings"],
+      ["manageInvitations"],
+      ["removeMembers"],
+      ["manageHomeDashboard"],
+    ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
       const has = (capability: DelegableCapability) =>
@@ -70,6 +76,9 @@ const matrix: readonly {
           "home.recovery.request": !owner,
           "home.recovery.cancel": owner,
           "home.recovery.object": true,
+          // Every member sees the Home dashboard; the Owner and granted Administrators arrange it.
+          "home.dashboard.view": true,
+          "home.dashboard.edit": owner || (admin && has("manageHomeDashboard")),
         },
       };
     }),
