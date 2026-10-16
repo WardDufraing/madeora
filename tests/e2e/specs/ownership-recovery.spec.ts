@@ -85,7 +85,13 @@ test("a member recovers ownership through staff review, an objection and the wai
   await expect(erinPage.getByTestId("recovery-member-notice")).toHaveText(
     "An ownership review is open for Thuis",
   );
-  await expect(erinPage.getByText(/Dave/)).toHaveCount(0);
+  // Dave is listed as a member in the Home members widget (S17), like on the directory page, but
+  // nothing outside it connects him to the review.
+  await expect(erinPage.getByTestId("recovery-member-notice")).not.toContainText("Dave");
+  await expect(
+    erinPage.getByText(/Dave/).and(erinPage.locator(":not([data-testid=dashboard] *)")),
+  ).toHaveCount(0);
+  await expect(erinPage.getByText(STATEMENT)).toHaveCount(0);
 
   // Sam reviews it from the staff pages, reached from Settings.
   const samPage = await signedIn(browser, sam);

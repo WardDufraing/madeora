@@ -48,7 +48,10 @@ type Summary =
 
 type Confirm = "selected" | "empty" | null;
 
-const itemTypeKey = { sample: "itemTypeSample" } as const;
+const itemTypeKey = {
+  sample: "itemTypeSample",
+  dashboard_template: "itemTypeDashboardTemplate",
+} as const;
 function conflictMessage(kind: string) {
   switch (kind) {
     case "slot_taken":

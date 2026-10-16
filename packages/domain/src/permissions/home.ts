@@ -29,6 +29,7 @@ export const delegableCapabilities = [
   "manageHomeSettings",
   "manageInvitations",
   "removeMembers",
+  "manageHomeDashboard",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -50,6 +51,8 @@ export const homeActions = [
   "home.recovery.request",
   "home.recovery.cancel",
   "home.recovery.object",
+  "home.dashboard.view",
+  "home.dashboard.edit",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -131,6 +134,11 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // Any adult member may object to an open recovery; the case pauses for staff (SQL:
   // public.object_to_ownership_recovery).
   "home.recovery.object": { roles: ["owner", "administrator", "member"] },
+  // The Home's shared dashboard (S17; spec "Confirmed dashboard ownership"): every current member
+  // sees it; the Owner, and Administrators granted manageHomeDashboard, arrange it and apply or share
+  // Home-dashboard templates (owner decision, 2026-10-16). SQL: private.can_edit_home_dashboard.
+  "home.dashboard.view": { roles: ["owner", "administrator", "member"] },
+  "home.dashboard.edit": { roles: ["owner"], delegatedThrough: "manageHomeDashboard" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -182,6 +190,8 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.recovery.request": can("home.recovery.request"),
     "home.recovery.cancel": can("home.recovery.cancel"),
     "home.recovery.object": can("home.recovery.object"),
+    "home.dashboard.view": can("home.dashboard.view"),
+    "home.dashboard.edit": can("home.dashboard.edit"),
   };
 }
 

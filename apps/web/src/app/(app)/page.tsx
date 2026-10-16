@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { requireIdentity } from "@/auth/identity";
 import { FormAlert } from "@/components/auth/form-alert";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { HomeSetupCard } from "@/components/dashboard/home-setup-card";
 import { RememberContext } from "@/components/homes/remember-context";
 import { RecoveredHomesNotice } from "@/components/recovery/recovered-homes-notice";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { getHomeContext, getRememberedContext, listMyHomes } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { getStoredPreferences } from "@/preferences/account";
-import { formatDate, formatWeekday, isoDate } from "@/preferences/regional";
-import { getEffectiveTimeZone, getRegionalFormats } from "@/preferences/server";
+import { getDateTimeFormats } from "@/invitations/server";
+import { getEffectiveTimeZone } from "@/preferences/server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Nav");
@@ -31,8 +31,8 @@ interface DashboardPageProps {
 /**
  * The personal dashboard: the starting point for every adult, with or without Homes (spec,
  * "Confirmed Home-independent adult account onboarding", "Confirmed editable starter personal
- * dashboard"). Widgets arrive with S17 and the modules; until then the widget area says so
- * honestly.
+ * dashboard"). Its widgets are the person's own layout (S17), or the starter layout until they
+ * customize it; Home setup stays outside the widgets until the person has a Home.
  *
  * Opening `/` returns to the Home this device used last, if the person still belongs to it (S09);
  * `?context=personal` (the switcher's Personal link) stays here and makes Personal the default
@@ -52,17 +52,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
   }
 
-  const [t, tNav, locale, stored, { timeZone, source }, { effective }] = await Promise.all([
+  const [t, tNav, stored, { source }, formats, myHomes] = await Promise.all([
     getTranslations("Dashboard"),
     getTranslations("Nav"),
-    getLocale(),
     getStoredPreferences(),
     getEffectiveTimeZone(),
-    getRegionalFormats(),
+    getDateTimeFormats(),
+    listMyHomes(),
   ]);
-  const myHomes = await listMyHomes();
   const now = new Date();
-  const hasHomes = myHomes.status === "ok" && myHomes.homes.length > 0;
+  const homes = myHomes.status === "ok" ? myHomes.homes : [];
+  const hasHomes = homes.length > 0;
 
   return (
     <>
@@ -78,36 +78,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </FormAlert>
       ) : null}
       <RecoveredHomesNotice now={now} />
-      <div className="mb-6 flex flex-col gap-1">
-        <p className="text-section-title font-semibold text-fg">
-          {stored.displayName
-            ? // The name is isolated (FSI … PDI, like <bdi>), so a name written right to left
-              // cannot reorder the words around it.
-              t("greetingNamed", { name: `\u2068${stored.displayName}\u2069` })
-            : t("greeting")}
-        </p>
-        <p className="text-body text-fg-muted">
-          <time dateTime={isoDate(now, timeZone)} data-time-zone={timeZone} data-testid="today">
-            {t("today", {
-              weekday: formatWeekday(now, timeZone, locale),
-              date: formatDate(now, timeZone, effective.dateFormat),
-            })}
-          </time>
-          {/* Until this device has reported its timezone, say which one the date is in. */}
-          {source === "fallback" ? ` ${t("todayFallbackZone", { zone: timeZone })}` : null}
-        </p>
-      </div>
-      <div
-        className={
-          hasHomes
-            ? "grid items-start gap-6"
-            : "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
-        }
-      >
-        <Card title={t("widgetsTitle")}>
-          <EmptyState title={t("widgetsEmptyTitle")} description={t("widgetsEmptyDescription")} />
-        </Card>
+      <div className="flex flex-col gap-6">
+        {/* Outside the widgets, so it is never part of a layout and goes away once there is a Home. */}
         {hasHomes ? null : <HomeSetupCard />}
+        <DashboardSection
+          scope={{
+            kind: "personal",
+            displayName: stored.displayName,
+            formats,
+            timeZoneIsFallback: source === "fallback",
+            homes,
+          }}
+          emptyState={<EmptyState title={t("emptyTitle")} description={t("emptyDescription")} />}
+        />
       </div>
     </>
   );

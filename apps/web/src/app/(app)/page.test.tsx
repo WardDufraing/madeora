@@ -42,6 +42,21 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/recovery/recovered-homes-notice", () => ({
   RecoveredHomesNotice: () => null,
 }));
+// The dashboard loads its own layout and widgets; covered by its own tests.
+vi.mock("@/components/dashboard/dashboard-section", () => ({
+  DashboardSection: ({ scope }: { scope: unknown }) => (
+    <div data-testid="dashboard-section" data-scope={JSON.stringify(scope)} />
+  ),
+}));
+vi.mock("@/invitations/server", () => ({
+  getDateTimeFormats: () =>
+    Promise.resolve({
+      timeZone: state.timeZone,
+      dateFormat: state.stored?.dateFormat ?? "dmy-slash",
+      timeFormat: "24h",
+      locale: state.locale,
+    }),
+}));
 vi.mock("@/homes/server", () => ({
   listMyHomes: () => Promise.resolve({ status: "ok", homes: state.homes }),
   getRememberedContext: () => Promise.resolve(state.remembered),
@@ -111,12 +126,15 @@ function DashboardPage(params: { context?: string; notice?: string } = {}) {
 }
 
 describe("DashboardPage", () => {
-  it("welcomes a new adult with zero Homes: honest empty widgets and optional Home actions", async () => {
+  function scope(): Record<string, unknown> {
+    return JSON.parse(
+      screen.getByTestId("dashboard-section").getAttribute("data-scope") ?? "{}",
+    ) as Record<string, unknown>;
+  }
+
+  it("welcomes a new adult with zero Homes: their dashboard and optional Home actions outside it", async () => {
     renderWithIntl(await DashboardPage());
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText("Welcome to Madeora")).toBeInTheDocument();
-    const widgets = screen.getByRole("region", { name: "Your widgets" });
-    expect(within(widgets).getByText("No widgets yet")).toBeInTheDocument();
     const homes = screen.getByRole("region", { name: "Homes" });
     expect(within(homes).getByRole("link", { name: "Create a Home" })).toHaveAttribute(
       "href",
@@ -126,46 +144,29 @@ describe("DashboardPage", () => {
       "href",
       "/homes/join",
     );
-    // Nothing blocks the page: no dialog, and the Home actions are outside the widget area.
+    // Nothing blocks the page, and the Home actions are never part of the widget layout.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(within(widgets).queryByRole("link")).not.toBeInTheDocument();
+    expect(homes).not.toContainElement(screen.getByTestId("dashboard-section"));
+    expect(scope()).toMatchObject({ kind: "personal", displayName: null, homes: [] });
   });
 
-  it("greets by display name, isolated so a right-to-left name cannot reorder the sentence", async () => {
-    state.stored = { ...noPreferences, displayName: "שרה" };
-    renderWithIntl(await DashboardPage());
-    expect(screen.getByText("Welcome, \u2068שרה\u2069")).toBeInTheDocument();
-  });
-
-  it("shows today's date in the person's timezone and date format", async () => {
-    state.stored = { ...noPreferences, dateFormat: "ymd-dash" };
+  it("passes the display name, formats and timezone source to the widgets", async () => {
+    state.stored = { ...noPreferences, displayName: "Sam", dateFormat: "ymd-dash" };
     state.timeZone = "Europe/Brussels";
-    renderWithIntl(await DashboardPage());
-    const today = screen.getByTestId("today");
-    expect(today).toHaveTextContent("Friday 2027-01-01");
-    expect(today).toHaveAttribute("dateTime", "2027-01-01");
-  });
-
-  it("uses the detected format when Automatic, and the interface language for the weekday", async () => {
-    state.locale = "nl";
-    renderWithIntl(await DashboardPage(), "nl");
-    expect(screen.getByTestId("today")).toHaveTextContent("donderdag 31/12/2026");
-    expect(screen.getByRole("link", { name: "Een Home aanmaken" })).toBeInTheDocument();
-  });
-
-  it("says which timezone the date is in while the device has not reported one", async () => {
     state.zoneSource = "fallback";
     renderWithIntl(await DashboardPage());
-    expect(
-      screen.getByText(/\(in UTC, until this device reports its timezone\)/),
-    ).toBeInTheDocument();
+    expect(scope()).toMatchObject({
+      displayName: "Sam",
+      timeZoneIsFallback: true,
+      formats: { timeZone: "Europe/Brussels", dateFormat: "ymd-dash" },
+    });
   });
 
-  it("hides the Create/Join card once the person has a Home (the switcher offers Create a Home)", async () => {
+  it("hides the Create/Join card once the person has a Home, and offers that Home to widgets", async () => {
     state.homes = [{ id: HOME_ID, name: "Thuis", timeZone: "UTC", role: "owner" }];
     renderWithIntl(await DashboardPage({ context: "personal" }));
     expect(screen.queryByRole("region", { name: "Homes" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Your widgets" })).toBeInTheDocument();
+    expect(scope()).toMatchObject({ homes: [{ id: HOME_ID, name: "Thuis" }] });
   });
 
   it("returns to the Home this device used last while the person still belongs to it", async () => {

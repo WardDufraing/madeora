@@ -1,0 +1,332 @@
+import "server-only";
+
+import type { HomePermissionProjection, HomeRole } from "@madeora/domain/permissions";
+import { getLocale, getTranslations } from "next-intl/server";
+import Link from "next/link";
+
+import { messageKeyFor } from "@/components/notifications/notification-list";
+import { MemberAvatar } from "@/components/members/member-avatar";
+import { EmptyState, ErrorState } from "@/components/ui/states";
+import type { DashboardLayout, DashboardWidget } from "@/dashboard/layout";
+import type { WidgetEntry } from "@/dashboard/view-types";
+import { widgetRegistry, type WidgetConfigs } from "@/dashboard/widgets";
+import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
+import { getHomeDirectory } from "@/members/directory";
+import { listNotifications } from "@/notifications/server";
+import { formatDate, formatWeekday, isoDate } from "@/preferences/regional";
+import type { MyHome } from "@/homes/types";
+
+/**
+ * The widgets' content (S17), rendered on the server with the viewer's own session for each widget
+ * on its own: one widget whose data cannot be read shows an error, and the rest still render. Every
+ * Home-sourced widget re-checks the viewer's current membership of its Home (the database does it
+ * again for its data), and a widget whose Home the viewer left shows a neutral unavailable state
+ * without the Home's name or any of its content.
+ */
+
+export interface PersonalScope {
+  readonly kind: "personal";
+  readonly displayName: string | null;
+  readonly formats: DateTimeFormats;
+  /** The account timezone is a fallback until this device reports its own. */
+  readonly timeZoneIsFallback: boolean;
+  /** The viewer's current Homes, for Home-sourced widgets and their labels. */
+  readonly homes: readonly MyHome[];
+}
+
+export interface HomeScope {
+  readonly kind: "home";
+  readonly home: { readonly id: string; readonly name: string; readonly timeZone: string };
+  readonly permissions: HomePermissionProjection;
+  readonly formats: DateTimeFormats;
+}
+
+export type WidgetScope = PersonalScope | HomeScope;
+
+const linkClass = "text-body font-medium text-accent-fg underline";
+
+function ActionList({ items }: { readonly items: readonly { href: string; label: string }[] }) {
+  return (
+    <ul className="flex flex-wrap gap-x-6 gap-y-2">
+      {items.map((item) => (
+        <li key={item.href}>
+          <Link href={item.href} className={linkClass}>
+            {item.label}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+async function WelcomeBody({
+  scope,
+  config,
+}: {
+  readonly scope: WidgetScope;
+  readonly config: WidgetConfigs["welcome"];
+}) {
+  const [t, locale] = await Promise.all([getTranslations("Dashboard"), getLocale()]);
+  const now = new Date();
+  const timeZone = scope.kind === "home" ? scope.home.timeZone : scope.formats.timeZone;
+  const heading =
+    scope.kind === "home"
+      ? t("welcomeHome", { home: isolate(scope.home.name) })
+      : scope.displayName
+        ? // The name is isolated (FSI … PDI, like <bdi>), so a name written right to left
+          // cannot reorder the words around it.
+          t("greetingNamed", { name: isolate(scope.displayName) })
+        : t("greeting");
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-section-title font-semibold text-fg">{heading}</p>
+      {config.showDate ? (
+        <p className="text-body text-fg-muted">
+          <time dateTime={isoDate(now, timeZone)} data-time-zone={timeZone} data-testid="today">
+            {t("today", {
+              weekday: formatWeekday(now, timeZone, locale),
+              date: formatDate(now, timeZone, scope.formats.dateFormat),
+            })}
+          </time>
+          {/* Until this device has reported its timezone, say which one the date is in. */}
+          {scope.kind === "personal" && scope.timeZoneIsFallback
+            ? ` ${t("todayFallbackZone", { zone: timeZone })}`
+            : scope.kind === "home"
+              ? ` ${t("todayHomeZone", { zone: timeZone })}`
+              : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+async function QuickActionsBody({ scope }: { readonly scope: WidgetScope }) {
+  const t = await getTranslations("Dashboard");
+  if (scope.kind === "home") {
+    const base = `/homes/${scope.home.id}`;
+    return (
+      <ActionList
+        items={[
+          { href: `${base}/members`, label: t("actionMembers") },
+          ...(scope.permissions["home.invitations.manage"]
+            ? [{ href: `${base}/invitations`, label: t("actionInvite") }]
+            : []),
+          { href: `${base}/settings`, label: t("actionHomeSettings") },
+          { href: `${base}/trash`, label: t("actionHomeTrash") },
+        ]}
+      />
+    );
+  }
+  return (
+    <ActionList
+      items={[
+        { href: "/homes/new", label: t("createHome") },
+        { href: "/homes/join", label: t("joinHome") },
+        { href: "/notifications", label: t("actionNotifications") },
+        { href: "/settings", label: t("actionSettings") },
+        { href: "/settings/trash", label: t("actionTrash") },
+      ]}
+    />
+  );
+}
+
+async function NotificationsBody({
+  scope,
+  config,
+}: {
+  readonly scope: PersonalScope;
+  readonly config: WidgetConfigs["notifications"];
+}) {
+  const [t, tNotifications, list] = await Promise.all([
+    getTranslations("Dashboard"),
+    getTranslations("Notifications"),
+    listNotifications(),
+  ]);
+  if (list.status === "unavailable") {
+    return <ErrorState title={t("widgetFailedTitle")} description={t("widgetFailed")} />;
+  }
+  const items = list.value.slice(0, config.count);
+  return (
+    <div className="flex flex-col gap-3">
+      {items.length === 0 ? (
+        <EmptyState title={t("notificationsEmptyTitle")} description={t("notificationsEmpty")} />
+      ) : (
+        <ol className="flex flex-col gap-2">
+          {items.map((item) => (
+            <li key={item.id} className="flex flex-col gap-0.5">
+              <p className="text-body text-fg">
+                {item.readAt === null ? (
+                  <span className="me-2 font-semibold text-accent-fg">
+                    {tNotifications("unread")}.
+                  </span>
+                ) : null}
+                {tNotifications(messageKeyFor(item), {
+                  home: item.homeName ? isolate(item.homeName) : tNotifications("homeFallback"),
+                  date: item.objectionEndsAt
+                    ? formatDateTime(item.objectionEndsAt, scope.formats)
+                    : "",
+                })}
+              </p>
+              <p className="text-helper text-fg-muted">
+                <time dateTime={item.createdAt}>
+                  {formatDateTime(item.createdAt, scope.formats)}
+                </time>
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p>
+        <Link href="/notifications" className={linkClass}>
+          {t("notificationsAll")}
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+async function HomeMembersBody({
+  homeId,
+  config,
+}: {
+  readonly homeId: string;
+  readonly config: WidgetConfigs["home-members"];
+}) {
+  const [t, tHomes, locale, directory] = await Promise.all([
+    getTranslations("Dashboard"),
+    getTranslations("Homes"),
+    getLocale(),
+    getHomeDirectory(homeId),
+  ]);
+  if (directory.status !== "ok") {
+    // Not a member any more (the database refused) or unreadable: nothing of the Home is shown.
+    return <ErrorState title={t("widgetFailedTitle")} description={t("widgetFailed")} />;
+  }
+  const roleKey = {
+    owner: "roleOwner",
+    administrator: "roleAdministrator",
+    member: "roleMember",
+  } as const satisfies Record<HomeRole, string>;
+  return (
+    <div className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-2">
+        {directory.members.map((member) => (
+          <li key={member.membershipId} className="flex items-center gap-3">
+            <MemberAvatar
+              name={member.name}
+              accentColor={member.accentColor}
+              locale={locale}
+              avatarFileId={member.avatarFileId ?? null}
+            />
+            <span className="text-body text-fg">
+              {member.name ? isolate(member.name) : t("memberNoName")}
+              {member.isSelf ? ` ${t("memberYou")}` : ""}
+            </span>
+            {config.showRoles ? (
+              <span className="ms-auto text-helper text-fg-muted">
+                {tHomes(roleKey[member.role])}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <p>
+        <Link href={`/homes/${homeId}/members`} className={linkClass}>
+          {t("membersAll")}
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+// readLayout and checkLayout already parsed every widget's settings with its type's schema; parsing
+// again here gives the typed settings, and falls back to the defaults rather than failing.
+function welcomeConfig(widget: DashboardWidget): WidgetConfigs["welcome"] {
+  const { config } = widgetRegistry.welcome;
+  const parsed = config.safeParse(widget.config);
+  return parsed.success ? parsed.data : config.parse({});
+}
+function notificationsConfig(widget: DashboardWidget): WidgetConfigs["notifications"] {
+  const { config } = widgetRegistry.notifications;
+  const parsed = config.safeParse(widget.config);
+  return parsed.success ? parsed.data : config.parse({});
+}
+function membersConfig(widget: DashboardWidget): WidgetConfigs["home-members"] {
+  const { config } = widgetRegistry["home-members"];
+  const parsed = config.safeParse(widget.config);
+  return parsed.success ? parsed.data : config.parse({});
+}
+
+async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<WidgetEntry> {
+  const t = await getTranslations("Dashboard");
+  const titles = {
+    welcome: t("widgetWelcome"),
+    "quick-actions": t("widgetQuickActions"),
+    notifications: t("widgetNotifications"),
+    "home-members": t("widgetHomeMembers"),
+  } as const;
+  const unavailable: WidgetEntry = {
+    id: widget.id,
+    title: t("unavailableTitle"),
+    sourceName: null,
+    body: <EmptyState title={t("unavailableTitle")} description={t("unavailableDescription")} />,
+    unavailable: true,
+  };
+
+  switch (widget.type) {
+    case "welcome":
+      return {
+        id: widget.id,
+        title: titles.welcome,
+        sourceName: null,
+        body: <WelcomeBody scope={scope} config={welcomeConfig(widget)} />,
+        unavailable: false,
+      };
+    case "quick-actions":
+      return {
+        id: widget.id,
+        title: titles["quick-actions"],
+        sourceName: null,
+        body: <QuickActionsBody scope={scope} />,
+        unavailable: false,
+      };
+    case "notifications":
+      if (scope.kind !== "personal") return unavailable;
+      return {
+        id: widget.id,
+        title: titles.notifications,
+        sourceName: null,
+        body: <NotificationsBody scope={scope} config={notificationsConfig(widget)} />,
+        unavailable: false,
+      };
+    case "home-members": {
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles["home-members"],
+          sourceName: null,
+          body: <HomeMembersBody homeId={scope.home.id} config={membersConfig(widget)} />,
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard: only for a Home the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles["home-members"], home: isolate(home.name) }),
+        sourceName: home.name,
+        body: <HomeMembersBody homeId={home.id} config={membersConfig(widget)} />,
+        unavailable: false,
+      };
+    }
+  }
+}
+
+/** Every widget's title and content, in layout order. */
+export async function renderWidgets(
+  layout: DashboardLayout,
+  scope: WidgetScope,
+): Promise<WidgetEntry[]> {
+  return Promise.all(layout.widgets.map((widget) => entryFor(widget, scope)));
+}

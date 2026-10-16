@@ -60,6 +60,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     tStorage,
     tTrash,
     avatars,
+    tTemplates,
   ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
@@ -77,6 +78,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getTranslations("Storage"),
     getTranslations("Trash"),
     getMyAvatars(),
+    getTranslations("DashboardTemplates"),
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
@@ -163,6 +165,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             data-testid="trash-link"
           >
             {tTrash("settingsCardLink")}
+          </Link>
+        </Card>
+        <Card title={tTemplates("settingsCardTitle")} description={tTemplates("settingsCardHint")}>
+          <Link
+            href="/settings/dashboard-templates"
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="dashboard-templates-link"
+          >
+            {tTemplates("settingsCardLink")}
           </Link>
         </Card>
         <Card title={t("appearance")}>

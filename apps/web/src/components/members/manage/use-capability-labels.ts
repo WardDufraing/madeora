@@ -15,11 +15,13 @@ export function useCapabilityLabels(): {
     manageHomeSettings: t("capManageHomeSettings"),
     manageInvitations: t("capManageInvitations"),
     removeMembers: t("capRemoveMembers"),
+    manageHomeDashboard: t("capManageHomeDashboard"),
   };
   const descriptions: { readonly [C in DelegableCapability]: string } = {
     manageHomeSettings: t("capManageHomeSettingsDescription"),
     manageInvitations: t("capManageInvitationsDescription"),
     removeMembers: t("capRemoveMembersDescription"),
+    manageHomeDashboard: t("capManageHomeDashboardDescription"),
   };
   return { name: (c) => names[c], description: (c) => descriptions[c] };
 }

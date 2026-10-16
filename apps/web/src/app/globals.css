@@ -42,3 +42,52 @@
 @utility animate-enter {
   animation: md-enter var(--md-duration-base) var(--md-ease-enter);
 }
+
+/* Dashboard edit mode (S17): the layout mechanics React Grid Layout needs, in Madeora's own styles
+   (architecture.md §15: the library supplies mechanics, never the look). Only edit mode uses it;
+   normal use is a plain CSS grid. Movement is instant when reduced motion is asked for, because
+   the duration tokens are 0ms then. */
+.react-grid-layout {
+  position: relative;
+  transition: height var(--md-duration-base) var(--md-ease-standard);
+}
+
+.react-grid-item {
+  transition-property: left, top, width, height;
+  transition-duration: var(--md-duration-base);
+  transition-timing-function: var(--md-ease-standard);
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+
+.react-grid-item.resizing,
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+}
+
+.react-grid-item.react-grid-placeholder {
+  border: 2px dashed var(--color-accent-edge);
+  border-radius: var(--md-radius-card);
+  background-color: var(--color-accent-subtle);
+  z-index: 2;
+  user-select: none;
+}
+
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  inset-block-end: 0.25rem;
+  inset-inline-end: 0.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: se-resize;
+  border-inline-end: 2px solid var(--color-fg-muted);
+  border-block-end: 2px solid var(--color-fg-muted);
+  border-end-end-radius: 0.25rem;
+}
+
+.react-resizable-hide > .react-resizable-handle {
+  display: none;
+}

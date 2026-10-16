@@ -6,9 +6,9 @@ import { z } from "zod";
  */
 
 /** Each module step adds its own value here and in the database check constraints. */
-export const trashModules = ["sample"] as const;
+export const trashModules = ["sample", "dashboard"] as const;
 export type TrashModule = (typeof trashModules)[number];
-export const trashItemTypes = ["sample"] as const;
+export const trashItemTypes = ["sample", "dashboard_template"] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 
 export function isTrashModule(value: unknown): value is TrashModule {

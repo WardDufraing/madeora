@@ -6,14 +6,14 @@ import { requireIdentity } from "@/auth/identity";
 import { isolatedName, loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
 import { RoleLabel } from "@/components/homes/role-label";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { OwnershipTransferNotice } from "@/components/members/manage/ownership-transfer-notice";
 import { RecoveryNotice } from "@/components/recovery/recovery-notice";
 import { PageHeader } from "@/components/shell/page-header";
-import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
-import { countPendingJoinRequests } from "@/invitations/server";
+import { countPendingJoinRequests, getDateTimeFormats } from "@/invitations/server";
 import { transferAnswers } from "@/members/manage-schema";
 
 // Typed here rather than with Next's generated PageProps, which only exist after `next typegen`.
@@ -37,8 +37,9 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
 }
 
 /**
- * A Home's dashboard (S09): the Home context made explicit, with the person's role there. Widgets
- * arrive with S17 and the modules. Nothing personal is shown here. Invitation managers get an
+ * A Home's dashboard (S09): the Home context made explicit, with the person's role there, and the
+ * Home's shared widget layout (S17), which the Owner and Administrators granted "Manage the Home
+ * dashboard" may customize. Nothing personal is shown here. Invitation managers get an
  * "Invite people" link with the number of join requests waiting (S10). Every member gets the
  * member directory and their own "How you appear here" page (S11). A pending ownership transfer
  * shows to the Owner who asked and the member asked, with its answers (S12). An ownership recovery
@@ -59,10 +60,12 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
     (answer) => answer === transfer && (answer === "declined") !== (membership.role === "owner"),
   );
   const canInvite = permissions["home.invitations.manage"];
-  const [pendingRequests, tInvitations, tMembers] = await Promise.all([
+  const [pendingRequests, tInvitations, tMembers, tDashboard, formats] = await Promise.all([
     canInvite ? countPendingJoinRequests(home.id) : Promise.resolve(0),
     getTranslations("Invitations"),
     getTranslations("Members"),
+    getTranslations("Dashboard"),
+    getDateTimeFormats(),
   ]);
 
   return (
@@ -110,9 +113,20 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
           </Link>
         ) : null}
       </div>
-      <Card title={t("widgetsTitle")}>
-        <EmptyState title={t("widgetsEmptyTitle")} description={t("widgetsEmptyDescription")} />
-      </Card>
+      <DashboardSection
+        scope={{
+          kind: "home",
+          home: { id: home.id, name: home.name, timeZone: home.timeZone },
+          permissions,
+          formats,
+        }}
+        emptyState={
+          <EmptyState
+            title={tDashboard("emptyTitle")}
+            description={tDashboard("homeEmptyDescription")}
+          />
+        }
+      />
     </>
   );
 }
