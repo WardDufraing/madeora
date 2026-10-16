@@ -11,6 +11,7 @@ import { pageTitle } from "@/i18n/page-title";
 import { getDateTimeFormats } from "@/invitations/server";
 import { hasTrashFilters, parseTrashFilters, trashQuery } from "@/trash/filters";
 import { listTrash } from "@/trash/data";
+import { listTaskLists } from "@/tasks/data";
 
 interface PersonalTrashPageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -35,7 +36,10 @@ export default async function PersonalTrashPage({ searchParams }: PersonalTrashP
   ]);
   const loadedAt = new Date().toISOString();
   const filters = parseTrashFilters(params);
-  const result = await listTrash(trashQuery(filters, formats.timeZone, null));
+  const [result, lists] = await Promise.all([
+    listTrash(trashQuery(filters, formats.timeZone, null)),
+    listTaskLists(null, false),
+  ]);
 
   return (
     <>
@@ -55,6 +59,7 @@ export default async function PersonalTrashPage({ searchParams }: PersonalTrashP
           formats={formats}
           filtered={hasTrashFilters(filters)}
           loadedAt={loadedAt}
+          taskLists={lists.status === "ok" ? lists.value : []}
         />
       ) : (
         <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />

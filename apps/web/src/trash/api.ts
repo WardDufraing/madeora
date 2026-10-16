@@ -1,4 +1,4 @@
-import type { TrashItemType, TrashModule, TrashResolution } from "./schema";
+import type { TrashItemType, TrashModule, TrashResolution, TrashResolutionChoice } from "./schema";
 
 /**
  * The HTTP contract of trash and recovery (S16):
@@ -152,7 +152,7 @@ export function readPurgeResults(payload: unknown): PurgeResult[] {
 
 export async function restoreEntries(
   entryIds: readonly string[],
-  resolutions: Readonly<Record<string, TrashResolution>> = {},
+  resolutions: Readonly<Record<string, TrashResolutionChoice>> = {},
 ): Promise<RestoreResult[]> {
   return readRestoreResults(await post(TRASH_RESTORE_ENDPOINT, { entryIds, resolutions }));
 }

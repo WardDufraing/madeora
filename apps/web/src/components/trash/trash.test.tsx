@@ -62,6 +62,95 @@ afterEach(() => {
   router.refresh.mockClear();
 });
 
+describe("TrashView with tasks (S18)", () => {
+  it("restores a task whose list is gone into the list the person chooses", async () => {
+    const user = userEvent.setup();
+    const LIST = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0f10";
+    const OTHER = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0f11";
+    const { container } = renderWithIntl(
+      <TrashView
+        entries={[entry(A, "Paint the hall", { module: "tasks", itemType: "task" })]}
+        homeId={HOME}
+        homeName="Thuis"
+        formats={formats}
+        filtered={false}
+        loadedAt="2026-10-15T12:00:00.000Z"
+        taskLists={[
+          { id: LIST, name: "Errands" },
+          { id: OTHER, name: "Garden" },
+        ]}
+      />,
+    );
+    expect(await screen.findByTestId("trash-entry")).toHaveTextContent("Task");
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        results: [
+          {
+            entryId: A,
+            outcome: "needs_resolution",
+            conflict: "list_unavailable",
+            options: ["move_to_list"],
+            attachmentsLost: 0,
+          },
+        ],
+      }),
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Paint the hall" }));
+    await user.click(screen.getByTestId("trash-restore"));
+    const conflict = await screen.findByTestId("trash-conflict");
+    expect(conflict).toHaveTextContent("The list this task was in has been deleted or archived.");
+    expect(await axeViolations(container)).toEqual([]);
+    await user.selectOptions(within(conflict).getByLabelText("Restore into list"), OTHER);
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        results: [
+          { entryId: A, outcome: "restored", conflict: null, options: [], attachmentsLost: 0 },
+        ],
+      }),
+    );
+    await user.click(within(conflict).getByTestId("trash-move-to-list"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("trash-conflict")).not.toBeInTheDocument();
+    });
+    expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toEqual({
+      entryIds: [A],
+      resolutions: { [A]: `move_to_list:${OTHER}` },
+    });
+  });
+
+  it("explains when no list is left to restore into", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <TrashView
+        entries={[entry(A, "Paint the hall", { module: "tasks", itemType: "task" })]}
+        homeId={null}
+        homeName={null}
+        formats={formats}
+        filtered={false}
+        loadedAt="2026-10-15T12:00:00.000Z"
+      />,
+    );
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        results: [
+          {
+            entryId: A,
+            outcome: "needs_resolution",
+            conflict: "list_unavailable",
+            options: ["move_to_list"],
+            attachmentsLost: 0,
+          },
+        ],
+      }),
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Paint the hall" }));
+    await user.click(screen.getByTestId("trash-restore"));
+    expect(
+      await screen.findByText(/There is no active list to restore it into/),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("TrashView", () => {
   it("lists each item with its deletion day and recovery deadline, and has no accessibility violations", async () => {
     const { container } = view([entry(A, "Old note", { fileCount: 2 }), entry(B, "Draft")]);

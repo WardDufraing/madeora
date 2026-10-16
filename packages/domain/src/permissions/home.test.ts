@@ -43,6 +43,7 @@ const matrix: readonly {
       ["manageInvitations"],
       ["removeMembers"],
       ["manageHomeDashboard"],
+      ["manageHomeTasks"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -79,6 +80,11 @@ const matrix: readonly {
           // Every member sees the Home dashboard; the Owner and granted Administrators arrange it.
           "home.dashboard.view": true,
           "home.dashboard.edit": owner || (admin && has("manageHomeDashboard")),
+          // Every member sees, creates and comments on Home tasks; task managers manage them.
+          "home.tasks.view": true,
+          "home.tasks.create": true,
+          "home.tasks.comment": true,
+          "home.tasks.manage": owner || (admin && has("manageHomeTasks")),
         },
       };
     }),

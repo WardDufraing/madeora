@@ -63,4 +63,15 @@ describe("navigation items", () => {
     expect(isActive(`/homes/${HOME}`, `/homes/${HOME}`)).toBe(true);
     expect(isActive(`/homes/${HOME}`, `/homes/${HOME}/settings`)).toBe(false);
   });
+
+  it("points Tasks at the open Home's tasks (S18), active on its pages too", () => {
+    const tasks = primaryNav.find((item) => item.id === "tasks");
+    if (!tasks) throw new Error("tasks item missing");
+    expect(contextHref(tasks, HOME)).toBe(`/homes/${HOME}/tasks`);
+    expect(contextHref(tasks, null)).toBe("/tasks");
+    expect(isActive(`/homes/${HOME}/tasks`, `/homes/${HOME}/tasks/manage`)).toBe(true);
+    expect(isActive(`/homes/${HOME}/tasks`, `/homes/${HOME}/tasks-x`)).toBe(false);
+    expect(isActive(`/homes/${HOME}/tasks`, `/homes/${HOME}`)).toBe(false);
+    expect(isActive(`/homes/${HOME}`, `/homes/${HOME}/tasks`)).toBe(false);
+  });
 });

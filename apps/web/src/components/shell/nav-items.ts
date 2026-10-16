@@ -64,7 +64,6 @@ export const secondaryNav: readonly NavItem[] = [
  */
 export const unbuiltSections: ReadonlySet<NavId> = new Set([
   "calendar",
-  "tasks",
   "chores",
   "meals",
   "shopping",
@@ -90,10 +89,11 @@ export function homeIdFromPath(pathname: string): string | null {
 
 /**
  * Where an item leads in the current context: Dashboard opens the Home's dashboard while a Home is
- * open (S09), the personal dashboard otherwise. Other sections are not Home-aware yet; each
- * module's step decides when it adds its pages.
+ * open (S09), the personal dashboard otherwise; Tasks opens the Home's tasks (S18). Other sections
+ * are not Home-aware yet; each module's step decides when it adds its pages.
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
+  if (item.id === "tasks") return homeId !== null ? `/homes/${homeId}/tasks` : item.href;
   if (item.id !== "dashboard") return item.href;
   // In Personal, Dashboard says so, so a Home remembered from earlier cannot pull the person back.
   return homeId !== null ? `/homes/${homeId}` : "/?context=personal";
@@ -104,6 +104,13 @@ export function isActive(target: string, pathname: string): boolean {
   const href = target.split("?")[0] ?? target;
   if (href === "/") return pathname === "/";
   // A Home's dashboard is current only on itself; its settings page belongs to no nav item yet.
-  if (homeIdFromPath(href) !== null) return pathname.toLowerCase() === href.toLowerCase();
+  // A Home's section (its tasks) is current on itself and its pages.
+  const homeId = homeIdFromPath(href);
+  if (homeId !== null) {
+    const path = pathname.toLowerCase();
+    const target = href.toLowerCase();
+    if (target === `/homes/${homeId}`) return path === target;
+    return path === target || path.startsWith(`${target}/`);
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }

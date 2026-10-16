@@ -304,6 +304,20 @@ export type Database = {
         Args: { p_home_id: string; p_recovery_id: string };
         Returns: string;
       };
+      add_subtask: {
+        Args: { p_id: string; p_task_id: string; p_title: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      add_task_comment: {
+        Args: { p_body: string; p_id: string; p_task_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
@@ -397,6 +411,38 @@ export type Database = {
           token: string;
         }[];
       };
+      create_task: {
+        Args: {
+          p_assignee_ids?: string[];
+          p_description?: string;
+          p_due_date?: string;
+          p_home_id?: string;
+          p_id: string;
+          p_label_ids?: string[];
+          p_list_id: string;
+          p_priority?: string;
+          p_start_date?: string;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_task_label: {
+        Args: { p_color?: string; p_home_id?: string; p_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_task_list: {
+        Args: { p_home_id?: string; p_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       create_upload_intent: {
         Args: { p_content_type: string; p_purpose: string; p_request_id: string; p_size: number };
         Returns: {
@@ -411,6 +457,30 @@ export type Database = {
         Returns: string;
       };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
+      delete_subtask: { Args: { p_id: string }; Returns: string };
+      delete_task: {
+        Args: { p_task_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
+      delete_task_comment: { Args: { p_id: string }; Returns: string };
+      delete_task_label: {
+        Args: { p_expected_revision: number; p_label_id: string };
+        Returns: {
+          detached: number;
+          outcome: string;
+        }[];
+      };
+      delete_task_list: {
+        Args: { p_expected_revision: number; p_list_id: string };
+        Returns: {
+          active_tasks: number;
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       deliver_recovery_ready: {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
@@ -511,6 +581,15 @@ export type Database = {
         Returns: {
           done: boolean;
           object_key: string;
+        }[];
+      };
+      get_task: { Args: { p_task_id: string; p_today?: string }; Returns: Json };
+      get_task_context: {
+        Args: { p_home_id?: string; p_today?: string };
+        Returns: {
+          can_create: boolean;
+          can_manage: boolean;
+          today: string;
         }[];
       };
       home_capabilities: {
@@ -641,6 +720,80 @@ export type Database = {
           state: string;
         }[];
       };
+      list_task_comments: {
+        Args: { p_limit?: number; p_offset?: number; p_task_id: string };
+        Returns: {
+          author_me: boolean;
+          author_member: string;
+          body: string;
+          created_at: string;
+          edited_at: string;
+          id: string;
+          revision: number;
+          total_count: number;
+        }[];
+      };
+      list_task_labels: {
+        Args: { p_home_id?: string };
+        Returns: {
+          color: string;
+          id: string;
+          name: string;
+          revision: number;
+          task_count: number;
+        }[];
+      };
+      list_task_lists: {
+        Args: { p_home_id?: string; p_include_archived?: boolean };
+        Returns: {
+          active_tasks: number;
+          archived: boolean;
+          id: string;
+          name: string;
+          open_tasks: number;
+          position: number;
+          revision: number;
+        }[];
+      };
+      list_tasks: {
+        Args: {
+          p_assignee?: string;
+          p_assignee_member?: string;
+          p_hide_future?: boolean;
+          p_home_id?: string;
+          p_label_ids?: string[];
+          p_limit?: number;
+          p_list_id?: string;
+          p_offset?: number;
+          p_priorities?: string[];
+          p_sort?: string;
+          p_status?: string;
+          p_today?: string;
+          p_when?: string;
+        };
+        Returns: {
+          assigned_to_me: boolean;
+          assignee_member_ids: string[];
+          can_complete: boolean;
+          comment_count: number;
+          completed_at: string;
+          due_date: string;
+          id: string;
+          label_ids: string[];
+          list_id: string;
+          list_name: string;
+          needs_reassignment: boolean;
+          overdue: boolean;
+          priority: string;
+          revision: number;
+          start_date: string;
+          subtasks_done: number;
+          subtasks_total: number;
+          title: string;
+          total_count: number;
+          upcoming: boolean;
+        }[];
+      };
       list_trash: {
         Args: {
           p_deleted_from?: string;
@@ -661,6 +814,13 @@ export type Database = {
         }[];
       };
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
+      move_task: {
+        Args: { p_expected_revision: number; p_list_id: string; p_task_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       my_notification_channels: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -730,6 +890,13 @@ export type Database = {
         Args: { p_name: string; p_template_id: string };
         Returns: string;
       };
+      rename_subtask: {
+        Args: { p_expected_revision: number; p_id: string; p_title: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       renew_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: {
@@ -737,6 +904,8 @@ export type Database = {
           outcome: string;
         }[];
       };
+      reorder_subtasks: { Args: { p_subtask_ids: string[]; p_task_id: string }; Returns: string };
+      reorder_task_lists: { Args: { p_home_id?: string; p_list_ids: string[] }; Returns: string };
       request_ownership_recovery: {
         Args: { p_home_id: string; p_request_id: string; p_statement: string };
         Returns: {
@@ -818,6 +987,29 @@ export type Database = {
       set_storage_allowance: {
         Args: { p_bytes: number; p_home_id: string; p_user_id: string };
         Returns: boolean;
+      };
+      set_subtask_completion: {
+        Args: { p_completed: boolean; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_task_assignees: {
+        Args: { p_expected_revision: number; p_member_ids: string[]; p_task_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_task_completion: {
+        Args: { p_completed: boolean; p_task_id: string };
+        Returns: {
+          completed_at: string;
+          completed_by_me: boolean;
+          completed_by_member: string;
+          outcome: string;
+        }[];
       };
       share_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
@@ -911,6 +1103,49 @@ export type Database = {
       unshare_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
+      };
+      update_task: {
+        Args: {
+          p_description?: string;
+          p_due_date?: string;
+          p_expected_revision: number;
+          p_label_ids: string[];
+          p_priority?: string;
+          p_start_date?: string;
+          p_task_id: string;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_task_comment: {
+        Args: { p_body: string; p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_task_label: {
+        Args: { p_color?: string; p_expected_revision: number; p_label_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_task_list: {
+        Args: {
+          p_archived: boolean;
+          p_expected_revision: number;
+          p_list_id: string;
+          p_name: string;
+        };
+        Returns: {
+          open_tasks: number;
+          outcome: string;
+          revision: number;
+        }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };
       withdraw_ownership_recovery: {
