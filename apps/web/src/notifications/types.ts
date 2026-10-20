@@ -13,6 +13,10 @@ export interface NotificationView {
   /** Dates and codes only (never free text); the words come from the reader's language. */
   readonly objectionEndsAt: string | null;
   readonly decision: "approved" | "declined" | null;
+  /** A reminder's task (S19b), its due day, and its title when the reader can still see it. */
+  readonly taskId: string | null;
+  readonly dueDate: string | null;
+  readonly taskTitle: string | null;
   readonly duringQuietHours: boolean;
   readonly createdAt: string;
   readonly readAt: string | null;

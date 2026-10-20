@@ -3,6 +3,7 @@ import { invitationEmail } from "./jobs/invitation-email.ts";
 import { notificationEmail } from "./jobs/notification-email.ts";
 import { recoveryReady } from "./jobs/recovery-ready.ts";
 import { samplePing } from "./jobs/sample-ping.ts";
+import { taskReminder } from "./jobs/task-reminder.ts";
 import { trashEntryPurge } from "./jobs/trash.ts";
 import { storageFilePurge, storageObjectDelete, storageUploadExpire } from "./jobs/storage.ts";
 
@@ -19,6 +20,7 @@ export const jobs: readonly AnyJobDefinition[] = [
   storageFilePurge,
   storageObjectDelete,
   trashEntryPurge,
+  taskReminder,
 ];
 
 export const jobRegistry = createJobRegistry(jobs);

@@ -5,7 +5,7 @@ How Madeora runs work outside a request (S13, [ADR 0017](adr/0017-background-job
 ## How it fits together
 
 1. A business function changes data **and** calls `private.enqueue_job(...)` in the same transaction. The job exists exactly when the change committed.
-2. Every 5 minutes the Trigger.dev task `outbox-dispatch` claims due outbox rows and triggers one run per row (`packages/jobs/src/dispatcher.ts`).
+2. Every 5 minutes the Trigger.dev task `outbox-dispatch` claims due outbox rows and triggers one run per row (`packages/jobs/src/dispatcher.ts`). A row can wait for a later moment with `available_at` (task reminders, S19b), so it runs up to 5 minutes after that moment.
 3. The run validates the envelope and payload, claims the execution in Postgres, runs the handler and records the outcome (`packages/jobs/src/executor.ts`).
 
 Use a job only for work that is durable, scheduled, retryable, long-running or failure-sensitive (CLAUDE.md, strategy B). Fast work whose result the person waits for stays in the API route.

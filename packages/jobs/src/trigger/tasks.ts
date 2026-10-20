@@ -16,6 +16,7 @@ import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
 import { storageFilePurge, storageObjectDelete, storageUploadExpire } from "../jobs/storage.ts";
+import { taskReminder } from "../jobs/task-reminder.ts";
 import { trashEntryPurge } from "../jobs/trash.ts";
 import { jobRegistry } from "../registry.ts";
 import { createSupabaseJobStore, JobStoreError } from "../supabase-store.ts";
@@ -72,6 +73,26 @@ export const storageUploadExpireTask = jobTask(storageUploadExpire);
 export const storageFilePurgeTask = jobTask(storageFilePurge);
 export const storageObjectDeleteTask = jobTask(storageObjectDelete);
 export const trashEntryPurgeTask = jobTask(trashEntryPurge);
+export const taskReminderTask = jobTask(taskReminder);
+
+/** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
+const REMINDER_ADVANCE_BATCH = 200;
+
+// Recurring occurrences are created lazily, so a reminder days before a due date needs its
+// occurrence to exist in time. Hourly: ~720 runs a month, well inside the free tier.
+export const taskReminderAdvance = schedules.task({
+  id: "task-reminder-advance",
+  cron: "0 * * * *",
+  queue: { concurrencyLimit: 1 },
+  retry: { maxAttempts: 2, minTimeoutInMs: 5_000, maxTimeoutInMs: 30_000, factor: 2 },
+  maxDuration: 90,
+  run: async () => {
+    const { services, logger } = getServices();
+    const created = await services.data.advanceReminderSeries(REMINDER_ADVANCE_BATCH);
+    logger.info("jobs.task_reminder_advance.done", { created });
+    return { created };
+  },
+});
 
 export const outboxDispatch = schedules.task({
   id: "outbox-dispatch",

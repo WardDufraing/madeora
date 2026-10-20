@@ -46,7 +46,7 @@ From a clone of the repository on your computer, with `main` checked out and `pn
 
 Without a browser, `TRIGGER_ACCESS_TOKEN=tr_pat_…` (a personal access token from Trigger.dev → Account → Personal Access Tokens) replaces step 2. Never commit the token or paste it into chat; revoke it afterwards.
 
-**Check:** Trigger.dev → **Tasks** lists `sample-ping` and `outbox-dispatch`, and **Schedules** shows `outbox-dispatch` every 5 minutes.
+**Check:** Trigger.dev → **Tasks** lists `sample-ping`, `outbox-dispatch`, `task-reminder` and `task-reminder-advance`, and **Schedules** shows `outbox-dispatch` every 5 minutes and `task-reminder-advance` every hour (S19b).
 
 ## 5. Smoke test
 

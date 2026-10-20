@@ -318,6 +318,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
@@ -343,6 +344,27 @@ export type Database = {
           claim_token: string;
           lease_until: string;
           state: string;
+        }[];
+      };
+      bulk_update_tasks: {
+        Args: {
+          p_action: string;
+          p_dry_run: boolean;
+          p_expected_revisions: Json;
+          p_home_id?: string;
+          p_label_ids?: string[];
+          p_label_mode?: string;
+          p_list_id?: string;
+          p_priority?: string;
+          p_task_ids: string[];
+        };
+        Returns: {
+          open_subtasks: number;
+          outcome: string;
+          recurring: boolean;
+          revision: number;
+          shared: boolean;
+          task_id: string;
         }[];
       };
       cancel_ownership_recoveries: {
@@ -430,6 +452,25 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_task_from_template: {
+        Args: {
+          p_description?: string;
+          p_due_date?: string;
+          p_expected_template_revision: number;
+          p_label_ids?: string[];
+          p_list_id: string;
+          p_priority?: string;
+          p_start_date?: string;
+          p_subtasks?: string[];
+          p_task_id: string;
+          p_template_id: string;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       create_task_label: {
         Args: { p_color?: string; p_home_id?: string; p_id: string; p_name: string };
         Returns: {
@@ -465,6 +506,22 @@ export type Database = {
         };
         Returns: {
           first_task_id: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_task_template: {
+        Args: {
+          p_description?: string;
+          p_home_id?: string;
+          p_id: string;
+          p_label_ids?: string[];
+          p_name: string;
+          p_priority?: string;
+          p_subtasks?: string[];
+          p_title: string;
+        };
+        Returns: {
           outcome: string;
           revision: number;
         }[];
@@ -520,10 +577,18 @@ export type Database = {
           outcome: string;
         }[];
       };
+      delete_task_template: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       deliver_recovery_ready: {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
       };
+      deliver_task_reminder: { Args: { p_revision: number; p_task_id: string }; Returns: string };
       empty_trash: {
         Args: { p_deleted_before?: string; p_home_id?: string };
         Returns: {
@@ -631,6 +696,8 @@ export type Database = {
           today: string;
         }[];
       };
+      get_task_reminder: { Args: { p_task_id: string; p_time_zone?: string }; Returns: Json };
+      get_task_template: { Args: { p_id: string }; Returns: Json };
       home_capabilities: {
         Args: { p_home_id: string };
         Returns: {
@@ -815,6 +882,18 @@ export type Database = {
           total_count: number;
         }[];
       };
+      list_task_templates: {
+        Args: { p_home_id?: string };
+        Returns: {
+          id: string;
+          label_count: number;
+          name: string;
+          priority: string;
+          revision: number;
+          subtask_count: number;
+          title: string;
+        }[];
+      };
       list_tasks: {
         Args: {
           p_assignee?: string;
@@ -947,6 +1026,20 @@ export type Database = {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
       };
+      remove_task_reminder: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_expected_series_revision?: number;
+          p_scope: string;
+          p_task_id: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       rename_dashboard_template: {
         Args: { p_name: string; p_template_id: string };
         Returns: string;
@@ -1007,6 +1100,14 @@ export type Database = {
           entry_id: string;
           options: string[];
           outcome: string;
+        }[];
+      };
+      review_task_reminder: {
+        Args: { p_choice: string; p_expected_revision: number; p_task_id: string };
+        Returns: {
+          fire_at: string;
+          outcome: string;
+          revision: number;
         }[];
       };
       revoke_home_invitation: {
@@ -1070,6 +1171,27 @@ export type Database = {
           completed_by_me: boolean;
           completed_by_member: string;
           outcome: string;
+        }[];
+      };
+      set_task_reminder: {
+        Args: {
+          p_days_before?: number;
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_expected_series_revision?: number;
+          p_local_at?: string;
+          p_mode: string;
+          p_scope: string;
+          p_task_id: string;
+          p_time?: string;
+          p_time_zone?: string;
+        };
+        Returns: {
+          dst: string;
+          fire_at: string;
+          impact: Json;
+          outcome: string;
+          revision: number;
         }[];
       };
       set_task_series_paused: {
@@ -1156,6 +1278,13 @@ export type Database = {
           oldest_open_deletion_seconds: number;
           open_deletions: number;
           pending_uploads: number;
+        }[];
+      };
+      task_reminder_titles: {
+        Args: { p_task_ids: string[] };
+        Returns: {
+          task_id: string;
+          title: string;
         }[];
       };
       trash_stats: {
@@ -1250,6 +1379,22 @@ export type Database = {
           outcome: string;
           revision: number;
           task_id: string;
+        }[];
+      };
+      update_task_template: {
+        Args: {
+          p_description?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_label_ids?: string[];
+          p_name: string;
+          p_priority?: string;
+          p_subtasks?: string[];
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
         }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };

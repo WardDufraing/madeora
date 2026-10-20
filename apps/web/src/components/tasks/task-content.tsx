@@ -35,6 +35,8 @@ export interface TaskContentProps {
   readonly task: TaskDetail;
   readonly labels: readonly LabelOption[];
   readonly dateFormat: DateFormat;
+  /** S19b: the task has a reminder before its due date (a due-date change puts it on hold). */
+  readonly reminderBeforeDue?: boolean;
 }
 
 /**
@@ -47,7 +49,12 @@ export interface TaskContentProps {
  * the change is for this occurrence, this and following ones, or the entire series, with a preview.
  * A changed due date only applies to this occurrence (the schedule sets the series' dates).
  */
-export function TaskContent({ task, labels, dateFormat }: TaskContentProps) {
+export function TaskContent({
+  task,
+  labels,
+  dateFormat,
+  reminderBeforeDue = false,
+}: TaskContentProps) {
   const t = useTranslations("Tasks");
   const texts = useTaskTexts(noMembers);
   const [editing, setEditing] = useState(false);
@@ -134,6 +141,11 @@ export function TaskContent({ task, labels, dateFormat }: TaskContentProps) {
         </h2>
         {editing ? (
           <>
+            {reminderBeforeDue ? (
+              <FormAlert tone="info">
+                <p data-testid="due-reminder-warning">{t("dueReminderWarning")}</p>
+              </FormAlert>
+            ) : null}
             <TaskForm
               mode="edit"
               defaults={{

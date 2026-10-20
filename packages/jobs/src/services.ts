@@ -61,6 +61,13 @@ export interface JobDataPort {
     recoveryId: string,
     objectionEndsAt: Date,
   ): Promise<"notified" | "not_ready">;
+  /**
+   * task-reminder (S19b): delivers a reminder at its time. 'stale': a newer revision, or it is no
+   * longer scheduled; 'not_sent': the task was completed or deleted, or nobody is left to remind.
+   */
+  deliverTaskReminder(taskId: string, revision: number): Promise<TaskReminderOutcome>;
+  /** task-reminder-advance (S19b): creates occurrences of series with a reminder; how many. */
+  advanceReminderSeries(limit: number): Promise<number>;
   /** storage-upload-expire (S15): settles an upload after its intent ended; its status afterwards. */
   expireUpload(fileId: string): Promise<StoredFileStatus>;
   /** storage-file-purge (S15): purges a deleted file past its recovery window; its status afterwards. */
@@ -74,6 +81,8 @@ export interface JobDataPort {
   /** trash-entry-purge (S16): purges a trash entry past its recovery window; its status afterwards. */
   purgeExpiredTrashEntry(entryId: string): Promise<TrashEntryStatus>;
 }
+
+export type TaskReminderOutcome = "notified" | "not_sent" | "stale" | "not_due";
 
 export type TrashEntryStatus = "trashed" | "restored" | "purged" | "missing";
 

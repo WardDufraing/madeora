@@ -40,6 +40,9 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     homeName: "Thuis",
     objectionEndsAt: null,
     decision: null,
+    taskId: null,
+    dueDate: null,
+    taskTitle: null,
     duringQuietHours: false,
     createdAt: "2026-10-15T10:00:00Z",
     readAt: null,
@@ -120,6 +123,21 @@ describe("NotificationList", () => {
     expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
       "href",
       `/homes/${HOME_ID}/recovery`,
+    );
+  });
+
+  it("names a reminder's task and due day, and links to the task", async () => {
+    const taskId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00b1";
+    await show([
+      item({ kind: "task.reminder", taskId, dueDate: "2027-03-28", taskTitle: "Bins out" }),
+      item({ id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00a2", kind: "task.reminder", taskId }),
+    ]);
+    const [named, hidden] = screen.getAllByTestId("notification");
+    expect(named).toHaveTextContent("Reminder: \u2068Bins out\u2069, due 28/03/2027.");
+    expect(hidden).toHaveTextContent("Reminder: a task.");
+    expect(within(named as HTMLElement).getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      `/homes/${HOME_ID}/tasks/${taskId}`,
     );
   });
 

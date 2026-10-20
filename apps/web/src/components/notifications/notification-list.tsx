@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FormAlert } from "@/components/auth/form-alert";
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
 import type { NotificationView } from "@/notifications/types";
+import { formatTaskDate } from "@/tasks/format";
 
 import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
 
@@ -42,10 +43,16 @@ type MessageKey =
   | (typeof kindMessage)[keyof typeof kindMessage]
   | "kindJoinRequestApproved"
   | "kindJoinRequestDeclined"
+  | "kindTaskReminder"
+  | "kindTaskReminderDue"
   | "kindUnknown";
 
 /** The message key for a notification (exported for tests). */
-export function messageKeyFor(item: Pick<NotificationView, "kind" | "decision">): MessageKey {
+export function messageKeyFor(
+  item: Pick<NotificationView, "kind" | "decision"> & Partial<Pick<NotificationView, "dueDate">>,
+): MessageKey {
+  if (item.kind === "task.reminder")
+    return item.dueDate ? "kindTaskReminderDue" : "kindTaskReminder";
   if (item.kind === "join_request.decided") {
     return item.decision === "declined" ? "kindJoinRequestDeclined" : "kindJoinRequestApproved";
   }
@@ -81,9 +88,18 @@ export async function NotificationList({
         {items.map((item) => {
           const text = t(messageKeyFor(item), {
             home: item.homeName ? isolate(item.homeName) : t("homeFallback"),
-            date: item.objectionEndsAt ? formatDateTime(item.objectionEndsAt, formats) : "",
+            date: item.objectionEndsAt
+              ? formatDateTime(item.objectionEndsAt, formats)
+              : item.dueDate
+                ? formatTaskDate(item.dueDate, formats)
+                : "",
+            task: item.taskTitle ? isolate(item.taskTitle) : t("taskFallback"),
           });
-          const href = notificationPath(item.kind, item.homeId);
+          const href = notificationPath(
+            item.kind,
+            item.homeId,
+            item.taskId ? { taskId: item.taskId } : {},
+          );
           const isUnread = item.readAt === null;
           return (
             <li

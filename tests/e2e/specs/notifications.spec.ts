@@ -97,31 +97,46 @@ test("defaults, a Home override and its reset, with a plain-language preview", a
 
   const defaults = page.getByRole("group", { name: "Your defaults" });
   const home = page.getByRole("group", { name: "Thuis" });
-  await expect(defaults.getByTestId("notification-preview")).toContainText("in the app only");
-  await expect(home.getByTestId("notification-status")).toHaveText("Inherited from your defaults");
+  const invitations = { name: "Invitations and join requests" };
+  const defaultInvitations = defaults.getByRole("group", invitations);
+  const homeInvitations = home.getByRole("group", invitations);
+  await expect(defaults.getByTestId("notification-preview")).toContainText(
+    "Invitations and join requests arrive in the app only",
+  );
+  await expect(homeInvitations.getByTestId("notification-status")).toHaveText(
+    "Inherited from your defaults",
+  );
   expect(await axeViolations(page)).toEqual([]);
 
   // Email on for the account: the Home inherits it.
-  await defaults.getByRole("checkbox", { name: "By email" }).click();
+  await defaultInvitations.getByRole("checkbox", { name: "By email" }).click();
   await expect(defaults.getByTestId("notification-preview")).toContainText(
     "in the app and by email",
   );
   await expect(home.getByTestId("notification-preview")).toContainText("in the app and by email");
-  await expect(home.getByTestId("notification-status")).toHaveText("Inherited from your defaults");
+  await expect(homeInvitations.getByTestId("notification-status")).toHaveText(
+    "Inherited from your defaults",
+  );
 
   // The Home overrides it; the override survives a change of the account's default.
-  await home.getByRole("checkbox", { name: "By email" }).click();
-  await expect(home.getByTestId("notification-status")).toHaveText("Set for this Home");
-  await expect(home.getByTestId("notification-preview")).toContainText("in the app only");
-  await defaults.getByRole("checkbox", { name: "By email" }).click();
-  await expect(defaults.getByTestId("notification-preview")).toContainText("in the app only");
-  await expect(home.getByTestId("notification-status")).toHaveText("Set for this Home");
+  await homeInvitations.getByRole("checkbox", { name: "By email" }).click();
+  await expect(homeInvitations.getByTestId("notification-status")).toHaveText("Set for this Home");
+  await expect(home.getByTestId("notification-preview")).toContainText(
+    "Invitations and join requests arrive in the app only",
+  );
+  await defaultInvitations.getByRole("checkbox", { name: "By email" }).click();
+  await expect(defaults.getByTestId("notification-preview")).toContainText(
+    "Invitations and join requests arrive in the app only",
+  );
+  await expect(homeInvitations.getByTestId("notification-status")).toHaveText("Set for this Home");
   await page.reload();
-  await expect(home.getByTestId("notification-status")).toHaveText("Set for this Home");
+  await expect(homeInvitations.getByTestId("notification-status")).toHaveText("Set for this Home");
 
   // Reset: back to inheriting.
-  await home.getByRole("button", { name: "Use my defaults" }).click();
-  await expect(home.getByTestId("notification-status")).toHaveText("Inherited from your defaults");
+  await homeInvitations.getByRole("button", { name: "Use my defaults" }).click();
+  await expect(homeInvitations.getByTestId("notification-status")).toHaveText(
+    "Inherited from your defaults",
+  );
 });
 
 test("quiet hours are saved per scope, with their own zone", async ({ page, baseURL }) => {

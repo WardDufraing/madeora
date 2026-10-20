@@ -30,6 +30,8 @@ export interface NotificationEmailInput {
 const paramsSchema = z.object({
   objectionEndsAt: z.iso.datetime().optional(),
   decision: z.enum(["approved", "declined"]).optional(),
+  taskId: z.uuid().optional(),
+  dueDate: z.iso.date().nullable().optional(),
 });
 
 function isEmailKind(kind: string): kind is NotificationEmailKind {
@@ -45,7 +47,10 @@ export async function buildNotificationEmail(
 ): Promise<RenderedEmail> {
   const params = paramsSchema.safeParse(input.params);
   if (!params.success) throw new PermanentJobError("invalid_params");
-  const url = new URL(notificationPath(input.kind, input.homeId), input.appUrl).toString();
+  const url = new URL(
+    notificationPath(input.kind, input.homeId, input.params),
+    input.appUrl,
+  ).toString();
   const timeZone = input.homeTimeZone ?? "UTC";
   // A notice without a Home (a case that ended after the person left it) still reads as a sentence.
   const homeName = input.homeName ?? (input.locale === "nl" ? "een Home" : "a Home");
@@ -67,7 +72,9 @@ export async function buildNotificationEmail(
   const kind =
     input.kind === "join_request.decided" && params.data.decision
       ? `join_request.decided.${params.data.decision}`
-      : input.kind;
+      : input.kind === "task.reminder"
+        ? `task.reminder.${input.homeId ? "home" : "personal"}${params.data.dueDate ? "_due" : ""}`
+        : input.kind;
   if (!isEmailKind(kind)) throw new PermanentJobError("no_email_template");
   if (kind === "recovery.claimant_approved" && !endsAt)
     throw new PermanentJobError("invalid_params");
@@ -77,6 +84,7 @@ export async function buildNotificationEmail(
     homeName,
     url,
     date: endsAt,
+    day: params.data.dueDate ?? null,
     timeZone,
   });
 }

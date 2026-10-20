@@ -9,6 +9,7 @@ import { getDateTimeFormats } from "@/invitations/server";
 import {
   advanceSeries,
   getTask,
+  getTaskContext,
   listTaskComments,
   listTaskLabels,
   listTaskLists,
@@ -16,11 +17,15 @@ import {
   listTaskOccurrences,
 } from "@/tasks/data";
 import { personName, memberNames, tasksPath, type MemberOption } from "@/tasks/format";
+import { getTaskReminder } from "@/tasks/reminder-data";
+import { isoDate } from "@/preferences/regional";
 
 import { TaskAssignees } from "./task-assignees";
 import { TaskComments } from "./task-comments";
 import { TaskCompletion, TaskDelete, TaskMove } from "./task-actions";
 import { TaskContent } from "./task-content";
+import { TaskReminderSection } from "./task-reminder";
+import { SaveAsTemplate } from "./task-templates";
 import { TaskRepeats } from "./task-repeats";
 import { TaskSubtasks } from "./task-subtasks";
 
@@ -51,7 +56,7 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
   }
   if (task.value.homeId !== homeId) notFound();
   const detail = task.value;
-  const [lists, labels, members, comments, history] = await Promise.all([
+  const [lists, labels, members, comments, history, reminder, context] = await Promise.all([
     listTaskLists(homeId, false),
     listTaskLabels(homeId),
     homeId ? listTaskMembers(homeId) : Promise.resolve({ status: "ok", value: [] } as const),
@@ -59,13 +64,17 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
     detail.series
       ? listTaskOccurrences(detail.id, "all", 0)
       : Promise.resolve({ status: "ok", value: null } as const),
+    getTaskReminder(detail.id),
+    getTaskContext(homeId),
   ]);
   if (
     lists.status !== "ok" ||
     labels.status !== "ok" ||
     members.status !== "ok" ||
     comments.status !== "ok" ||
-    history.status !== "ok"
+    history.status !== "ok" ||
+    reminder.status !== "ok" ||
+    context.status !== "ok"
   ) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -110,6 +119,16 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
           task={detail}
           labels={labels.value.map(({ id, name, color }) => ({ id, name, color }))}
           dateFormat={formats.dateFormat}
+          reminderBeforeDue={
+            reminder.value.reminder?.mode === "relative" &&
+            reminder.value.reminder.status === "scheduled"
+          }
+        />
+        <TaskReminderSection
+          view={reminder.value}
+          members={memberOptions}
+          formats={formats}
+          today={isoDate(new Date(), reminder.value.timeZone ?? formats.timeZone)}
         />
         {series && history.value ? (
           <TaskRepeats
@@ -179,6 +198,12 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
           lists={lists.value.map(({ id, name }) => ({ id, name }))}
           dateFormat={formats.dateFormat}
         />
+        {context.value.canManage ? (
+          <SaveAsTemplate
+            task={detail}
+            labels={labels.value.map(({ id, name, color }) => ({ id, name, color }))}
+          />
+        ) : null}
         <TaskDelete task={detail} dateFormat={formats.dateFormat} />
       </div>
     </>

@@ -152,6 +152,24 @@ describe("Supabase job data", () => {
     });
   });
 
+  it("delivers a reminder by id and revision and refuses an unknown answer", async () => {
+    const { client, calls } = fakeClient({
+      deliver_task_reminder: ok("stale"),
+      advance_reminder_series: ok(3),
+    });
+    const data = createSupabaseJobData(client);
+    await expect(data.deliverTaskReminder("t1", 2)).resolves.toBe("stale");
+    await expect(data.advanceReminderSeries(200)).resolves.toBe(3);
+    expect(calls).toEqual([
+      { fn: "deliver_task_reminder", args: { p_task_id: "t1", p_revision: 2 } },
+      { fn: "advance_reminder_series", args: { p_limit: 200 } },
+    ]);
+    const { client: odd } = fakeClient({ deliver_task_reminder: ok("sent twice") });
+    await expect(createSupabaseJobData(odd).deliverTaskReminder("t1", 2)).rejects.toMatchObject({
+      code: "unexpected_result",
+    });
+  });
+
   it("throws the Postgres code only", async () => {
     const { client } = fakeClient({
       get_notification_email: {

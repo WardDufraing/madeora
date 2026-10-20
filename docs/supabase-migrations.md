@@ -8,18 +8,19 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 - **`madeora-production`:** just before you merge a release pull request (`production` ← `main`) whose commit list contains a migration. Apply it first, then merge: the code already in production ignores new tables, and the new code needs them.
 - Apply every file you have not applied yet, **oldest first** (the file names start with the date). Never apply a file twice. The table below says how to check whether a file is already in.
 
-| File                                                         | Step | Already applied when the check query says              |
-| ------------------------------------------------------------ | ---- | ------------------------------------------------------ |
-| `supabase/migrations/20261013000000_private_schema.sql`      | S03  | `private_schema` is `true`                             |
-| `supabase/migrations/20261014120000_user_preferences.sql`    | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
-| `supabase/migrations/20261015090000_sign_in_methods.sql`     | S08  | `sign_in_methods_table` is not `NULL`                  |
-| `supabase/migrations/20261016090000_homes.sql`               | S09  | `homes_table` is `homes` (not `NULL`)                  |
-| `supabase/migrations/20261017090000_home_invitations.sql`    | S10  | `invitations_table` is not `NULL`                      |
-| `supabase/migrations/20261018090000_member_profiles.sql`     | S11  | `member_profiles_table` is not `NULL`                  |
-| `supabase/migrations/20261019090000_roles_and_ownership.sql` | S12  | `ownership_transfers_table` is not `NULL`              |
-| `supabase/migrations/20261020090000_ownership_recovery.sql`  | S12b | `ownership_recoveries_table` is not `NULL`             |
-| `supabase/migrations/20261026090000_tasks.sql`               | S18  | `tasks_table` is not `NULL`                            |
-| `supabase/migrations/20261027090000_task_recurrence.sql`     | S19  | `task_series_table` is not `NULL`                      |
+| File                                                                   | Step | Already applied when the check query says              |
+| ---------------------------------------------------------------------- | ---- | ------------------------------------------------------ |
+| `supabase/migrations/20261013000000_private_schema.sql`                | S03  | `private_schema` is `true`                             |
+| `supabase/migrations/20261014120000_user_preferences.sql`              | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
+| `supabase/migrations/20261015090000_sign_in_methods.sql`               | S08  | `sign_in_methods_table` is not `NULL`                  |
+| `supabase/migrations/20261016090000_homes.sql`                         | S09  | `homes_table` is `homes` (not `NULL`)                  |
+| `supabase/migrations/20261017090000_home_invitations.sql`              | S10  | `invitations_table` is not `NULL`                      |
+| `supabase/migrations/20261018090000_member_profiles.sql`               | S11  | `member_profiles_table` is not `NULL`                  |
+| `supabase/migrations/20261019090000_roles_and_ownership.sql`           | S12  | `ownership_transfers_table` is not `NULL`              |
+| `supabase/migrations/20261020090000_ownership_recovery.sql`            | S12b | `ownership_recoveries_table` is not `NULL`             |
+| `supabase/migrations/20261026090000_tasks.sql`                         | S18  | `tasks_table` is not `NULL`                            |
+| `supabase/migrations/20261027090000_task_recurrence.sql`               | S19  | `task_series_table` is not `NULL`                      |
+| `supabase/migrations/20261028090000_task_reminders_templates_bulk.sql` | S19b | `task_templates_table` is not `NULL`                   |
 
 Check query (read-only, safe to run any time):
 
@@ -34,7 +35,8 @@ select
   to_regclass('private.home_ownership_transfers') as ownership_transfers_table,
   to_regclass('private.home_ownership_recoveries') as ownership_recoveries_table,
   to_regclass('private.tasks') as tasks_table,
-  to_regclass('private.task_series') as task_series_table;
+  to_regclass('private.task_series') as task_series_table,
+  to_regclass('private.task_templates') as task_templates_table;
 ```
 
 ## Apply a migration
@@ -279,6 +281,27 @@ From S19 a task can repeat. Nothing changes for existing tasks: none of them rep
    It must show `task_series_table` **private.task_series**, **false** for `members_can_read_series` and `signed_out_can_read_history`, **true** for `members_can_advance`, and `series` **0**.
 
 2. In the app click **Tasks**, then **New task**: the form has a **Repeats** field. Add a task with a due date of today that repeats weekly: its row says "Repeats", and its page shows the Repeats section with the next date.
+
+## Check S19b (`20261028090000_task_reminders_templates_bulk.sql`)
+
+From S19b a task can have a reminder, tasks can be made from templates, and several tasks can be changed at once. Nothing changes for existing tasks. Apply it only after S19 (`20261027090000_task_recurrence.sql`), because it extends its functions. Deploy the Trigger.dev tasks from the same commit with it (`docs/trigger-setup.md`, step 4): reminders are delivered by the job `task-reminder`.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.task_templates') as task_templates_table,
+     has_table_privilege('authenticated', 'private.task_reminders', 'select') as members_can_read_reminders,
+     has_function_privilege('authenticated', 'public.deliver_task_reminder(uuid, integer)', 'execute')
+       as members_can_deliver,
+     has_function_privilege('authenticated', 'public.bulk_update_tasks(uuid[], text, jsonb, boolean, uuid, text, text, uuid[], uuid)', 'execute')
+       as members_can_bulk,
+     (select count(*) from private.task_reminders) as reminders;
+   ```
+
+   It must show `task_templates_table` **private.task_templates**, **false** for `members_can_read_reminders` and `members_can_deliver`, **true** for `members_can_bulk`, and `reminders` **0**.
+
+2. In the app open a task with a due date: its page has a **Reminder** section. Click **Set a reminder**: the form shows "It will remind around …". Under **Notifications** in Settings, a **Task reminders** group appears.
 
 ## If a migration file changed after you applied it
 

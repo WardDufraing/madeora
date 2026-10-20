@@ -18,6 +18,7 @@ import type {
   JobServices,
   NotificationEmailRead,
   StoredFileStatus,
+  TaskReminderOutcome,
   TrashEntryStatus,
 } from "../services.ts";
 
@@ -31,6 +32,11 @@ export class FakeJobData implements JobDataPort {
     [];
   readonly invitationRecords: { id: string; send: number; status: EmailRecordStatus }[] = [];
   readonly readyCalls: { recoveryId: string; endsAt: Date }[] = [];
+  /** Reminders (S19b): what delivery answers, the calls, and how many occurrences an advance makes. */
+  reminderOutcome: TaskReminderOutcome = "notified";
+  readonly reminderCalls: { taskId: string; revision: number }[] = [];
+  advanced = 0;
+  readonly advanceCalls: number[] = [];
   /** Storage (S15): file statuses the database functions return, and the deletion queue. */
   expireStatus: StoredFileStatus = "failed";
   purgeStatus: StoredFileStatus = "purged";
@@ -73,6 +79,18 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.readyCalls.push({ recoveryId, endsAt });
     return Promise.resolve(this.readyOutcome);
+  }
+
+  deliverTaskReminder(taskId: string, revision: number): Promise<TaskReminderOutcome> {
+    this.check();
+    this.reminderCalls.push({ taskId, revision });
+    return Promise.resolve(this.reminderOutcome);
+  }
+
+  advanceReminderSeries(limit: number): Promise<number> {
+    this.check();
+    this.advanceCalls.push(limit);
+    return Promise.resolve(this.advanced);
   }
 
   expireUpload(fileId: string): Promise<StoredFileStatus> {

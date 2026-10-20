@@ -106,7 +106,7 @@ test("weekly task: complete, change following, history, delete the series and re
     .click();
   await page.getByTestId("task-edit").click();
   await page.getByLabel("Title").fill("Water all the plants");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Save changes to which occurrences?" });
   await dialog.getByRole("radio", { name: "This and following occurrences" }).check();
   const impact = dialog.getByTestId("series-impact");

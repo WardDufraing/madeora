@@ -158,19 +158,20 @@ select tests.assert_true(
 
 select tests.act_as('carol');
 select tests.assert_true(
-  (select count(*) = 6 and bool_and(not overridden)
+  (select count(*) = 12 and bool_and(not overridden)
      and bool_and(enabled = (channel = 'in_app'))
+     and count(distinct category) = 2
    from public.get_notification_settings()),
-  'By default nothing is overridden: in-app on, email off, for the account and both of her Homes'
+  'By default nothing is overridden: in-app on, email off, for both optional categories (S19b: reminders), the account and both of her Homes'
 );
 select tests.assert_true(
   public.set_notification_preference('invitations', 'email', true, null) = 'ok',
   'Carol turns invitation email on for her account'
 );
 select tests.assert_true(
-  (select bool_and(enabled) from public.get_notification_settings()
+  (select bool_and(enabled) from (select * from public.get_notification_settings() where category = 'invitations') s
    where channel = 'email')
-  and (select bool_and(not overridden) from public.get_notification_settings()
+  and (select bool_and(not overridden) from (select * from public.get_notification_settings() where category = 'invitations') s
        where home_id is not null),
   'Both Homes inherit it, and show as inherited'
 );
@@ -179,15 +180,15 @@ select tests.assert_true(
   'She overrides it for Home B only'
 );
 select tests.assert_true(
-  (select enabled and not overridden from public.get_notification_settings()
+  (select enabled and not overridden from (select * from public.get_notification_settings() where category = 'invitations') s
    where home_id = (select id from ids where name = 'home-a') and channel = 'email')
-  and (select not enabled and overridden from public.get_notification_settings()
+  and (select not enabled and overridden from (select * from public.get_notification_settings() where category = 'invitations') s
        where home_id = (select id from ids where name = 'home-b') and channel = 'email'),
   'Home A still inherits the account choice; Home B shows as overridden'
 );
 select tests.assert_true(
   public.set_notification_preference('invitations', 'email', false, null) = 'ok'
-  and (select not enabled and overridden from public.get_notification_settings()
+  and (select not enabled and overridden from (select * from public.get_notification_settings() where category = 'invitations') s
        where home_id = (select id from ids where name = 'home-b') and channel = 'email'),
   'Changing the account default reaches the inheriting Home and never overwrites the override'
 );
@@ -269,19 +270,19 @@ select tests.assert_true(
   public.reset_notification_preference('invitations', 'in_app', (select id from ids where name = 'home-b')),
   'Reset removes the Home override, so the Home inherits the account choice (now off)');
 select tests.assert_true(
-  (select not enabled and not overridden from public.get_notification_settings()
+  (select not enabled and not overridden from (select * from public.get_notification_settings() where category = 'invitations') s
    where home_id = (select id from ids where name = 'home-b') and channel = 'in_app'),
   'and says so');
 select tests.assert_true(public.reset_notification_preference('invitations', 'in_app', null),
   'Carol resets the account choice');
 select tests.assert_true(
-  (select enabled and not overridden from public.get_notification_settings()
+  (select enabled and not overridden from (select * from public.get_notification_settings() where category = 'invitations') s
    where home_id is null and channel = 'in_app'),
   'which returns to the built-in default (in-app on)');
 -- Bob's choices are his own.
 select tests.act_as('bob');
 select tests.assert_true(
-  (select bool_and(not overridden) from public.get_notification_settings()),
+  (select bool_and(not overridden) from (select * from public.get_notification_settings() where category = 'invitations') s),
   'Carol''s choices do not appear in Bob''s settings');
 select tests.assert_row_count($$select id from public.notification_preferences$$, 0,
   'and Bob reads none of her stored preferences');

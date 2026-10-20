@@ -8,11 +8,11 @@
  * `supabase/migrations/*_notifications.sql`; a database test lists what the triggers write.
  */
 
-export const notificationCategories = ["security", "invitations", "storage"] as const;
+export const notificationCategories = ["security", "invitations", "storage", "reminders"] as const;
 export type NotificationCategory = (typeof notificationCategories)[number];
 
 /** Categories a person can configure; the others are essential and cannot be switched off. */
-export const optionalNotificationCategories = ["invitations"] as const;
+export const optionalNotificationCategories = ["invitations", "reminders"] as const;
 export type OptionalNotificationCategory = (typeof optionalNotificationCategories)[number];
 
 export const notificationChannels = ["in_app", "email"] as const;
@@ -43,6 +43,7 @@ export const notificationKinds = [
   "storage.personal_critical",
   "storage.home_warning",
   "storage.home_critical",
+  "task.reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -51,7 +52,16 @@ export function isNotificationKind(value: unknown): value is NotificationKind {
 }
 
 /** The page in the app a notification leads to (also the target of its email's button). */
-export function notificationPath(kind: string, homeId: string | null): string {
+export function notificationPath(
+  kind: string,
+  homeId: string | null,
+  params: Readonly<Record<string, unknown>> = {},
+): string {
+  if (kind === "task.reminder") {
+    const taskId = typeof params.taskId === "string" ? encodeURIComponent(params.taskId) : null;
+    const base = homeId ? `/homes/${encodeURIComponent(homeId)}/tasks` : "/tasks";
+    return taskId ? `${base}/${taskId}` : base;
+  }
   if (
     kind === "recovery.former_owner_completed" ||
     kind === "recovery.former_owner_completed_removed"

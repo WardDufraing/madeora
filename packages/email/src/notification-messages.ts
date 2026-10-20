@@ -20,6 +20,10 @@ export const notificationKinds = [
   "join_request.received",
   "join_request.decided.approved",
   "join_request.decided.declined",
+  "task.reminder.home",
+  "task.reminder.home_due",
+  "task.reminder.personal",
+  "task.reminder.personal_due",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -133,6 +137,34 @@ const en: Catalogue = {
     body: "A manager declined your request to join a Home. You can ask the person who invited you for another invitation.",
     button: "Open Madeora",
   },
+  "task.reminder.home": {
+    subject: "Reminder: a task in {home}",
+    preview: "Open Madeora to see the task.",
+    heading: "A reminder about a task in {home}",
+    body: "You have a reminder for a task in {home}. Open Madeora to see which task it is.",
+    button: "Open the task",
+  },
+  "task.reminder.home_due": {
+    subject: "Reminder: a task in {home} is due {date}",
+    preview: "Open Madeora to see the task.",
+    heading: "A task in {home} is due {date}",
+    body: "You have a reminder for a task in {home} that is due {date}. Open Madeora to see which task it is.",
+    button: "Open the task",
+  },
+  "task.reminder.personal": {
+    subject: "Reminder: a task in your personal space",
+    preview: "Open Madeora to see the task.",
+    heading: "A reminder about one of your tasks",
+    body: "You have a reminder for a task in your personal space. Open Madeora to see which task it is.",
+    button: "Open the task",
+  },
+  "task.reminder.personal_due": {
+    subject: "Reminder: a task in your personal space is due {date}",
+    preview: "Open Madeora to see the task.",
+    heading: "One of your tasks is due {date}",
+    body: "You have a reminder for a task in your personal space that is due {date}. Open Madeora to see which task it is.",
+    button: "Open the task",
+  },
 };
 
 const nl: Catalogue = {
@@ -234,6 +266,34 @@ const nl: Catalogue = {
     body: "Een beheerder wees je verzoek af om bij een Home aan te sluiten. Je kunt de persoon die je uitnodigde vragen om een nieuwe uitnodiging.",
     button: "Madeora openen",
   },
+  "task.reminder.home": {
+    subject: "Herinnering: een taak in {home}",
+    preview: "Open Madeora om de taak te zien.",
+    heading: "Een herinnering voor een taak in {home}",
+    body: "Je hebt een herinnering voor een taak in {home}. Open Madeora om te zien welke taak het is.",
+    button: "Taak openen",
+  },
+  "task.reminder.home_due": {
+    subject: "Herinnering: een taak in {home} vervalt op {date}",
+    preview: "Open Madeora om de taak te zien.",
+    heading: "Een taak in {home} vervalt op {date}",
+    body: "Je hebt een herinnering voor een taak in {home} die vervalt op {date}. Open Madeora om te zien welke taak het is.",
+    button: "Taak openen",
+  },
+  "task.reminder.personal": {
+    subject: "Herinnering: een taak in je persoonlijke ruimte",
+    preview: "Open Madeora om de taak te zien.",
+    heading: "Een herinnering voor een van je taken",
+    body: "Je hebt een herinnering voor een taak in je persoonlijke ruimte. Open Madeora om te zien welke taak het is.",
+    button: "Taak openen",
+  },
+  "task.reminder.personal_due": {
+    subject: "Herinnering: een taak in je persoonlijke ruimte vervalt op {date}",
+    preview: "Open Madeora om de taak te zien.",
+    heading: "Een van je taken vervalt op {date}",
+    body: "Je hebt een herinnering voor een taak in je persoonlijke ruimte die vervalt op {date}. Open Madeora om te zien welke taak het is.",
+    button: "Taak openen",
+  },
 };
 
 export const notificationMessages = {
@@ -269,5 +329,5 @@ export const notificationMessages = {
 
 /** Optional kinds follow the person's choices; the others are security messages. */
 export function isOptionalNotificationKind(kind: NotificationEmailKind): boolean {
-  return kind.startsWith("join_request.");
+  return kind.startsWith("join_request.") || kind.startsWith("task.reminder.");
 }
