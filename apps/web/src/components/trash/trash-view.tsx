@@ -60,6 +60,7 @@ const itemTypeKey = {
   dashboard_template: "itemTypeDashboardTemplate",
   task: "itemTypeTask",
   task_list: "itemTypeTaskList",
+  task_series_removal: "itemTypeTaskSeriesRemoval",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -69,6 +70,8 @@ function conflictMessage(kind: string) {
       return "conflictParentUnavailable";
     case "list_unavailable":
       return "conflictListUnavailable";
+    case "series_changed":
+      return "conflictSeriesChanged";
     default:
       return "conflictOther";
   }
@@ -76,6 +79,7 @@ function conflictMessage(kind: string) {
 const resolutionKey = {
   clear_slot: "resolveClearSlot",
   detach_parent: "resolveDetachParent",
+  restore_tasks_only: "resolveRestoreTasksOnly",
 } as const satisfies Record<Exclude<TrashResolution, "move_to_list">, string>;
 const errorKey = {
   signedOut: "errorSignedOut",

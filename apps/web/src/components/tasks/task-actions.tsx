@@ -10,6 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
 import { useAnnouncer } from "@/components/ui/use-announcer";
 import { formatDateTime, type DateTimeFormats } from "@/invitations/format";
+import type { DateFormat } from "@/preferences/schema";
 import {
   sendTaskRequest,
   TASKS_ENDPOINT,
@@ -18,8 +19,15 @@ import {
   type TaskDetail,
 } from "@/tasks/api";
 import { memberNames, tasksPath, type MemberOption } from "@/tasks/format";
+import type { SeriesScope } from "@/tasks/schema";
 
 import { HydrationGate } from "./hydration-gate";
+import {
+  sendSeriesChange,
+  sendSeriesDelete,
+  SeriesScopeDialog,
+  type OccurrenceScope,
+} from "./series-scope";
 import { useTaskMutation } from "./use-task-mutation";
 import { useTaskTexts } from "./use-task-texts";
 
@@ -154,15 +162,26 @@ export function TaskCompletion({ task, members, formats }: TaskCompletionProps) 
 export interface TaskMoveProps {
   readonly task: TaskDetail;
   readonly lists: readonly { readonly id: string; readonly name: string }[];
+  readonly dateFormat: DateFormat;
 }
 
-/** Moving the task to another active list of the same context, with an explicit destination. */
-export function TaskMove({ task, lists }: TaskMoveProps) {
+/**
+ * Moving the task to another active list of the same context, with an explicit destination. On an
+ * occurrence of a recurring series (S19), a person who may change the series chooses this
+ * occurrence, this and following ones, or the entire series, with a preview; the series scopes
+ * also move the schedule, so new occurrences are created in the new list.
+ */
+export function TaskMove({ task, lists, dateFormat }: TaskMoveProps) {
   const t = useTranslations("Tasks");
   const texts = useTaskTexts(memberNames([]));
   const others = lists.filter((list) => list.id !== task.list.id);
   const [listId, setListId] = useState(others[0]?.id ?? "");
+  const [asking, setAsking] = useState(false);
   const { announce, region } = useAnnouncer();
+  const finish = () => {
+    setAsking(false);
+    announce(t("announceMoved"));
+  };
   const mutation = useTaskMutation(
     `task:${task.id}`,
     (destination: string) =>
@@ -170,11 +189,40 @@ export function TaskMove({ task, lists }: TaskMoveProps) {
         expectedRevision: task.revision,
         listId: destination,
       }),
-    () => {
-      announce(t("announceMoved"));
-    },
+    finish,
   );
-  if (!task.can.edit || others.length === 0) return null;
+  const series = task.series;
+  const seriesBody = {
+    expectedTaskRevision: task.revision,
+    expectedSeriesRevision: series?.revision ?? 1,
+    listId,
+  };
+  const seriesMutation = useTaskMutation(
+    `task:${task.id}`,
+    (scope: SeriesScope) => sendSeriesChange(task.id, scope, seriesBody, false),
+    finish,
+  );
+  const seriesAllowed = series?.can.edit ?? false;
+  if ((!task.can.edit && !seriesAllowed) || others.length === 0) return null;
+  const busy = mutation.busy || seriesMutation.busy;
+
+  function move() {
+    if (seriesAllowed) {
+      setAsking(true);
+      return;
+    }
+    mutation.mutate(listId);
+  }
+
+  function confirm(scope: OccurrenceScope) {
+    if (scope === "this") {
+      setAsking(false);
+      mutation.mutate(listId);
+    } else {
+      seriesMutation.mutate(scope);
+    }
+  }
+
   return (
     <section aria-labelledby="task-move-heading" className="flex flex-col gap-3">
       <HydrationGate>
@@ -194,52 +242,100 @@ export function TaskMove({ task, lists }: TaskMoveProps) {
           />
           <Button
             variant="secondary"
-            loading={mutation.busy}
+            loading={busy}
             disabled={listId === ""}
-            onClick={() => {
-              mutation.mutate(listId);
-            }}
+            onClick={move}
             data-testid="task-move"
           >
             {t("move")}
           </Button>
         </div>
-        {mutation.error ? (
+        {mutation.error && !asking ? (
           <FormAlert tone="error" announce>
             {texts.failure(mutation.error.failure)}
           </FormAlert>
+        ) : null}
+        {asking ? (
+          <SeriesScopeDialog
+            open
+            onClose={() => {
+              setAsking(false);
+              seriesMutation.reset();
+            }}
+            task={task}
+            title={t("scopeMoveTitle")}
+            request={{ kind: "change", body: seriesBody }}
+            allowThis={task.can.edit}
+            allowSeries
+            confirmLabel={t("move")}
+            busy={busy}
+            dateFormat={dateFormat}
+            onConfirm={confirm}
+            error={seriesMutation.error ?? mutation.error}
+          />
         ) : null}
       </HydrationGate>
     </section>
   );
 }
 
-/** Moving the task to the trash, after confirmation; the page then shows the task's context. */
-export function TaskDelete({ task }: { readonly task: TaskDetail }) {
+/**
+ * Moving the task to the trash, after confirmation; the page then shows the task's context. On an
+ * occurrence of a recurring series (S19), a person who may change the series chooses this
+ * occurrence, this and following ones, or the entire series, with a preview; the series scopes go
+ * to the trash as one item and completed occurrences stay in the history.
+ */
+export function TaskDelete({
+  task,
+  dateFormat,
+}: {
+  readonly task: TaskDetail;
+  readonly dateFormat: DateFormat;
+}) {
   const t = useTranslations("Tasks");
   const texts = useTaskTexts(memberNames([]));
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const leave = () => {
+    // The task is gone from here: go to its list, where a notice (focused by the page) says so.
+    router.push(`${tasksPath(task.homeId)}?list=${task.list.id}&deleted=1`);
+  };
   const mutation = useTaskMutation(
     `task:${task.id}`,
     () => sendTaskRequest<object>("DELETE", `${TASKS_ENDPOINT}/${task.id}`, {}),
-    () => {
-      // The task is gone from here: go to its list, where a notice (focused by the page) says so.
-      router.push(`${tasksPath(task.homeId)}?list=${task.list.id}&deleted=1`);
-    },
+    leave,
   );
-  if (!task.can.delete) return null;
+  const seriesMutation = useTaskMutation(
+    `task:${task.id}`,
+    (scope: SeriesScope) => sendSeriesDelete(task, scope, false),
+    leave,
+  );
+  const seriesAllowed = task.series?.can.delete ?? false;
+  if (!task.can.delete && !seriesAllowed) return null;
+  const busy = mutation.busy || seriesMutation.busy;
+
+  function confirm(scope: OccurrenceScope) {
+    if (scope === "this") {
+      setConfirming(false);
+      mutation.mutate(undefined);
+    } else {
+      seriesMutation.mutate(scope);
+    }
+  }
+
   return (
     <section aria-labelledby="task-delete-heading" className="flex flex-col gap-3">
       <HydrationGate>
         <h2 id="task-delete-heading" className="text-section-title font-semibold text-fg">
           {t("deleteHeading")}
         </h2>
-        <p className="text-helper text-fg-muted">{t("deleteHelp")}</p>
+        <p className="text-helper text-fg-muted">
+          {task.series ? t("deleteSeriesHelp") : t("deleteHelp")}
+        </p>
         <div>
           <Button
             variant="destructive"
-            loading={mutation.busy}
+            loading={busy}
             onClick={() => {
               setConfirming(true);
             }}
@@ -253,37 +349,60 @@ export function TaskDelete({ task }: { readonly task: TaskDetail }) {
             {texts.failure(mutation.error.failure)}
           </FormAlert>
         ) : null}
-        <Dialog
-          open={confirming}
-          onClose={() => {
-            setConfirming(false);
-          }}
-          title={t("confirmDeleteTitle")}
-          description={t("confirmDeleteBody")}
-          closeLabel={t("close")}
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setConfirming(false);
-                }}
-              >
-                {t("cancel")}
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setConfirming(false);
-                  mutation.mutate(undefined);
-                }}
-                data-testid="task-confirm-delete"
-              >
-                {t("deleteTask")}
-              </Button>
-            </>
-          }
-        />
+        {task.series && seriesAllowed ? (
+          confirming ? (
+            <SeriesScopeDialog
+              open
+              onClose={() => {
+                setConfirming(false);
+                seriesMutation.reset();
+              }}
+              task={task}
+              title={t("scopeDeleteTitle")}
+              request={{ kind: "delete" }}
+              allowThis={task.can.delete}
+              allowSeries
+              confirmLabel={t("deleteTask")}
+              destructive
+              busy={busy}
+              dateFormat={dateFormat}
+              onConfirm={confirm}
+              error={seriesMutation.error}
+            />
+          ) : null
+        ) : (
+          <Dialog
+            open={confirming}
+            onClose={() => {
+              setConfirming(false);
+            }}
+            title={t("confirmDeleteTitle")}
+            description={t("confirmDeleteBody")}
+            closeLabel={t("close")}
+            footer={
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setConfirming(false);
+                  }}
+                >
+                  {t("cancel")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setConfirming(false);
+                    mutation.mutate(undefined);
+                  }}
+                  data-testid="task-confirm-delete"
+                >
+                  {t("deleteTask")}
+                </Button>
+              </>
+            }
+          />
+        )}
       </HydrationGate>
     </section>
   );

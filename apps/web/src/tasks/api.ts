@@ -1,4 +1,6 @@
-import type { LabelColor, TaskPriority } from "./schema";
+import type { IsoWeekday, RecurrenceFrequency } from "@madeora/domain/tasks";
+
+import type { LabelColor, OccurrenceFilter, SeriesScope, TaskPriority } from "./schema";
 
 /**
  * The HTTP contract of tasks (S18). Every mutation is same-origin JSON, checked again by the database
@@ -14,6 +16,10 @@ import type { LabelColor, TaskPriority } from "./schema";
  * - `GET|POST /api/v1/tasks/:id/comments`, `PATCH|DELETE /api/v1/task-comments/:id`.
  * - `POST /api/v1/task-lists`, `PUT /api/v1/task-lists` (order), `PATCH|DELETE /api/v1/task-lists/:id`.
  * - `POST /api/v1/task-labels`, `PATCH|DELETE /api/v1/task-labels/:id`.
+ * - S19: `POST /api/v1/tasks` with `recurrence` creates a recurring task → `201 { id, taskId }`;
+ *   `POST /api/v1/tasks/:id/series` (change following or all occurrences, or preview it),
+ *   `POST /api/v1/tasks/:id/series/delete`, `PUT /api/v1/tasks/:id/series/paused`,
+ *   `GET /api/v1/tasks/:id/occurrences?filter&offset` (history).
  *
  * `409 conflict` (with the current `revision` when known) means someone changed it since it was read.
  */
@@ -38,6 +44,10 @@ export type TaskErrorCode =
   | "has-tasks"
   | "has-open-tasks"
   | "id-taken"
+  | "has-series"
+  | "scope-unavailable"
+  | "not-recurring"
+  | "schedule-ended"
   | "failed";
 
 export interface TaskErrorResponse {
@@ -95,6 +105,8 @@ export interface TaskRow {
   /** Whether the viewer may complete or reopen it (the database decides again on every change). */
   readonly canComplete: boolean;
   readonly revision: number;
+  /** An occurrence of a recurring series (S19). */
+  readonly recurring: boolean;
 }
 
 export interface TaskPage {
@@ -107,6 +119,32 @@ export interface Subtask {
   readonly title: string;
   readonly completed: boolean;
   readonly revision: number;
+}
+
+/** The series an occurrence belongs to (S19): its current part's schedule and template facts. */
+export interface TaskSeries {
+  readonly revision: number;
+  readonly frequency: RecurrenceFrequency;
+  readonly interval: number;
+  readonly weekdays: readonly IsoWeekday[] | null;
+  readonly startsOn: string;
+  readonly endsOn: string | null;
+  readonly count: number | null;
+  readonly startOffset: number | null;
+  readonly listId: string | null;
+  readonly paused: boolean;
+  readonly ended: boolean;
+  /** The next open occurrence after today, or the next date still to come; null when ended. */
+  readonly nextDate: string | null;
+  /** Whether this occurrence belongs to the current part (only then "this and following"). */
+  readonly inHead: boolean;
+  /** Changed on its own: later series changes leave it as it is. */
+  readonly detached: boolean;
+  readonly needsReassignment: boolean;
+  /** Membership ids of the series' assignees (new occurrences get them). */
+  readonly assignees: readonly string[];
+  readonly checklistSize: number;
+  readonly can: { readonly edit: boolean; readonly assign: boolean; readonly delete: boolean };
 }
 
 export interface TaskDetail {
@@ -139,6 +177,9 @@ export interface TaskDetail {
   }[];
   readonly subtasks: readonly Subtask[];
   readonly commentCount: number;
+  /** S19: the occurrence's original scheduled date, and its series (null: one-off, or removed). */
+  readonly occurrenceDate: string | null;
+  readonly series: TaskSeries | null;
   readonly can: {
     readonly edit: boolean;
     readonly complete: boolean;
@@ -146,6 +187,62 @@ export interface TaskDetail {
     readonly delete: boolean;
     readonly comment: boolean;
   };
+}
+
+/** What a change to following or all occurrences does (S19), from the dry run or the change. */
+export interface SeriesImpact {
+  /** The scope applied: "following" turns into "series" when nothing came before this occurrence. */
+  readonly scope: SeriesScope;
+  readonly updated: number;
+  /** Open occurrences changed on their own, left as they are. */
+  readonly kept: number;
+  /** Upcoming untouched occurrences no longer on the schedule. */
+  readonly removed: number;
+  /** Completed occurrences in scope, never changed. */
+  readonly completed: number;
+  readonly selectedRemoved: boolean;
+  readonly subtasksCopied: number;
+  readonly nextDates: readonly string[];
+}
+
+export interface SeriesChangeResponse {
+  readonly outcome: "preview" | "saved";
+  readonly impact: SeriesImpact;
+  readonly revision: number;
+  /** This occurrence, or the next open one when the change removed this one; null if none. */
+  readonly taskId: string | null;
+}
+
+export interface SeriesDeleteImpact {
+  readonly scope: SeriesScope;
+  readonly removed: number;
+  readonly completed: number;
+}
+
+export interface SeriesDeleteResponse {
+  readonly outcome: "preview" | "deleted";
+  readonly impact: SeriesDeleteImpact;
+  readonly trashEntryId: string | null;
+}
+
+export type OccurrenceStatus = "completed" | "completed_late" | "missed" | "open";
+
+/** One row of a series' history (S19): scheduled date, status, and the actual completer. */
+export interface OccurrenceRow {
+  readonly id: string;
+  readonly occurrenceDate: string;
+  readonly dueDate: string | null;
+  readonly status: OccurrenceStatus;
+  readonly completedAt: string | null;
+  readonly completedBy: TaskPerson | null;
+  /** The occurrence being viewed. */
+  readonly current: boolean;
+}
+
+export interface OccurrencePage {
+  readonly occurrences: readonly OccurrenceRow[];
+  readonly total: number;
+  readonly filter: OccurrenceFilter;
 }
 
 export interface TaskComment {
@@ -187,6 +284,10 @@ export type TaskFailure =
   | "listUnavailable"
   | "hasTasks"
   | "hasOpenTasks"
+  | "hasSeries"
+  | "scopeUnavailable"
+  | "notRecurring"
+  | "scheduleEnded"
   | "network"
   | "failed";
 
@@ -213,6 +314,10 @@ const failures: { readonly [C in TaskErrorCode]?: TaskFailure } = {
   "has-tasks": "hasTasks",
   "has-open-tasks": "hasOpenTasks",
   "id-taken": "failed",
+  "has-series": "hasSeries",
+  "scope-unavailable": "scopeUnavailable",
+  "not-recurring": "notRecurring",
+  "schedule-ended": "scheduleEnded",
 };
 
 /** Sends one request; resolves with the JSON answer or rejects with a TaskRequestError. */

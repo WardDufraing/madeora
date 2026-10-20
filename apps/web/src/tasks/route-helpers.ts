@@ -106,6 +106,7 @@ export function outcomeAnswer(
     case "reopened":
     case "already_completed":
     case "already_open":
+    case "preview":
       return json(okStatus, body);
     case "conflict":
       return failure(409, "conflict", revision === undefined ? {} : { revision });
@@ -123,6 +124,14 @@ export function outcomeAnswer(
       return failure(409, "has-tasks", count === undefined ? {} : { count });
     case "has_open_tasks":
       return failure(409, "has-open-tasks", count === undefined ? {} : { count });
+    case "has_series":
+      return failure(409, "has-series", count === undefined ? {} : { count });
+    case "scope_unavailable":
+      return failure(409, "scope-unavailable");
+    case "not_recurring":
+      return failure(409, "not-recurring");
+    case "ended":
+      return failure(409, "schedule-ended");
     case "id_taken":
       return failure(409, "id-taken");
     case "invalid_label":

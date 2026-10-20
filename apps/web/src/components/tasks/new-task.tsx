@@ -6,11 +6,13 @@ import { useRef, useState } from "react";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import { useAnnouncer } from "@/components/ui/use-announcer";
+import type { DateFormat } from "@/preferences/schema";
 import { sendTaskRequest, TASKS_ENDPOINT, type RevisionResponse } from "@/tasks/api";
 import { noMembers, type MemberOption } from "@/tasks/format";
 import type { CreateTaskInput } from "@/tasks/schema";
 
 import type { LabelOption } from "./label-picker";
+import { noRepeat } from "./repeat-fields";
 import { TaskForm, type TaskFormInput, type TaskFormOutput } from "./task-form";
 import { HydrationGate } from "./hydration-gate";
 import { useTaskMutation } from "./use-task-mutation";
@@ -24,13 +26,21 @@ export interface NewTaskProps {
   readonly labels: readonly LabelOption[];
   /** Assignable members, only when the viewer manages tasks in this Home. */
   readonly members: readonly MemberOption[];
+  readonly dateFormat: DateFormat;
 }
 
 /**
- * Adding a task (S18). Each opening of the form gets a fresh id, so a retry after a lost answer finds
+ * Adding a task (S18), optionally repeating (S19: its due date is the first date). Each opening of the form gets a fresh id, so a retry after a lost answer finds
  * the task already there instead of creating a second one.
  */
-export function NewTask({ homeId, lists, defaultListId, labels, members }: NewTaskProps) {
+export function NewTask({
+  homeId,
+  lists,
+  defaultListId,
+  labels,
+  members,
+  dateFormat,
+}: NewTaskProps) {
   const t = useTranslations("Tasks");
   const texts = useTaskTexts(noMembers);
   const [open, setOpen] = useState(false);
@@ -59,6 +69,7 @@ export function NewTask({ homeId, lists, defaultListId, labels, members }: NewTa
     labelIds: [],
     listId: firstList,
     assigneeIds: [],
+    repeat: noRepeat,
   };
 
   function submit(values: TaskFormOutput) {
@@ -73,6 +84,8 @@ export function NewTask({ homeId, lists, defaultListId, labels, members }: NewTa
       priority: values.priority,
       labelIds: [...values.labelIds],
       assigneeIds: [...values.assigneeIds],
+      recurrence:
+        values.repeat && values.dueDate ? { ...values.repeat, startsOn: values.dueDate } : null,
     });
   }
 
@@ -115,10 +128,12 @@ export function NewTask({ homeId, lists, defaultListId, labels, members }: NewTa
               }}
               submitLabel={t("addTask")}
               focusTitle
+              repeatable
+              dateFormat={dateFormat}
             />
             {mutation.error ? (
               <FormAlert tone="error" announce className="mt-3">
-                {texts.failure(mutation.error.failure)}
+                {texts.failure(mutation.error.failure, mutation.error.detail)}
               </FormAlert>
             ) : null}
           </div>

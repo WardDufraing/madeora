@@ -19,6 +19,7 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261019090000_roles_and_ownership.sql` | S12  | `ownership_transfers_table` is not `NULL`              |
 | `supabase/migrations/20261020090000_ownership_recovery.sql`  | S12b | `ownership_recoveries_table` is not `NULL`             |
 | `supabase/migrations/20261026090000_tasks.sql`               | S18  | `tasks_table` is not `NULL`                            |
+| `supabase/migrations/20261027090000_task_recurrence.sql`     | S19  | `task_series_table` is not `NULL`                      |
 
 Check query (read-only, safe to run any time):
 
@@ -32,7 +33,8 @@ select
   to_regclass('public.home_member_profiles') as member_profiles_table,
   to_regclass('private.home_ownership_transfers') as ownership_transfers_table,
   to_regclass('private.home_ownership_recoveries') as ownership_recoveries_table,
-  to_regclass('private.tasks') as tasks_table;
+  to_regclass('private.tasks') as tasks_table,
+  to_regclass('private.task_series') as task_series_table;
 ```
 
 ## Apply a migration
@@ -256,6 +258,27 @@ From S18 there are tasks in the Personal space and in every Home (the **Tasks** 
    It must show `tasks_table` **private.tasks**, **false** for `members_can_read_tasks` and `signed_out_can_list`, **true** for `members_can_complete` and `new_capability`, and `tasks` **0**.
 
 2. In the app click **Tasks** in the sidebar: "No task lists yet" appears. Click **Lists and labels**, create a list, go back and add a task. Open a Home and click **Tasks**: the Home's own, empty, task page appears.
+
+## Check S19 (`20261027090000_task_recurrence.sql`)
+
+From S19 a task can repeat. Nothing changes for existing tasks: none of them repeats until someone creates a repeating task. Apply it only after S18 (`20261026090000_tasks.sql`), because it extends its functions.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.task_series') as task_series_table,
+     has_table_privilege('authenticated', 'private.task_series', 'select') as members_can_read_series,
+     has_function_privilege('authenticated', 'public.advance_task_series(uuid, date)', 'execute')
+       as members_can_advance,
+     has_function_privilege('anon', 'public.list_task_occurrences(uuid, text, integer, integer, date, text)', 'execute')
+       as signed_out_can_read_history,
+     (select count(*) from private.task_series) as series;
+   ```
+
+   It must show `task_series_table` **private.task_series**, **false** for `members_can_read_series` and `signed_out_can_read_history`, **true** for `members_can_advance`, and `series` **0**.
+
+2. In the app click **Tasks**, then **New task**: the form has a **Repeats** field. Add a task with a due date of today that repeats weekly: its row says "Repeats", and its page shows the Repeats section with the next date.
 
 ## If a migration file changed after you applied it
 

@@ -1,6 +1,13 @@
 import { z } from "zod";
 
 import { accentPalette, type PaletteId } from "@madeora/design-tokens";
+import {
+  daysBetween,
+  isValidPattern,
+  RECURRENCE_LIMITS,
+  recurrenceFrequencies,
+  type IsoWeekday,
+} from "@madeora/domain/tasks";
 
 import { nameProblem, normalizeName } from "@/names/visible-name";
 
@@ -22,6 +29,9 @@ export const TASK_LIMITS = {
   subtasks: 100,
   lists: 100,
   labels: 100,
+  /** S19: days a recurring task's start date may lie before its due date; history page size. */
+  startOffset: 365,
+  historyPage: 50,
 } as const;
 
 export const taskPriorities = ["low", "normal", "high", "urgent"] as const;
@@ -132,6 +142,38 @@ export const taskFieldsSchema = z
   );
 export type TaskFields = z.output<typeof taskFieldsSchema>;
 
+/**
+ * A recurring task's schedule (S19): daily, weekly on chosen ISO weekdays (1 Monday … 7 Sunday),
+ * monthly or yearly, every `interval`; it ends never, on `endsOn`, or after `count` occurrences.
+ * `startsOn` is the first date and the anchor of the rhythm. The database checks it again
+ * (`private.valid_series_rule`) and decides which occurrences exist.
+ */
+export const recurrenceSchema = z
+  .strictObject({
+    frequency: z.enum(recurrenceFrequencies),
+    interval: z.int().min(1).max(RECURRENCE_LIMITS.interval),
+    weekdays: z
+      .array(z.int().min(1).max(7))
+      .min(1)
+      .max(7)
+      .transform((days) => [...days].sort((a, b) => a - b) as IsoWeekday[])
+      .nullable(),
+    startsOn: dateOnlySchema,
+    endsOn: dateOnlySchema.nullable(),
+    count: z.int().min(1).max(RECURRENCE_LIMITS.count).nullable(),
+  })
+  .refine((rule) => isValidPattern(rule), { message: "invalid", path: ["weekdays"] })
+  .refine((rule) => rule.endsOn === null || rule.endsOn >= rule.startsOn, {
+    message: "dateOrder",
+    path: ["endsOn"],
+  });
+export type RecurrenceInput = z.output<typeof recurrenceSchema>;
+
+/** Days between a start and a due date, as a series' start offset; null without a start date. */
+export function startOffsetOf(startDate: string | null, dueDate: string): number | null {
+  return startDate === null ? null : daysBetween(startDate, dueDate);
+}
+
 export const createTaskSchema = z
   .strictObject({
     id,
@@ -144,6 +186,8 @@ export const createTaskSchema = z
     priority: z.enum(taskPriorities).nullable(),
     labelIds: z.array(id).max(TASK_LIMITS.labelsPerTask),
     assigneeIds: z.array(id).max(TASK_LIMITS.assigneesPerTask),
+    /** S19: makes it a recurring task; its first date is the due date. */
+    recurrence: recurrenceSchema.nullish(),
   })
   .refine(
     (task) => task.startDate === null || task.dueDate === null || task.startDate <= task.dueDate,
@@ -152,7 +196,18 @@ export const createTaskSchema = z
   .refine((task) => task.homeId !== null || task.assigneeIds.length === 0, {
     message: "invalid",
     path: ["assigneeIds"],
-  });
+  })
+  .refine((task) => !task.recurrence || task.dueDate === task.recurrence.startsOn, {
+    message: "required",
+    path: ["dueDate"],
+  })
+  .refine(
+    (task) =>
+      !task.recurrence ||
+      task.dueDate === null ||
+      (startOffsetOf(task.startDate, task.dueDate) ?? 0) <= TASK_LIMITS.startOffset,
+    { message: "tooLong", path: ["startDate"] },
+  );
 export type CreateTaskInput = z.output<typeof createTaskSchema>;
 
 export const updateTaskSchema = z
@@ -177,6 +232,63 @@ export const setAssigneesSchema = z.strictObject({
 });
 export const moveTaskSchema = z.strictObject({ expectedRevision: z.int().min(1), listId: id });
 export const completionSchema = z.strictObject({ completed: z.boolean() });
+
+export const seriesScopes = ["following", "series"] as const;
+export type SeriesScope = (typeof seriesScopes)[number];
+
+/**
+ * A change to this and following occurrences, or the entire series (S19). Each part is optional,
+ * at least one is given. `dryRun` asks for the impact only (the same work, rolled back).
+ */
+export const seriesChangeSchema = z
+  .strictObject({
+    scope: z.enum(seriesScopes),
+    expectedTaskRevision: z.int().min(1),
+    expectedSeriesRevision: z.int().min(1),
+    dryRun: z.boolean(),
+    content: z
+      .strictObject({
+        title: taskTitleSchema,
+        description: descriptionSchema.nullable(),
+        priority: z.enum(taskPriorities).nullable(),
+        labelIds: z.array(id).max(TASK_LIMITS.labelsPerTask),
+        startOffset: z.int().min(0).max(TASK_LIMITS.startOffset).nullable(),
+        /** This occurrence's checklist becomes the checklist of occurrences created from now on. */
+        copySubtasks: z.boolean(),
+      })
+      .optional(),
+    listId: id.optional(),
+    assigneeIds: z.array(id).max(TASK_LIMITS.assigneesPerTask).optional(),
+    schedule: recurrenceSchema.optional(),
+  })
+  .refine(
+    (change) =>
+      change.content !== undefined ||
+      change.listId !== undefined ||
+      change.assigneeIds !== undefined ||
+      change.schedule !== undefined,
+    { message: "required", path: ["content"] },
+  );
+export type SeriesChangeInput = z.output<typeof seriesChangeSchema>;
+
+export const seriesDeleteSchema = z.strictObject({
+  scope: z.enum(seriesScopes),
+  expectedSeriesRevision: z.int().min(1),
+  dryRun: z.boolean(),
+});
+export type SeriesDeleteInput = z.output<typeof seriesDeleteSchema>;
+
+export const seriesPausedSchema = z.strictObject({
+  paused: z.boolean(),
+  expectedSeriesRevision: z.int().min(1),
+});
+
+export const occurrenceFilters = ["all", "completed", "missed"] as const;
+export type OccurrenceFilter = (typeof occurrenceFilters)[number];
+export const occurrenceQuerySchema = z.strictObject({
+  filter: z.enum(occurrenceFilters).default("all"),
+  offset: z.coerce.number().int().min(0).max(TASK_LIMITS.maxOffset).default(0),
+});
 
 export const addSubtaskSchema = z.strictObject({ id, title: taskTitleSchema });
 export const updateSubtaskSchema = z.union([

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,11 @@ import { SelectField } from "@/components/ui/select-field";
 import { TextArea } from "@/components/ui/text-area";
 import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import type { DateFormat } from "@/preferences/schema";
 import type { MemberOption } from "@/tasks/format";
 import {
   dateOnlySchema,
+  startOffsetOf,
   descriptionSchema,
   TASK_LIMITS,
   taskPriorities,
@@ -24,6 +26,7 @@ import {
 } from "@/tasks/schema";
 
 import { LabelPicker, type LabelOption } from "./label-picker";
+import { RepeatFields, repeatSchema, type RepeatError } from "./repeat-fields";
 
 const optionalDate = z.union([z.literal(""), dateOnlySchema]).transform((value) => value || null);
 
@@ -37,10 +40,28 @@ const formSchema = z
     labelIds: z.array(z.string()).max(TASK_LIMITS.labelsPerTask),
     listId: z.string(),
     assigneeIds: z.array(z.string()).max(TASK_LIMITS.assigneesPerTask),
+    /** S19, creating only: the repeat schedule; its first date is the due date. */
+    repeat: repeatSchema,
   })
   .refine(
     (task) => task.startDate === null || task.dueDate === null || task.startDate <= task.dueDate,
     { message: "dateOrder" satisfies TaskFieldError, path: ["dueDate"] },
+  )
+  .refine((task) => task.repeat === null || task.dueDate !== null, {
+    message: "repeatNeedsDue" satisfies FormError,
+    path: ["dueDate"],
+  })
+  .refine(
+    (task) =>
+      task.repeat === null ||
+      task.dueDate === null ||
+      (startOffsetOf(task.startDate, task.dueDate) ?? 0) <= TASK_LIMITS.startOffset,
+    { message: "repeatOffset" satisfies FormError, path: ["startDate"] },
+  )
+  .refine(
+    (task) =>
+      task.repeat?.endsOn == null || task.dueDate === null || task.repeat.endsOn >= task.dueDate,
+    { message: "endsOn" satisfies RepeatError, path: ["repeat", "endsOn"] },
   );
 export type TaskFormInput = z.input<typeof formSchema>;
 export type TaskFormOutput = z.output<typeof formSchema>;
@@ -59,7 +80,12 @@ export interface TaskFormProps {
   readonly submitLabel: string;
   /** Moves focus to the title when the form appears (opening it, or after adding a task). */
   readonly focusTitle?: boolean;
+  /** S19: offers the repeat fields (creating only); the date format is for their summary. */
+  readonly repeatable?: boolean;
+  readonly dateFormat?: DateFormat;
 }
+
+type FormError = TaskFieldError | "repeatNeedsDue" | "repeatOffset";
 
 const fieldErrorKey = {
   required: "fieldRequired",
@@ -67,7 +93,9 @@ const fieldErrorKey = {
   invalidCharacters: "fieldInvalidCharacters",
   dateOrder: "fieldDateOrder",
   invalid: "fieldInvalid",
-} as const satisfies Record<TaskFieldError, string>;
+  repeatNeedsDue: "repeatErrorNeedsDue",
+  repeatOffset: "repeatErrorOffset",
+} as const satisfies Record<FormError, string>;
 
 /**
  * A task's fields (S18): title, plain-text description, optional start and due dates (calendar dates
@@ -86,6 +114,8 @@ export function TaskForm({
   onCancel,
   submitLabel,
   focusTitle = false,
+  repeatable = false,
+  dateFormat = "ymd-dash",
 }: TaskFormProps) {
   const t = useTranslations("Tasks");
   const hydrated = useHydrated();
@@ -94,11 +124,12 @@ export function TaskForm({
     defaultValues: defaults,
   });
   const errors = form.formState.errors;
+  const dueDate = useWatch({ control: form.control, name: "dueDate" });
   useEffect(() => {
     if (focusTitle) form.setFocus("title");
   }, [focusTitle, form]);
   const message = (error: { readonly message?: string | undefined } | undefined) => {
-    const key = error?.message as TaskFieldError | undefined;
+    const key = error?.message as FormError | undefined;
     return key && key in fieldErrorKey ? t(fieldErrorKey[key]) : undefined;
   };
 
@@ -176,6 +207,31 @@ export function TaskForm({
           <LabelPicker labels={labels} value={field.value} onChange={field.onChange} />
         )}
       />
+      {mode === "create" && repeatable ? (
+        <Controller
+          control={form.control}
+          name="repeat"
+          render={({ field }) => {
+            const repeatErrors = errors.repeat;
+            return (
+              <RepeatFields
+                value={field.value}
+                onChange={field.onChange}
+                startsOn={dueDate || null}
+                errors={{
+                  interval: repeatErrors?.interval?.message,
+                  weekdays:
+                    repeatErrors?.weekdays?.message ?? repeatErrors?.weekdays?.root?.message,
+                  endsOn: repeatErrors?.endsOn?.message,
+                  count: repeatErrors?.count?.message,
+                }}
+                dateFormat={dateFormat}
+                allowNone
+              />
+            );
+          }}
+        />
+      ) : null}
       {mode === "create" && members.length > 0 ? (
         <Controller
           control={form.control}

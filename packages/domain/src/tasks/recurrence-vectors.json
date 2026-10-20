@@ -1,0 +1,502 @@
+[
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-01",
+    "expected": "2026-10-20"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-20",
+    "expected": "2026-10-20"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-21",
+    "expected": "2026-10-21"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2027-01-01",
+    "expected": "2027-01-01"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 3,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-21",
+    "expected": "2026-10-23"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 3,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-23",
+    "expected": "2026-10-23"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 3,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-24",
+    "expected": "2026-10-26"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 3,
+      "weekdays": null,
+      "startsOn": "2026-10-20"
+    },
+    "from": "2028-02-28",
+    "expected": "2028-03-01"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 99,
+      "weekdays": null,
+      "startsOn": "2024-02-29"
+    },
+    "from": "2024-03-01",
+    "expected": "2024-06-07"
+  },
+  {
+    "pattern": {
+      "frequency": "daily",
+      "interval": 99,
+      "weekdays": null,
+      "startsOn": "2024-02-29"
+    },
+    "from": "2025-01-01",
+    "expected": "2025-03-31"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [1],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-10-21",
+    "expected": "2026-10-26"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [1],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-10-26",
+    "expected": "2026-10-26"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [1],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-10-27",
+    "expected": "2026-11-02"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [2, 4],
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-20",
+    "expected": "2026-10-20"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [2, 4],
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-21",
+    "expected": "2026-10-22"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [2, 4],
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-10-23",
+    "expected": "2026-10-27"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [2, 4],
+      "startsOn": "2026-10-20"
+    },
+    "from": "2026-12-31",
+    "expected": "2026-12-31"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 2,
+      "weekdays": [1, 5],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-10-01",
+    "expected": "2026-10-23"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 2,
+      "weekdays": [1, 5],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-10-24",
+    "expected": "2026-11-02"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 2,
+      "weekdays": [1, 5],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-10-31",
+    "expected": "2026-11-02"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 2,
+      "weekdays": [1, 5],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-11-03",
+    "expected": "2026-11-06"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 2,
+      "weekdays": [1, 5],
+      "startsOn": "2026-10-21"
+    },
+    "from": "2026-11-07",
+    "expected": "2026-11-16"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 3,
+      "weekdays": [7],
+      "startsOn": "2026-12-27"
+    },
+    "from": "2026-12-28",
+    "expected": "2027-01-17"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 3,
+      "weekdays": [7],
+      "startsOn": "2026-12-27"
+    },
+    "from": "2027-01-17",
+    "expected": "2027-01-17"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 3,
+      "weekdays": [7],
+      "startsOn": "2026-12-27"
+    },
+    "from": "2027-01-18",
+    "expected": "2027-02-07"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [1, 2, 3, 4, 5, 6, 7],
+      "startsOn": "2026-10-25"
+    },
+    "from": "2026-10-25",
+    "expected": "2026-10-25"
+  },
+  {
+    "pattern": {
+      "frequency": "weekly",
+      "interval": 1,
+      "weekdays": [1, 2, 3, 4, 5, 6, 7],
+      "startsOn": "2026-10-25"
+    },
+    "from": "2026-10-26",
+    "expected": "2026-10-26"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2027-01-31"
+    },
+    "from": "2027-02-01",
+    "expected": "2027-02-28"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2027-01-31"
+    },
+    "from": "2027-03-01",
+    "expected": "2027-03-31"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2027-01-31"
+    },
+    "from": "2027-04-01",
+    "expected": "2027-04-30"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2027-01-31"
+    },
+    "from": "2028-02-01",
+    "expected": "2028-02-29"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-30"
+    },
+    "from": "2027-02-01",
+    "expected": "2027-02-28"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-30"
+    },
+    "from": "2027-02-28",
+    "expected": "2027-02-28"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2026-10-30"
+    },
+    "from": "2027-03-01",
+    "expected": "2027-03-30"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-11-15"
+    },
+    "from": "2026-12-01",
+    "expected": "2027-01-15"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-11-15"
+    },
+    "from": "2027-01-15",
+    "expected": "2027-01-15"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-11-15"
+    },
+    "from": "2027-01-16",
+    "expected": "2027-03-15"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-11-15"
+    },
+    "from": "2027-03-16",
+    "expected": "2027-05-15"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 12,
+      "weekdays": null,
+      "startsOn": "2026-01-29"
+    },
+    "from": "2026-02-01",
+    "expected": "2027-01-29"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 12,
+      "weekdays": null,
+      "startsOn": "2026-01-29"
+    },
+    "from": "2027-01-30",
+    "expected": "2028-01-29"
+  },
+  {
+    "pattern": {
+      "frequency": "monthly",
+      "interval": 12,
+      "weekdays": null,
+      "startsOn": "2026-01-29"
+    },
+    "from": "2028-01-01",
+    "expected": "2028-01-29"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2028-02-29"
+    },
+    "from": "2028-03-01",
+    "expected": "2029-02-28"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2028-02-29"
+    },
+    "from": "2029-02-28",
+    "expected": "2029-02-28"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2028-02-29"
+    },
+    "from": "2029-03-01",
+    "expected": "2030-02-28"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 1,
+      "weekdays": null,
+      "startsOn": "2028-02-29"
+    },
+    "from": "2032-01-01",
+    "expected": "2032-02-29"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-12-31"
+    },
+    "from": "2027-01-01",
+    "expected": "2028-12-31"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-12-31"
+    },
+    "from": "2028-12-31",
+    "expected": "2028-12-31"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 2,
+      "weekdays": null,
+      "startsOn": "2026-12-31"
+    },
+    "from": "2029-01-01",
+    "expected": "2030-12-31"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 4,
+      "weekdays": null,
+      "startsOn": "2024-02-29"
+    },
+    "from": "2024-03-01",
+    "expected": "2028-02-29"
+  },
+  {
+    "pattern": {
+      "frequency": "yearly",
+      "interval": 4,
+      "weekdays": null,
+      "startsOn": "2024-02-29"
+    },
+    "from": "2027-12-31",
+    "expected": "2028-02-29"
+  }
+]

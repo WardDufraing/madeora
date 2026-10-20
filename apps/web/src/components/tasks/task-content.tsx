@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAnnouncer } from "@/components/ui/use-announcer";
 import type { DateFormat } from "@/preferences/schema";
 import {
@@ -14,12 +15,19 @@ import {
   type TaskDetail,
 } from "@/tasks/api";
 import { formatTaskDate, noMembers } from "@/tasks/format";
-import type { UpdateTaskInput } from "@/tasks/schema";
+import { startOffsetOf, type SeriesScope, type UpdateTaskInput } from "@/tasks/schema";
 
 import { LabelChip } from "./label-chip";
 import type { LabelOption } from "./label-picker";
 import { TaskForm, type TaskFormOutput } from "./task-form";
 import { HydrationGate } from "./hydration-gate";
+import { noRepeat } from "./repeat-fields";
+import {
+  sendSeriesChange,
+  SeriesScopeDialog,
+  type OccurrenceScope,
+  type SeriesChangeBody,
+} from "./series-scope";
 import { useTaskMutation } from "./use-task-mutation";
 import { useTaskTexts } from "./use-task-texts";
 
@@ -34,6 +42,10 @@ export interface TaskContentProps {
  * an Edit form. A save names the revision it started from; if someone saved in between, nothing is
  * overwritten: the draft stays on screen with the explanation until the person loads the latest
  * version.
+ *
+ * S19: on an occurrence of a recurring series, a person who may change the series is asked whether
+ * the change is for this occurrence, this and following ones, or the entire series, with a preview.
+ * A changed due date only applies to this occurrence (the schedule sets the series' dates).
  */
 export function TaskContent({ task, labels, dateFormat }: TaskContentProps) {
   const t = useTranslations("Tasks");
@@ -41,18 +53,65 @@ export function TaskContent({ task, labels, dateFormat }: TaskContentProps) {
   const [editing, setEditing] = useState(false);
   const editButton = useRef<HTMLButtonElement>(null);
   const { announce, region } = useAnnouncer();
+  const [pending, setPending] = useState<TaskFormOutput | null>(null);
+  const [copySubtasks, setCopySubtasks] = useState(false);
+  const finish = () => {
+    setPending(null);
+    setEditing(false);
+    announce(t("announceSaved"));
+    requestAnimationFrame(() => editButton.current?.focus());
+  };
   const mutation = useTaskMutation(
     `task:${task.id}`,
     (input: UpdateTaskInput) =>
       sendTaskRequest<RevisionResponse>("PATCH", `${TASKS_ENDPOINT}/${task.id}`, input),
-    () => {
-      setEditing(false);
-      announce(t("announceSaved"));
-      requestAnimationFrame(() => editButton.current?.focus());
-    },
+    finish,
   );
+  const seriesMutation = useTaskMutation(
+    `task:${task.id}`,
+    ({ scope, body }: { readonly scope: SeriesScope; readonly body: SeriesChangeBody }) =>
+      sendSeriesChange(task.id, scope, body, false),
+    finish,
+  );
+  const series = task.series;
+  const dueChanged = pending !== null && pending.dueDate !== task.dueDate;
+  const seriesAllowed = series !== null && series.can.edit && !dueChanged;
+
+  function seriesBody(values: TaskFormOutput): SeriesChangeBody {
+    const dueDate = values.dueDate ?? task.dueDate;
+    return {
+      expectedTaskRevision: task.revision,
+      expectedSeriesRevision: series?.revision ?? 1,
+      content: {
+        title: values.title,
+        description: values.description,
+        priority: values.priority,
+        labelIds: [...values.labelIds],
+        startOffset: dueDate ? startOffsetOf(values.startDate, dueDate) : null,
+        copySubtasks,
+      },
+    };
+  }
 
   function save(values: TaskFormOutput) {
+    if (series?.can.edit) {
+      setCopySubtasks(false);
+      setPending(values);
+      return;
+    }
+    saveThis(values);
+  }
+
+  function confirm(scope: OccurrenceScope) {
+    if (!pending) return;
+    if (scope === "this") {
+      saveThis(pending);
+      return;
+    }
+    seriesMutation.mutate({ scope, body: seriesBody(pending) });
+  }
+
+  function saveThis(values: TaskFormOutput) {
     mutation.mutate({
       expectedRevision: task.revision,
       title: values.title,
@@ -86,19 +145,53 @@ export function TaskContent({ task, labels, dateFormat }: TaskContentProps) {
                 labelIds: task.labels.map((label) => label.id),
                 listId: task.list.id,
                 assigneeIds: [],
+                repeat: noRepeat,
               }}
               labels={labels}
-              busy={mutation.busy}
+              busy={mutation.busy || seriesMutation.busy}
               onSubmit={save}
               onCancel={() => {
                 setEditing(false);
                 mutation.reset();
+                seriesMutation.reset();
                 requestAnimationFrame(() => editButton.current?.focus());
               }}
               submitLabel={t("save")}
               focusTitle
             />
-            {mutation.error ? (
+            {pending && series ? (
+              <SeriesScopeDialog
+                open
+                onClose={() => {
+                  setPending(null);
+                  seriesMutation.reset();
+                }}
+                task={task}
+                title={t("scopeSaveTitle")}
+                request={{ kind: "change", body: seriesBody(pending) }}
+                allowThis
+                allowSeries={seriesAllowed}
+                {...(dueChanged ? { note: t("scopeDateNote") } : {})}
+                confirmLabel={t("save")}
+                busy={mutation.busy || seriesMutation.busy}
+                dateFormat={dateFormat}
+                onConfirm={confirm}
+                error={seriesMutation.error ?? mutation.error}
+                seriesOptions={
+                  task.subtasks.length > 0 ? (
+                    <Checkbox
+                      label={t("scopeCopySubtasks", { count: task.subtasks.length })}
+                      description={t("scopeCopySubtasksHelp")}
+                      checked={copySubtasks}
+                      onChange={(event) => {
+                        setCopySubtasks(event.target.checked);
+                      }}
+                    />
+                  ) : null
+                }
+              />
+            ) : null}
+            {mutation.error && !pending ? (
               <FormAlert tone="error" announce>
                 <p>{texts.failure(mutation.error.failure)}</p>
                 {mutation.error.failure === "conflict" ? (

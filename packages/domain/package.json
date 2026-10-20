@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./permissions": "./src/permissions/index.ts",
-    "./notifications": "./src/notifications/index.ts"
+    "./notifications": "./src/notifications/index.ts",
+    "./tasks": "./src/tasks/index.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

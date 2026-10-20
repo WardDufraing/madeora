@@ -20,9 +20,13 @@ export {
   type MemberTargetFacts,
 } from "./home";
 export {
+  decideSeriesAction,
   decideTaskAction,
+  seriesActions,
   taskActions,
   taskPermissions,
+  type SeriesAction,
+  type SeriesFacts,
   type TaskAction,
   type TaskFacts,
   type TaskPermissionProjection,

@@ -6,6 +6,7 @@ import { cx } from "@/components/ui/cx";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { getDateTimeFormats } from "@/invitations/server";
 import {
+  advanceSeries,
   getTaskContext,
   listTaskLabels,
   listTaskLists,
@@ -39,6 +40,8 @@ export interface TasksOverviewProps {
 export async function TasksOverview({ userId, home, searchParams, notice }: TasksOverviewProps) {
   const homeId = home?.id ?? null;
   const query = parseTaskQuery(searchParams);
+  // S19: recurring series create their due occurrences before anything is read.
+  await advanceSeries(homeId);
   const [t, formats, context, lists, labels, members] = await Promise.all([
     getTranslations("Tasks"),
     getDateTimeFormats(),
@@ -152,6 +155,7 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
               defaultListId={current?.id ?? null}
               labels={labelOptions}
               members={context.value.canManage ? memberOptions : []}
+              dateFormat={formats.dateFormat}
             />
           )}
           <h2 className="sr-only">{current ? current.name : t("allTasks")}</h2>
