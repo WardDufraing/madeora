@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { type DelegableCapability, type HomeMembershipFacts, type HomeRole } from "./home";
-import { decideTaskAction, taskActions, taskPermissions, type TaskFacts } from "./tasks";
+import {
+  decideSeriesAction,
+  decideTaskAction,
+  seriesActions,
+  taskActions,
+  taskPermissions,
+  type TaskFacts,
+} from "./tasks";
 
 const HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
 const OTHER_HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0002";
@@ -127,6 +134,74 @@ describe("personal tasks", () => {
   it.each(taskActions)("refuses %s to anyone else, whatever Home role they hold", (action) => {
     expect(
       decideTaskAction({ context: "personal", ownedByMe: false }, membership("owner"), action),
+    ).toEqual({ allowed: false, reason: "not-member" });
+  });
+});
+
+describe("recurring series (S19)", () => {
+  const series = (createdByMe: boolean) =>
+    ({ context: "home", homeId: HOME, createdByMe }) as const;
+  const cases: readonly {
+    readonly who: string;
+    readonly membership: HomeMembershipFacts;
+    readonly creator: boolean;
+    readonly expected: { readonly [A in (typeof seriesActions)[number]]: boolean };
+  }[] = [true, false].flatMap((creator) => [
+    {
+      who: "Owner",
+      membership: membership("owner"),
+      creator,
+      expected: { "series.edit": true, "series.assign": true, "series.delete": true },
+    },
+    {
+      who: "Administrator with manageHomeTasks",
+      membership: membership("administrator", ["manageHomeTasks"]),
+      creator,
+      expected: { "series.edit": true, "series.assign": true, "series.delete": true },
+    },
+    {
+      who: "Administrator without it",
+      membership: membership("administrator", ["manageHomeSettings"]),
+      creator,
+      expected: { "series.edit": creator, "series.assign": false, "series.delete": creator },
+    },
+    {
+      who: "Member",
+      membership: membership("member"),
+      creator,
+      expected: { "series.edit": creator, "series.assign": false, "series.delete": creator },
+    },
+  ]);
+
+  for (const row of cases) {
+    for (const action of seriesActions) {
+      it(`${row.who}, ${row.creator ? "creator" : "not creator"}: ${action}`, () => {
+        expect(decideSeriesAction(series(row.creator), row.membership, action).allowed).toBe(
+          row.expected[action],
+        );
+      });
+    }
+  }
+
+  it.each(seriesActions)("refuses %s outside the Home", (action) => {
+    expect(decideSeriesAction(series(true), membership("owner", [], OTHER_HOME), action)).toEqual({
+      allowed: false,
+      reason: "not-member",
+    });
+    expect(decideSeriesAction(series(true), null, action).allowed).toBe(false);
+  });
+
+  it("lets a personal series' owner do everything but assign", () => {
+    const own = { context: "personal", ownedByMe: true } as const;
+    expect(decideSeriesAction(own, null, "series.edit").allowed).toBe(true);
+    expect(decideSeriesAction(own, null, "series.delete").allowed).toBe(true);
+    expect(decideSeriesAction(own, null, "series.assign").allowed).toBe(false);
+    expect(
+      decideSeriesAction(
+        { context: "personal", ownedByMe: false },
+        membership("owner"),
+        "series.edit",
+      ),
     ).toEqual({ allowed: false, reason: "not-member" });
   });
 });

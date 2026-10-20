@@ -6,9 +6,26 @@ import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { isoDate } from "@/preferences/regional";
 import { getEffectiveTimeZone } from "@/preferences/server";
 
-import type { CommentPage, TaskDetail, TaskLabel, TaskListSummary, TaskPage, TaskRow } from "./api";
+import { type IsoWeekday, recurrenceFrequencies } from "@madeora/domain/tasks";
+
+import type {
+  CommentPage,
+  OccurrencePage,
+  OccurrenceStatus,
+  TaskDetail,
+  TaskLabel,
+  TaskListSummary,
+  TaskPage,
+  TaskRow,
+} from "./api";
 import { logTasks } from "./log";
-import { isLabelColor, TASK_LIMITS, taskPriorities, type TaskQuery } from "./schema";
+import {
+  isLabelColor,
+  type OccurrenceFilter,
+  TASK_LIMITS,
+  taskPriorities,
+  type TaskQuery,
+} from "./schema";
 
 /**
  * Server reads of tasks (S18), always with the signed-in person's own Supabase session: the database
@@ -39,6 +56,21 @@ const homeArg = (homeId: string | null) => (homeId ? { p_home_id: homeId } : {})
 export async function personalToday(): Promise<string> {
   const zone = await getEffectiveTimeZone();
   return isoDate(new Date(), zone.timeZone);
+}
+
+/**
+ * Creates the occurrences of the context's recurring series that are due by now (S19): every date
+ * up to today plus the next upcoming one. Generation is lazy, so task pages call this before they
+ * read; it is idempotent and safe to run from two page loads at once. A failure is logged and the
+ * page still shows what exists.
+ */
+export async function advanceSeries(homeId: string | null): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("advance_task_series", {
+    ...homeArg(homeId),
+    p_today: await personalToday(),
+  });
+  if (error && error.code !== "42501") logTasks("tasks.series_advance_failed", error.code);
 }
 
 export interface TaskContextInfo {
@@ -159,6 +191,7 @@ export async function listTasks(
         assignedToMe: row.assigned_to_me,
         canComplete: row.can_complete,
         revision: row.revision,
+        recurring: row.recurring,
       })),
     },
   };
@@ -201,6 +234,32 @@ const detailSchema = z.object({
     z.object({ id: z.uuid(), title: z.string(), completed: z.boolean(), revision: z.int() }),
   ),
   commentCount: z.int(),
+  occurrenceDate: z.string().nullable(),
+  series: z
+    .object({
+      revision: z.int(),
+      frequency: z.enum(recurrenceFrequencies),
+      interval: z.int(),
+      weekdays: z
+        .array(z.int().min(1).max(7))
+        .transform((days) => days as IsoWeekday[])
+        .nullable(),
+      startsOn: z.string(),
+      endsOn: z.string().nullable(),
+      count: z.int().nullable(),
+      startOffset: z.int().nullable(),
+      listId: z.uuid().nullable(),
+      paused: z.boolean(),
+      ended: z.boolean(),
+      nextDate: z.string().nullable(),
+      inHead: z.boolean(),
+      detached: z.boolean(),
+      needsReassignment: z.boolean(),
+      assignees: z.array(z.uuid()),
+      checklistSize: z.int(),
+      can: z.object({ edit: z.boolean(), assign: z.boolean(), delete: z.boolean() }),
+    })
+    .nullable(),
   can: z.object({
     edit: z.boolean(),
     complete: z.boolean(),
@@ -253,6 +312,63 @@ export async function listTaskComments(taskId: string, offset: number): Promise<
         revision: row.revision,
         author: { me: row.author_me, member: nullable(row.author_member) },
       })),
+    },
+  };
+}
+
+const occurrenceStatuses: readonly OccurrenceStatus[] = [
+  "completed",
+  "completed_late",
+  "missed",
+  "open",
+];
+
+/**
+ * One page of a series' history (S19), newest first: each occurrence's scheduled date, status and
+ * who actually completed it. Completed late and missed are judged in the person's effective
+ * timezone for Personal series (a Home uses its own).
+ */
+export async function listTaskOccurrences(
+  taskId: string,
+  filter: OccurrenceFilter,
+  offset: number,
+): Promise<Read<OccurrencePage>> {
+  const supabase = await createSupabaseServerClient();
+  const [today, zone] = await Promise.all([personalToday(), getEffectiveTimeZone()]);
+  const { data, error } = await supabase.rpc("list_task_occurrences", {
+    p_task_id: taskId,
+    p_filter: filter,
+    p_offset: offset,
+    p_limit: TASK_LIMITS.historyPage,
+    p_today: today,
+    p_time_zone: zone.timeZone,
+  });
+  if (error) {
+    if (error.code === "22023") return { status: "not-found" };
+    return failed("tasks.occurrences_failed", error);
+  }
+  return {
+    status: "ok",
+    value: {
+      filter,
+      total: data[0]?.total_count ?? 0,
+      occurrences: data.map((row) => {
+        const completedAt = nullable(row.completed_at);
+        return {
+          id: row.id,
+          occurrenceDate: row.occurrence_date,
+          dueDate: nullable(row.due_date),
+          status: occurrenceStatuses.includes(row.status as OccurrenceStatus)
+            ? (row.status as OccurrenceStatus)
+            : "open",
+          completedAt,
+          completedBy:
+            completedAt === null
+              ? null
+              : { me: row.completed_by_me, member: nullable(row.completed_by_member) },
+          current: row.is_current,
+        };
+      }),
     },
   };
 }

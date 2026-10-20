@@ -13,7 +13,7 @@ Madeora's own SVG icons (`architecture.md` §16). No general-purpose icon pack i
 
 ## Inventory
 
-All icons were drawn for Madeora on 13 October 2026 (S04 and S05; `chevron-down.svg` on 14 October 2026, S09; `bell.svg` on 15 October 2026, S14; `drag-handle.svg` on 16 October 2026, S17) as original artwork: simple geometric shapes, not copied or adapted from any icon set. A test checks that this table lists exactly the exported icons.
+All icons were drawn for Madeora on 13 October 2026 (S04 and S05; `chevron-down.svg` on 14 October 2026, S09; `bell.svg` on 15 October 2026, S14; `drag-handle.svg` on 16 October 2026, S17; `repeat.svg` on 17 October 2026, S19) as original artwork: simple geometric shapes, not copied or adapted from any icon set. A test checks that this table lists exactly the exported icons.
 
 | Component             | File                   | Used for                                                        |
 | --------------------- | ---------------------- | --------------------------------------------------------------- |
@@ -42,3 +42,4 @@ All icons were drawn for Madeora on 13 October 2026 (S04 and S05; `chevron-down.
 | `SidebarCollapseIcon` | `sidebar-collapse.svg` | Collapse the sidebar (mirrored in right-to-left layouts)        |
 | `SidebarExpandIcon`   | `sidebar-expand.svg`   | Expand the sidebar (mirrored in right-to-left layouts)          |
 | `DragHandleIcon`      | `drag-handle.svg`      | Drag handle of a dashboard widget in edit mode (S17)            |
+| `RepeatIcon`          | `repeat.svg`           | Marks an occurrence of a recurring task (S19)                   |

@@ -71,6 +71,7 @@ function row(extra: Partial<TaskRow> = {}): TaskRow {
     assignedToMe: true,
     canComplete: true,
     revision: 2,
+    recurring: false,
     ...extra,
   };
 }
@@ -114,6 +115,8 @@ function detail(extra: Partial<TaskDetail> = {}): TaskDetail {
       },
     ],
     commentCount: 0,
+    occurrenceDate: null,
+    series: null,
     can: { edit: true, complete: true, assign: false, delete: false, comment: true },
     ...extra,
   };
@@ -229,6 +232,7 @@ describe("NewTask", () => {
         defaultListId={null}
         labels={[]}
         members={members}
+        dateFormat="dmy-slash"
       />,
     );
     await user.click(screen.getByTestId("new-task-open"));
@@ -272,7 +276,14 @@ describe("NewTask", () => {
 
   it("cannot be opened without a list", () => {
     renderWithQuery(
-      <NewTask homeId={null} lists={[]} defaultListId={null} labels={[]} members={[]} />,
+      <NewTask
+        homeId={null}
+        lists={[]}
+        defaultListId={null}
+        labels={[]}
+        members={[]}
+        dateFormat="dmy-slash"
+      />,
     );
     expect(screen.getByTestId("new-task-open")).toBeDisabled();
   });
@@ -478,7 +489,7 @@ describe("TaskComments", () => {
 describe("TaskAssignees", () => {
   it("shows assignees to everyone; only task managers get the change button", async () => {
     const { container, unmount } = renderWithQuery(
-      <TaskAssignees task={detail()} members={members} />,
+      <TaskAssignees task={detail()} members={members} dateFormat="dmy-slash" />,
     );
     expect(screen.getByTestId("task-assignees")).toHaveTextContent("You");
     expect(screen.getByTestId("task-assignees")).toHaveTextContent("Bea");
@@ -492,6 +503,7 @@ describe("TaskAssignees", () => {
           can: { edit: true, complete: true, assign: true, delete: true, comment: true },
         })}
         members={members}
+        dateFormat="dmy-slash"
       />,
     );
     expect(screen.getByText(/This task needs reassignment/)).toBeInTheDocument();

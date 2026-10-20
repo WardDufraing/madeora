@@ -56,6 +56,8 @@ export const taskKeys = {
     ["tasks", userId, homeId ?? "personal", "page", query, loadedAt] as const,
   comments: (userId: string, taskId: string, loadedAt: string) =>
     ["tasks", userId, "comments", taskId, loadedAt] as const,
+  occurrences: (userId: string, taskId: string, filter: string, loadedAt: string) =>
+    ["tasks", userId, "occurrences", taskId, filter, loadedAt] as const,
 };
 
 /** Where the context's task pages live. */

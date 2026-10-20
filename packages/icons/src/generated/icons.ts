@@ -18,6 +18,7 @@ export const MealsIcon = createIcon("Meals", [["path",{"d":"M4 12h16a8 8 0 0 1-1
 export const MenuIcon = createIcon("Menu", [["path",{"d":"M4 7h16M4 12h16M4 17h16"}]]);
 export const PetsIcon = createIcon("Pets", [["circle",{"cx":"6","cy":"11","r":"1.5"}],["circle",{"cx":"9.5","cy":"6.5","r":"1.5"}],["circle",{"cx":"14.5","cy":"6.5","r":"1.5"}],["circle",{"cx":"18","cy":"11","r":"1.5"}],["path",{"d":"M12 12c-2.5 0-5 3-5 5.5 0 1.5 1.2 2.5 2.7 2.5.9 0 1.5-.5 2.3-.5s1.4.5 2.3.5c1.5 0 2.7-1 2.7-2.5 0-2.5-2.5-5.5-5-5.5Z"}]]);
 export const PhotosIcon = createIcon("Photos", [["rect",{"x":"3","y":"5","width":"18","height":"14","rx":"2"}],["circle",{"cx":"8.5","cy":"10","r":"1.5"}],["path",{"d":"m21 15-5-5-8 9"}]]);
+export const RepeatIcon = createIcon("Repeat", [["polyline",{"points":"17 3 20 6 17 9"}],["path",{"d":"M4 12v-2a4 4 0 0 1 4-4h12"}],["polyline",{"points":"7 21 4 18 7 15"}],["path",{"d":"M20 12v2a4 4 0 0 1-4 4H4"}]]);
 export const SettingsIcon = createIcon("Settings", [["path",{"d":"M4 7h9M17 7h3M4 17h3M11 17h9"}],["circle",{"cx":"15","cy":"7","r":"2"}],["circle",{"cx":"9","cy":"17","r":"2"}]]);
 export const ShoppingIcon = createIcon("Shopping", [["path",{"d":"M3 4h2l2.2 10.5a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6"}],["circle",{"cx":"9","cy":"19.5","r":"1.25"}],["circle",{"cx":"17","cy":"19.5","r":"1.25"}]]);
 export const SidebarCollapseIcon = createIcon("SidebarCollapse", [["rect",{"x":"3","y":"4","width":"18","height":"16","rx":"2"}],["path",{"d":"M9 4v16"}],["polyline",{"points":"16 9 13 12 16 15"}]]);

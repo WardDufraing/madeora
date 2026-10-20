@@ -7,11 +7,13 @@ import { ErrorState } from "@/components/ui/states";
 import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import {
+  advanceSeries,
   getTask,
   listTaskComments,
   listTaskLabels,
   listTaskLists,
   listTaskMembers,
+  listTaskOccurrences,
 } from "@/tasks/data";
 import { personName, memberNames, tasksPath, type MemberOption } from "@/tasks/format";
 
@@ -19,6 +21,7 @@ import { TaskAssignees } from "./task-assignees";
 import { TaskComments } from "./task-comments";
 import { TaskCompletion, TaskDelete, TaskMove } from "./task-actions";
 import { TaskContent } from "./task-content";
+import { TaskRepeats } from "./task-repeats";
 import { TaskSubtasks } from "./task-subtasks";
 
 export interface TaskDetailPageProps {
@@ -32,8 +35,11 @@ export interface TaskDetailPageProps {
  * One task (S18): its status and completer, content, assignees (Home tasks), subtasks, comments and
  * basic activity (who created it and when, the last update). Everything is read with the viewer's
  * session; a task they cannot see, or one in another context than the address, is not found.
+ * S19: an occurrence of a recurring series also shows the series (Repeats) and its history.
  */
 export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageProps) {
+  // S19: due occurrences of the context's series exist before the task is read.
+  await advanceSeries(homeId);
   const [t, formats, task] = await Promise.all([
     getTranslations("Tasks"),
     getDateTimeFormats(),
@@ -45,17 +51,21 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
   }
   if (task.value.homeId !== homeId) notFound();
   const detail = task.value;
-  const [lists, labels, members, comments] = await Promise.all([
+  const [lists, labels, members, comments, history] = await Promise.all([
     listTaskLists(homeId, false),
     listTaskLabels(homeId),
     homeId ? listTaskMembers(homeId) : Promise.resolve({ status: "ok", value: [] } as const),
     listTaskComments(detail.id, 0),
+    detail.series
+      ? listTaskOccurrences(detail.id, "all", 0)
+      : Promise.resolve({ status: "ok", value: null } as const),
   ]);
   if (
     lists.status !== "ok" ||
     labels.status !== "ok" ||
     members.status !== "ok" ||
-    comments.status !== "ok"
+    comments.status !== "ok" ||
+    history.status !== "ok"
   ) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -72,6 +82,8 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
           : t("personFormer");
   };
   const base = tasksPath(homeId);
+  const loadedAt = new Date().toISOString();
+  const series = detail.series;
 
   return (
     <>
@@ -99,13 +111,25 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
           labels={labels.value.map(({ id, name, color }) => ({ id, name, color }))}
           dateFormat={formats.dateFormat}
         />
-        {homeId ? <TaskAssignees task={detail} members={memberOptions} /> : null}
+        {series && history.value ? (
+          <TaskRepeats
+            userId={userId}
+            task={{ ...detail, series }}
+            history={history.value}
+            loadedAt={loadedAt}
+            members={memberOptions}
+            formats={formats}
+          />
+        ) : null}
+        {homeId ? (
+          <TaskAssignees task={detail} members={memberOptions} dateFormat={formats.dateFormat} />
+        ) : null}
         <TaskSubtasks task={detail} />
         <TaskComments
           userId={userId}
           taskId={detail.id}
           initial={comments.value}
-          loadedAt={new Date().toISOString()}
+          loadedAt={loadedAt}
           members={memberOptions}
           formats={formats}
         />
@@ -150,8 +174,12 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
             ) : null}
           </dl>
         </section>
-        <TaskMove task={detail} lists={lists.value.map(({ id, name }) => ({ id, name }))} />
-        <TaskDelete task={detail} />
+        <TaskMove
+          task={detail}
+          lists={lists.value.map(({ id, name }) => ({ id, name }))}
+          dateFormat={formats.dateFormat}
+        />
+        <TaskDelete task={detail} dateFormat={formats.dateFormat} />
       </div>
     </>
   );

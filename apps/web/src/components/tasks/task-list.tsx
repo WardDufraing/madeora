@@ -1,5 +1,6 @@
 "use client";
 
+import { RepeatIcon } from "@madeora/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -212,6 +213,12 @@ export function TaskList({
                   </Link>
                   <p className="flex flex-wrap gap-x-3 gap-y-1 text-helper text-fg-muted">
                     {task.completed ? <span>{t("statusCompleted")}</span> : null}
+                    {task.recurring ? (
+                      <span className="inline-flex items-center gap-1" data-testid="task-repeats">
+                        <RepeatIcon size="sm" />
+                        {t("repeatsBadge")}
+                      </span>
+                    ) : null}
                     {showListName ? (
                       <span>
                         {t("inList")} <bdi>{task.listName}</bdi>

@@ -318,6 +318,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
@@ -443,6 +444,31 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_task_series: {
+        Args: {
+          p_assignee_ids?: string[];
+          p_description?: string;
+          p_ends_on?: string;
+          p_frequency: string;
+          p_home_id?: string;
+          p_id: string;
+          p_interval: number;
+          p_label_ids?: string[];
+          p_list_id: string;
+          p_max_count?: number;
+          p_priority?: string;
+          p_start_offset?: number;
+          p_starts_on: string;
+          p_title: string;
+          p_today?: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          first_task_id: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       create_upload_intent: {
         Args: { p_content_type: string; p_purpose: string; p_request_id: string; p_size: number };
         Returns: {
@@ -478,6 +504,19 @@ export type Database = {
         Returns: {
           active_tasks: number;
           entry_id: string;
+          outcome: string;
+        }[];
+      };
+      delete_task_series: {
+        Args: {
+          p_dry_run: boolean;
+          p_expected_series_revision: number;
+          p_scope: string;
+          p_task_id: string;
+        };
+        Returns: {
+          entry_id: string;
+          impact: Json;
           outcome: string;
         }[];
       };
@@ -755,6 +794,27 @@ export type Database = {
           revision: number;
         }[];
       };
+      list_task_occurrences: {
+        Args: {
+          p_filter?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_task_id: string;
+          p_time_zone?: string;
+          p_today?: string;
+        };
+        Returns: {
+          completed_at: string;
+          completed_by_me: boolean;
+          completed_by_member: string;
+          due_date: string;
+          id: string;
+          is_current: boolean;
+          occurrence_date: string;
+          status: string;
+          total_count: number;
+        }[];
+      };
       list_tasks: {
         Args: {
           p_assignee?: string;
@@ -785,6 +845,7 @@ export type Database = {
           needs_reassignment: boolean;
           overdue: boolean;
           priority: string;
+          recurring: boolean;
           revision: number;
           start_date: string;
           subtasks_done: number;
@@ -1011,6 +1072,18 @@ export type Database = {
           outcome: string;
         }[];
       };
+      set_task_series_paused: {
+        Args: {
+          p_expected_series_revision: number;
+          p_paused: boolean;
+          p_task_id: string;
+          p_today?: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       share_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
@@ -1145,6 +1218,38 @@ export type Database = {
           open_tasks: number;
           outcome: string;
           revision: number;
+        }[];
+      };
+      update_task_series: {
+        Args: {
+          p_assignee_ids?: string[];
+          p_copy_subtasks?: boolean;
+          p_description?: string;
+          p_dry_run: boolean;
+          p_ends_on?: string;
+          p_expected_series_revision: number;
+          p_expected_task_revision: number;
+          p_frequency?: string;
+          p_interval?: number;
+          p_label_ids?: string[];
+          p_list_id?: string;
+          p_max_count?: number;
+          p_priority?: string;
+          p_scope: string;
+          p_set_content?: boolean;
+          p_set_schedule?: boolean;
+          p_start_offset?: number;
+          p_starts_on?: string;
+          p_task_id: string;
+          p_title?: string;
+          p_today?: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+          task_id: string;
         }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };
