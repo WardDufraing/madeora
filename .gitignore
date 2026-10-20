@@ -23,3 +23,6 @@ tests/e2e/playwright/.auth/
 # OS and editor files
 .DS_Store
 *.log
+
+# Graphify (local code graph, regenerated)
+graphify-out/
