@@ -29,6 +29,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The titles of the tasks the reminders are about, read now and only for tasks the reader can still
+ * see (S19b): a notification never stores the title, so a renamed task shows its new title and a
+ * task the reader lost access to shows none. Empty when they cannot be read.
+ */
+async function reminderTitles(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  rows: readonly { kind: string; params: unknown }[],
+): Promise<ReadonlyMap<string, string>> {
+  const ids = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.kind === "task.reminder" &&
+        isRecord(row.params) &&
+        typeof row.params.taskId === "string"
+          ? [row.params.taskId]
+          : [],
+      ),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase.rpc("task_reminder_titles", { p_task_ids: ids });
+  if (error) {
+    logFailure("notifications.task_titles_failed", error.code);
+    return new Map();
+  }
+  return new Map(data.map((row) => [row.task_id, row.title]));
+}
+
 /** The newest notifications, 50 at most. */
 export const listNotifications = cache(async (): Promise<Loaded<readonly NotificationView[]>> => {
   if (!(await getVerifiedIdentity())) return { status: "ok", value: [] };
@@ -43,6 +72,7 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
     return { status: "unavailable" };
   }
   const items: NotificationView[] = [];
+  const titles = await reminderTitles(supabase, data);
   for (const row of data) {
     const params = isRecord(row.params) ? row.params : {};
     const embedded: unknown = row.homes;
@@ -55,6 +85,9 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       objectionEndsAt: typeof params.objectionEndsAt === "string" ? params.objectionEndsAt : null,
       decision:
         params.decision === "approved" || params.decision === "declined" ? params.decision : null,
+      taskId: typeof params.taskId === "string" ? params.taskId : null,
+      dueDate: typeof params.dueDate === "string" ? params.dueDate : null,
+      taskTitle: typeof params.taskId === "string" ? (titles.get(params.taskId) ?? null) : null,
       duringQuietHours: row.during_quiet_hours,
       createdAt: row.created_at,
       readAt: row.read_at,

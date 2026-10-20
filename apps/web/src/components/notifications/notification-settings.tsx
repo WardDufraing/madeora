@@ -1,7 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { NotificationChannel } from "@madeora/domain/notifications";
+import {
+  optionalNotificationCategories,
+  type NotificationChannel,
+  type OptionalNotificationCategory,
+} from "@madeora/domain/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -43,7 +47,25 @@ export interface NotificationSettingsProps {
   readonly quietHours: readonly QuietHoursRow[];
 }
 
-const CATEGORY = "invitations";
+/** The words for each category a person can configure. */
+const categoryText = {
+  invitations: {
+    title: "categoryInvitations",
+    hint: "categoryInvitationsHint",
+    both: "previewBoth",
+    inApp: "previewInApp",
+    email: "previewEmail",
+    none: "previewNone",
+  },
+  reminders: {
+    title: "categoryReminders",
+    hint: "categoryRemindersHint",
+    both: "previewRemindersBoth",
+    inApp: "previewRemindersInApp",
+    email: "previewRemindersEmail",
+    none: "previewRemindersNone",
+  },
+} as const satisfies Record<OptionalNotificationCategory, Record<string, string>>;
 
 /** Runs one change, then refreshes the page so every status and preview follows. */
 function useChange<Input>(run: (input: Input) => Promise<unknown>) {
@@ -131,25 +153,97 @@ interface ScopeProps {
 /** The choices and quiet hours of one scope: the account's defaults, or one Home. */
 function ScopeSettings({ scope, zoneChoices, emailVerified, preferences, quietHours }: ScopeProps) {
   const t = useTranslations("NotificationSettings");
-  const hydrated = useHydrated();
   const headingId = useId();
   const rows = preferences.filter((row) => row.homeId === scope.id);
-  const rowFor = (channel: NotificationChannel) => rows.find((row) => row.channel === channel);
-  const inApp = rowFor("in_app");
-  const email = rowFor("email");
+  const quiet = quietHours.find((row) => row.homeId === scope.id);
+  const effectiveQuiet =
+    quiet ?? (scope.id ? quietHours.find((row) => row.homeId === null) : undefined);
+  const quietPreview =
+    effectiveQuiet?.enabled === true
+      ? t("previewQuietOn", {
+          start: effectiveQuiet.start,
+          end: effectiveQuiet.end,
+          zone: effectiveQuiet.timeZone,
+        })
+      : t("previewQuietOff");
+  const previews = optionalNotificationCategories.map((category) => {
+    const text = categoryText[category];
+    const inApp = rows.find((row) => row.category === category && row.channel === "in_app");
+    const email = rows.find((row) => row.category === category && row.channel === "email");
+    return t(
+      (inApp?.enabled ?? true)
+        ? email?.enabled
+          ? text.both
+          : text.inApp
+        : email?.enabled
+          ? text.email
+          : text.none,
+    );
+  });
+
+  return (
+    <div
+      role="group"
+      aria-labelledby={headingId}
+      data-testid={scope.id ? "notification-scope-home" : "notification-scope-account"}
+      className="flex flex-col gap-5 rounded-card border border-line bg-surface p-5"
+    >
+      <h3 id={headingId} className="text-body font-semibold text-fg">
+        {scope.name}
+      </h3>
+
+      {optionalNotificationCategories.map((category) => (
+        <CategorySettings
+          key={category}
+          scope={scope}
+          category={category}
+          emailVerified={emailVerified}
+          rows={rows.filter((row) => row.category === category)}
+        />
+      ))}
+
+      <QuietHoursForm
+        scope={scope}
+        stored={quiet ?? null}
+        inherited={effectiveQuiet && !quiet ? effectiveQuiet : null}
+        zoneChoices={zoneChoices}
+      />
+
+      <div className="flex flex-col gap-1 rounded-control bg-accent-subtle p-3">
+        <p className="text-helper font-semibold text-fg">{t("previewTitle")}</p>
+        <p className="text-body text-fg" data-testid="notification-preview">
+          {previews.join(" ")} {quietPreview}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** One category's two channels in one scope, with its status and reset. */
+function CategorySettings({
+  scope,
+  category,
+  emailVerified,
+  rows,
+}: {
+  readonly scope: SettingsScope;
+  readonly category: OptionalNotificationCategory;
+  readonly emailVerified: boolean;
+  readonly rows: readonly PreferenceRow[];
+}) {
+  const t = useTranslations("NotificationSettings");
+  const hydrated = useHydrated();
+  const inApp = rows.find((row) => row.channel === "in_app");
+  const email = rows.find((row) => row.channel === "email");
   const overridden = rows.some((row) => row.overridden);
 
   const toggle = useChange<{ channel: NotificationChannel; enabled: boolean }>((input) =>
-    setNotificationPreference({ homeId: scope.id, category: CATEGORY, ...input }),
+    setNotificationPreference({ homeId: scope.id, category, ...input }),
   );
   const reset = useChange<undefined>(async () => {
     for (const row of rows) {
       if (row.overridden) {
-        await resetNotificationPreference({
-          homeId: scope.id,
-          category: CATEGORY,
-          channel: row.channel,
-        });
+        await resetNotificationPreference({ homeId: scope.id, category, channel: row.channel });
       }
     }
   });
@@ -163,94 +257,53 @@ function ScopeSettings({ scope, zoneChoices, emailVerified, preferences, quietHo
     : overridden
       ? t("statusChosen")
       : t("statusDefault");
-  const preview = inApp?.enabled
-    ? email?.enabled
-      ? t("previewBoth")
-      : t("previewInApp")
-    : email?.enabled
-      ? t("previewEmail")
-      : t("previewNone");
-  const quiet = quietHours.find((row) => row.homeId === scope.id);
-  const effectiveQuiet =
-    quiet ?? (scope.id ? quietHours.find((row) => row.homeId === null) : undefined);
-  const quietPreview =
-    effectiveQuiet?.enabled === true
-      ? t("previewQuietOn", {
-          start: effectiveQuiet.start,
-          end: effectiveQuiet.end,
-          zone: effectiveQuiet.timeZone,
-        })
-      : t("previewQuietOff");
 
   return (
-    <div
-      role="group"
-      aria-labelledby={headingId}
-      data-testid={scope.id ? "notification-scope-home" : "notification-scope-account"}
-      className="flex flex-col gap-5 rounded-card border border-line bg-surface p-5"
-    >
-      <h3 id={headingId} className="text-body font-semibold text-fg">
-        {scope.name}
-      </h3>
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-body font-medium text-fg">{t("categoryInvitations")}</legend>
-        <p className="text-helper text-fg-muted">{t("categoryInvitationsHint")}</p>
-        <Checkbox
-          label={t("channelInApp")}
-          checked={inApp?.enabled ?? true}
-          disabled={!hydrated || busy}
-          onChange={(event) => {
-            toggle.mutation.mutate({ channel: "in_app", enabled: event.target.checked });
-          }}
-        />
-        <Checkbox
-          label={t("channelEmail")}
-          {...(emailVerified ? {} : { description: t("emailUnverified") })}
-          checked={email?.enabled ?? false}
-          disabled={!hydrated || busy || (!emailVerified && !email?.enabled)}
-          onChange={(event) => {
-            toggle.mutation.mutate({ channel: "email", enabled: event.target.checked });
-          }}
-        />
-        <p className="text-helper text-fg-muted" data-testid="notification-status">
-          {status}
-        </p>
-        {overridden ? (
-          <div>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!hydrated}
-              loading={reset.mutation.isPending}
-              onClick={() => {
-                if (!reset.mutation.isPending) reset.mutation.mutate(undefined);
-              }}
-            >
-              {scope.id ? t("resetHome") : t("resetAccount")}
-            </Button>
-          </div>
-        ) : null}
-        <NotificationFailureAlert failure={toggle.failure ?? reset.failure} />
-        <p role="status" className="text-helper text-success">
-          {toggle.saved || reset.saved ? t("saved") : null}
-        </p>
-      </fieldset>
-
-      <QuietHoursForm
-        scope={scope}
-        stored={quiet ?? null}
-        inherited={effectiveQuiet && !quiet ? effectiveQuiet : null}
-        zoneChoices={zoneChoices}
+    <fieldset className="flex flex-col gap-2" data-testid={`notification-category-${category}`}>
+      <legend className="mb-1 text-body font-medium text-fg">
+        {t(categoryText[category].title)}
+      </legend>
+      <p className="text-helper text-fg-muted">{t(categoryText[category].hint)}</p>
+      <Checkbox
+        label={t("channelInApp")}
+        checked={inApp?.enabled ?? true}
+        disabled={!hydrated || busy}
+        onChange={(event) => {
+          toggle.mutation.mutate({ channel: "in_app", enabled: event.target.checked });
+        }}
       />
-
-      <div className="flex flex-col gap-1 rounded-control bg-accent-subtle p-3">
-        <p className="text-helper font-semibold text-fg">{t("previewTitle")}</p>
-        <p className="text-body text-fg" data-testid="notification-preview">
-          {preview} {quietPreview}
-        </p>
-      </div>
-    </div>
+      <Checkbox
+        label={t("channelEmail")}
+        {...(emailVerified ? {} : { description: t("emailUnverified") })}
+        checked={email?.enabled ?? false}
+        disabled={!hydrated || busy || (!emailVerified && !email?.enabled)}
+        onChange={(event) => {
+          toggle.mutation.mutate({ channel: "email", enabled: event.target.checked });
+        }}
+      />
+      <p className="text-helper text-fg-muted" data-testid="notification-status">
+        {status}
+      </p>
+      {overridden ? (
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!hydrated}
+            loading={reset.mutation.isPending}
+            onClick={() => {
+              if (!reset.mutation.isPending) reset.mutation.mutate(undefined);
+            }}
+          >
+            {scope.id ? t("resetHome") : t("resetAccount")}
+          </Button>
+        </div>
+      ) : null}
+      <NotificationFailureAlert failure={toggle.failure ?? reset.failure} />
+      <p role="status" className="text-helper text-success">
+        {toggle.saved || reset.saved ? t("saved") : null}
+      </p>
+    </fieldset>
   );
 }
 

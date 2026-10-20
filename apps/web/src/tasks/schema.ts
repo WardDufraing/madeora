@@ -32,6 +32,11 @@ export const TASK_LIMITS = {
   /** S19: days a recurring task's start date may lie before its due date; history page size. */
   startOffset: 365,
   historyPage: 50,
+  /** S19b: days a reminder may come before the due date; templates; tasks in one bulk action. */
+  reminderDays: 30,
+  templateName: 60,
+  templates: 100,
+  bulk: 100,
 } as const;
 
 export const taskPriorities = ["low", "normal", "high", "urgent"] as const;
@@ -331,6 +336,149 @@ export const updateLabelSchema = z.strictObject({
   name: labelNameSchema,
   color: labelColorSchema.nullable(),
 });
+
+// S19b: reminders, templates and bulk actions ---------------------------------------------------
+
+/** Who a reminder change reaches: this task only, or (an occurrence) following or all of them. */
+export const reminderScopes = ["this", ...seriesScopes] as const;
+export type ReminderScope = (typeof reminderScopes)[number];
+
+/** A wall-clock time, `HH:MM`. */
+export const clockTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+
+/** A wall-clock date and time, `YYYY-MM-DDTHH:MM`, without a zone: the server applies the zone. */
+export const localDateTimeSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/)
+  .refine((value) => dateOnlySchema.safeParse(value.slice(0, 10)).success);
+
+const reminderBase = {
+  scope: z.enum(reminderScopes),
+  /** The task's reminder revision as read (0: it had none). */
+  expectedRevision: z.int().min(0),
+  /** The series' reminder revision as read (0: none); required for the series scopes. */
+  expectedSeriesRevision: z.int().min(0).nullable(),
+  dryRun: z.boolean(),
+};
+
+/**
+ * A reminder: at a date and time, or a number of days before the due date at a time. Only the
+ * second can apply to following or all occurrences. The zone is the Home's, or the person's own
+ * for the Personal space; the server resolves it and its DST cases.
+ */
+export const setReminderSchema = z
+  .discriminatedUnion("mode", [
+    z.strictObject({ ...reminderBase, mode: z.literal("absolute"), localAt: localDateTimeSchema }),
+    z.strictObject({
+      ...reminderBase,
+      mode: z.literal("relative"),
+      daysBefore: z.int().min(0).max(TASK_LIMITS.reminderDays),
+      time: clockTimeSchema,
+    }),
+  ])
+  .refine((input) => input.scope === "this" || input.mode === "relative", {
+    message: "invalid",
+    path: ["mode"],
+  })
+  .refine((input) => input.scope === "this" || input.expectedSeriesRevision !== null, {
+    message: "required",
+    path: ["expectedSeriesRevision"],
+  });
+export type SetReminderInput = z.output<typeof setReminderSchema>;
+
+export const removeReminderSchema = z
+  .strictObject(reminderBase)
+  .refine((input) => input.scope === "this" || input.expectedSeriesRevision !== null, {
+    message: "required",
+    path: ["expectedSeriesRevision"],
+  });
+export type RemoveReminderInput = z.output<typeof removeReminderSchema>;
+
+export const reviewReminderSchema = z.strictObject({
+  choice: z.enum(["follow", "remove"]),
+  expectedRevision: z.int().min(1),
+});
+
+export const templateNameSchema = nameSchema(TASK_LIMITS.templateName);
+
+/** What a template holds: never dates, people, comments, completion, reminders or recurrence. */
+const templateContent = {
+  name: templateNameSchema,
+  title: taskTitleSchema,
+  description: descriptionSchema.nullable(),
+  priority: z.enum(taskPriorities).nullable(),
+  labelIds: z.array(id).max(TASK_LIMITS.labelsPerTask),
+  subtasks: z.array(taskTitleSchema).max(TASK_LIMITS.subtasks),
+};
+
+export const createTemplateSchema = z.strictObject({
+  id,
+  homeId: contextSchema,
+  ...templateContent,
+});
+export type CreateTemplateInput = z.output<typeof createTemplateSchema>;
+
+export const updateTemplateSchema = z.strictObject({
+  expectedRevision: z.int().min(1),
+  ...templateContent,
+});
+export type UpdateTemplateInput = z.output<typeof updateTemplateSchema>;
+
+/** A task from a template's reviewed preview: what the person confirmed, into one list. */
+export const createFromTemplateSchema = z
+  .strictObject({
+    taskId: id,
+    expectedTemplateRevision: z.int().min(1),
+    listId: id,
+    title: taskTitleSchema,
+    description: descriptionSchema.nullable(),
+    priority: z.enum(taskPriorities).nullable(),
+    labelIds: z.array(id).max(TASK_LIMITS.labelsPerTask),
+    subtasks: z.array(taskTitleSchema).max(TASK_LIMITS.subtasks),
+    startDate: optionalDate,
+    dueDate: optionalDate,
+  })
+  .refine(
+    (task) => task.startDate === null || task.dueDate === null || task.startDate <= task.dueDate,
+    { message: "dateOrder", path: ["dueDate"] },
+  );
+export type CreateFromTemplateInput = z.output<typeof createFromTemplateSchema>;
+
+export const bulkActions = ["complete", "priority", "labels", "move"] as const;
+export type BulkAction = (typeof bulkActions)[number];
+export const labelModes = ["add", "remove", "replace"] as const;
+export type LabelMode = (typeof labelModes)[number];
+
+const bulkBase = {
+  homeId: contextSchema,
+  taskIds: z.array(id).min(1).max(TASK_LIMITS.bulk),
+  /** Each task's revision as previewed; required to apply (not for the preview). */
+  expectedRevisions: z.record(id, z.int().min(1)).nullable(),
+  dryRun: z.boolean(),
+};
+
+/** One basic action on selected tasks of one context (spec "basic bulk task actions"). */
+export const bulkSchema = z
+  .discriminatedUnion("action", [
+    z.strictObject({ ...bulkBase, action: z.literal("complete") }),
+    z.strictObject({
+      ...bulkBase,
+      action: z.literal("priority"),
+      priority: z.enum(taskPriorities).nullable(),
+    }),
+    z.strictObject({
+      ...bulkBase,
+      action: z.literal("labels"),
+      labelMode: z.enum(labelModes),
+      labelIds: z.array(id).max(TASK_LIMITS.labelsPerTask),
+    }),
+    z.strictObject({ ...bulkBase, action: z.literal("move"), listId: id }),
+  ])
+  .refine((input) => input.dryRun || input.expectedRevisions !== null, {
+    message: "required",
+    path: ["expectedRevisions"],
+  });
+export type BulkInput = z.output<typeof bulkSchema>;
 
 /** One value or several of a search parameter, as Next.js gives them. */
 const many = <T extends z.ZodType>(item: T) =>

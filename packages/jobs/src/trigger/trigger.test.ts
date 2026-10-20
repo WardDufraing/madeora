@@ -44,9 +44,11 @@ beforeEach(() => {
 });
 
 describe("Trigger.dev tasks", () => {
-  it("exports one task per job, with the job's name as id, plus the outbox dispatcher", () => {
+  it("exports one task per job, with the job's name as id, plus the two schedules", () => {
     const ids = Object.values(tasksModule).map((exported) => exported.id);
-    expect(ids.sort()).toEqual([...jobs.map((job) => job.name), "outbox-dispatch"].sort());
+    expect(ids.sort()).toEqual(
+      [...jobs.map((job) => job.name), "outbox-dispatch", "task-reminder-advance"].sort(),
+    );
   });
 });
 

@@ -1,6 +1,6 @@
 import type { IsoWeekday, RecurrenceFrequency } from "@madeora/domain/tasks";
 
-import type { LabelColor, OccurrenceFilter, SeriesScope, TaskPriority } from "./schema";
+import type { BulkAction, LabelColor, OccurrenceFilter, SeriesScope, TaskPriority } from "./schema";
 
 /**
  * The HTTP contract of tasks (S18). Every mutation is same-origin JSON, checked again by the database
@@ -20,6 +20,11 @@ import type { LabelColor, OccurrenceFilter, SeriesScope, TaskPriority } from "./
  *   `POST /api/v1/tasks/:id/series` (change following or all occurrences, or preview it),
  *   `POST /api/v1/tasks/:id/series/delete`, `PUT /api/v1/tasks/:id/series/paused`,
  *   `GET /api/v1/tasks/:id/occurrences?filter&offset` (history).
+ * - S19b: `GET|PUT|DELETE /api/v1/tasks/:id/reminder` (read, set or preview, remove or preview),
+ *   `POST /api/v1/tasks/:id/reminder/review` (a reminder on hold after a due-date change);
+ *   `GET|POST /api/v1/task-templates`, `GET|PATCH|DELETE /api/v1/task-templates/:id`,
+ *   `POST /api/v1/task-templates/:id/tasks` (a task from a template's reviewed preview);
+ *   `POST /api/v1/tasks/bulk` (one action on selected tasks, or its preview; per-task results).
  *
  * `409 conflict` (with the current `revision` when known) means someone changed it since it was read.
  */
@@ -28,6 +33,8 @@ export const SUBTASKS_ENDPOINT = "/api/v1/subtasks";
 export const TASK_COMMENTS_ENDPOINT = "/api/v1/task-comments";
 export const TASK_LISTS_ENDPOINT = "/api/v1/task-lists";
 export const TASK_LABELS_ENDPOINT = "/api/v1/task-labels";
+export const TASK_TEMPLATES_ENDPOINT = "/api/v1/task-templates";
+export const BULK_ENDPOINT = "/api/v1/tasks/bulk";
 
 export type TaskErrorCode =
   | "forbidden"
@@ -48,6 +55,11 @@ export type TaskErrorCode =
   | "scope-unavailable"
   | "not-recurring"
   | "schedule-ended"
+  | "in-past"
+  | "needs-due-date"
+  | "task-completed"
+  | "not-needed"
+  | "template-changed"
   | "failed";
 
 export interface TaskErrorResponse {
@@ -259,6 +271,149 @@ export interface CommentPage {
   readonly total: number;
 }
 
+/**
+ * How PostgreSQL resolved a wall-clock time on a DST change: `gap` (a time that does not exist moved
+ * forward), `overlap` (a time that happens twice: the later, standard-time instance), or null.
+ */
+export type DstCase = "gap" | "overlap" | null;
+
+export type ReminderStatus = "scheduled" | "needs_review" | "sent" | "not_sent" | "off";
+
+/** A task's reminder (S19b). */
+export interface TaskReminder {
+  /** Null when switched off for this occurrence (`off`). */
+  readonly mode: "absolute" | "relative" | null;
+  /** `YYYY-MM-DDTHH:MM:SS` wall-clock, for an absolute reminder. */
+  readonly localAt: string | null;
+  readonly daysBefore: number | null;
+  readonly time: string | null;
+  readonly timeZone: string | null;
+  /** Null while on hold (`needs_review`) and when off. */
+  readonly fireAt: string | null;
+  readonly dst: DstCase;
+  readonly status: ReminderStatus;
+  /** Set on this task itself (an occurrence's own choice); false: from the series. */
+  readonly own: boolean;
+  readonly revision: number;
+  /** On hold: when it would come if it follows the new due date. */
+  readonly reviewFireAt: string | null;
+  readonly reviewDst: DstCase;
+}
+
+/** The reminder an occurrence's series gives its occurrences (S19b). */
+export interface SeriesReminder {
+  readonly active: boolean;
+  readonly daysBefore: number | null;
+  readonly time: string | null;
+  readonly revision: number;
+}
+
+/** Everything the reminder editor shows (S19b). */
+export interface TaskReminderView {
+  readonly taskId: string;
+  readonly dueDate: string | null;
+  readonly completed: boolean;
+  readonly recurring: boolean;
+  readonly canEdit: boolean;
+  readonly canEditSeries: boolean;
+  /** The zone reminders use here: the Home's, or the person's own for the Personal space. */
+  readonly timeZone: string | null;
+  readonly reminder: TaskReminder | null;
+  readonly seriesReminder: SeriesReminder | null;
+  /** Membership ids of who is reminded in a Home (null in the Personal space: its owner). */
+  readonly recipients: readonly string[] | null;
+  /** Whether the recipients are the assignees (else the member who set it). */
+  readonly recipientsAreAssignees: boolean;
+  /** How the viewer would receive it here, from their notification settings. */
+  readonly channels: { readonly inApp: boolean; readonly email: boolean };
+}
+
+/** What a reminder change to following or all occurrences does. */
+export interface ReminderImpact {
+  readonly scope: SeriesScope;
+  readonly updated: number;
+  /** Occurrences with a reminder of their own, left as they are. */
+  readonly kept: number;
+  /** Occurrences whose new time has already passed, left as they are. */
+  readonly past: number;
+  readonly completed: number;
+}
+
+export interface ReminderSaveResponse {
+  readonly outcome: "preview" | "saved";
+  readonly fireAt: string | null;
+  readonly dst: DstCase;
+  readonly impact: ReminderImpact | null;
+  readonly revision: number | null;
+}
+
+export interface ReminderRemoveResponse {
+  readonly outcome: "preview" | "deleted";
+  readonly impact: ReminderImpact | null;
+  readonly revision: number | null;
+}
+
+export interface ReminderReviewResponse {
+  readonly outcome: "saved" | "deleted";
+  readonly fireAt: string | null;
+  readonly revision: number | null;
+}
+
+/** A template in the library (S19b). */
+export interface TaskTemplateSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly title: string;
+  readonly priority: TaskPriority | null;
+  readonly labelCount: number;
+  readonly subtaskCount: number;
+  readonly revision: number;
+}
+
+export interface TaskTemplate {
+  readonly id: string;
+  readonly homeId: string | null;
+  readonly name: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly priority: TaskPriority | null;
+  /** Labels that still exist; `omittedLabels` were deleted since and are left out. */
+  readonly labelIds: readonly string[];
+  readonly omittedLabels: number;
+  readonly subtasks: readonly string[];
+  readonly revision: number;
+  readonly canManage: boolean;
+}
+
+export type BulkOutcome =
+  | "changed"
+  | "will_change"
+  | "unchanged"
+  | "conflict"
+  | "not_found"
+  | "not_permitted"
+  | "list_unavailable"
+  | "invalid_label"
+  | "too_many_labels"
+  | "failed";
+
+/** One task's result of a bulk action or its preview (S19b). */
+export interface BulkResult {
+  readonly taskId: string;
+  readonly outcome: BulkOutcome;
+  readonly revision: number | null;
+  readonly openSubtasks: number | null;
+  readonly recurring: boolean | null;
+  /** Assigned to several people. */
+  readonly shared: boolean | null;
+}
+
+export interface BulkResponse {
+  readonly action: BulkAction;
+  readonly dryRun: boolean;
+  readonly results: readonly BulkResult[];
+}
+
 export interface RevisionResponse {
   readonly revision: number;
 }
@@ -288,6 +443,11 @@ export type TaskFailure =
   | "scopeUnavailable"
   | "notRecurring"
   | "scheduleEnded"
+  | "inPast"
+  | "needsDueDate"
+  | "taskCompleted"
+  | "notNeeded"
+  | "templateChanged"
   | "network"
   | "failed";
 
@@ -318,6 +478,11 @@ const failures: { readonly [C in TaskErrorCode]?: TaskFailure } = {
   "scope-unavailable": "scopeUnavailable",
   "not-recurring": "notRecurring",
   "schedule-ended": "scheduleEnded",
+  "in-past": "inPast",
+  "needs-due-date": "needsDueDate",
+  "task-completed": "taskCompleted",
+  "not-needed": "notNeeded",
+  "template-changed": "templateChanged",
 };
 
 /** Sends one request; resolves with the JSON answer or rejects with a TaskRequestError. */

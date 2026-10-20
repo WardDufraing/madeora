@@ -7,13 +7,19 @@ import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import { useAnnouncer } from "@/components/ui/use-announcer";
 import type { DateFormat } from "@/preferences/schema";
-import { sendTaskRequest, TASKS_ENDPOINT, type RevisionResponse } from "@/tasks/api";
+import {
+  sendTaskRequest,
+  TASKS_ENDPOINT,
+  type RevisionResponse,
+  type TaskTemplateSummary,
+} from "@/tasks/api";
 import { noMembers, type MemberOption } from "@/tasks/format";
 import type { CreateTaskInput } from "@/tasks/schema";
 
 import type { LabelOption } from "./label-picker";
 import { noRepeat } from "./repeat-fields";
 import { TaskForm, type TaskFormInput, type TaskFormOutput } from "./task-form";
+import { FromTemplate } from "./task-templates";
 import { HydrationGate } from "./hydration-gate";
 import { useTaskMutation } from "./use-task-mutation";
 import { useTaskTexts } from "./use-task-texts";
@@ -27,6 +33,8 @@ export interface NewTaskProps {
   /** Assignable members, only when the viewer manages tasks in this Home. */
   readonly members: readonly MemberOption[];
   readonly dateFormat: DateFormat;
+  /** S19b: the context's templates, to start a task from one. */
+  readonly templates?: readonly TaskTemplateSummary[];
 }
 
 /**
@@ -40,8 +48,12 @@ export function NewTask({
   labels,
   members,
   dateFormat,
+  templates = [],
 }: NewTaskProps) {
   const t = useTranslations("Tasks");
+  const tTemplates = useTranslations("TaskTemplates");
+  const [fromTemplate, setFromTemplate] = useState(false);
+  const templateOpener = useRef<HTMLButtonElement>(null);
   const texts = useTaskTexts(noMembers);
   const [open, setOpen] = useState(false);
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
@@ -96,8 +108,26 @@ export function NewTask({
         <h2 id="new-task-heading" className="sr-only">
           {t("newTaskHeading")}
         </h2>
-        {!open ? (
-          <div>
+        {fromTemplate ? (
+          <div className="rounded-card border border-line bg-surface p-4">
+            <FromTemplate
+              templates={templates}
+              lists={lists}
+              defaultListId={firstList}
+              labels={labels}
+              onCreated={() => {
+                announce(t("announceCreated"));
+                setFromTemplate(false);
+                requestAnimationFrame(() => templateOpener.current?.focus());
+              }}
+              onCancel={() => {
+                setFromTemplate(false);
+                requestAnimationFrame(() => templateOpener.current?.focus());
+              }}
+            />
+          </div>
+        ) : !open ? (
+          <div className="flex flex-wrap gap-2">
             <Button
               ref={opener}
               onClick={() => {
@@ -108,6 +138,19 @@ export function NewTask({
             >
               {t("newTask")}
             </Button>
+            {templates.length > 0 ? (
+              <Button
+                ref={templateOpener}
+                variant="secondary"
+                onClick={() => {
+                  setFromTemplate(true);
+                }}
+                disabled={lists.length === 0}
+                data-testid="new-task-from-template"
+              >
+                {tTemplates("fromTemplate")}
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="rounded-card border border-line bg-surface p-4">

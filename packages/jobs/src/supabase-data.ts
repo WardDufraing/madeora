@@ -39,6 +39,8 @@ const fileStatuses = ["pending", "ready", "failed", "deleted", "purged", "missin
 
 const trashStatuses = ["trashed", "restored", "purged", "missing"] as const;
 
+const reminderOutcomes = ["notified", "not_sent", "stale", "not_due"] as const;
+
 function fileStatus(operation: string, value: string | null): StoredFileStatus {
   const status = oneOf(fileStatuses, value);
   if (!status) throw new JobStoreError(operation, "unexpected_result");
@@ -138,6 +140,23 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       });
       if (error) throw new JobStoreError("deliver_recovery_ready", error.code);
       return data === "notified" ? "notified" : "not_ready";
+    },
+
+    async deliverTaskReminder(taskId, revision) {
+      const { data, error } = await client.rpc("deliver_task_reminder", {
+        p_task_id: taskId,
+        p_revision: revision,
+      });
+      if (error) throw new JobStoreError("deliver_task_reminder", error.code);
+      const outcome = oneOf(reminderOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_task_reminder", "unexpected_result");
+      return outcome;
+    },
+
+    async advanceReminderSeries(limit) {
+      const { data, error } = await client.rpc("advance_reminder_series", { p_limit: limit });
+      if (error) throw new JobStoreError("advance_reminder_series", error.code);
+      return data;
     },
 
     async expireUpload(fileId) {

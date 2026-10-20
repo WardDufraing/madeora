@@ -28,6 +28,13 @@ describe("notificationPath", () => {
     expect(notificationPath("join_request.decided", null)).toBe("/");
   });
 
+  it("leads a reminder to its task, in its Home or the personal space", () => {
+    const taskId = "5d2a7c41-8b3e-4f9a-a1c2-3e4f5a6b7c8d";
+    expect(notificationPath("task.reminder", "h1", { taskId })).toBe(`/homes/h1/tasks/${taskId}`);
+    expect(notificationPath("task.reminder", null, { taskId })).toBe(`/tasks/${taskId}`);
+    expect(notificationPath("task.reminder", null, { taskId: 7 })).toBe("/tasks");
+  });
+
   it("encodes the Home id", () => {
     expect(notificationPath("recovery.member_ended", "a/b")).toBe("/homes/a%2Fb");
   });
@@ -46,12 +53,20 @@ describe("notificationKinds", () => {
       "../../../../supabase/migrations",
     );
     const sql = readdirSync(migrations)
-      .filter((name) => name.endsWith("_notifications.sql") || name.endsWith("_file_storage.sql"))
+      .filter(
+        (name) =>
+          name.endsWith("_notifications.sql") ||
+          name.endsWith("_file_storage.sql") ||
+          name.endsWith("_task_reminders_templates_bulk.sql"),
+      )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
-    const written = new Set(
-      [...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((match) => match[1]),
-    );
+    // Task kinds share their prefix with audit actions, so only those written with the reminders
+    // category count.
+    const written = new Set([
+      ...[...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'reminders', '(task\.[a-z_]+)'/g)].map((m) => m[1]),
+    ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });
 });

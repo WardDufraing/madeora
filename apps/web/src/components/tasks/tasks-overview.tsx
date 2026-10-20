@@ -14,6 +14,7 @@ import {
   listTasks,
   type TaskMember,
 } from "@/tasks/data";
+import { listTaskTemplates } from "@/tasks/template-data";
 import { hasTaskFilters, parseTaskQuery, taskQueryString } from "@/tasks/filters";
 import { tasksPath } from "@/tasks/format";
 import { TASK_LIMITS } from "@/tasks/schema";
@@ -42,19 +43,22 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
   const query = parseTaskQuery(searchParams);
   // S19: recurring series create their due occurrences before anything is read.
   await advanceSeries(homeId);
-  const [t, formats, context, lists, labels, members] = await Promise.all([
+  const [t, tTemplates, formats, context, lists, labels, members, templates] = await Promise.all([
     getTranslations("Tasks"),
+    getTranslations("TaskTemplates"),
     getDateTimeFormats(),
     getTaskContext(homeId),
     listTaskLists(homeId, true),
     listTaskLabels(homeId),
     homeId ? listTaskMembers(homeId) : Promise.resolve({ status: "ok", value: [] } as const),
+    listTaskTemplates(homeId),
   ]);
   if (
     context.status !== "ok" ||
     lists.status !== "ok" ||
     labels.status !== "ok" ||
-    members.status !== "ok"
+    members.status !== "ok" ||
+    templates.status !== "ok"
   ) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -85,6 +89,10 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
             </Link>
           </>
         ) : null}
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link href={`${base}/templates`} className="font-medium text-accent-fg underline">
+          {tTemplates("libraryLink")}
+        </Link>
       </p>
       {notice === "deleted" ? (
         <TaskNotice>
@@ -156,6 +164,7 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
               labels={labelOptions}
               members={context.value.canManage ? memberOptions : []}
               dateFormat={formats.dateFormat}
+              templates={templates.value}
             />
           )}
           <h2 className="sr-only">{current ? current.name : t("allTasks")}</h2>
@@ -188,6 +197,7 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
             showListName={!current}
             filtered={filtered}
             pageSize={TASK_LIMITS.page}
+            moveLists={active.map(({ id, name }) => ({ id, name }))}
           />
         </div>
       </div>

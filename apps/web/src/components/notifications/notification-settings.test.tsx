@@ -66,6 +66,11 @@ function scope(name: string): HTMLElement {
   return screen.getByRole("group", { name });
 }
 
+/** One scope's invitations choices. */
+function invitations(name: string): HTMLElement {
+  return within(scope(name)).getByRole("group", { name: "Invitations and join requests" });
+}
+
 beforeEach(() => {
   fetchMock.mockReset();
   fetchMock.mockImplementation(ok);
@@ -86,13 +91,13 @@ describe("NotificationSettings", () => {
 
   it("shows, per scope, what is inherited and what is overridden", () => {
     renderWithQuery(<NotificationSettings {...props()} />);
-    expect(within(scope("Your defaults")).getByTestId("notification-status")).toHaveTextContent(
-      "Your choice",
-    );
-    expect(within(scope("Thuis")).getByTestId("notification-status")).toHaveTextContent(
+    expect(
+      within(invitations("Your defaults")).getByTestId("notification-status"),
+    ).toHaveTextContent("Your choice");
+    expect(within(invitations("Thuis")).getByTestId("notification-status")).toHaveTextContent(
       "Inherited from your defaults",
     );
-    expect(within(scope("Elders")).getByTestId("notification-status")).toHaveTextContent(
+    expect(within(invitations("Elders")).getByTestId("notification-status")).toHaveTextContent(
       "Set for this Home",
     );
   });
@@ -110,7 +115,7 @@ describe("NotificationSettings", () => {
   it("saves a Home override when a box is changed, and refreshes the page", async () => {
     const user = userEvent.setup();
     renderWithQuery(<NotificationSettings {...props()} />);
-    await user.click(within(scope("Thuis")).getByRole("checkbox", { name: "By email" }));
+    await user.click(within(invitations("Thuis")).getByRole("checkbox", { name: "By email" }));
     await waitFor(() => {
       expect(router.refresh).toHaveBeenCalled();
     });
@@ -127,7 +132,9 @@ describe("NotificationSettings", () => {
   it("saves an account default with homeId null", async () => {
     const user = userEvent.setup();
     renderWithQuery(<NotificationSettings {...props()} />);
-    await user.click(within(scope("Your defaults")).getByRole("checkbox", { name: "In the app" }));
+    await user.click(
+      within(invitations("Your defaults")).getByRole("checkbox", { name: "In the app" }),
+    );
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
@@ -142,8 +149,12 @@ describe("NotificationSettings", () => {
   it("resets a Home's overrides, only the ones that are set", async () => {
     const user = userEvent.setup();
     renderWithQuery(<NotificationSettings {...props()} />);
-    expect(within(scope("Thuis")).queryByRole("button", { name: "Use my defaults" })).toBeNull();
-    await user.click(within(scope("Elders")).getByRole("button", { name: "Use my defaults" }));
+    expect(
+      within(invitations("Thuis")).queryByRole("button", { name: "Use my defaults" }),
+    ).toBeNull();
+    await user.click(
+      within(invitations("Elders")).getByRole("button", { name: "Use my defaults" }),
+    );
     await waitFor(() => {
       expect(router.refresh).toHaveBeenCalled();
     });
@@ -162,7 +173,7 @@ describe("NotificationSettings", () => {
         })}
       />,
     );
-    const email = within(scope("Your defaults")).getByRole("checkbox", { name: "By email" });
+    const email = within(invitations("Your defaults")).getByRole("checkbox", { name: "By email" });
     expect(email).toBeDisabled();
     expect(email).toHaveAccessibleDescription(/once your address is confirmed/);
   });
@@ -171,10 +182,31 @@ describe("NotificationSettings", () => {
     const user = userEvent.setup();
     fetchMock.mockReturnValueOnce(Promise.resolve(new Response("{}", { status: 404 })));
     renderWithQuery(<NotificationSettings {...props()} />);
-    await user.click(within(scope("Thuis")).getByRole("checkbox", { name: "In the app" }));
+    await user.click(within(invitations("Thuis")).getByRole("checkbox", { name: "In the app" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "You no longer belong to this Home.",
     );
+  });
+
+  it("has its own choices for task reminders, in the app by default", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<NotificationSettings {...props()} />);
+    const reminders = within(within(scope("Thuis")).getByRole("group", { name: "Task reminders" }));
+    expect(reminders.getByRole("checkbox", { name: "In the app" })).toBeChecked();
+    expect(reminders.getByRole("checkbox", { name: "By email" })).not.toBeChecked();
+    expect(within(scope("Thuis")).getByTestId("notification-preview")).toHaveTextContent(
+      "Task reminders arrive in the app only.",
+    );
+    await user.click(reminders.getByRole("checkbox", { name: "By email" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(bodyOf()).toEqual({
+      homeId: HOME_A,
+      category: "reminders",
+      channel: "email",
+      enabled: true,
+    });
   });
 
   it("says when there is no Home", () => {
@@ -206,7 +238,7 @@ describe("quiet hours", () => {
     renderWithQuery(<NotificationSettings {...props({ quietHours: [quiet] })} />);
     const thuis = within(scope("Thuis"));
     expect(thuis.getByRole("checkbox", { name: "Use quiet hours" })).toBeChecked();
-    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(2);
+    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(3);
     expect(thuis.getByTestId("notification-preview")).toHaveTextContent(
       "Quiet hours: 22:00 to 07:00 (Europe/Brussels).",
     );

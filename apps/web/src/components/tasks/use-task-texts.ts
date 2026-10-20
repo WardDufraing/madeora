@@ -21,6 +21,11 @@ const failureKey = {
   scopeUnavailable: "errorScopeUnavailable",
   notRecurring: "errorNotRecurring",
   scheduleEnded: "errorScheduleEnded",
+  inPast: "errorInPast",
+  needsDueDate: "errorNeedsDueDate",
+  taskCompleted: "errorTaskCompleted",
+  notNeeded: "errorNotNeeded",
+  templateChanged: "errorTemplateChanged",
   network: "errorNetwork",
   failed: "errorFailed",
 } as const satisfies Record<TaskFailure, string>;

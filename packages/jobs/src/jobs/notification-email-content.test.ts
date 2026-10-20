@@ -41,6 +41,30 @@ describe("buildNotificationEmail", () => {
     },
   );
 
+  it("emails a reminder with the Home and due day but never the task, linking to the task", async () => {
+    const taskId = "5d2a7c41-8b3e-4f9a-a1c2-3e4f5a6b7c8d";
+    const email = await buildNotificationEmail({
+      ...base,
+      kind: "task.reminder",
+      params: { taskId, dueDate: "2027-03-28" },
+    });
+    expect(email.subject).toBe(
+      "Reminder: a task in \u2068De Boomgaard\u2069 is due March 28, 2027",
+    );
+    expect(email.text).toContain(`https://app.madeora.test/homes/${homeId}/tasks/${taskId}`);
+    const personal = await buildNotificationEmail({
+      ...base,
+      locale: "nl",
+      homeId: null,
+      homeName: null,
+      homeTimeZone: null,
+      kind: "task.reminder",
+      params: { taskId, dueDate: null },
+    });
+    expect(personal.subject).toBe("Herinnering: een taak in je persoonlijke ruimte");
+    expect(personal.text).toContain(`https://app.madeora.test/tasks/${taskId}`);
+  });
+
   it("keeps the owner's two recovery emails on their own template", async () => {
     const review = await buildNotificationEmail({
       ...base,

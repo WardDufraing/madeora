@@ -25,11 +25,22 @@ export interface NotificationEmailProps {
   readonly url: string;
   /** A date some kinds mention (the end of an objection period). */
   readonly date: Date | null;
+  /** A calendar day some kinds mention instead (a task's due date), as YYYY-MM-DD. */
+  readonly day?: string | null;
   /** The Home's timezone for that date; UTC when there is none. */
   readonly timeZone: string;
 }
 
 function dateText(props: NotificationEmailProps): string {
+  if (props.day) {
+    // A day has no time or zone: read and shown in UTC so it never moves to the day before.
+    return new Intl.DateTimeFormat(props.locale, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${props.day}T00:00:00Z`));
+  }
   return props.date ? formatExpiry(props.date, props.locale, props.timeZone) : "";
 }
 

@@ -17,6 +17,7 @@ Only the person can read or change their settings (`/settings/notifications`). N
 | ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `security`    | yes        | Ownership recovery: for the Owner (`recovery.owner_*`), the person who asked (`recovery.claimant_*`), other members (`recovery.member_*`, in-app only), a former Owner (`recovery.former_owner_completed*`) |
 | `invitations` | no         | `join_request.received` (managers who can decide it), `join_request.decided` (the applicant; no Home)                                                                                                       |
+| `reminders`   | no         | `task.reminder` (task reminders, S19b: the people the reminder is for; in-app on and email off by default; the email names the Home and the due date, never the task)                                       |
 
 Invitation emails (to a person who may have no account) are not notifications: they are `invitation-email` jobs.
 

@@ -29,7 +29,9 @@ import {
   type MemberOption,
 } from "@/tasks/format";
 import type { DateFormat } from "@/preferences/schema";
+import { TASK_LIMITS } from "@/tasks/schema";
 
+import { BulkBar } from "./bulk-actions";
 import { LabelChip } from "./label-chip";
 import type { LabelOption } from "./label-picker";
 import { HydrationGate } from "./hydration-gate";
@@ -52,6 +54,8 @@ export interface TaskListProps {
   readonly showListName: boolean;
   readonly filtered: boolean;
   readonly pageSize: number;
+  /** S19b: the context's active lists, the targets of a bulk move. */
+  readonly moveLists?: readonly { readonly id: string; readonly name: string }[];
 }
 
 /**
@@ -71,8 +75,10 @@ export function TaskList({
   showListName,
   filtered,
   pageSize,
+  moveLists = [],
 }: TaskListProps) {
   const t = useTranslations("Tasks");
+  const tBulk = useTranslations("TaskBulk");
   const names = useMemo(() => memberNames(members), [members]);
   const texts = useTaskTexts(names);
   const labelsById = useMemo(() => new Map(labels.map((label) => [label.id, label])), [labels]);
@@ -144,6 +150,23 @@ export function TaskList({
     },
   );
 
+  // S19b select mode. The selection belongs to the filters it was made under: changing them
+  // (a new query) clears it, so nothing hidden by a filter stays selected.
+  const [selecting, setSelecting] = useState(false);
+  const [selection, setSelection] = useState<{
+    readonly query: string;
+    readonly ids: ReadonlySet<string>;
+  }>({ query, ids: new Set() });
+  const shownIds = new Set(rows.map((row) => row.id));
+  const selected =
+    selection.query === query
+      ? new Set([...selection.ids].filter((id) => shownIds.has(id)))
+      : new Set<string>();
+  const select = (ids: ReadonlySet<string>) => {
+    setSelection({ query, ids });
+  };
+  const full = selected.size >= TASK_LIMITS.bulk;
+
   function complete(task: TaskRow, completed: boolean) {
     setTicked((previous) => new Map(previous).set(task.id, completed));
     completion.mutate({ task, completed });
@@ -165,6 +188,35 @@ export function TaskList({
         >
           {t("listCount", { count: total })}
         </h2>
+        {rows.length > 0 && !selecting ? (
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                select(new Set());
+                setSelecting(true);
+              }}
+              data-testid="bulk-select"
+            >
+              {tBulk("select")}
+            </Button>
+          </div>
+        ) : null}
+        {selecting ? (
+          <BulkBar
+            homeId={homeId}
+            shown={rows}
+            selected={selected}
+            onSelect={select}
+            onDone={() => {
+              select(new Set());
+              setSelecting(false);
+            }}
+            labels={labels}
+            lists={moveLists}
+          />
+        ) : null}
         {completion.error ? (
           <FormAlert tone="error" announce>
             {texts.failure(completion.error.failure)}
@@ -183,6 +235,21 @@ export function TaskList({
                 className="flex items-start gap-3 rounded-control border border-line bg-surface p-3"
                 data-testid="task-row"
               >
+                {selecting ? (
+                  <Checkbox
+                    label={tBulk("selectTask", { task: task.title })}
+                    className="mt-0.5 [&_label]:sr-only"
+                    checked={selected.has(task.id)}
+                    disabled={full && !selected.has(task.id)}
+                    onChange={(event) => {
+                      const next = new Set(selected);
+                      if (event.target.checked) next.add(task.id);
+                      else next.delete(task.id);
+                      select(next);
+                    }}
+                    data-testid="bulk-checkbox"
+                  />
+                ) : null}
                 {task.canComplete ? (
                   <Checkbox
                     label={t("completeTask", { task: task.title })}

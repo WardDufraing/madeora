@@ -134,6 +134,16 @@ export function outcomeAnswer(
       return failure(409, "schedule-ended");
     case "id_taken":
       return failure(409, "id-taken");
+    case "in_past":
+      return failure(409, "in-past");
+    case "needs_due_date":
+      return failure(409, "needs-due-date");
+    case "task_completed":
+      return failure(409, "task-completed");
+    case "not_needed":
+      return failure(409, "not-needed", revision === undefined ? {} : { revision });
+    case "template_changed":
+      return failure(409, "template-changed", revision === undefined ? {} : { revision });
     case "invalid_label":
       return failure(400, "invalid", { fields: ["labelIds"] });
     case "invalid_assignee":
