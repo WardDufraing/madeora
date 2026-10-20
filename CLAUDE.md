@@ -158,3 +158,11 @@ Report: branch name; files changed; behavior implemented; tests run and results;
 ## First assignment to Claude
 
 Read the product specification set (READ ONLY), `architecture.md`, and `CLAUDE.md`. Propose a short bootstrap plan using the approved stack and list only genuinely unresolved decisions. Do not start coding dependent product behavior until its requirements are confirmed. Create the Turborepo/pnpm repository, web app, tooling and CI work in a fresh branch and obtain an independent review before PR readiness. If GitHub settings cannot be applied automatically, provide exact owner-facing setup instructions instead of claiming they are configured.
+
+## Graphify code graph
+
+A local, gitignored code graph lives in `graphify-out/` (built offline with `graphify update .`; no LLM, no API key, €0). The `.claude/` hooks install the pinned CLI and rebuild it at session start.
+
+- When `graphify-out/graph.json` exists, run `graphify query "<question>"` before the first grep or source-file read for a codebase question; read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` and `graphify explain "<path::symbol>"` for relationships and single concepts.
+- After modifying code, run `graphify update .` (AST-only). Never run the semantic extraction on `docs/product/` or other documents: it sends them to an LLM.
+- The graph helps reading, not editing; it never replaces the product specification, `architecture.md` or the line-range rules for the specification.
