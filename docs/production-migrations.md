@@ -1,0 +1,19394 @@
+# Production database migrations
+
+This document tracks the exact database SQL currently in `supabase/migrations/` on `main`.
+
+## Choose one path for a fresh production database
+
+- **One paste:** use the consolidated SQL block below once, on a brand-new, empty `madeora-production` project.
+- **Separate files:** apply the linked source files individually in the order listed below.
+
+Do not run both paths. Do not paste the consolidated SQL into a database that already has any of these objects. For an existing environment, inspect which migrations are already applied using [the migration guide](supabase-migrations.md), then apply only missing files. Run migrations on Preview first, then Production before merging the release.
+
+The hosted projects in the current owner workflow are migrated by pasting SQL in Supabase SQL Editor; this does not necessarily create rows in Supabase CLI's migration history. The reset block below checks for a history table and removes only these migration versions if present.
+
+## Individual migrations
+
+Each link opens one standalone migration file. Apply each file once, oldest first, and check for a successful result before continuing.
+
+- [`supabase/migrations/20261013000000_private_schema.sql`](../supabase/migrations/20261013000000_private_schema.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261014120000_user_preferences.sql`](../supabase/migrations/20261014120000_user_preferences.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261015090000_sign_in_methods.sql`](../supabase/migrations/20261015090000_sign_in_methods.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261016090000_homes.sql`](../supabase/migrations/20261016090000_homes.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261017090000_home_invitations.sql`](../supabase/migrations/20261017090000_home_invitations.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261018090000_member_profiles.sql`](../supabase/migrations/20261018090000_member_profiles.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261019090000_roles_and_ownership.sql`](../supabase/migrations/20261019090000_roles_and_ownership.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261020090000_ownership_recovery.sql`](../supabase/migrations/20261020090000_ownership_recovery.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261021090000_background_jobs.sql`](../supabase/migrations/20261021090000_background_jobs.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261022090000_notifications.sql`](../supabase/migrations/20261022090000_notifications.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261023090000_file_storage.sql`](../supabase/migrations/20261023090000_file_storage.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261024090000_trash_and_recovery.sql`](../supabase/migrations/20261024090000_trash_and_recovery.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261025090000_dashboards.sql`](../supabase/migrations/20261025090000_dashboards.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261026090000_tasks.sql`](../supabase/migrations/20261026090000_tasks.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261027090000_task_recurrence.sql`](../supabase/migrations/20261027090000_task_recurrence.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261028090000_task_reminders_templates_bulk.sql`](../supabase/migrations/20261028090000_task_reminders_templates_bulk.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql`](../supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261030090000_chores.sql`](../supabase/migrations/20261030090000_chores.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261031090000_chore_templates_history_bulk.sql`](../supabase/migrations/20261031090000_chore_templates_history_bulk.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+
+## One copyable migration for an empty database
+
+Copy the entire SQL block below into the Supabase SQL Editor for a **new, empty** `madeora-production` database and run it once. It concatenates the individual migrations above in chronological order without changing their SQL. If it reports an error, stop and do not run a later subset on top of a partial run; inspect the database and resolve the failure first.
+
+```sql
+-- ============================================================================
+-- supabase/migrations/20261013000000_private_schema.sql
+-- ============================================================================
+-- Baseline (S03): a schema for internal database helpers, such as SECURITY DEFINER functions that
+-- RLS policies call. architecture.md §6 asks for careful review of SECURITY DEFINER functions; the
+-- Supabase guidance is never to create them in a schema the Data API exposes. `private` is not in
+-- `api.schemas` (supabase/config.toml).
+
+create schema if not exists private;
+
+revoke all on schema private from public;
+
+-- PostgreSQL lets PUBLIC execute every new function by default, and a per-schema default cannot
+-- take that away. So the owner role's global default is changed instead: functions postgres creates
+-- from now on are executable only by roles granted explicitly. In schema public, Supabase's own
+-- default privileges still grant them to anon, authenticated and service_role, so nothing changes
+-- there. In schema private, each function must be granted one by one, and
+-- tests/db/rls/baseline.test.sql fails if one is executable by PUBLIC, anon or authenticated without
+-- being on that test's allowlist.
+alter default privileges for role postgres revoke execute on functions from public;
+
+-- ============================================================================
+-- supabase/migrations/20261014120000_user_preferences.sql
+-- ============================================================================
+-- S07: global personal preferences (architecture.md §4 `user_preferences`; brief S07).
+--
+-- One row per account with the preferences that are the same on every device and in every Home:
+-- display name, interface language, regional formats and a chosen timezone. The row is created on
+-- the first save; until then the app uses the defaults. NULL means "not chosen" for the language
+-- and "Automatic" for the formats and the timezone, so returning a setting to Automatic restores
+-- the current detected default, and nothing a device, language or Home does can overwrite a
+-- custom choice (spec, "Confirmed automatic regional defaults", "Confirmed personal timezone").
+--
+-- The allowed values mirror apps/web/src/preferences/schema.ts. The app validates first; these
+-- constraints keep direct Data API writes well-formed too.
+
+create table public.user_preferences (
+  user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  display_name text
+    constraint user_preferences_display_name_check check (
+      char_length(display_name) between 1 and 50
+      and display_name = btrim(display_name)
+      and display_name is nfc normalized
+      -- No control characters, line or paragraph separators, or direction marks, overrides and
+      -- isolates that could disguise a name. Exactly the code points the app refuses (schema.ts).
+      and display_name !~ '[\u0001-\u001F\u007F-\u009F\u2028\u2029\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]'
+    ),
+  locale text
+    constraint user_preferences_locale_check check (locale in ('en', 'nl')),
+  date_format text
+    constraint user_preferences_date_format_check check (
+      date_format in ('dmy-slash', 'dmy-dash', 'dmy-dot', 'mdy-slash', 'ymd-dash')
+    ),
+  time_format text
+    constraint user_preferences_time_format_check check (time_format in ('24h', '12h')),
+  week_start text
+    constraint user_preferences_week_start_check check (
+      week_start in ('monday', 'saturday', 'sunday')
+    ),
+  number_format text
+    constraint user_preferences_number_format_check check (
+      number_format in ('comma-dot', 'dot-comma', 'space-comma')
+    ),
+  measurement_system text
+    constraint user_preferences_measurement_system_check check (
+      measurement_system in ('metric', 'us-customary')
+    ),
+  -- An IANA zone name such as Europe/Brussels. The app also checks the zone exists; the database
+  -- only checks its shape, because PostgreSQL's and the browsers' zone lists differ slightly.
+  timezone text
+    constraint user_preferences_timezone_check check (
+      char_length(timezone) <= 64
+      and timezone ~ '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'
+    ),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Row level security from the start, before any role is granted access.
+alter table public.user_preferences enable row level security;
+
+comment on table public.user_preferences is
+  'Global personal preferences of one account (S07). NULL = not chosen / Automatic.';
+
+-- updated_at is set by the database, never by the client.
+create function private.set_updated_at() returns trigger
+  language plpgsql
+  set search_path = ''
+  as $$
+  begin
+    new.updated_at := now();
+    return new;
+  end
+  $$;
+
+create trigger user_preferences_set_updated_at
+  before update on public.user_preferences
+  for each row execute function private.set_updated_at();
+
+-- Supabase grants every API role full access to new tables in schema public. Take that back and
+-- grant only what the app needs: signed-in people read their row and write the preference columns
+-- (user_id included, so an upsert works; the policies below stop it from naming anyone else).
+-- created_at and updated_at stay out of reach. Nobody deletes a row through the API: it goes with
+-- the account.
+revoke all on table public.user_preferences from anon, authenticated;
+grant select on table public.user_preferences to authenticated;
+grant insert (
+  user_id, display_name, locale, date_format, time_format, week_start, number_format,
+  measurement_system, timezone
+) on table public.user_preferences to authenticated;
+grant update (
+  user_id, display_name, locale, date_format, time_format, week_start, number_format,
+  measurement_system, timezone
+) on table public.user_preferences to authenticated;
+
+create policy user_preferences_select_own on public.user_preferences
+  for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+create policy user_preferences_insert_own on public.user_preferences
+  for insert
+  to authenticated
+  with check (user_id = (select auth.uid()));
+
+create policy user_preferences_update_own on public.user_preferences
+  for update
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+-- ============================================================================
+-- supabase/migrations/20261015090000_sign_in_methods.sql
+-- ============================================================================
+-- S08: rules for linking and unlinking sign-in methods (brief S08; spec "Confirmed self-service
+-- Google and Apple sign-in method management"; architecture.md §7).
+--
+-- Supabase Auth attaches a Google sign-in to an existing account whose email matches (automatic
+-- linking), and lets any signed-in browser link or unlink a provider with its own session. The
+-- spec allows neither: linking needs explicit consent after recent reauthentication, never a
+-- matching email, and the last usable sign-in method can never be removed. Supabase has no setting
+-- for this on hosted projects, so the database enforces it on the table Supabase Auth writes:
+--
+-- * Adding a provider identity (Google; Apple later) to an account that already has a confirmed
+--   sign-in method needs a one-time link permission. Without one the insert fails and Supabase
+--   Auth reports an error. With one, the transaction must also be Supabase Auth's manual-link flow
+--   for that account (checked when it commits), so a plain sign-in with a matching email is
+--   refused even while a permission is open: automatic email-based linking cannot happen.
+-- * Removing a provider identity needs a one-time unlink permission and a remaining usable
+--   method: a confirmed email address with a password. The email/password identity itself cannot
+--   be removed (no Madeora flow offers it yet).
+-- * Permissions come only from public.authorize_sign_in_method_change(), which requires a
+--   password sign-in from the last 5 minutes on a session that still exists.
+--
+-- Supabase Auth's own clean-up keeps working: a new account (no other identity), an account that
+-- never confirmed its email (Auth then removes the unconfirmed password, its protection against
+-- pre-account takeover), and deleting an account (identities go with it).
+--
+-- Supabase allows triggers on its auth tables, but no new functions or tables in schema auth, so
+-- everything here lives in schema private and the API cannot reach it.
+
+create table private.sign_in_method_grants (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  action text not null
+    constraint sign_in_method_grants_action_check check (action in ('link', 'unlink')),
+  provider text not null
+    constraint sign_in_method_grants_provider_check check (provider in ('google')),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  -- One open permission per account and action: asking again replaces it.
+  primary key (user_id, action)
+);
+
+comment on table private.sign_in_method_grants is
+  'One-time permissions to link or unlink a sign-in method after recent reauthentication (S08).';
+
+revoke all on table private.sign_in_method_grants from public;
+
+-- How long a password sign-in counts as "recent", and how long a permission stays usable. The app
+-- mirrors both in apps/web/src/auth/sign-in-methods.ts.
+create function private.sign_in_method_reauth_window() returns interval
+  language sql immutable set search_path = '' as $$ select interval '5 minutes' $$;
+
+create function private.sign_in_method_grant_lifetime() returns interval
+  language sql immutable set search_path = '' as $$ select interval '10 minutes' $$;
+
+-- Serializes every link, unlink and permission change of one account, so two concurrent requests
+-- cannot both pass the checks below. Released at the end of the transaction.
+create function private.lock_sign_in_methods(p_user_id uuid) returns void
+  language sql set search_path = '' as $$
+    select pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('madeora.sign_in_methods:' || p_user_id::text, 0)
+    )
+  $$;
+
+-- True when the account can still sign in without any provider identity: a confirmed email with
+-- a password. Typing that password is also how the unlink permission was obtained.
+create function private.has_usable_password(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (
+      select 1
+      from auth.users u
+      where u.id = p_user_id
+        and u.email is not null
+        and u.email_confirmed_at is not null
+        and coalesce(u.encrypted_password, '') <> ''
+    )
+  $$;
+
+-- Uses up the matching permission, if one is still valid.
+create function private.consume_sign_in_method_grant(
+  p_user_id uuid, p_action text, p_provider text
+) returns boolean
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_found boolean;
+  begin
+    delete from private.sign_in_method_grants g
+      where g.user_id = p_user_id
+        and g.action = p_action
+        and g.provider = p_provider
+        and g.expires_at > pg_catalog.now()
+      returning true into v_found;
+    -- An expired permission is removed too, so it can never be used later.
+    delete from private.sign_in_method_grants g
+      where g.user_id = p_user_id and g.action = p_action and g.expires_at <= pg_catalog.now();
+    return coalesce(v_found, false);
+  end
+  $$;
+
+create function private.guard_identity_insert() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_confirmed timestamptz;
+  begin
+    -- Email/password identities are created by Supabase Auth's own sign-up and confirmation flows,
+    -- which already require control of the address.
+    if new.provider = 'email' then
+      return new;
+    end if;
+
+    perform private.lock_sign_in_methods(new.user_id);
+
+    -- A brand-new account: this identity is its first.
+    if not exists (
+      select 1 from auth.identities i where i.user_id = new.user_id and i.id <> new.id
+    ) then
+      return new;
+    end if;
+
+    -- An account that never confirmed its email holds nothing and cannot sign in. Supabase Auth
+    -- hands it to the verified provider identity and removes the unconfirmed password.
+    select u.email_confirmed_at into v_confirmed from auth.users u where u.id = new.user_id;
+    if v_confirmed is null then
+      return new;
+    end if;
+
+    if private.consume_sign_in_method_grant(new.user_id, 'link', new.provider) then
+      -- Checked again at commit: it must be a manual link to this account (see below).
+      perform pg_catalog.set_config(
+        'madeora.linked_by_permission',
+        coalesce(pg_catalog.current_setting('madeora.linked_by_permission', true), '')
+          || new.id::text || ',',
+        true
+      );
+      return new;
+    end if;
+
+    raise exception 'sign-in method link not authorized'
+      using errcode = '42501',
+            hint = 'Madeora links a provider only after the account holder confirms it (S08).';
+  end
+  $$;
+
+create function private.guard_identity_delete() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_confirmed timestamptz;
+    v_exists boolean;
+  begin
+    select true, u.email_confirmed_at into v_exists, v_confirmed
+      from auth.users u where u.id = old.user_id;
+
+    -- The account itself is being deleted (the identities go with it).
+    if v_exists is null then
+      return old;
+    end if;
+
+    perform private.lock_sign_in_methods(old.user_id);
+
+    -- Supabase Auth's clean-up of an account that never confirmed its email.
+    if v_confirmed is null then
+      return old;
+    end if;
+
+    if old.provider = 'email' then
+      raise exception 'the email and password sign-in method cannot be removed'
+        using errcode = '42501';
+    end if;
+
+    if not private.has_usable_password(old.user_id) then
+      raise exception 'the last usable sign-in method cannot be removed'
+        using errcode = '42501';
+    end if;
+
+    if not private.consume_sign_in_method_grant(old.user_id, 'unlink', old.provider) then
+      raise exception 'sign-in method unlink not authorized'
+        using errcode = '42501',
+              hint = 'Madeora unlinks a provider only after the account holder confirms it (S08).';
+    end if;
+
+    return old;
+  end
+  $$;
+
+-- Runs when the transaction commits, after Supabase Auth has finished the callback. An identity
+-- let in by a permission must come from Supabase Auth's manual-link flow for this account: the
+-- PKCE flow state that targets the account (linking_target_id), for this provider, completed by
+-- a callback within the last minute (user_id and auth_code_issued_at set; Supabase Auth sets them
+-- in the same transaction as the insert). Links through the implicit flow, which deletes its flow
+-- state, are refused: Madeora's clients use PKCE. A Google sign-in that Supabase
+-- would link by matching email has no such flow state, so a permission left open (for example by
+-- cancelling at Google) cannot be used by it.
+create function private.check_identity_link_flow() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if pg_catalog.strpos(
+         coalesce(pg_catalog.current_setting('madeora.linked_by_permission', true), ''),
+         new.id::text || ','
+       ) = 0 then
+      return null;
+    end if;
+
+    if not exists (
+      select 1
+      from auth.flow_state f
+      where f.linking_target_id = new.user_id
+        and f.user_id = new.user_id
+        and f.provider_type = new.provider
+        and f.auth_code_issued_at >= pg_catalog.now() - interval '1 minute'
+    ) then
+      raise exception 'sign-in method link not authorized'
+        using errcode = '42501',
+              hint = 'Only a manual link started by the account holder may add a sign-in method (S08).';
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger madeora_guard_identity_insert
+  before insert on auth.identities
+  for each row execute function private.guard_identity_insert();
+
+create trigger madeora_guard_identity_delete
+  before delete on auth.identities
+  for each row execute function private.guard_identity_delete();
+
+create constraint trigger madeora_check_identity_link_flow
+  after insert on auth.identities
+  deferrable initially deferred
+  for each row execute function private.check_identity_link_flow();
+
+-- Called by the browser with the session of a password sign-in it has just made (the settings page
+-- asks for the password again). Checks in the database, not just in the token, that this session
+-- still exists and recorded a password sign-in within the reauthentication window, then stores a
+-- one-time permission. Returns when it expires.
+create function public.authorize_sign_in_method_change(p_action text, p_provider text)
+returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid;
+    v_expires_at timestamptz;
+  begin
+    if v_user_id is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if p_action is null or p_action not in ('link', 'unlink') then
+      raise exception 'unknown action' using errcode = '22023';
+    end if;
+    if p_provider is null or p_provider not in ('google') then
+      raise exception 'unknown provider' using errcode = '22023';
+    end if;
+
+    begin
+      v_session_id := (auth.jwt() ->> 'session_id')::uuid;
+    exception when invalid_text_representation then
+      v_session_id := null;
+    end;
+
+    if v_session_id is null or not exists (
+      select 1
+      from auth.sessions s
+      join auth.mfa_amr_claims c on c.session_id = s.id
+      where s.id = v_session_id
+        and s.user_id = v_user_id
+        and (s.not_after is null or s.not_after > pg_catalog.now())
+        and c.authentication_method = 'password'
+        and c.updated_at > pg_catalog.now() - private.sign_in_method_reauth_window()
+    ) then
+      raise exception 'recent password sign-in required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    perform private.lock_sign_in_methods(v_user_id);
+
+    v_expires_at := pg_catalog.now() + private.sign_in_method_grant_lifetime();
+    insert into private.sign_in_method_grants (user_id, action, provider, expires_at)
+      values (v_user_id, p_action, p_provider, v_expires_at)
+      on conflict (user_id, action) do update
+        set provider = excluded.provider,
+            expires_at = excluded.expires_at,
+            created_at = pg_catalog.now();
+    return v_expires_at;
+  end
+  $$;
+
+comment on function public.authorize_sign_in_method_change(text, text) is
+  'S08: one-time permission to link or unlink a sign-in method after a fresh password sign-in.';
+
+-- Only signed-in people may ask; the function checks the rest itself.
+revoke all on function public.authorize_sign_in_method_change(text, text) from public, anon;
+grant execute on function public.authorize_sign_in_method_change(text, text) to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261016090000_homes.sql
+-- ============================================================================
+-- S09: Homes, memberships with exactly one Owner, and the audit log (architecture.md section 4; brief
+-- S09; spec "Confirmed multi-Home model", "Confirmed Home roles", "Confirmed exactly one Home
+-- Owner").
+--
+-- What the API can do here, and nothing more:
+-- - read a Home it is a current member of, and its own memberships (RLS below);
+-- - create a Home through public.create_home(), which makes the caller its single Owner in one
+--   transaction;
+-- - change a Home's name and scheduling timezone, as that Home's Owner (RLS below).
+-- Nobody inserts, changes or deletes a membership through the API: joining (S10) and role changes,
+-- removal and ownership transfer (S12) arrive with their own reviewed functions. Every change to
+-- either table is written to private.audit_events by triggers, whichever path made it.
+
+-- Homes ------------------------------------------------------------------------------------------
+
+create table public.homes (
+  id uuid primary key default gen_random_uuid(),
+  -- A Home's name is shown to every member, so it follows the stricter name policy that S07's
+  -- review deferred to the first names other people see (apps/web/src/names/visible-name.ts; the
+  -- app applies the exact Unicode rules, this check is the backstop for direct API writes):
+  --   * 1 to 50 characters, NFC, no leading or trailing whitespace of any kind;
+  --   * no control, format or other invisible characters: zero-width spaces, direction marks,
+  --     overrides and isolates, word joiners, BOMs, soft hyphens, Hangul fillers, the Braille
+  --     blank, Mongolian selectors, line and paragraph separators;
+  --   * a zero-width joiner or non-joiner only between two visible characters, and a variation
+  --     selector only directly after one (emoji sequences, Persian and Indic text);
+  --   * tag characters only inside a complete emoji tag flag (U+1F3F4 ... U+E007F);
+  --   * at least one character that is not whitespace, a joiner, a selector or a combining mark.
+  name text not null
+    constraint homes_name_check check (
+      char_length(name) between 1 and 50
+      and name is nfc normalized
+      and name !~ '^[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]'
+      and name !~ '[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]$'
+      and name !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u034F\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200E\u200F\u2028-\u202E\u2060-\u206F\u2800\u3164\uFEFF\uFFA0\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E001F\U000E0080-\U000E00FF\U000E01F0-\U000E0FFF]'
+      and name !~ '^[\u200C\u200D\uFE00-\uFE0F\U000E0100-\U000E01EF]|[\u200C\u200D]$|[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200C\u200D][\u200C\u200D]|[\u200C\u200D][\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFE00-\uFE0F\U000E0100-\U000E01EF]|[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200C\u200D\uFE00-\uFE0F\U000E0100-\U000E01EF][\uFE00-\uFE0F\U000E0100-\U000E01EF]'
+      and regexp_replace(name, '\U0001F3F4[\U000E0020-\U000E007E]+\U000E007F', '', 'g')
+        !~ '[\U000E0020-\U000E007F]'
+      and name ~ '[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200C\u200D\uFE00-\uFE0F\U000E0100-\U000E01EF\U000E0020-\U000E007F\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]'
+    ),
+  -- The Home's scheduling timezone (spec "Confirmed personal timezone": Home-anchored schedules
+  -- use it, whoever views them). Same shape check as user_preferences.timezone; the app also
+  -- checks the zone exists.
+  timezone text not null
+    constraint homes_timezone_check check (
+      char_length(timezone) <= 64
+      and timezone ~ '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'
+    ),
+  -- Who created it. Kept for duplicate-request detection only; ownership lives in
+  -- home_memberships, and the creator may later stop being the Owner (S12).
+  created_by uuid references auth.users (id) on delete set null,
+  -- The id the app generates once per Create a Home form, so a double click or a retry after a
+  -- lost response returns the same Home instead of creating a second one.
+  creation_request_id uuid not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index homes_creation_request_key on public.homes (created_by, creation_request_id);
+
+alter table public.homes enable row level security;
+
+comment on table public.homes is
+  'A Home: an isolated shared context with its own members, roles and data (S09).';
+
+create trigger homes_set_updated_at
+  before update on public.homes
+  for each row execute function private.set_updated_at();
+
+-- Memberships --------------------------------------------------------------------------------------
+
+create table public.home_memberships (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  -- Deleting an account removes its memberships; for a Home's only Owner the Owner check below
+  -- refuses that until transfer-or-close exists (S12, S40).
+  user_id uuid not null references auth.users (id) on delete cascade,
+  role text not null
+    constraint home_memberships_role_check check (role in ('owner', 'administrator', 'member')),
+  created_at timestamptz not null default now(),
+  constraint home_memberships_home_user_key unique (home_id, user_id)
+);
+
+-- At most one Owner per Home. The deferred trigger below makes it at least one.
+create unique index home_memberships_one_owner on public.home_memberships (home_id)
+  where role = 'owner';
+
+-- "Which Homes am I in" is the query every page runs.
+create index home_memberships_user_id_idx on public.home_memberships (user_id);
+
+alter table public.home_memberships enable row level security;
+
+comment on table public.home_memberships is
+  'Current Home memberships with their role; exactly one Owner per Home (S09).';
+
+-- Exactly one Owner -------------------------------------------------------------------------------
+
+-- Checked at commit, so a transaction may create a Home before its Owner membership, or (S12)
+-- swap two roles, but can never finish with a Home that has no Owner. A Home that no longer exists
+-- (deleted with its memberships) needs no Owner.
+create function private.check_home_has_owner() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_home_id uuid;
+  begin
+    if tg_table_name = 'homes' then
+      v_home_id := new.id;
+    else
+      v_home_id := old.home_id;
+    end if;
+
+    if exists (select 1 from public.homes h where h.id = v_home_id)
+       and not exists (
+         select 1 from public.home_memberships m
+         where m.home_id = v_home_id and m.role = 'owner'
+       ) then
+      raise exception 'a Home must always have an Owner'
+        using errcode = '23514',
+              hint = 'Ownership changes only through an accepted transfer (S12).';
+    end if;
+    return null;
+  end
+  $$;
+
+create constraint trigger homes_owner_required
+  after insert on public.homes
+  deferrable initially deferred
+  for each row execute function private.check_home_has_owner();
+
+create constraint trigger home_memberships_owner_required
+  after update or delete on public.home_memberships
+  deferrable initially deferred
+  for each row execute function private.check_home_has_owner();
+
+-- Audit log ---------------------------------------------------------------------------------------
+
+-- Who did what, in which Home, to which subject, and when (architecture.md section 4). Identities are
+-- stable ids, never names or colours. Not reachable through the API: schema private is not
+-- exposed and nothing is granted. Details are minimal (field names and roles, never the names or
+-- other content people typed). Retention is still open in the spec; nothing deletes rows yet.
+create table private.audit_events (
+  id bigint generated always as identity primary key,
+  occurred_at timestamptz not null default now(),
+  -- The signed-in account that made the change; null for the database owner or the service role
+  -- acting without a user (migrations, maintenance).
+  actor_user_id uuid,
+  -- No foreign keys: the record must outlive the Home and the accounts it mentions (deletion and
+  -- anonymisation rules arrive with S40).
+  home_id uuid,
+  action text not null
+    constraint audit_events_action_check check (action ~ '^[a-z_]+(\.[a-z_]+)+$'),
+  subject_type text not null
+    constraint audit_events_subject_type_check check (subject_type in ('home', 'user')),
+  subject_id uuid,
+  details jsonb not null default '{}'::jsonb
+    constraint audit_events_details_check check (jsonb_typeof(details) = 'object')
+);
+
+create index audit_events_home_id_idx on private.audit_events (home_id, occurred_at);
+
+revoke all on table private.audit_events from public;
+
+comment on table private.audit_events is
+  'Restricted audit trail of Home and membership changes (S09). Not exposed through the API.';
+
+create function private.audit_home_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_fields text[] := array[]::text[];
+  begin
+    if tg_op = 'INSERT' then
+      insert into private.audit_events (actor_user_id, home_id, action, subject_type, subject_id)
+        values (auth.uid(), new.id, 'home.created', 'home', new.id);
+    elsif tg_op = 'UPDATE' then
+      if new.name is distinct from old.name then
+        v_fields := v_fields || 'name'::text;
+      end if;
+      if new.timezone is distinct from old.timezone then
+        v_fields := v_fields || 'timezone'::text;
+      end if;
+      if pg_catalog.cardinality(v_fields) > 0 then
+        insert into private.audit_events (
+          actor_user_id, home_id, action, subject_type, subject_id, details
+        )
+          values (
+            auth.uid(), new.id, 'home.settings_changed', 'home', new.id,
+            pg_catalog.jsonb_build_object('fields', pg_catalog.to_jsonb(v_fields))
+          );
+      end if;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger homes_audit
+  after insert or update on public.homes
+  for each row execute function private.audit_home_change();
+
+create function private.audit_membership_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if tg_op = 'INSERT' then
+      insert into private.audit_events (
+        actor_user_id, home_id, action, subject_type, subject_id, details
+      )
+        values (
+          auth.uid(), new.home_id, 'home_membership.created', 'user', new.user_id,
+          pg_catalog.jsonb_build_object('role', new.role)
+        );
+    elsif tg_op = 'UPDATE' then
+      if new.role is distinct from old.role then
+        insert into private.audit_events (
+          actor_user_id, home_id, action, subject_type, subject_id, details
+        )
+          values (
+            auth.uid(), new.home_id, 'home_membership.role_changed', 'user', new.user_id,
+            pg_catalog.jsonb_build_object('from', old.role, 'to', new.role)
+          );
+      end if;
+    else
+      insert into private.audit_events (
+        actor_user_id, home_id, action, subject_type, subject_id, details
+      )
+        values (
+          auth.uid(), old.home_id, 'home_membership.ended', 'user', old.user_id,
+          pg_catalog.jsonb_build_object('role', old.role)
+        );
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_audit
+  after insert or update or delete on public.home_memberships
+  for each row execute function private.audit_membership_change();
+
+-- API access --------------------------------------------------------------------------------------
+
+-- Supabase grants every API role full access to new tables in schema public. Take that back and
+-- grant only what the app needs. created_by and creation_request_id stay out of reach: members do
+-- not need to know who created a Home, and request ids are the creator's own business.
+revoke all on table public.homes from anon, authenticated;
+revoke all on table public.home_memberships from anon, authenticated;
+
+grant select (id, name, timezone, created_at, updated_at) on table public.homes to authenticated;
+grant update (name, timezone) on table public.homes to authenticated;
+grant select (id, home_id, user_id, role, created_at) on table public.home_memberships
+  to authenticated;
+
+-- A Home is visible only to its current members. The subquery reads home_memberships as the same
+-- person, whose policy below shows them their own rows only, so it finds exactly their membership.
+create policy homes_select_member on public.homes
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = homes.id and m.user_id = (select auth.uid())
+    )
+  );
+
+-- Only the Owner changes a Home's settings. Administrators get this through a capability the Owner
+-- grants (S12), never through the role alone (spec "Confirmed customizable Administrator
+-- permissions"). The TypeScript engine (packages/domain) makes the same decision first.
+create policy homes_update_owner on public.homes
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = homes.id and m.user_id = (select auth.uid()) and m.role = 'owner'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = homes.id and m.user_id = (select auth.uid()) and m.role = 'owner'
+    )
+  );
+
+-- Each person sees their own memberships only. The member directory, with other people's rows,
+-- arrives in S11 with its own policy and tests.
+create policy home_memberships_select_own on public.home_memberships
+  for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+-- Create a Home ----------------------------------------------------------------------------------
+
+-- Creates a Home and makes the caller its single Owner, atomically. A repeated p_request_id from
+-- the same account returns the Home that request already created, so retries and double clicks
+-- never make two. Only signed-in accounts with a confirmed email may call it; every account is an
+-- adult until children (S41) and Household Displays (S43) arrive, which must be refused here then.
+-- The name and timezone are checked by the table's constraints (the app normalises them first).
+create function public.create_home(p_name text, p_timezone text, p_request_id uuid)
+returns uuid
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_home_id uuid;
+  begin
+    if v_user_id is null or not exists (
+      select 1 from auth.users u where u.id = v_user_id and u.email_confirmed_at is not null
+    ) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if p_request_id is null then
+      raise exception 'a request id is required' using errcode = '22023';
+    end if;
+
+    -- One creation at a time per account, so two concurrent retries of one request cannot both
+    -- miss the existing Home and then collide on the unique index.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('madeora.create_home:' || v_user_id::text, 0)
+    );
+
+    select h.id into v_home_id
+      from public.homes h
+      where h.created_by = v_user_id and h.creation_request_id = p_request_id;
+    if v_home_id is not null then
+      return v_home_id;
+    end if;
+
+    insert into public.homes (name, timezone, created_by, creation_request_id)
+      values (p_name, p_timezone, v_user_id, p_request_id)
+      returning id into v_home_id;
+    insert into public.home_memberships (home_id, user_id, role)
+      values (v_home_id, v_user_id, 'owner');
+    return v_home_id;
+  end
+  $$;
+
+comment on function public.create_home(text, text, uuid) is
+  'S09: create a Home and become its single Owner; idempotent per request id.';
+
+revoke all on function public.create_home(text, text, uuid) from public, anon;
+grant execute on function public.create_home(text, text, uuid) to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261017090000_home_invitations.sql
+-- ============================================================================
+-- S10: Home invitations, join requests and manager approval (brief S10; spec "Confirmed Home
+-- invitations", "Confirmed manager invitations and approved adult join requests", "Confirmed
+-- active invitation management", "Confirmed email invitation resend and renewal", "Confirmed
+-- email invitation account matching", "Confirmed private accounts and invitation-only discovery").
+--
+-- Three ways in, one boundary:
+-- - an email invitation (only the account with that verified email may use it),
+-- - an invitation link (any signed-in adult; single use, or 2 to 10 admissions),
+-- - a join code (Member only, no use cap; shared as a code or a link).
+-- Using any of them only creates a pending join request. A current manager's approval is the
+-- membership boundary: it re-checks everything, creates the membership and counts the use, under
+-- row locks, so simultaneous approvals cannot exceed a cap or create two memberships.
+--
+-- The tables live in schema private, which the Data API cannot reach at all. Everything the app
+-- does goes through the security definer functions at the end of this file, each of which checks
+-- the caller (auth.uid()), their current membership and authority, and the invitation's state.
+
+-- Audit subjects ------------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in ('home', 'user', 'invitation', 'join_request'));
+
+create function private.audit(
+  p_action text, p_home_id uuid, p_subject_type text, p_subject_id uuid,
+  p_details jsonb default '{}'::jsonb
+) returns void
+  language sql security definer set search_path = '' as $$
+  insert into private.audit_events (actor_user_id, home_id, action, subject_type, subject_id, details)
+    values (auth.uid(), p_home_id, p_action, p_subject_type, p_subject_id, p_details);
+  $$;
+
+-- Invitations ---------------------------------------------------------------------------------------
+
+create table private.home_invitations (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  kind text not null constraint home_invitations_kind_check
+    check (kind in ('email', 'link', 'join_code')),
+  -- Never 'owner': ownership changes only through the explicit transfer (S12). Join codes always
+  -- propose Member (spec: an applicant cannot request elevated roles).
+  role text not null constraint home_invitations_role_check
+    check (role in ('member', 'administrator') and (kind <> 'join_code' or role = 'member')),
+  -- Email invitations only: the intended recipient (lower case) and the email's language.
+  recipient_email text constraint home_invitations_recipient_check
+    check (
+      (kind = 'email') = (recipient_email is not null)
+      and (recipient_email is null or (
+        char_length(recipient_email) <= 254 and recipient_email = lower(recipient_email)
+        and recipient_email ~ '^[^@\s]+@[^@\s]+$'
+      ))
+    ),
+  email_locale text constraint home_invitations_email_locale_check
+    check ((kind = 'email') = (email_locale is not null) and email_locale in ('en', 'nl')),
+  -- The secret part of the link (or the join code). Kept in the clear because Resend must send
+  -- the same link again (spec) and managers copy links later; the whole table is unreachable
+  -- through the API, and renewal replaces it.
+  token text not null constraint home_invitations_token_key unique,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  -- How many approved admissions it allows (null: no cap, join codes only) and how many it had.
+  max_admissions integer constraint home_invitations_max_admissions_check
+    check (
+      case kind
+        when 'email' then max_admissions = 1
+        when 'link' then max_admissions = 1 or max_admissions between 2 and 10
+        else max_admissions is null
+      end
+    ),
+  admissions integer not null default 0
+    constraint home_invitations_admissions_check
+    check (admissions >= 0 and (max_admissions is null or admissions <= max_admissions)),
+  -- The inviter. If they no longer have the authority to issue this role (or their account is
+  -- gone), the invitation stops being usable (spec: acceptance must fail safely).
+  created_by uuid references auth.users (id) on delete set null,
+  creation_request_id uuid not null,
+  -- Ended early: revoked by a manager, or (email invitations) its recipient was declined.
+  ended_at timestamptz,
+  ended_by uuid,
+  end_reason text constraint home_invitations_end_check
+    check ((end_reason is null) = (ended_at is null) and end_reason in ('revoked', 'declined')),
+  -- Email delivery bookkeeping (email invitations only): when it was last sent, how many sends
+  -- (first send, resends, renewals) fell in the current 24-hour window, and the last outcome.
+  last_sent_at timestamptz,
+  send_window_started_at timestamptz,
+  sends_in_window integer not null default 0,
+  delivery_status text constraint home_invitations_delivery_check
+    check (delivery_status in ('pending', 'sent', 'failed', 'not_configured'))
+);
+
+create unique index home_invitations_request_key
+  on private.home_invitations (created_by, creation_request_id);
+create index home_invitations_home_idx on private.home_invitations (home_id, created_at desc);
+
+comment on table private.home_invitations is
+  'Email invitations, invitation links and join codes for a Home (S10). Not exposed through the API.';
+
+-- Join requests -------------------------------------------------------------------------------------
+
+create table private.home_join_requests (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  invitation_id uuid not null references private.home_invitations (id) on delete cascade,
+  applicant_id uuid not null references auth.users (id) on delete cascade,
+  -- Copied from the invitation; the applicant never chooses it, and approval cannot change it.
+  role text not null constraint home_join_requests_role_check
+    check (role in ('member', 'administrator')),
+  status text not null default 'pending' constraint home_join_requests_status_check
+    check (status in ('pending', 'approved', 'declined', 'withdrawn', 'expired')),
+  -- What managers see to recognise the applicant (spec: minimally necessary verified identity):
+  -- the verified email and the display name at the time of the request.
+  applicant_email text not null,
+  applicant_name text,
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid,
+  constraint home_join_requests_decided_check check ((status = 'pending') = (decided_at is null))
+);
+
+-- One pending request per person per Home.
+create unique index home_join_requests_one_pending
+  on private.home_join_requests (home_id, applicant_id) where status = 'pending';
+create index home_join_requests_home_idx on private.home_join_requests (home_id, created_at desc);
+create index home_join_requests_applicant_idx
+  on private.home_join_requests (applicant_id, created_at desc);
+create index home_join_requests_invitation_idx on private.home_join_requests (invitation_id);
+
+comment on table private.home_join_requests is
+  'Requests to join a Home made with an invitation or join code, and their outcome (S10).';
+
+-- Failed lookups, for rate limiting link and code guessing per account.
+create table private.join_attempts (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  attempted_at timestamptz not null default now()
+);
+
+create index join_attempts_user_idx on private.join_attempts (user_id, attempted_at);
+
+-- Helpers -------------------------------------------------------------------------------------------
+
+-- Whether p_user may issue (and approve) invitations for p_role in p_home right now. The Owner
+-- may do both. An Administrator will manage Member invitations through the capability the Owner
+-- grants in S12 (TypeScript: manageInvitations); Administrator invitations stay Owner-only, as
+-- assigning Administrators is a non-delegable Owner power. Mirrors packages/domain's engine.
+create function private.can_manage_invitations(p_home_id uuid, p_user_id uuid, p_role text)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and p_role in ('member', 'administrator') and exists (
+    select 1 from public.home_memberships m
+    where m.home_id = p_home_id and m.user_id = p_user_id and m.role = 'owner'
+  );
+  $$;
+
+-- The signed-in account's verified email (lower case), or null when it is not confirmed.
+create function private.confirmed_email(p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.lower(u.email) from auth.users u
+  where u.id = p_user_id and u.email_confirmed_at is not null and u.email is not null;
+  $$;
+
+-- What an invitation can do now: 'active', or why not ('revoked', 'declined', 'accepted' for a
+-- used email invitation, 'used_up', 'expired', 'invalid' when its inviter lost the authority).
+create function private.invitation_state(p_invitation private.home_invitations) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_invitation.end_reason is not null then p_invitation.end_reason
+    when p_invitation.max_admissions is not null
+      and p_invitation.admissions >= p_invitation.max_admissions
+      then case when p_invitation.kind = 'email' then 'accepted' else 'used_up' end
+    when p_invitation.expires_at <= pg_catalog.now() then 'expired'
+    when not private.can_manage_invitations(
+      p_invitation.home_id, p_invitation.created_by, p_invitation.role
+    ) then 'invalid'
+    else 'active'
+  end;
+  $$;
+
+-- A new secret: 32 random bytes as base64url (43 characters) for links and emails, or 10 Crockford
+-- base32 characters (50 bits; no I, L, O or U) for join codes.
+create function private.new_invitation_token(p_kind text) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_alphabet constant text := '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    v_bytes bytea;
+    v_code text := '';
+  begin
+    if p_kind = 'join_code' then
+      v_bytes := extensions.gen_random_bytes(10);
+      for i in 0..9 loop
+        -- 256 is a multiple of 32, so every character is equally likely.
+        v_code := v_code || pg_catalog.substr(v_alphabet, (pg_catalog.get_byte(v_bytes, i) % 32) + 1, 1);
+      end loop;
+      return v_code;
+    end if;
+    return pg_catalog.rtrim(
+      pg_catalog.translate(pg_catalog.encode(extensions.gen_random_bytes(32), 'base64'), '+/', '-_'),
+      '='
+    );
+  end
+  $$;
+
+-- The stored form of what someone typed or opened: a 43-character link token as is, or a join code
+-- with spaces and dashes removed, upper case, and the look-alikes I, L and O read as 1, 1 and 0.
+-- Null when it can be neither.
+create function private.normalize_invitation_token(p_value text) returns text
+  language plpgsql immutable security definer set search_path = '' as $$
+  declare
+    v_code text;
+  begin
+    if p_value is null or pg_catalog.char_length(p_value) > 100 then
+      return null;
+    end if;
+    if p_value ~ '^[A-Za-z0-9_-]{43}$' then
+      return p_value;
+    end if;
+    v_code := pg_catalog.translate(
+      pg_catalog.upper(pg_catalog.regexp_replace(p_value, '[\s-]', '', 'g')), 'ILO', '110'
+    );
+    if v_code ~ '^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{10}$' then
+      return v_code;
+    end if;
+    return null;
+  end
+  $$;
+
+-- Raises "not signed in" unless the caller is a signed-in account with a confirmed email; returns
+-- the account id. Every account is an adult until children (S41) and displays (S43) arrive, which
+-- must be refused here then.
+create function private.require_confirmed_caller() returns uuid
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or private.confirmed_email(v_user_id) is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    return v_user_id;
+  end
+  $$;
+
+-- Rate limits (brief S10, owner may change): failed lookups per account per 15 minutes, new join
+-- requests per account per 24 hours, email sends per invitation per 24 hours and the pause between
+-- two sends, invitation emails per sending account and per Home per 24 hours (well under Resend's
+-- free 100 a day, which Supabase Auth's account emails share), and active invitations per Home
+-- (spec: 25).
+create function private.invitation_limit(p_name text) returns integer
+  language sql immutable security definer set search_path = '' as $$
+  select case p_name
+    when 'failed_lookups' then 10
+    when 'requests_per_day' then 20
+    when 'sends_per_day' then 5
+    when 'seconds_between_sends' then 60
+    when 'active_per_home' then 25
+    when 'emails_per_account_per_day' then 20
+    when 'emails_per_home_per_day' then 20
+  end;
+  $$;
+
+-- Whether the account has used up its failed lookups for now.
+create function private.lookups_blocked(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select (
+    select pg_catalog.count(*) from private.join_attempts a
+    where a.user_id = p_user_id and a.attempted_at > pg_catalog.now() - interval '15 minutes'
+  ) >= private.invitation_limit('failed_lookups');
+  $$;
+
+create function private.record_failed_lookup(p_user_id uuid) returns void
+  language sql security definer set search_path = '' as $$
+  delete from private.join_attempts
+    where user_id = p_user_id and attempted_at < pg_catalog.now() - interval '1 day';
+  insert into private.join_attempts (user_id) values (p_user_id);
+  $$;
+
+-- Every invitation email sent (first sends, resends and renewals), kept for a day, so the daily
+-- limits per sending account and per Home hold even when invitations are revoked and created again.
+create table private.invitation_email_sends (
+  id bigint generated always as identity primary key,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  sender_id uuid not null references auth.users (id) on delete cascade,
+  sent_at timestamptz not null default now()
+);
+create index invitation_email_sends_home_idx on private.invitation_email_sends (home_id, sent_at);
+create index invitation_email_sends_sender_idx on private.invitation_email_sends (sender_id, sent_at);
+revoke all on table private.invitation_email_sends from public;
+revoke all on table private.home_invitations, private.home_join_requests, private.join_attempts
+  from public;
+
+comment on table private.invitation_email_sends is
+  'Invitation emails sent in the last day, for the per-account and per-Home limits (S10).';
+
+-- Whether the sender or the Home has used up today's invitation emails.
+create function private.email_sends_blocked(p_home_id uuid, p_sender_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select (
+    select pg_catalog.count(*) from private.invitation_email_sends e
+    where e.sender_id = p_sender_id and e.sent_at > pg_catalog.now() - interval '24 hours'
+  ) >= private.invitation_limit('emails_per_account_per_day')
+  or (
+    select pg_catalog.count(*) from private.invitation_email_sends e
+    where e.home_id = p_home_id and e.sent_at > pg_catalog.now() - interval '24 hours'
+  ) >= private.invitation_limit('emails_per_home_per_day');
+  $$;
+
+create function private.record_email_send(p_home_id uuid, p_sender_id uuid) returns void
+  language sql security definer set search_path = '' as $$
+  delete from private.invitation_email_sends
+    where sender_id = p_sender_id and sent_at < pg_catalog.now() - interval '2 days';
+  insert into private.invitation_email_sends (home_id, sender_id) values (p_home_id, p_sender_id);
+  $$;
+
+-- Counts one email send for an invitation by p_sender_id, or returns false when a limit refuses
+-- it: the pause between sends and the daily count of this invitation, and the daily limits of the
+-- sender and of the Home.
+create function private.count_invitation_send(p_invitation_id uuid, p_sender_id uuid)
+returns boolean
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_inv private.home_invitations;
+  begin
+    select * into v_inv from private.home_invitations where id = p_invitation_id for update;
+    if private.email_sends_blocked(v_inv.home_id, p_sender_id) then
+      return false;
+    end if;
+    if v_inv.last_sent_at is not null and v_inv.last_sent_at
+         > pg_catalog.now() - pg_catalog.make_interval(secs => private.invitation_limit('seconds_between_sends')) then
+      return false;
+    end if;
+    if v_inv.send_window_started_at is null
+       or v_inv.send_window_started_at <= pg_catalog.now() - interval '24 hours' then
+      update private.home_invitations
+        set send_window_started_at = pg_catalog.now(), sends_in_window = 1,
+            last_sent_at = pg_catalog.now(), delivery_status = 'pending'
+        where id = p_invitation_id;
+      perform private.record_email_send(v_inv.home_id, p_sender_id);
+      return true;
+    end if;
+    if v_inv.sends_in_window >= private.invitation_limit('sends_per_day') then
+      return false;
+    end if;
+    update private.home_invitations
+      set sends_in_window = sends_in_window + 1, last_sent_at = pg_catalog.now(),
+          delivery_status = 'pending'
+      where id = p_invitation_id;
+    perform private.record_email_send(v_inv.home_id, p_sender_id);
+    return true;
+  end
+  $$;
+
+-- Managing invitations ------------------------------------------------------------------------------
+
+-- Creates an invitation and returns its secret, which only the server uses (to send the email or
+-- to show the link to the manager). A repeated p_request_id from the same account returns the
+-- invitation that request created; reused with other content it raises 22023. Outcomes:
+-- 'created', 'existing', 'limit_reached', 'duplicate_email', 'rate_limited' (email limits),
+-- 'not_permitted', 'not_found'. Malformed input raises 22023.
+create function public.create_home_invitation(
+  p_home_id uuid,
+  p_kind text,
+  p_role text,
+  p_request_id uuid,
+  p_recipient_email text default null,
+  p_email_locale text default null,
+  p_expires_in text default null,
+  p_max_admissions integer default null
+) returns table (
+  outcome text, invitation_id uuid, token text, expires_at timestamptz, delivery_status text
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_interval interval;
+    v_email text;
+    v_existing private.home_invitations;
+    v_created private.home_invitations;
+    v_active integer;
+  begin
+    if p_home_id is null or p_request_id is null
+       or p_kind is null or p_kind not in ('email', 'link', 'join_code')
+       or p_role is null or p_role not in ('member', 'administrator') then
+      raise exception 'invalid invitation' using errcode = '22023';
+    end if;
+
+    if not exists (
+      select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      return query select 'not_found'::text, null::uuid, null::text, null::timestamptz, null::text;
+      return;
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, p_role) then
+      return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz, null::text;
+      return;
+    end if;
+
+    -- Expiry: links and codes choose 24 hours, 7 days (default) or 30 days; email invitations
+    -- always last 7 days (spec leaves other durations open).
+    v_interval := case coalesce(p_expires_in, '7d')
+      when '24h' then interval '24 hours'
+      when '7d' then interval '7 days'
+      when '30d' then interval '30 days'
+    end;
+    if v_interval is null or (p_kind = 'email' and v_interval <> interval '7 days') then
+      raise exception 'invalid expiry' using errcode = '22023';
+    end if;
+
+    if p_kind = 'email' then
+      v_email := pg_catalog.lower(pg_catalog.btrim(p_recipient_email));
+      if v_email is null or v_email !~ '^[^@\s]+@[^@\s]+$' or pg_catalog.char_length(v_email) > 254
+         or p_email_locale is null or p_email_locale not in ('en', 'nl')
+         or p_max_admissions is distinct from 1 then
+        raise exception 'invalid email invitation' using errcode = '22023';
+      end if;
+    elsif p_recipient_email is not null or p_email_locale is not null then
+      raise exception 'only email invitations have a recipient' using errcode = '22023';
+    elsif p_kind = 'link' and (p_max_admissions is null
+          or not (p_max_admissions = 1 or p_max_admissions between 2 and 10)) then
+      raise exception 'invalid admission cap' using errcode = '22023';
+    elsif p_kind = 'join_code' and (p_max_admissions is not null or p_role <> 'member') then
+      raise exception 'join codes are Member only without a cap' using errcode = '22023';
+    end if;
+
+    -- One creation at a time per Home: the active count below cannot be raced past the limit, and
+    -- a retried request cannot miss its earlier result.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('madeora.home_invitations:' || p_home_id::text, 0)
+    );
+
+    -- A retry returns what the first attempt created, but only for the very same request: a
+    -- request id reused with other content (another address, kind, role or expiry) is refused,
+    -- so an existing secret is never sent to, or shown for, something it was not made for.
+    select * into v_existing from private.home_invitations i
+      where i.created_by = v_user_id and i.creation_request_id = p_request_id;
+    if found then
+      if v_existing.home_id <> p_home_id
+         or v_existing.kind <> p_kind
+         or v_existing.role <> p_role
+         or v_existing.recipient_email is distinct from v_email
+         or v_existing.email_locale is distinct from p_email_locale
+         or v_existing.max_admissions is distinct from p_max_admissions
+         or v_existing.expires_at - v_existing.created_at <> v_interval then
+        raise exception 'request id already used' using errcode = '22023';
+      end if;
+      return query select 'existing'::text, v_existing.id, v_existing.token,
+        v_existing.expires_at, v_existing.delivery_status;
+      return;
+    end if;
+
+    if p_kind = 'email' then
+      -- One outstanding invitation per address per Home. This says nothing about accounts: it
+      -- only looks at this Home's own invitations, which the manager can see anyway.
+      if exists (
+        select 1 from private.home_invitations i
+        where i.home_id = p_home_id and i.kind = 'email' and i.recipient_email = v_email
+          and private.invitation_state(i) = 'active'
+      ) then
+        return query select 'duplicate_email'::text, null::uuid, null::text, null::timestamptz,
+          null::text;
+        return;
+      end if;
+      -- The first email counts toward the sender's and the Home's daily email limits.
+      if private.email_sends_blocked(p_home_id, v_user_id) then
+        return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz,
+          null::text;
+        return;
+      end if;
+    end if;
+
+    select pg_catalog.count(*) into v_active from private.home_invitations i
+      where i.home_id = p_home_id and private.invitation_state(i) = 'active';
+    if v_active >= private.invitation_limit('active_per_home') then
+      return query select 'limit_reached'::text, null::uuid, null::text, null::timestamptz,
+        null::text;
+      return;
+    end if;
+
+    -- A new join code could, very rarely, repeat an existing one: try again.
+    for attempt in 1..5 loop
+      begin
+        insert into private.home_invitations (
+          home_id, kind, role, recipient_email, email_locale, token, expires_at, max_admissions,
+          created_by, creation_request_id, delivery_status, last_sent_at, send_window_started_at,
+          sends_in_window
+        ) values (
+          p_home_id, p_kind, p_role, v_email, p_email_locale,
+          private.new_invitation_token(p_kind), pg_catalog.now() + v_interval, p_max_admissions,
+          v_user_id, p_request_id,
+          case when p_kind = 'email' then 'pending' end,
+          case when p_kind = 'email' then pg_catalog.now() end,
+          case when p_kind = 'email' then pg_catalog.now() end,
+          case when p_kind = 'email' then 1 else 0 end
+        ) returning * into v_created;
+        exit;
+      exception when unique_violation then
+        if attempt = 5 then
+          raise;
+        end if;
+      end;
+    end loop;
+
+    if p_kind = 'email' then
+      perform private.record_email_send(p_home_id, v_user_id);
+    end if;
+
+    perform private.audit('invitation.created', p_home_id, 'invitation', v_created.id,
+      pg_catalog.jsonb_build_object(
+        'kind', p_kind, 'role', p_role, 'expires_in', coalesce(p_expires_in, '7d'),
+        'max_admissions', p_max_admissions
+      ));
+    return query select 'created'::text, v_created.id, v_created.token, v_created.expires_at,
+      v_created.delivery_status;
+  end
+  $$;
+
+-- The invitations of a Home, newest first: every active one and those that ended in the last 30
+-- days. The secret is returned only for active links and codes (the manager copies those); email
+-- links go only to their recipient. Managers only (42501 otherwise).
+create function public.list_home_invitations(p_home_id uuid)
+returns table (
+  id uuid, kind text, role text, recipient_email text, email_locale text, state text,
+  created_at timestamptz, expires_at timestamptz, ended_at timestamptz,
+  max_admissions integer, admissions integer, pending_requests integer,
+  delivery_status text, last_sent_at timestamptz, token text
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select i.id, i.kind, i.role, i.recipient_email, i.email_locale, s.state,
+        i.created_at, i.expires_at, i.ended_at, i.max_admissions, i.admissions,
+        (select pg_catalog.count(*)::integer from private.home_join_requests r
+          where r.invitation_id = i.id and r.status = 'pending'),
+        i.delivery_status, i.last_sent_at,
+        case when s.state = 'active' and i.kind <> 'email' then i.token end
+      from private.home_invitations i
+      cross join lateral (select private.invitation_state(i) as state) s
+      where i.home_id = p_home_id
+        and (s.state = 'active' or coalesce(i.ended_at, i.expires_at) > pg_catalog.now() - interval '30 days'
+             or i.created_at > pg_catalog.now() - interval '30 days')
+      order by (s.state = 'active') desc, i.created_at desc
+      limit 200;
+  end
+  $$;
+
+-- Looks up an invitation of p_home_id for a manager action and locks it. Raises nothing; the
+-- caller turns a null into 'not_found' or 'not_permitted'.
+create function private.invitation_for_manager(
+  p_home_id uuid, p_invitation_id uuid, p_user_id uuid, out o_outcome text,
+  out o_invitation private.home_invitations
+)
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if not exists (
+      select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = p_user_id
+    ) then
+      o_outcome := 'not_found';
+      return;
+    end if;
+    select * into o_invitation from private.home_invitations i
+      where i.id = p_invitation_id and i.home_id = p_home_id for update;
+    if not found then
+      -- Managers learn that it does not exist; others only that they may not.
+      o_outcome := case when private.can_manage_invitations(p_home_id, p_user_id, 'member')
+        then 'not_found' else 'not_permitted' end;
+      o_invitation := null;
+      return;
+    end if;
+    if not private.can_manage_invitations(p_home_id, p_user_id, o_invitation.role) then
+      o_outcome := 'not_permitted';
+      o_invitation := null;
+      return;
+    end if;
+    o_outcome := 'ok';
+  end
+  $$;
+
+-- Revokes an invitation at once: its link or code stops working, pending requests made with it
+-- can no longer be approved. Outcomes: 'revoked', 'not_active', 'not_permitted', 'not_found'.
+create function public.revoke_home_invitation(p_home_id uuid, p_invitation_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_found record;
+  begin
+    select * into v_found from private.invitation_for_manager(p_home_id, p_invitation_id, v_user_id);
+    if v_found.o_outcome <> 'ok' then
+      return v_found.o_outcome;
+    end if;
+    if private.invitation_state(v_found.o_invitation) <> 'active' then
+      return 'not_active';
+    end if;
+    update private.home_invitations
+      set ended_at = pg_catalog.now(), ended_by = v_user_id, end_reason = 'revoked'
+      where id = p_invitation_id;
+    perform private.audit('invitation.revoked', p_home_id, 'invitation', p_invitation_id,
+      pg_catalog.jsonb_build_object('kind', (v_found.o_invitation).kind));
+    return 'revoked';
+  end
+  $$;
+
+-- Resend (same link, recipient, role and expiry) or renew (a new link and a fresh 7 days; the old
+-- link dies in the same transaction) an outstanding email invitation, and return what the server
+-- needs to send it. Neither works once the recipient has used it, after it ended or expired, or
+-- beyond the send limits. Outcomes: 'ok', 'not_email', 'not_active', 'has_request',
+-- 'rate_limited', 'not_permitted', 'not_found'.
+create function private.prepare_invitation_email(
+  p_home_id uuid, p_invitation_id uuid, p_renew boolean
+) returns table (
+  outcome text, token text, recipient_email text, email_locale text, role text,
+  expires_at timestamptz, home_name text
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_found record;
+    v_inv private.home_invitations;
+  begin
+    select * into v_found from private.invitation_for_manager(p_home_id, p_invitation_id, v_user_id);
+    if v_found.o_outcome <> 'ok' then
+      return query select v_found.o_outcome, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text;
+      return;
+    end if;
+    v_inv := v_found.o_invitation;
+    if v_inv.kind <> 'email' then
+      return query select 'not_email'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text;
+      return;
+    end if;
+    if private.invitation_state(v_inv) <> 'active' then
+      return query select 'not_active'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text;
+      return;
+    end if;
+    -- The recipient already used it: a manager decides their request instead.
+    if exists (
+      select 1 from private.home_join_requests r
+      where r.invitation_id = v_inv.id and r.status = 'pending'
+    ) then
+      return query select 'has_request'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text;
+      return;
+    end if;
+    if not private.count_invitation_send(v_inv.id, v_user_id) then
+      return query select 'rate_limited'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text;
+      return;
+    end if;
+
+    if p_renew then
+      update private.home_invitations i
+        set token = private.new_invitation_token('email'),
+            expires_at = pg_catalog.now() + interval '7 days'
+        where i.id = v_inv.id;
+      perform private.audit('invitation.renewed', p_home_id, 'invitation', v_inv.id);
+    else
+      perform private.audit('invitation.resent', p_home_id, 'invitation', v_inv.id);
+    end if;
+
+    return query
+      select 'ok'::text, i.token, i.recipient_email, i.email_locale, i.role, i.expires_at, h.name
+      from private.home_invitations i join public.homes h on h.id = i.home_id
+      where i.id = v_inv.id;
+  end
+  $$;
+
+create function public.resend_home_invitation(p_home_id uuid, p_invitation_id uuid)
+returns table (
+  outcome text, token text, recipient_email text, email_locale text, role text,
+  expires_at timestamptz, home_name text
+)
+  language sql security definer set search_path = '' as $$
+  select * from private.prepare_invitation_email(p_home_id, p_invitation_id, false);
+  $$;
+
+create function public.renew_home_invitation(p_home_id uuid, p_invitation_id uuid)
+returns table (
+  outcome text, token text, recipient_email text, email_locale text, role text,
+  expires_at timestamptz, home_name text
+)
+  language sql security definer set search_path = '' as $$
+  select * from private.prepare_invitation_email(p_home_id, p_invitation_id, true);
+  $$;
+
+-- Records whether the email just sent (or tried) was accepted by the email provider.
+create function public.record_home_invitation_delivery(
+  p_home_id uuid, p_invitation_id uuid, p_status text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_found record;
+  begin
+    if p_status is null or p_status not in ('sent', 'failed', 'not_configured') then
+      raise exception 'invalid delivery status' using errcode = '22023';
+    end if;
+    select * into v_found from private.invitation_for_manager(p_home_id, p_invitation_id, v_user_id);
+    if v_found.o_outcome <> 'ok' then
+      return v_found.o_outcome;
+    end if;
+    if (v_found.o_invitation).kind <> 'email' then
+      return 'not_email';
+    end if;
+    update private.home_invitations set delivery_status = p_status where id = p_invitation_id;
+    return 'ok';
+  end
+  $$;
+
+-- Using an invitation ------------------------------------------------------------------------------
+
+-- The invitation behind a link or code, as the signed-in person may see it, and whether they could
+-- ask to join with it. Nothing about the Home is returned unless they may use it (or already
+-- belong to it, or already asked). Outcomes: 'ok', 'invalid', 'expired', 'revoked', 'used_up',
+-- 'email_mismatch', 'already_member', 'pending', 'declined', 'rate_limited'.
+create function private.resolve_invitation(p_token text, p_user_id uuid)
+returns table (
+  outcome text, invitation_id uuid, home_id uuid, home_name text, role text, kind text,
+  expires_at timestamptz, request_id uuid
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_token text := private.normalize_invitation_token(p_token);
+    v_inv private.home_invitations;
+    v_state text;
+    v_request private.home_join_requests;
+    v_home_name text;
+  begin
+    -- Checked before the lookup, so a blocked account learns nothing, even about a valid code.
+    if private.lookups_blocked(p_user_id) then
+      return query select 'rate_limited'::text, null::uuid, null::uuid, null::text, null::text,
+        null::text, null::timestamptz, null::uuid;
+      return;
+    end if;
+    if v_token is not null then
+      select * into v_inv from private.home_invitations i where i.token = v_token;
+    end if;
+    if v_token is null or v_inv.id is null then
+      perform private.record_failed_lookup(p_user_id);
+      return query select 'invalid'::text, null::uuid, null::uuid, null::text, null::text,
+        null::text, null::timestamptz, null::uuid;
+      return;
+    end if;
+
+    -- A recipient-bound invitation says nothing more to anyone else, not even whether it expired.
+    if v_inv.kind = 'email' and v_inv.recipient_email is distinct from private.confirmed_email(p_user_id) then
+      return query select 'email_mismatch'::text, null::uuid, null::uuid, null::text, null::text,
+        null::text, null::timestamptz, null::uuid;
+      return;
+    end if;
+
+    select h.name into v_home_name from public.homes h where h.id = v_inv.home_id;
+
+    if exists (
+      select 1 from public.home_memberships m
+      where m.home_id = v_inv.home_id and m.user_id = p_user_id
+    ) then
+      return query select 'already_member'::text, v_inv.id, v_inv.home_id, v_home_name, null::text,
+        null::text, null::timestamptz, null::uuid;
+      return;
+    end if;
+
+    select * into v_request from private.home_join_requests r
+      where r.home_id = v_inv.home_id and r.applicant_id = p_user_id and r.status = 'pending'
+      for update;
+    if found then
+      if private.request_state(v_request) = 'pending' then
+        return query select 'pending'::text, v_inv.id, v_inv.home_id, v_home_name, null::text,
+          null::text, null::timestamptz, v_request.id;
+        return;
+      end if;
+      -- Its invitation ended before anyone decided: close it, so a new invitation for the same
+      -- Home can be used (one pending request per Home).
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now()
+        where id = v_request.id;
+      perform private.audit('join_request.expired', v_request.home_id, 'join_request', v_request.id);
+    end if;
+
+    -- Declined with this invitation: it cannot be used to ask again.
+    if exists (
+      select 1 from private.home_join_requests r
+      where r.invitation_id = v_inv.id and r.applicant_id = p_user_id and r.status = 'declined'
+    ) then
+      return query select 'declined'::text, null::uuid, null::uuid, null::text, null::text,
+        null::text, null::timestamptz, null::uuid;
+      return;
+    end if;
+
+    v_state := private.invitation_state(v_inv);
+    if v_state <> 'active' then
+      return query select
+        case v_state
+          when 'expired' then 'expired'
+          when 'revoked' then 'revoked'
+          when 'used_up' then 'used_up'
+          -- An accepted or declined email invitation, or one whose inviter lost the authority.
+          else 'invalid'
+        end,
+        null::uuid, null::uuid, null::text, null::text, null::text, null::timestamptz, null::uuid;
+      return;
+    end if;
+
+    return query select 'ok'::text, v_inv.id, v_inv.home_id, v_home_name, v_inv.role, v_inv.kind,
+      v_inv.expires_at, null::uuid;
+  end
+  $$;
+
+create function public.preview_home_invitation(p_token text)
+returns table (
+  outcome text, home_id uuid, home_name text, role text, kind text, expires_at timestamptz,
+  request_id uuid
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select r.outcome, r.home_id, r.home_name, r.role, r.kind, r.expires_at, r.request_id
+      from private.resolve_invitation(p_token, v_user_id) r;
+  end
+  $$;
+
+-- Asks to join with a link or code: creates a pending request for a manager to decide, with the
+-- invitation's role. Asking again while one is pending returns that one. Nothing is consumed.
+-- Outcomes: 'requested', and those of resolve_invitation ('pending' with the existing request).
+create function public.request_to_join_home(p_token text)
+returns table (outcome text, request_id uuid, home_name text)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_found record;
+    v_request_id uuid;
+  begin
+    select * into v_found from private.resolve_invitation(p_token, v_user_id);
+    if v_found.outcome = 'pending' then
+      return query select 'pending'::text, v_found.request_id, v_found.home_name;
+      return;
+    end if;
+    if v_found.outcome <> 'ok' then
+      return query select v_found.outcome,
+        null::uuid,
+        case when v_found.outcome = 'already_member' then v_found.home_name end;
+      return;
+    end if;
+
+    if (
+      select pg_catalog.count(*) from private.home_join_requests r
+      where r.applicant_id = v_user_id and r.created_at > pg_catalog.now() - interval '24 hours'
+    ) >= private.invitation_limit('requests_per_day') then
+      return query select 'rate_limited'::text, null::uuid, null::text;
+      return;
+    end if;
+
+    begin
+      insert into private.home_join_requests (
+        home_id, invitation_id, applicant_id, role, applicant_email, applicant_name
+      ) values (
+        v_found.home_id, v_found.invitation_id, v_user_id, v_found.role,
+        private.confirmed_email(v_user_id),
+        (select p.display_name from public.user_preferences p where p.user_id = v_user_id)
+      ) returning id into v_request_id;
+    exception when unique_violation then
+      -- A simultaneous request from the same person got there first.
+      select r.id into v_request_id from private.home_join_requests r
+        where r.home_id = v_found.home_id and r.applicant_id = v_user_id and r.status = 'pending';
+      return query select 'pending'::text, v_request_id, v_found.home_name;
+      return;
+    end;
+
+    perform private.audit('join_request.created', v_found.home_id, 'join_request', v_request_id,
+      pg_catalog.jsonb_build_object('kind', v_found.kind, 'role', v_found.role));
+    return query select 'requested'::text, v_request_id, v_found.home_name;
+  end
+  $$;
+
+-- A request's state as people see it: a pending request whose invitation can no longer admit
+-- anyone (expired, revoked, used up, inviter without authority) shows as expired.
+create function private.request_state(p_request private.home_join_requests) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_request.status <> 'pending' then p_request.status
+    when (
+      select private.invitation_state(i) from private.home_invitations i
+      where i.id = p_request.invitation_id
+    ) = 'active' then 'pending'
+    else 'expired'
+  end;
+  $$;
+
+-- The signed-in person's own join requests of the last 90 days, newest first.
+create function public.list_my_join_requests()
+returns table (
+  id uuid, home_id uuid, home_name text, role text, kind text, state text,
+  created_at timestamptz, decided_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select r.id,
+        -- The Home's id only while they belong to it, so the page can link there.
+        case when exists (
+          select 1 from public.home_memberships m
+          where m.home_id = r.home_id and m.user_id = v_user_id
+        ) then r.home_id end,
+        h.name, r.role,
+        case when i.kind = 'join_code' then 'join_code' else 'invitation' end,
+        private.request_state(r), r.created_at, r.decided_at
+      from private.home_join_requests r
+      join public.homes h on h.id = r.home_id
+      join private.home_invitations i on i.id = r.invitation_id
+      where r.applicant_id = v_user_id and r.created_at > pg_catalog.now() - interval '90 days'
+      order by r.created_at desc
+      limit 50;
+  end
+  $$;
+
+-- Withdraws the signed-in person's own pending request. Outcomes: 'withdrawn', 'not_pending',
+-- 'not_found'.
+create function public.withdraw_join_request(p_request_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_request private.home_join_requests;
+  begin
+    select * into v_request from private.home_join_requests r
+      where r.id = p_request_id and r.applicant_id = v_user_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_request.status <> 'pending' then
+      return 'not_pending';
+    end if;
+    update private.home_join_requests
+      set status = 'withdrawn', decided_at = pg_catalog.now(), decided_by = v_user_id
+      where id = p_request_id;
+    perform private.audit('join_request.withdrawn', v_request.home_id, 'join_request', p_request_id);
+    return 'withdrawn';
+  end
+  $$;
+
+-- Deciding requests ---------------------------------------------------------------------------------
+
+-- A Home's join requests for its managers: every pending one and those decided in the last 30
+-- days. can_decide is false where the caller lacks the authority for the requested role.
+create function public.list_home_join_requests(p_home_id uuid)
+returns table (
+  id uuid, applicant_name text, applicant_email text, role text, kind text, state text,
+  created_at timestamptz, decided_at timestamptz, can_decide boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select r.id, r.applicant_name, r.applicant_email, r.role, i.kind, s.state,
+        r.created_at, r.decided_at,
+        s.state = 'pending' and private.can_manage_invitations(p_home_id, v_user_id, r.role)
+      from private.home_join_requests r
+      join private.home_invitations i on i.id = r.invitation_id
+      cross join lateral (select private.request_state(r) as state) s
+      where r.home_id = p_home_id
+        and (r.status = 'pending' or r.decided_at > pg_catalog.now() - interval '30 days')
+      order by (s.state = 'pending') desc, r.created_at desc
+      limit 200;
+  end
+  $$;
+
+-- Approves or declines a pending request. Approval is the membership boundary: under locks on the
+-- request and its invitation, it re-checks the approver's current authority for the role, the
+-- invitation (not ended, not expired, uses left, inviter still authorised), the applicant's
+-- confirmed email (and exact match for an email invitation) and existing membership, then creates
+-- exactly one membership and counts one use. Outcomes: 'approved', 'declined', 'already_decided',
+-- 'no_longer_valid', 'already_member', 'not_permitted', 'not_found'.
+create function public.decide_join_request(p_home_id uuid, p_request_id uuid, p_decision text)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_request private.home_join_requests;
+    v_inv private.home_invitations;
+  begin
+    if p_decision is null or p_decision not in ('approve', 'decline') then
+      raise exception 'invalid decision' using errcode = '22023';
+    end if;
+    if not exists (
+      select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      return 'not_found';
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      return 'not_permitted';
+    end if;
+
+    -- Lock order everywhere: request, then invitation.
+    select * into v_request from private.home_join_requests r
+      where r.id = p_request_id and r.home_id = p_home_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, v_request.role) then
+      return 'not_permitted';
+    end if;
+    if v_request.status <> 'pending' then
+      return 'already_decided';
+    end if;
+    select * into v_inv from private.home_invitations i where i.id = v_request.invitation_id
+      for update;
+
+    if p_decision = 'decline' then
+      update private.home_join_requests
+        set status = 'declined', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      -- An email invitation has one possible recipient: once they are declined it is finished.
+      if v_inv.kind = 'email' and v_inv.end_reason is null then
+        update private.home_invitations
+          set ended_at = pg_catalog.now(), ended_by = v_user_id, end_reason = 'declined'
+          where id = v_inv.id;
+      end if;
+      perform private.audit('join_request.declined', p_home_id, 'join_request', p_request_id,
+        pg_catalog.jsonb_build_object('role', v_request.role));
+      return 'declined';
+    end if;
+
+    if exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_request.applicant_id
+    ) then
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      perform private.audit('join_request.expired', p_home_id, 'join_request', p_request_id,
+        pg_catalog.jsonb_build_object('reason', 'already_member'));
+      return 'already_member';
+    end if;
+
+    if private.invitation_state(v_inv) <> 'active'
+       or v_request.role <> v_inv.role
+       or private.confirmed_email(v_request.applicant_id) is null
+       or (v_inv.kind = 'email'
+           and v_inv.recipient_email is distinct from private.confirmed_email(v_request.applicant_id))
+    then
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      perform private.audit('join_request.expired', p_home_id, 'join_request', p_request_id);
+      return 'no_longer_valid';
+    end if;
+
+    -- The S09 trigger audits the new membership with the approver as the actor.
+    insert into public.home_memberships (home_id, user_id, role)
+      values (p_home_id, v_request.applicant_id, v_request.role);
+    update private.home_invitations set admissions = admissions + 1 where id = v_inv.id;
+    update private.home_join_requests
+      set status = 'approved', decided_at = pg_catalog.now(), decided_by = v_user_id
+      where id = p_request_id;
+    perform private.audit('join_request.approved', p_home_id, 'join_request', p_request_id,
+      pg_catalog.jsonb_build_object('role', v_request.role, 'kind', v_inv.kind));
+    return 'approved';
+  end
+  $$;
+
+-- The number of pending requests a manager can act on, for the Home dashboard. 0 for everyone else.
+create function public.count_pending_join_requests(p_home_id uuid) returns integer
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      return 0;
+    end if;
+    return (
+      select pg_catalog.count(*) from private.home_join_requests r
+      where r.home_id = p_home_id and private.request_state(r) = 'pending'
+        and private.can_manage_invitations(p_home_id, v_user_id, r.role)
+    );
+  end
+  $$;
+
+-- API access ----------------------------------------------------------------------------------------
+
+-- The private helpers keep the default set in the baseline migration: nobody but their owner may
+-- run them. The public functions are for signed-in accounts only.
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.create_home_invitation(uuid, text, text, uuid, text, text, text, integer)',
+    'public.list_home_invitations(uuid)',
+    'public.revoke_home_invitation(uuid, uuid)',
+    'public.resend_home_invitation(uuid, uuid)',
+    'public.renew_home_invitation(uuid, uuid)',
+    'public.record_home_invitation_delivery(uuid, uuid, text)',
+    'public.preview_home_invitation(text)',
+    'public.request_to_join_home(text)',
+    'public.list_my_join_requests()',
+    'public.withdraw_join_request(uuid)',
+    'public.list_home_join_requests(uuid)',
+    'public.decide_join_request(uuid, uuid, text)',
+    'public.count_pending_join_requests(uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261018090000_member_profiles.sql
+-- ============================================================================
+-- S11: member directory, Home-specific names and personal accent colours (brief S11; spec
+-- "Confirmed global adult avatar and display name with per-Home overrides", "Confirmed simple Home
+-- member directory", "Confirmed optional per-Home nicknames", "Confirmed personal accent color with
+-- per-Home overrides", "Confirmed global identity with Home-specific profile presentation").
+--
+-- What the API can do here, and nothing more:
+-- - set its own global accent colour (user_preferences.accent_color, existing RLS);
+-- - read, create and change its own presentation in a Home it currently belongs to: nickname, Home
+--   display name and accent override (public.home_member_profiles, RLS below). Nobody, whatever
+--   their role, can write another person's row;
+-- - list the current members of a Home it belongs to through public.home_directory(), which
+--   returns only what other members may see: membership id, role, the date they joined, the
+--   effective Home name and colour. Never account ids, emails or other Homes.
+
+-- One name rule -----------------------------------------------------------------------------------
+
+-- The visible-name policy for every name other people see (apps/web/src/names/visible-name.ts;
+-- the S09 Home-name rule, unchanged). Home names, global display names and the two Home-specific
+-- names all check it here, so the rules cannot drift apart. The app applies the exact Unicode rules
+-- first; this is the backstop for direct Data API writes. It can only list code points, so for lone
+-- combining marks of rarer scripts it is a little more lenient than the app.
+--   * 1 to p_max characters, NFC, no leading or trailing whitespace of any kind;
+--   * no control, format or other invisible characters: zero-width spaces, direction marks,
+--     overrides and isolates, word joiners, BOMs, soft hyphens, Hangul fillers, the Braille
+--     blank, Mongolian selectors, line and paragraph separators;
+--   * a zero-width joiner or non-joiner only between two visible characters, and a variation
+--     selector only directly after one (emoji sequences, Persian and Indic text);
+--   * tag characters only inside a complete emoji tag flag (U+1F3F4 ... U+E007F);
+--   * at least one character that is not whitespace, a joiner, a selector or a combining mark.
+create or replace function private.is_visible_name(p_name text, p_max integer) returns boolean
+  language sql immutable strict parallel safe set search_path = '' as $$
+    select pg_catalog.char_length(p_name) between 1 and p_max
+      and p_name is nfc normalized
+      and p_name !~ '^[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]'
+      and p_name !~ '[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]$'
+      and p_name !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u034F\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200E\u200F\u2028-\u202E\u2060-\u206F\u2800\u3164\uFEFF\uFFA0\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E001F\U000E0080-\U000E00FF\U000E01F0-\U000E0FFF]'
+      and p_name !~ '^[\u200C\u200D\uFE00-\uFE0F\U000E0100-\U000E01EF]|[\u200C\u200D]$|[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200C\u200D][\u200C\u200D]|[\u200C\u200D][\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFE00-\uFE0F\U000E0100-\U000E01EF]|[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200C\u200D\uFE00-\uFE0F\U000E0100-\U000E01EF][\uFE00-\uFE0F\U000E0100-\U000E01EF]'
+      and pg_catalog.regexp_replace(p_name, '\U0001F3F4[\U000E0020-\U000E007E]+\U000E007F', '', 'g')
+        !~ '[\U000E0020-\U000E007F]'
+      and p_name ~ '[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200C\u200D\uFE00-\uFE0F\U000E0100-\U000E01EF\U000E0020-\U000E007F\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]'
+  $$;
+
+comment on function private.is_visible_name(text, integer) is
+  'S11: the visible-name rule for names other people see (Home names, display names, nicknames).';
+
+-- `create or replace`, so the file can be applied again after the owner guide's undo block, which
+-- keeps this function because the name checks below still use it.
+-- Check constraints run their functions with the privileges of whoever writes the row, so the
+-- signed-in API role must be able to execute it. It is pure: it reads nothing and reveals nothing.
+-- Allowlisted in tests/db/rls/baseline.test.sql.
+revoke all on function private.is_visible_name(text, integer) from public, anon;
+grant execute on function private.is_visible_name(text, integer) to authenticated, service_role;
+
+-- Home names keep exactly the S09 rule, now from the shared function.
+alter table public.homes drop constraint homes_name_check;
+alter table public.homes
+  add constraint homes_name_check check (private.is_visible_name(name, 50));
+
+-- Global display names --------------------------------------------------------------------------
+
+-- Display names become visible to other members with this step, so they follow the same rule
+-- (S07 review M1, deferred to S11). A stored name the new rule refuses is cleared, because the new
+-- check would otherwise refuse every later preference save of that account. Only names with
+-- invisible or direction characters are affected; the person can type their name again.
+alter table public.user_preferences drop constraint user_preferences_display_name_check;
+update public.user_preferences
+  set display_name = null
+  where display_name is not null and not private.is_visible_name(display_name, 50);
+alter table public.user_preferences
+  add constraint user_preferences_display_name_check
+    check (display_name is null or private.is_visible_name(display_name, 50));
+
+-- The global personal accent: a solid colour as lower-case #rrggbb (the app derives every shade
+-- from it with deriveAccent). NULL means the default accent.
+alter table public.user_preferences
+  add column accent_color text
+    constraint user_preferences_accent_color_check check (accent_color ~ '^#[0-9a-f]{6}$');
+
+grant insert (accent_color), update (accent_color) on table public.user_preferences
+  to authenticated;
+
+-- Home presentation -------------------------------------------------------------------------------
+
+-- How one member presents themselves in one Home. Each field is optional and NULL means "inherit":
+-- the effective Home name is the nickname, else the Home display name, else the global display
+-- name; the effective colour is the accent override, else the global accent. The row belongs to
+-- the membership: when the membership ends (leaving, removal, account deletion) it is deleted with
+-- it, so overrides never survive a departure or reappear on a later re-join.
+create table public.home_member_profiles (
+  home_id uuid not null,
+  user_id uuid not null default auth.uid(),
+  nickname text
+    constraint home_member_profiles_nickname_check
+      check (nickname is null or private.is_visible_name(nickname, 50)),
+  display_name text
+    constraint home_member_profiles_display_name_check
+      check (display_name is null or private.is_visible_name(display_name, 50)),
+  accent_color text
+    constraint home_member_profiles_accent_color_check check (accent_color ~ '^#[0-9a-f]{6}$'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint home_member_profiles_pkey primary key (home_id, user_id),
+  constraint home_member_profiles_membership_fkey foreign key (home_id, user_id)
+    references public.home_memberships (home_id, user_id) on delete cascade
+);
+
+alter table public.home_member_profiles enable row level security;
+
+comment on table public.home_member_profiles is
+  'A member''s own presentation in one Home: nickname, Home display name, accent (S11).';
+
+create trigger home_member_profiles_set_updated_at
+  before update on public.home_member_profiles
+  for each row execute function private.set_updated_at();
+
+-- A row stays with its membership: an update may not move it to another Home or person. The Data
+-- API's upsert names home_id and user_id in its update, so they keep their grant, unchanged.
+create function private.keep_home_member_profile_owner() returns trigger
+  language plpgsql set search_path = '' as $$
+  begin
+    if new.home_id is distinct from old.home_id or new.user_id is distinct from old.user_id then
+      raise exception 'a Home profile cannot move to another Home or person'
+        using errcode = '42501';
+    end if;
+    return new;
+  end
+  $$;
+
+create trigger home_member_profiles_keep_owner
+  before update on public.home_member_profiles
+  for each row execute function private.keep_home_member_profile_owner();
+
+-- Supabase grants every API role full access to new tables in schema public. Take that back and
+-- grant only what the app needs: the person reads their own rows and writes the three presentation
+-- columns (home_id and user_id on insert, so an upsert works; the policies stop them naming anyone
+-- else). Resetting a field writes NULL; nobody deletes a row through the API.
+revoke all on table public.home_member_profiles from anon, authenticated;
+grant select (home_id, user_id, nickname, display_name, accent_color, created_at, updated_at)
+  on table public.home_member_profiles to authenticated;
+grant insert (home_id, user_id, nickname, display_name, accent_color)
+  on table public.home_member_profiles to authenticated;
+grant update (home_id, user_id, nickname, display_name, accent_color)
+  on table public.home_member_profiles to authenticated;
+
+-- Only your own row, and only while you are a current member of that Home. The membership subquery
+-- runs as the same person, whose home_memberships policy shows them their own rows only. Owners and
+-- Administrators get nothing here: nobody may present another adult (spec: managers cannot rename
+-- or recolour another adult).
+create policy home_member_profiles_select_own on public.home_member_profiles
+  for select
+  to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+create policy home_member_profiles_insert_own on public.home_member_profiles
+  for insert
+  to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+create policy home_member_profiles_update_own on public.home_member_profiles
+  for update
+  to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+-- Member directory --------------------------------------------------------------------------------
+
+-- The current members of one Home with what every member of that Home may see about them, for a
+-- caller who is a current member of it now. Anyone else gets an error (42501), whether or not the
+-- Home exists. Other people's global display names and accents live in rows only their owner can
+-- read, so this function reads them as the database owner and returns only the effective values:
+-- never which source a name came from, the global name behind an override, account ids, emails or
+-- anything from another Home. membership_id is the stable Home-member identifier for attribution.
+create function public.home_directory(p_home_id uuid)
+returns table (
+  membership_id uuid,
+  role text,
+  joined_at timestamptz,
+  is_self boolean,
+  name text,
+  accent_color text
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or p_home_id is null or not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+
+    return query
+      select
+        m.id,
+        m.role,
+        m.created_at,
+        m.user_id = v_user_id,
+        coalesce(p.nickname, p.display_name, up.display_name),
+        coalesce(p.accent_color, up.accent_color)
+      from public.home_memberships m
+      left join public.home_member_profiles p
+        on p.home_id = m.home_id and p.user_id = m.user_id
+      left join public.user_preferences up on up.user_id = m.user_id
+      where m.home_id = p_home_id
+      order by m.created_at, m.id;
+  end
+  $$;
+
+comment on function public.home_directory(uuid) is
+  'S11: the members of a Home the caller belongs to, with their effective name and colour only.';
+
+revoke all on function public.home_directory(uuid) from public, anon;
+grant execute on function public.home_directory(uuid) to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261019090000_roles_and_ownership.sql
+-- ============================================================================
+-- S12: role management and ownership (brief S12; spec "Confirmed Home ownership transfer",
+-- "Confirmed exactly one Home Owner", "Confirmed customizable Administrator permissions",
+-- "Confirmed Home member-removal authority" and its reaffirmation, "Confirmed privacy-minimized
+-- Home history after adult departure", "Confirmed voluntary Home departure", "Confirmed guided
+-- transfer-or-close for departing Home Owner").
+--
+-- What the API can do here, and nothing more, always through the security definer functions below:
+-- - the Owner makes a Member an Administrator or an Administrator a Member, and grants or revokes
+--   an Administrator's individual capabilities;
+-- - the Owner removes Members and Administrators; an Administrator granted removeMembers removes
+--   Members only; nobody removes the Owner;
+-- - Members and Administrators leave; the Owner cannot leave while they are the Owner;
+-- - the Owner nominates an existing member as the next Owner; only that member accepts or
+--   declines; the Owner cancels. Acceptance swaps the two roles in one transaction.
+-- Memberships and capabilities still have no direct API write path. Every function that changes a
+-- membership locks the Home's row first, so all such changes in one Home run one at a time and
+-- re-check authority after the lock (one lock order: Home, then anything else).
+
+-- Audit subjects ----------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in ('home', 'user', 'invitation', 'join_request', 'ownership_transfer'));
+
+-- Administrator capabilities ----------------------------------------------------------------------
+
+-- The capabilities the Owner may grant an Administrator, one by one (packages/domain
+-- delegableCapabilities). None of them reaches an Owner-only power (ownership transfer, Home
+-- deletion, managing Administrators or their capabilities).
+create function private.is_delegable_capability(p_capability text) returns boolean
+  language sql immutable security definer set search_path = '' as $$
+  select p_capability in ('manageHomeSettings', 'manageInvitations', 'removeMembers');
+  $$;
+
+create table private.home_admin_capabilities (
+  home_id uuid not null,
+  user_id uuid not null,
+  capability text not null
+    constraint home_admin_capabilities_capability_check
+      check (private.is_delegable_capability(capability)),
+  granted_by uuid,
+  granted_at timestamptz not null default now(),
+  constraint home_admin_capabilities_pkey primary key (home_id, user_id, capability),
+  -- A grant belongs to the membership: it ends with it, so it never survives a departure or
+  -- reappears on a later re-join.
+  constraint home_admin_capabilities_membership_fkey foreign key (home_id, user_id)
+    references public.home_memberships (home_id, user_id) on delete cascade
+);
+
+comment on table private.home_admin_capabilities is
+  'Capabilities the Owner granted to an Administrator of a Home (S12). Not exposed through the API.';
+
+-- Only Administrators hold capabilities, whatever path writes them.
+create function private.check_capability_holder() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = new.home_id and m.user_id = new.user_id and m.role = 'administrator'
+    ) then
+      raise exception 'only Administrators hold capabilities' using errcode = '23514';
+    end if;
+    return new;
+  end
+  $$;
+
+create trigger home_admin_capabilities_holder
+  before insert or update on private.home_admin_capabilities
+  for each row execute function private.check_capability_holder();
+
+-- A role change away from Administrator (to Member, or to Owner through a transfer) drops every
+-- grant, so a later promotion starts again from none.
+create function private.drop_capabilities_on_role_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if new.role <> 'administrator' and old.role = 'administrator' then
+      delete from private.home_admin_capabilities c
+        where c.home_id = new.home_id and c.user_id = new.user_id;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_drop_capabilities
+  after update of role on public.home_memberships
+  for each row execute function private.drop_capabilities_on_role_change();
+
+-- The one SQL authority rule for delegable actions: the Owner always, an Administrator only with
+-- the grant (packages/domain decideHomeAction makes the same decision).
+create function private.has_home_capability(p_home_id uuid, p_user_id uuid, p_capability text)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and exists (
+    select 1 from public.home_memberships m
+    where m.home_id = p_home_id and m.user_id = p_user_id
+      and (
+        m.role = 'owner'
+        or (m.role = 'administrator' and exists (
+          select 1 from private.home_admin_capabilities c
+          where c.home_id = m.home_id and c.user_id = m.user_id and c.capability = p_capability
+        ))
+      )
+  );
+  $$;
+
+-- The same rule for the signed-in caller only, for RLS policies. It can only ever answer about the
+-- caller themselves, so granting it to the API role reveals nothing about anyone else.
+create function private.caller_has_home_capability(p_home_id uuid, p_capability text)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.has_home_capability(p_home_id, auth.uid(), p_capability);
+  $$;
+
+revoke all on function private.caller_has_home_capability(uuid, text) from public, anon;
+grant execute on function private.caller_has_home_capability(uuid, text) to authenticated;
+
+-- Home settings: the Owner, or an Administrator granted manageHomeSettings (was Owner only).
+drop policy homes_update_owner on public.homes;
+create policy homes_update_manager on public.homes
+  for update
+  to authenticated
+  using (private.caller_has_home_capability(homes.id, 'manageHomeSettings'))
+  with check (private.caller_has_home_capability(homes.id, 'manageHomeSettings'));
+
+-- Invitations: the Owner for both roles; an Administrator granted manageInvitations for the Member
+-- role only (inviting or admitting Administrators stays Owner-only). invitation_state re-checks the
+-- inviter with this rule, so an Administrator's invitations stop working the moment the grant is
+-- revoked or they stop being an Administrator.
+create or replace function private.can_manage_invitations(p_home_id uuid, p_user_id uuid, p_role text)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and p_role in ('member', 'administrator') and exists (
+    select 1 from public.home_memberships m
+    where m.home_id = p_home_id and m.user_id = p_user_id
+      and (
+        m.role = 'owner'
+        or (p_role = 'member' and m.role = 'administrator' and exists (
+          select 1 from private.home_admin_capabilities c
+          where c.home_id = m.home_id and c.user_id = m.user_id
+            and c.capability = 'manageInvitations'
+        ))
+      )
+  );
+  $$;
+
+-- Ownership transfers -----------------------------------------------------------------------------
+
+create table private.home_ownership_transfers (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  -- The Owner who nominated and the member nominated. No foreign keys to accounts: the record
+  -- outlives a departure, and its state, not the account, decides what it can do.
+  from_user_id uuid not null,
+  to_user_id uuid not null,
+  status text not null default 'pending'
+    constraint home_ownership_transfers_status_check
+      check (status in ('pending', 'accepted', 'declined', 'cancelled', 'expired', 'invalid')),
+  -- clock_timestamp(), so transfers started in one transaction still have an order.
+  created_at timestamptz not null default clock_timestamp(),
+  -- The spec leaves expiry open; 7 days is the S12 default (brief).
+  expires_at timestamptz not null,
+  decided_at timestamptz,
+  creation_request_id uuid not null,
+  constraint home_ownership_transfers_parties_check check (from_user_id <> to_user_id),
+  constraint home_ownership_transfers_decided_check check ((status = 'pending') = (decided_at is null))
+);
+
+-- At most one pending transfer per Home, whoever starts it and however simultaneously.
+create unique index home_ownership_transfers_one_pending
+  on private.home_ownership_transfers (home_id) where status = 'pending';
+create unique index home_ownership_transfers_request_key
+  on private.home_ownership_transfers (from_user_id, creation_request_id);
+create index home_ownership_transfers_home_idx
+  on private.home_ownership_transfers (home_id, created_at desc);
+
+comment on table private.home_ownership_transfers is
+  'Ownership transfers: nomination, acceptance, decline, cancellation, expiry (S12). Not exposed.';
+
+-- A pending transfer stops being acceptable as soon as its recipient leaves or is removed, or its
+-- sender stops being the Owner, whatever path made that happen.
+create function private.invalidate_ownership_transfers() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+  begin
+    if tg_op = 'DELETE' or (old.role = 'owner' and new.role <> 'owner') then
+      for v_id in
+        update private.home_ownership_transfers t
+          set status = 'invalid', decided_at = pg_catalog.now()
+          where t.home_id = old.home_id and t.status = 'pending'
+            and (t.to_user_id = old.user_id or t.from_user_id = old.user_id)
+          returning t.id
+      loop
+        perform private.audit('home_ownership.transfer_invalid', old.home_id, 'ownership_transfer',
+          v_id);
+      end loop;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_invalidate_transfers
+  after update of role or delete on public.home_memberships
+  for each row execute function private.invalidate_ownership_transfers();
+
+-- Departure: privacy-minimized history -------------------------------------------------------------
+
+-- When a membership ends, the records that kept the person's verified email and display name for
+-- managers (all their join requests in that Home, whatever their state, and the email invitation
+-- they accepted) are deleted. The audit log keeps the id-only record of what happened. The Home profile already goes
+-- with the membership (S11), and so do Administrator capabilities (above).
+create function private.forget_departed_member() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from private.home_invitations i
+      where i.home_id = old.home_id and i.kind = 'email'
+        and i.id in (
+          select r.invitation_id from private.home_join_requests r
+          where r.home_id = old.home_id and r.applicant_id = old.user_id and r.status = 'approved'
+        );
+    delete from private.home_join_requests r
+      where r.home_id = old.home_id and r.applicant_id = old.user_id;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_forget_departed
+  after delete on public.home_memberships
+  for each row execute function private.forget_departed_member();
+
+-- Membership audit: removed or left ---------------------------------------------------------------
+
+-- As S09, plus why a membership ended: remove_home_member and leave_home set
+-- madeora.membership_end for their own transaction; anything else (account deletion, Home deletion)
+-- stays the generic 'ended'.
+create or replace function private.audit_membership_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_reason text := pg_catalog.current_setting('madeora.membership_end', true);
+  begin
+    if tg_op = 'INSERT' then
+      insert into private.audit_events (
+        actor_user_id, home_id, action, subject_type, subject_id, details
+      )
+        values (
+          auth.uid(), new.home_id, 'home_membership.created', 'user', new.user_id,
+          pg_catalog.jsonb_build_object('role', new.role)
+        );
+    elsif tg_op = 'UPDATE' then
+      if new.role is distinct from old.role then
+        insert into private.audit_events (
+          actor_user_id, home_id, action, subject_type, subject_id, details
+        )
+          values (
+            auth.uid(), new.home_id, 'home_membership.role_changed', 'user', new.user_id,
+            pg_catalog.jsonb_build_object('from', old.role, 'to', new.role)
+          );
+      end if;
+    else
+      insert into private.audit_events (
+        actor_user_id, home_id, action, subject_type, subject_id, details
+      )
+        values (
+          auth.uid(), old.home_id,
+          case when v_reason in ('removed', 'left')
+            then 'home_membership.' || v_reason else 'home_membership.ended' end,
+          'user', old.user_id,
+          pg_catalog.jsonb_build_object('role', old.role)
+        );
+    end if;
+    return null;
+  end
+  $$;
+
+-- Helpers ------------------------------------------------------------------------------------------
+
+-- Locks the Home's row for the rest of the transaction, so every membership change in that Home
+-- runs one at a time; returns false when the Home does not exist. Call it in a statement of its
+-- own: in READ COMMITTED each later statement sees what other transactions committed while this
+-- one waited for the lock, but an expression evaluated together with the lock does not.
+create function private.lock_home(p_home_id uuid) returns boolean
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform 1 from public.homes h where h.id = p_home_id for update;
+    return found;
+  end
+  $$;
+
+-- The caller's role in a Home now, or null.
+create function private.home_role(p_home_id uuid, p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select m.role from public.home_memberships m
+  where m.home_id = p_home_id and m.user_id = p_user_id;
+  $$;
+
+-- What a transfer can do now: its stored status, or 'expired' for a pending one past its expiry.
+create function private.transfer_state(p_transfer private.home_ownership_transfers) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_transfer.status = 'pending' and p_transfer.expires_at <= pg_catalog.now() then 'expired'
+    else p_transfer.status
+  end;
+  $$;
+
+-- Marks pending transfers of a Home that have passed their expiry as expired (the Home is locked).
+create function private.expire_ownership_transfers(p_home_id uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+  begin
+    for v_id in
+      update private.home_ownership_transfers t
+        set status = 'expired', decided_at = t.expires_at
+        where t.home_id = p_home_id and t.status = 'pending' and t.expires_at <= pg_catalog.now()
+        returning t.id
+    loop
+      perform private.audit('home_ownership.transfer_expired', p_home_id, 'ownership_transfer', v_id);
+    end loop;
+  end
+  $$;
+
+-- Reading -----------------------------------------------------------------------------------------
+
+-- The Administrator capabilities in a Home the caller belongs to. The Owner sees every
+-- Administrator's grants (to inspect and edit them); anyone else sees only their own. Rows carry
+-- membership ids, never account ids. Anyone who is not a member gets an error (42501).
+create function public.home_capabilities(p_home_id uuid)
+returns table (membership_id uuid, is_self boolean, capability text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_role text := private.home_role(p_home_id, v_user_id);
+  begin
+    if v_user_id is null or v_role is null then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+    return query
+      select m.id, m.user_id = v_user_id, c.capability
+      from private.home_admin_capabilities c
+      join public.home_memberships m on m.home_id = c.home_id and m.user_id = c.user_id
+      where c.home_id = p_home_id and (v_role = 'owner' or c.user_id = v_user_id)
+      order by m.id, c.capability;
+  end
+  $$;
+
+comment on function public.home_capabilities(uuid) is
+  'S12: Administrator grants in a Home; the Owner sees all, everyone else only their own.';
+
+-- The Home's current ownership transfer as the caller may see it: a pending one to the Owner who
+-- started it and to the member it nominates; a finished one only to the person who started it, for
+-- 7 days, so they see that it was declined, expired or became invalid. Nothing for anyone else.
+create function public.home_ownership_transfer(p_home_id uuid)
+returns table (
+  id uuid,
+  state text,
+  is_sender boolean,
+  is_recipient boolean,
+  recipient_membership_id uuid,
+  created_at timestamptz,
+  expires_at timestamptz,
+  decided_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or private.home_role(p_home_id, v_user_id) is null then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+    return query
+      select t.id, private.transfer_state(t), t.from_user_id = v_user_id, t.to_user_id = v_user_id,
+        m.id, t.created_at, t.expires_at,
+        case when private.transfer_state(t) = 'expired' then coalesce(t.decided_at, t.expires_at)
+          else t.decided_at end
+      from private.home_ownership_transfers t
+      left join public.home_memberships m on m.home_id = t.home_id and m.user_id = t.to_user_id
+      where t.home_id = p_home_id
+        and (
+          (t.status = 'pending' and (t.from_user_id = v_user_id or t.to_user_id = v_user_id))
+          or (t.status <> 'pending' and t.status <> 'accepted' and t.from_user_id = v_user_id
+              and t.decided_at > pg_catalog.now() - interval '7 days')
+        )
+      order by t.created_at desc
+      limit 1;
+  end
+  $$;
+
+comment on function public.home_ownership_transfer(uuid) is
+  'S12: the pending or recently ended ownership transfer visible to its sender or recipient.';
+
+-- Roles and capabilities --------------------------------------------------------------------------
+
+-- The Owner makes a Member an Administrator or an Administrator a Member. Never Owner (that is the
+-- transfer) and never the Owner's own membership. p_expected_role is the target's role as the
+-- Owner saw it: if it changed meanwhile nothing happens ('stale'). Outcomes: 'ok', 'unchanged',
+-- 'not_found', 'not_permitted', 'stale'.
+create function public.change_home_member_role(
+  p_home_id uuid, p_membership_id uuid, p_role text, p_expected_role text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_target public.home_memberships;
+  begin
+    if p_role is null or p_role not in ('member', 'administrator')
+       or p_expected_role is null or p_expected_role not in ('member', 'administrator') then
+      raise exception 'invalid role' using errcode = '22023';
+    end if;
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) <> 'owner' then
+      return 'not_permitted';
+    end if;
+    select * into v_target from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = p_home_id;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_target.role = 'owner' then
+      return 'not_permitted';
+    end if;
+    if v_target.role <> p_expected_role then
+      return 'stale';
+    end if;
+    if v_target.role = p_role then
+      return 'unchanged';
+    end if;
+    -- The S09 trigger audits the change; the trigger above drops a demoted Administrator's grants.
+    update public.home_memberships set role = p_role where id = v_target.id;
+    return 'ok';
+  end
+  $$;
+
+-- The Owner replaces an Administrator's capabilities with exactly p_capabilities (an empty array
+-- revokes all). Unknown or repeated names are refused (22023). Outcomes: 'ok', 'unchanged',
+-- 'not_found', 'not_permitted', 'stale' (the target is no longer an Administrator).
+create function public.set_administrator_capabilities(
+  p_home_id uuid, p_membership_id uuid, p_capabilities text[]
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_target public.home_memberships;
+    v_before text[];
+    v_after text[];
+  begin
+    if p_capabilities is null
+       or pg_catalog.array_ndims(p_capabilities) > 1
+       or exists (
+         select 1 from pg_catalog.unnest(p_capabilities) c(name)
+         where c.name is null or not private.is_delegable_capability(c.name)
+       )
+       or (select pg_catalog.count(distinct c.name) from pg_catalog.unnest(p_capabilities) c(name))
+          <> pg_catalog.cardinality(p_capabilities) then
+      raise exception 'invalid capabilities' using errcode = '22023';
+    end if;
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) <> 'owner' then
+      return 'not_permitted';
+    end if;
+    select * into v_target from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = p_home_id;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_target.role = 'owner' then
+      return 'not_permitted';
+    end if;
+    if v_target.role <> 'administrator' then
+      return 'stale';
+    end if;
+
+    select coalesce(pg_catalog.array_agg(c.capability order by c.capability), '{}')
+      into v_before
+      from private.home_admin_capabilities c
+      where c.home_id = p_home_id and c.user_id = v_target.user_id;
+    select coalesce(pg_catalog.array_agg(c.name order by c.name), '{}')
+      into v_after
+      from pg_catalog.unnest(p_capabilities) c(name);
+    if v_before = v_after then
+      return 'unchanged';
+    end if;
+
+    delete from private.home_admin_capabilities c
+      where c.home_id = p_home_id and c.user_id = v_target.user_id
+        and c.capability <> all (v_after);
+    insert into private.home_admin_capabilities (home_id, user_id, capability, granted_by)
+      select p_home_id, v_target.user_id, c.name, v_user_id
+      from pg_catalog.unnest(v_after) c(name)
+      where c.name <> all (v_before);
+    perform private.audit('home_membership.capabilities_changed', p_home_id, 'user',
+      v_target.user_id,
+      pg_catalog.jsonb_build_object('from', pg_catalog.to_jsonb(v_before),
+        'to', pg_catalog.to_jsonb(v_after)));
+    return 'ok';
+  end
+  $$;
+
+-- Removal and departure ---------------------------------------------------------------------------
+
+-- Removes another member. The Owner removes Members and Administrators; an Administrator granted
+-- removeMembers removes Members only; nobody removes the Owner; nobody removes themselves (that is
+-- leave_home). Authority, the target's current role (p_expected_role, as the remover saw it) and
+-- membership are re-checked under the Home lock. Outcomes: 'removed', 'not_found' (also when the
+-- person was already removed: reported, never repeated), 'not_permitted', 'stale'.
+create function public.remove_home_member(
+  p_home_id uuid, p_membership_id uuid, p_expected_role text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_actor_role text;
+    v_target public.home_memberships;
+  begin
+    if p_expected_role is null or p_expected_role not in ('member', 'administrator', 'owner') then
+      raise exception 'invalid role' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    v_actor_role := private.home_role(p_home_id, v_user_id);
+    if v_actor_role is null then
+      return 'not_found';
+    end if;
+    select * into v_target from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = p_home_id;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_target.role <> p_expected_role then
+      return 'stale';
+    end if;
+    if v_target.user_id = v_user_id or v_target.role = 'owner' then
+      return 'not_permitted';
+    end if;
+    if not (
+      v_actor_role = 'owner'
+      or (v_target.role = 'member'
+          and private.has_home_capability(p_home_id, v_user_id, 'removeMembers'))
+    ) then
+      return 'not_permitted';
+    end if;
+
+    perform pg_catalog.set_config('madeora.membership_end', 'removed', true);
+    delete from public.home_memberships where id = v_target.id;
+    perform pg_catalog.set_config('madeora.membership_end', '', true);
+    return 'removed';
+  end
+  $$;
+
+-- The caller leaves a Home. Members and Administrators may leave at any time without anyone's
+-- approval; the Owner cannot while they are the Owner (a pending or declined transfer is not
+-- enough). Outcomes: 'left', 'not_found', 'owner_must_transfer'.
+create function public.leave_home(p_home_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_role text;
+  begin
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    v_role := private.home_role(p_home_id, v_user_id);
+    if v_role is null then
+      return 'not_found';
+    end if;
+    if v_role = 'owner' then
+      return 'owner_must_transfer';
+    end if;
+    perform pg_catalog.set_config('madeora.membership_end', 'left', true);
+    delete from public.home_memberships m where m.home_id = p_home_id and m.user_id = v_user_id;
+    perform pg_catalog.set_config('madeora.membership_end', '', true);
+    return 'left';
+  end
+  $$;
+
+-- Ownership transfer ------------------------------------------------------------------------------
+
+-- The Owner nominates an existing member (Member or Administrator; every account is an adult until
+-- children and displays arrive, which must be refused here then) as the next Owner. Nothing changes
+-- until they accept. One pending transfer per Home; a repeated p_request_id returns the transfer
+-- that request already started. Outcomes: 'started', 'not_found', 'not_permitted',
+-- 'pending_exists', 'invalid_target'.
+create function public.start_ownership_transfer(
+  p_home_id uuid, p_membership_id uuid, p_request_id uuid
+) returns table (outcome text, transfer_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_target public.home_memberships;
+    v_existing private.home_ownership_transfers;
+    v_id uuid;
+  begin
+    if p_request_id is null then
+      raise exception 'a request id is required' using errcode = '22023';
+    end if;
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) <> 'owner' then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+
+    select * into v_existing from private.home_ownership_transfers t
+      where t.from_user_id = v_user_id and t.creation_request_id = p_request_id;
+    if found then
+      return query select
+        case when v_existing.home_id = p_home_id then 'started' else 'not_found' end,
+        case when v_existing.home_id = p_home_id then v_existing.id end;
+      return;
+    end if;
+
+    select * into v_target from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = p_home_id;
+    if not found then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if v_target.user_id = v_user_id or v_target.role = 'owner'
+       or private.confirmed_email(v_target.user_id) is null then
+      return query select 'invalid_target'::text, null::uuid;
+      return;
+    end if;
+
+    perform private.expire_ownership_transfers(p_home_id);
+    if exists (
+      select 1 from private.home_ownership_transfers t
+      where t.home_id = p_home_id and t.status = 'pending'
+    ) then
+      return query select 'pending_exists'::text, null::uuid;
+      return;
+    end if;
+
+    insert into private.home_ownership_transfers (
+      home_id, from_user_id, to_user_id, expires_at, creation_request_id
+    )
+      values (
+        p_home_id, v_user_id, v_target.user_id, pg_catalog.now() + interval '7 days', p_request_id
+      )
+      returning id into v_id;
+    perform private.audit('home_ownership.transfer_started', p_home_id, 'ownership_transfer', v_id,
+      pg_catalog.jsonb_build_object('to', v_target.user_id));
+    return query select 'started'::text, v_id;
+  end
+  $$;
+
+-- The Owner who started a pending transfer cancels it. Outcomes: 'cancelled', 'not_found',
+-- 'not_permitted', 'already_decided' (also when it has expired or become invalid).
+create function public.cancel_ownership_transfer(p_home_id uuid, p_transfer_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_transfer private.home_ownership_transfers;
+  begin
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    perform private.expire_ownership_transfers(p_home_id);
+    select * into v_transfer from private.home_ownership_transfers t
+      where t.id = p_transfer_id and t.home_id = p_home_id for update;
+    if not found or (v_transfer.from_user_id <> v_user_id and v_transfer.to_user_id <> v_user_id) then
+      return 'not_found';
+    end if;
+    if v_transfer.from_user_id <> v_user_id then
+      return 'not_permitted';
+    end if;
+    if v_transfer.status <> 'pending' then
+      return 'already_decided';
+    end if;
+    update private.home_ownership_transfers
+      set status = 'cancelled', decided_at = pg_catalog.now()
+      where id = v_transfer.id;
+    perform private.audit('home_ownership.transfer_cancelled', p_home_id, 'ownership_transfer',
+      v_transfer.id);
+    return 'cancelled';
+  end
+  $$;
+
+-- The nominated member accepts or declines. Acceptance re-checks, under the Home lock, that the
+-- transfer is still pending and unexpired, that its sender is still the Owner and that the
+-- recipient is still a member with a confirmed account; then the former Owner becomes a Member and
+-- the recipient the Owner in one transaction. The S09 unique index allows at most one Owner at any
+-- moment and the deferred trigger at least one at commit, so no committed state has none or two.
+-- Outcomes: 'accepted', 'declined', 'not_found', 'already_decided', 'expired', 'no_longer_valid'.
+create function public.respond_to_ownership_transfer(
+  p_home_id uuid, p_transfer_id uuid, p_decision text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_transfer private.home_ownership_transfers;
+  begin
+    if p_decision is null or p_decision not in ('accept', 'decline') then
+      raise exception 'invalid decision' using errcode = '22023';
+    end if;
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    perform private.expire_ownership_transfers(p_home_id);
+    select * into v_transfer from private.home_ownership_transfers t
+      where t.id = p_transfer_id and t.home_id = p_home_id for update;
+    if not found or v_transfer.to_user_id <> v_user_id then
+      return 'not_found';
+    end if;
+    if v_transfer.status = 'expired' then
+      return 'expired';
+    end if;
+    if v_transfer.status <> 'pending' then
+      return 'already_decided';
+    end if;
+
+    if p_decision = 'decline' then
+      update private.home_ownership_transfers
+        set status = 'declined', decided_at = pg_catalog.now()
+        where id = v_transfer.id;
+      perform private.audit('home_ownership.transfer_declined', p_home_id, 'ownership_transfer',
+        v_transfer.id);
+      return 'declined';
+    end if;
+
+    if private.home_role(p_home_id, v_transfer.from_user_id) is distinct from 'owner'
+       or private.confirmed_email(v_user_id) is null then
+      update private.home_ownership_transfers
+        set status = 'invalid', decided_at = pg_catalog.now()
+        where id = v_transfer.id;
+      perform private.audit('home_ownership.transfer_invalid', p_home_id, 'ownership_transfer',
+        v_transfer.id);
+      return 'no_longer_valid';
+    end if;
+
+    -- Marked accepted first, so the triggers that invalidate pending transfers on role changes
+    -- leave this one alone. Then the swap: the former Owner steps down first (the one-Owner index
+    -- is checked per statement), and the recipient becomes the Owner before the transaction ends.
+    update private.home_ownership_transfers
+      set status = 'accepted', decided_at = pg_catalog.now()
+      where id = v_transfer.id;
+    update public.home_memberships set role = 'member'
+      where home_id = p_home_id and user_id = v_transfer.from_user_id;
+    update public.home_memberships set role = 'owner'
+      where home_id = p_home_id and user_id = v_user_id;
+    perform private.audit('home_ownership.transfer_accepted', p_home_id, 'ownership_transfer',
+      v_transfer.id, pg_catalog.jsonb_build_object('from', v_transfer.from_user_id));
+    return 'accepted';
+  end
+  $$;
+
+-- Join-request approval takes the Home lock too ----------------------------------------------------
+
+-- As S10, with one change: the Home's row is locked before anything else, so an approval and a
+-- simultaneous role change, removal or ownership transfer in the same Home run one after the other,
+-- and the approver's authority is checked after the lock (an Owner who has just handed over
+-- ownership can no longer admit an Administrator). Lock order: Home, request, invitation.
+create or replace function public.decide_join_request(p_home_id uuid, p_request_id uuid, p_decision text)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_request private.home_join_requests;
+    v_inv private.home_invitations;
+  begin
+    if p_decision is null or p_decision not in ('approve', 'decline') then
+      raise exception 'invalid decision' using errcode = '22023';
+    end if;
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if not exists (
+      select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      return 'not_found';
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      return 'not_permitted';
+    end if;
+
+    select * into v_request from private.home_join_requests r
+      where r.id = p_request_id and r.home_id = p_home_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if not private.can_manage_invitations(p_home_id, v_user_id, v_request.role) then
+      return 'not_permitted';
+    end if;
+    if v_request.status <> 'pending' then
+      return 'already_decided';
+    end if;
+    select * into v_inv from private.home_invitations i where i.id = v_request.invitation_id
+      for update;
+
+    if p_decision = 'decline' then
+      update private.home_join_requests
+        set status = 'declined', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      -- An email invitation has one possible recipient: once they are declined it is finished.
+      if v_inv.kind = 'email' and v_inv.end_reason is null then
+        update private.home_invitations
+          set ended_at = pg_catalog.now(), ended_by = v_user_id, end_reason = 'declined'
+          where id = v_inv.id;
+      end if;
+      perform private.audit('join_request.declined', p_home_id, 'join_request', p_request_id,
+        pg_catalog.jsonb_build_object('role', v_request.role));
+      return 'declined';
+    end if;
+
+    if exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_request.applicant_id
+    ) then
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      perform private.audit('join_request.expired', p_home_id, 'join_request', p_request_id,
+        pg_catalog.jsonb_build_object('reason', 'already_member'));
+      return 'already_member';
+    end if;
+
+    if private.invitation_state(v_inv) <> 'active'
+       or v_request.role <> v_inv.role
+       or private.confirmed_email(v_request.applicant_id) is null
+       or (v_inv.kind = 'email'
+           and v_inv.recipient_email is distinct from private.confirmed_email(v_request.applicant_id))
+    then
+      update private.home_join_requests
+        set status = 'expired', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where id = p_request_id;
+      perform private.audit('join_request.expired', p_home_id, 'join_request', p_request_id);
+      return 'no_longer_valid';
+    end if;
+
+    -- The S09 trigger audits the new membership with the approver as the actor.
+    insert into public.home_memberships (home_id, user_id, role)
+      values (p_home_id, v_request.applicant_id, v_request.role);
+    update private.home_invitations set admissions = admissions + 1 where id = v_inv.id;
+    update private.home_join_requests
+      set status = 'approved', decided_at = pg_catalog.now(), decided_by = v_user_id
+      where id = p_request_id;
+    perform private.audit('join_request.approved', p_home_id, 'join_request', p_request_id,
+      pg_catalog.jsonb_build_object('role', v_request.role, 'kind', v_inv.kind));
+    return 'approved';
+  end
+  $$;
+
+-- The invitation and join-request lists, as S10, but each row only for someone allowed to manage
+-- its role: an Administrator with manageInvitations sees Member invitations and requests only,
+-- never the Owner's Administrator links, codes, invited emails or applicants.
+create or replace function public.list_home_invitations(p_home_id uuid)
+returns table (
+  id uuid, kind text, role text, recipient_email text, email_locale text, state text,
+  created_at timestamptz, expires_at timestamptz, ended_at timestamptz,
+  max_admissions integer, admissions integer, pending_requests integer,
+  delivery_status text, last_sent_at timestamptz, token text
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select i.id, i.kind, i.role, i.recipient_email, i.email_locale, s.state,
+        i.created_at, i.expires_at, i.ended_at, i.max_admissions, i.admissions,
+        (select pg_catalog.count(*)::integer from private.home_join_requests r
+          where r.invitation_id = i.id and r.status = 'pending'),
+        i.delivery_status, i.last_sent_at,
+        case when s.state = 'active' and i.kind <> 'email' then i.token end
+      from private.home_invitations i
+      cross join lateral (select private.invitation_state(i) as state) s
+      where i.home_id = p_home_id
+        and private.can_manage_invitations(p_home_id, v_user_id, i.role)
+        and (s.state = 'active' or coalesce(i.ended_at, i.expires_at) > pg_catalog.now() - interval '30 days'
+             or i.created_at > pg_catalog.now() - interval '30 days')
+      order by (s.state = 'active') desc, i.created_at desc
+      limit 200;
+  end
+  $$;
+
+create or replace function public.list_home_join_requests(p_home_id uuid)
+returns table (
+  id uuid, applicant_name text, applicant_email text, role text, kind text, state text,
+  created_at timestamptz, decided_at timestamptz, can_decide boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.can_manage_invitations(p_home_id, v_user_id, 'member') then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select r.id, r.applicant_name, r.applicant_email, r.role, i.kind, s.state,
+        r.created_at, r.decided_at,
+        s.state = 'pending' and private.can_manage_invitations(p_home_id, v_user_id, r.role)
+      from private.home_join_requests r
+      join private.home_invitations i on i.id = r.invitation_id
+      cross join lateral (select private.request_state(r) as state) s
+      where r.home_id = p_home_id
+        and private.can_manage_invitations(p_home_id, v_user_id, r.role)
+        and (r.status = 'pending' or r.decided_at > pg_catalog.now() - interval '30 days')
+      order by (s.state = 'pending') desc, r.created_at desc
+      limit 200;
+  end
+  $$;
+
+-- API access --------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.home_capabilities(uuid)',
+    'public.home_ownership_transfer(uuid)',
+    'public.change_home_member_role(uuid, uuid, text, text)',
+    'public.set_administrator_capabilities(uuid, uuid, text[])',
+    'public.remove_home_member(uuid, uuid, text)',
+    'public.leave_home(uuid)',
+    'public.start_ownership_transfer(uuid, uuid, uuid)',
+    'public.cancel_ownership_transfer(uuid, uuid)',
+    'public.respond_to_ownership_transfer(uuid, uuid, text)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261020090000_ownership_recovery.sql
+-- ============================================================================
+-- S12b: verified Home ownership recovery (brief S12b; spec "Confirmed verified Home ownership
+-- recovery", "Confirmed exactly one Home Owner"; architecture.md §43 and ADR 0015 for staff).
+--
+-- When a Home's only Owner can no longer reach their account and normal account recovery fails, an
+-- eligible adult member may ask Madeora to review a takeover. Nothing changes until:
+-- 1. a Madeora staff member (private.madeora_staff) reviews the private statement, verifies the
+--    person outside the app and approves, with a recent sign-in;
+-- 2. a 14-day objection period passes without an objection, a cancellation by the Owner, or the
+--    Owner showing that they have access again (signing in, or opening the Home);
+-- 3. the person who asked accepts. Under the Home lock everything is checked again, and the Owner
+--    steps down (to Member, or out of the Home when staff decided so) and the person becomes Owner
+--    in one transaction.
+-- Statements, objections, appeals and staff reasons are readable by no API role; members see only
+-- that a review is open. Staff get no Home access: each staff function checks staff status itself
+-- and returns only what reviewing needs.
+
+-- Audit subjects ----------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery'
+  ));
+
+-- Staff -------------------------------------------------------------------------------------------
+
+-- Madeora staff accounts. No API role can read or write this table: the owner adds and removes
+-- staff by running SQL in the hosted project's SQL Editor (docs/staff-operations.md).
+create table private.madeora_staff (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  added_at timestamptz not null default now(),
+  note text constraint madeora_staff_note_check check (char_length(note) <= 200)
+);
+
+comment on table private.madeora_staff is
+  'Madeora staff accounts (architecture.md §43). Managed only through the SQL Editor.';
+
+-- The caller, when they are staff with a confirmed account; with p_recent, also signed in within
+-- the last 15 minutes in this very session (staff decisions): the session in the caller's token
+-- must have a sign-in recorded in that window, so a sign-in on another device does not refresh an
+-- older, possibly stolen session. Raises 42501 otherwise, the same for everyone.
+create function private.require_staff(p_recent boolean) returns uuid
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_session_id uuid;
+  begin
+    if not exists (select 1 from private.madeora_staff s where s.user_id = v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    if p_recent then
+      begin
+        v_session_id := (auth.jwt() ->> 'session_id')::uuid;
+      exception when invalid_text_representation then
+        v_session_id := null;
+      end;
+    end if;
+    if p_recent and (v_session_id is null or not exists (
+      select 1
+      from auth.sessions s
+      join auth.mfa_amr_claims c on c.session_id = s.id
+      where s.id = v_session_id
+        and s.user_id = v_user_id
+        and (s.not_after is null or s.not_after > pg_catalog.now())
+        and c.updated_at > pg_catalog.now() - interval '15 minutes'
+    )) then
+      raise exception 'recent sign-in required' using errcode = '42501', hint = 'reauthenticate';
+    end if;
+    return v_user_id;
+  end
+  $$;
+
+-- Whether a staff member is a party to a case or belongs to its Home. Such a staff member may not
+-- see or decide it: the review must be independent of the Home (another staff member decides).
+create function private.staff_is_involved(p_home_id uuid, p_claimant_id uuid, p_owner_id uuid,
+  p_staff_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_staff_id = p_claimant_id or p_staff_id = p_owner_id or exists (
+    select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = p_staff_id
+  );
+  $$;
+
+-- Whether the caller is staff: for the app to show the staff link. Not a permission by itself.
+create function public.is_madeora_staff() returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from private.madeora_staff s where s.user_id = auth.uid());
+  $$;
+
+-- Recovery cases ----------------------------------------------------------------------------------
+
+create table private.home_ownership_recoveries (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  claimant_id uuid not null references auth.users (id) on delete cascade,
+  -- The Owner when the request was made; the takeover is only ever from this account.
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  statement text not null
+    constraint home_ownership_recoveries_statement_check
+      check (char_length(btrim(statement)) between 50 and 4000),
+  status text not null default 'submitted'
+    constraint home_ownership_recoveries_status_check check (status in (
+      'submitted', 'in_review', 'approved', 'paused', 'completed', 'rejected', 'withdrawn',
+      'cancelled', 'owner_returned', 'invalid'
+    )),
+  -- clock_timestamp: two requests in one transaction (tests) still have an order.
+  created_at timestamptz not null default clock_timestamp(),
+  creation_request_id uuid not null,
+  -- The Owner opened the Home after the request: they have access again.
+  owner_seen_at timestamptz,
+  review_started_at timestamptz,
+  review_started_by uuid references auth.users (id) on delete set null,
+  approved_at timestamptz,
+  approved_by uuid references auth.users (id) on delete set null,
+  objection_ends_at timestamptz,
+  -- What happens to the former Owner, decided by staff on approval.
+  former_owner_outcome text
+    constraint home_ownership_recoveries_outcome_check
+      check (former_owner_outcome in ('member', 'removed')),
+  paused_from text
+    constraint home_ownership_recoveries_paused_from_check
+      check (paused_from in ('submitted', 'in_review', 'approved')),
+  decided_at timestamptz,
+  decided_by uuid references auth.users (id) on delete set null,
+  -- Staff's reasons for approving, pausing, rejecting; never shown to members.
+  staff_notes text
+    constraint home_ownership_recoveries_notes_check check (char_length(staff_notes) <= 40000),
+  constraint home_ownership_recoveries_paused_check check ((status = 'paused') = (paused_from is not null)),
+  constraint home_ownership_recoveries_approved_check check (
+    status not in ('approved', 'completed') or (approved_at is not null and objection_ends_at is not null
+      and former_owner_outcome is not null)
+  )
+);
+
+-- One open request per person per Home; several people may have one each (competing claimants).
+create unique index home_ownership_recoveries_one_open
+  on private.home_ownership_recoveries (home_id, claimant_id)
+  where status in ('submitted', 'in_review', 'approved', 'paused');
+create unique index home_ownership_recoveries_request_key
+  on private.home_ownership_recoveries (claimant_id, creation_request_id);
+create index home_ownership_recoveries_home_idx on private.home_ownership_recoveries (home_id);
+
+comment on table private.home_ownership_recoveries is
+  'Verified Home ownership recovery cases (S12b). Statements and staff notes are private.';
+
+-- Objections from adult members or the Owner while a case is open. They pause the case.
+create table private.home_ownership_recovery_objections (
+  id uuid primary key default gen_random_uuid(),
+  recovery_id uuid not null references private.home_ownership_recoveries (id) on delete cascade,
+  objector_id uuid references auth.users (id) on delete set null,
+  objector_role text not null
+    constraint recovery_objections_role_check check (objector_role in ('owner', 'administrator', 'member')),
+  reason text not null
+    constraint recovery_objections_reason_check check (char_length(btrim(reason)) between 10 and 2000),
+  created_at timestamptz not null default clock_timestamp()
+);
+
+-- Appeals by a former Owner after a completed recovery. Recorded for staff; nothing is reversed
+-- automatically.
+create table private.home_ownership_recovery_appeals (
+  id uuid primary key default gen_random_uuid(),
+  recovery_id uuid not null references private.home_ownership_recoveries (id) on delete cascade,
+  appellant_id uuid references auth.users (id) on delete set null,
+  reason text not null
+    constraint recovery_appeals_reason_check check (char_length(btrim(reason)) between 10 and 4000),
+  status text not null default 'open'
+    constraint recovery_appeals_status_check check (status in ('open', 'closed')),
+  created_at timestamptz not null default clock_timestamp(),
+  closed_at timestamptz,
+  closed_by uuid references auth.users (id) on delete set null,
+  staff_notes text constraint recovery_appeals_notes_check check (char_length(staff_notes) <= 8000)
+);
+
+create unique index recovery_appeals_one_open
+  on private.home_ownership_recovery_appeals (recovery_id) where status = 'open';
+
+-- State --------------------------------------------------------------------------------------------
+
+-- What a case is now: its stored status, 'owner_returned' for an open case whose Owner has shown
+-- access since the request (signed in, or opened the Home), and 'ready' for an approved case whose
+-- objection period has ended.
+create function private.recovery_state(p_case private.home_ownership_recoveries) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_case.status in ('submitted', 'in_review', 'approved', 'paused')
+      and (p_case.owner_seen_at is not null or exists (
+        select 1 from auth.users u
+        where u.id = p_case.owner_id and u.last_sign_in_at > p_case.created_at
+      ))
+      then 'owner_returned'
+    when p_case.status = 'approved' and p_case.objection_ends_at <= pg_catalog.now() then 'ready'
+    else p_case.status
+  end;
+  $$;
+
+-- Stores 'owner_returned' on the Home's open cases whose Owner is back (the Home is locked).
+create function private.settle_owner_returned(p_home_id uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+  begin
+    for v_id in
+      update private.home_ownership_recoveries r
+        set status = 'owner_returned', paused_from = null, decided_at = pg_catalog.now()
+        where r.home_id = p_home_id and r.status in ('submitted', 'in_review', 'approved', 'paused')
+          and private.recovery_state(r) = 'owner_returned'
+        returning r.id
+    loop
+      perform private.audit('ownership_recovery.owner_returned', p_home_id, 'ownership_recovery', v_id);
+    end loop;
+  end
+  $$;
+
+-- Whether p_user may ask for a recovery in p_home now: an Administrator or Member with a confirmed
+-- account, a member for at least 30 days, and not the Owner.
+create function private.can_request_recovery(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.confirmed_email(p_user_id) is not null and exists (
+    select 1 from public.home_memberships m
+    where m.home_id = p_home_id and m.user_id = p_user_id
+      and m.role in ('administrator', 'member')
+      and m.created_at <= pg_catalog.now() - interval '30 days'
+  );
+  $$;
+
+-- A membership that ends, or an Owner who stops being the Owner by any other path, ends the cases
+-- it makes impossible: the claimant leaving or being removed, or the Owner changing.
+create function private.invalidate_ownership_recoveries() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+  begin
+    if tg_op = 'DELETE' or (old.role = 'owner' and new.role <> 'owner') then
+      for v_id in
+        update private.home_ownership_recoveries r
+          set status = 'invalid', paused_from = null, decided_at = pg_catalog.now()
+          where r.home_id = old.home_id
+            and r.status in ('submitted', 'in_review', 'approved', 'paused')
+            and (r.claimant_id = old.user_id or r.owner_id = old.user_id)
+          returning r.id
+      loop
+        perform private.audit('ownership_recovery.invalid', old.home_id, 'ownership_recovery', v_id);
+      end loop;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_invalidate_recoveries
+  after update of role or delete on public.home_memberships
+  for each row execute function private.invalidate_ownership_recoveries();
+
+-- Members ------------------------------------------------------------------------------------------
+
+-- What the caller may see of recovery in a Home they belong to, one row per visible case:
+-- - the person who asked: their own open or recently ended case, with its state;
+-- - the Owner: every open case, with who asked (the Owner is the one it is about); opening this
+--   as the Owner shows they have access, which stops every open case;
+-- - other members: only that a review is open, and whether they have objected.
+-- Never the statement, objections or staff notes. Errors (42501) for non-members.
+create function public.home_ownership_recovery_status(p_home_id uuid)
+returns table (
+  id uuid, viewer text, state text, created_at timestamptz, objection_ends_at timestamptz,
+  claimant_membership_id uuid, objected boolean
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_role text;
+  begin
+    v_role := private.home_role(p_home_id, v_user_id);
+    if v_role is null then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    if v_role = 'owner' then
+      -- The Home lock first, as every function that changes cases takes it (no deadlock with an
+      -- acceptance in progress).
+      perform private.lock_home(p_home_id);
+      update private.home_ownership_recoveries r
+        set owner_seen_at = pg_catalog.now()
+        where r.home_id = p_home_id and r.owner_id = v_user_id and r.owner_seen_at is null
+          and r.status in ('submitted', 'in_review', 'approved', 'paused');
+    end if;
+    return query
+      select r.id,
+        case when r.claimant_id = v_user_id then 'claimant'
+             when v_role = 'owner' then 'owner' else 'member' end,
+        private.recovery_state(r), r.created_at,
+        case when r.claimant_id = v_user_id or v_role = 'owner' then r.objection_ends_at end,
+        case when v_role = 'owner' then (
+          select m.id from public.home_memberships m
+          where m.home_id = p_home_id and m.user_id = r.claimant_id
+        ) end,
+        exists (
+          select 1 from private.home_ownership_recovery_objections o
+          where o.recovery_id = r.id and o.objector_id = v_user_id
+        )
+      from private.home_ownership_recoveries r
+      where r.home_id = p_home_id
+        and (
+          (r.claimant_id = v_user_id
+            and (r.status in ('submitted', 'in_review', 'approved', 'paused')
+                 or r.decided_at > pg_catalog.now() - interval '30 days'))
+          or (r.claimant_id <> v_user_id
+            and r.status in ('submitted', 'in_review', 'approved', 'paused'))
+        )
+      order by r.created_at desc;
+  end
+  $$;
+
+-- An eligible member asks for a recovery review. A repeated request id returns the case it made.
+-- Outcomes: 'submitted', 'not_found', 'not_permitted' (the Owner, too new a member, unconfirmed),
+-- 'already_open'.
+create function public.request_ownership_recovery(
+  p_home_id uuid, p_statement text, p_request_id uuid
+) returns table (outcome text, recovery_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing uuid;
+    v_owner uuid;
+    v_id uuid;
+  begin
+    if p_request_id is null or p_statement is null
+       or char_length(btrim(p_statement)) not between 50 and 4000 then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select r.id into v_existing from private.home_ownership_recoveries r
+      where r.claimant_id = v_user_id and r.creation_request_id = p_request_id;
+    if found then
+      return query select 'submitted'::text, v_existing;
+      return;
+    end if;
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if not private.can_request_recovery(p_home_id, v_user_id) then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+    perform private.settle_owner_returned(p_home_id);
+    if exists (
+      select 1 from private.home_ownership_recoveries r
+      where r.home_id = p_home_id and r.claimant_id = v_user_id
+        and r.status in ('submitted', 'in_review', 'approved', 'paused')
+    ) then
+      return query select 'already_open'::text, null::uuid;
+      return;
+    end if;
+    select m.user_id into v_owner from public.home_memberships m
+      where m.home_id = p_home_id and m.role = 'owner';
+    insert into private.home_ownership_recoveries (
+      home_id, claimant_id, owner_id, statement, creation_request_id
+    ) values (p_home_id, v_user_id, v_owner, btrim(p_statement), p_request_id)
+    returning id into v_id;
+    perform private.audit('ownership_recovery.requested', p_home_id, 'ownership_recovery', v_id);
+    return query select 'submitted'::text, v_id;
+  end
+  $$;
+
+-- The person who asked withdraws their open request. Outcomes: 'withdrawn', 'not_found',
+-- 'already_decided'.
+create function public.withdraw_ownership_recovery(p_home_id uuid, p_recovery_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_case private.home_ownership_recoveries;
+  begin
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    select * into v_case from private.home_ownership_recoveries r
+      where r.id = p_recovery_id and r.home_id = p_home_id and r.claimant_id = v_user_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_case.status not in ('submitted', 'in_review', 'approved', 'paused') then
+      return 'already_decided';
+    end if;
+    update private.home_ownership_recoveries
+      set status = 'withdrawn', paused_from = null, decided_at = pg_catalog.now(), decided_by = v_user_id
+      where id = v_case.id;
+    perform private.audit('ownership_recovery.withdrawn', p_home_id, 'ownership_recovery', v_case.id);
+    return 'withdrawn';
+  end
+  $$;
+
+-- The Owner, who evidently has access, ends every open request about their Home. Outcomes:
+-- 'cancelled' (with the number ended), 'not_permitted' (not the Owner), 'not_found'.
+create function public.cancel_ownership_recoveries(p_home_id uuid)
+returns table (outcome text, cancelled integer)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_role text;
+    v_count integer := 0;
+    v_id uuid;
+  begin
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, 0;
+      return;
+    end if;
+    v_role := private.home_role(p_home_id, v_user_id);
+    if v_role is null then
+      return query select 'not_found'::text, 0;
+      return;
+    end if;
+    if v_role <> 'owner' then
+      return query select 'not_permitted'::text, 0;
+      return;
+    end if;
+    for v_id in
+      update private.home_ownership_recoveries r
+        set status = 'cancelled', paused_from = null, decided_at = pg_catalog.now(),
+          decided_by = v_user_id
+        where r.home_id = p_home_id and r.status in ('submitted', 'in_review', 'approved', 'paused')
+        returning r.id
+    loop
+      v_count := v_count + 1;
+      perform private.audit('ownership_recovery.cancelled_by_owner', p_home_id, 'ownership_recovery', v_id);
+    end loop;
+    return query select 'cancelled'::text, v_count;
+  end
+  $$;
+
+-- Any adult member other than the person who asked objects; every open case of the Home pauses
+-- for staff to look at. The reason is private to staff. Outcomes: 'objected', 'not_found',
+-- 'nothing_open', 'not_permitted' (the person who asked).
+create function public.object_to_ownership_recovery(p_home_id uuid, p_reason text) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_role text;
+    v_case private.home_ownership_recoveries;
+    v_objected boolean := false;
+  begin
+    if p_reason is null or char_length(btrim(p_reason)) not between 10 and 2000 then
+      raise exception 'invalid reason' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    v_role := private.home_role(p_home_id, v_user_id);
+    if v_role is null then
+      return 'not_found';
+    end if;
+    perform private.settle_owner_returned(p_home_id);
+    for v_case in
+      select * from private.home_ownership_recoveries r
+      where r.home_id = p_home_id and r.status in ('submitted', 'in_review', 'approved', 'paused')
+      for update
+    loop
+      if v_case.claimant_id = v_user_id then
+        continue;
+      end if;
+      insert into private.home_ownership_recovery_objections (recovery_id, objector_id, objector_role, reason)
+        values (v_case.id, v_user_id, v_role, btrim(p_reason));
+      if v_case.status <> 'paused' then
+        update private.home_ownership_recoveries
+          set status = 'paused', paused_from = v_case.status
+          where id = v_case.id;
+      end if;
+      perform private.audit('ownership_recovery.objected', p_home_id, 'ownership_recovery', v_case.id,
+        pg_catalog.jsonb_build_object('role', v_role));
+      v_objected := true;
+    end loop;
+    if v_objected then
+      return 'objected';
+    end if;
+    if exists (
+      select 1 from private.home_ownership_recoveries r
+      where r.home_id = p_home_id and r.claimant_id = v_user_id
+        and r.status in ('submitted', 'in_review', 'approved', 'paused')
+    ) then
+      return 'not_permitted';
+    end if;
+    return 'nothing_open';
+  end
+  $$;
+
+-- After the objection period, the person who asked accepts and becomes the Owner. Under the Home
+-- lock: the case is approved, its period over, not paused; the Owner is still the account the
+-- request was about and has not shown access since; the person is still an adult member with a
+-- confirmed account. Then the former Owner steps down (to Member, or out of the Home when staff
+-- decided so), the person becomes Owner, and every other open case and pending transfer of the
+-- Home ends. Outcomes: 'completed', 'not_found', 'not_ready', 'owner_returned', 'no_longer_valid'.
+create function public.accept_ownership_recovery(p_home_id uuid, p_recovery_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_case private.home_ownership_recoveries;
+    v_state text;
+    v_id uuid;
+  begin
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    select * into v_case from private.home_ownership_recoveries r
+      where r.id = p_recovery_id and r.home_id = p_home_id and r.claimant_id = v_user_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    v_state := private.recovery_state(v_case);
+    if v_state = 'owner_returned' then
+      perform private.settle_owner_returned(p_home_id);
+      return 'owner_returned';
+    end if;
+    -- Ended because a membership changed (the Owner or the person no longer in place).
+    if v_state = 'invalid' then
+      return 'no_longer_valid';
+    end if;
+    if v_state <> 'ready' then
+      return 'not_ready';
+    end if;
+    if private.home_role(p_home_id, v_case.owner_id) is distinct from 'owner'
+       or coalesce(private.home_role(p_home_id, v_user_id), '') not in ('administrator', 'member')
+       or private.confirmed_email(v_user_id) is null then
+      update private.home_ownership_recoveries
+        set status = 'invalid', decided_at = pg_catalog.now()
+        where id = v_case.id;
+      perform private.audit('ownership_recovery.invalid', p_home_id, 'ownership_recovery', v_case.id);
+      return 'no_longer_valid';
+    end if;
+
+    -- Completed first, so the triggers that end open cases when the Owner changes leave this one.
+    update private.home_ownership_recoveries
+      set status = 'completed', decided_at = pg_catalog.now()
+      where id = v_case.id;
+    update public.home_memberships set role = 'member'
+      where home_id = p_home_id and user_id = v_case.owner_id;
+    update public.home_memberships set role = 'owner'
+      where home_id = p_home_id and user_id = v_user_id;
+    if v_case.former_owner_outcome = 'removed' then
+      perform pg_catalog.set_config('madeora.membership_end', 'removed', true);
+      delete from public.home_memberships
+        where home_id = p_home_id and user_id = v_case.owner_id;
+      perform pg_catalog.set_config('madeora.membership_end', '', true);
+    end if;
+    -- Other people's open requests end with the change of Owner (the role trigger above); any
+    -- still open, for example a request by the former Owner's co-claimant, end here too.
+    for v_id in
+      update private.home_ownership_recoveries r
+        set status = 'invalid', paused_from = null, decided_at = pg_catalog.now()
+        where r.home_id = p_home_id and r.id <> v_case.id
+          and r.status in ('submitted', 'in_review', 'approved', 'paused')
+        returning r.id
+    loop
+      perform private.audit('ownership_recovery.invalid', p_home_id, 'ownership_recovery', v_id);
+    end loop;
+    perform private.audit('ownership_recovery.completed', p_home_id, 'ownership_recovery', v_case.id,
+      pg_catalog.jsonb_build_object('former_owner', v_case.former_owner_outcome));
+    return 'completed';
+  end
+  $$;
+
+-- For a former Owner: the Homes taken over from them through a completed recovery, with any
+-- appeal, so they can see what happened and appeal, even when they were removed from the Home.
+create function public.my_recovered_homes()
+returns table (
+  recovery_id uuid, home_name text, completed_at timestamptz, still_member boolean,
+  appeal_status text
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select r.id, h.name, r.decided_at,
+        exists (select 1 from public.home_memberships m
+          where m.home_id = r.home_id and m.user_id = v_user_id),
+        (select a.status from private.home_ownership_recovery_appeals a
+          where a.recovery_id = r.id order by a.created_at desc limit 1)
+      from private.home_ownership_recoveries r
+      join public.homes h on h.id = r.home_id
+      where r.owner_id = v_user_id and r.status = 'completed'
+      order by r.decided_at desc;
+  end
+  $$;
+
+-- The former Owner appeals a completed recovery; staff review it. Outcomes: 'appealed',
+-- 'not_found', 'already_open'.
+create function public.appeal_ownership_recovery(p_recovery_id uuid, p_reason text) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_case private.home_ownership_recoveries;
+  begin
+    if p_reason is null or char_length(btrim(p_reason)) not between 10 and 4000 then
+      raise exception 'invalid reason' using errcode = '22023';
+    end if;
+    select * into v_case from private.home_ownership_recoveries r
+      where r.id = p_recovery_id and r.owner_id = v_user_id and r.status = 'completed'
+      for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if exists (
+      select 1 from private.home_ownership_recovery_appeals a
+      where a.recovery_id = v_case.id and a.status = 'open'
+    ) then
+      return 'already_open';
+    end if;
+    insert into private.home_ownership_recovery_appeals (recovery_id, appellant_id, reason)
+      values (v_case.id, v_user_id, btrim(p_reason));
+    perform private.audit('ownership_recovery.appealed', v_case.home_id, 'ownership_recovery', v_case.id);
+    return 'appealed';
+  end
+  $$;
+
+-- Staff --------------------------------------------------------------------------------------------
+
+-- Every case, newest first, for the staff queue: what needs attention, without statements.
+create function public.staff_ownership_recoveries()
+returns table (
+  id uuid, home_name text, state text, created_at timestamptz, objection_ends_at timestamptz,
+  objections integer, open_appeals integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_staff uuid := private.require_staff(false);
+  begin
+    return query
+      select r.id, h.name, private.recovery_state(r), r.created_at, r.objection_ends_at,
+        (select pg_catalog.count(*)::integer from private.home_ownership_recovery_objections o
+          where o.recovery_id = r.id),
+        (select pg_catalog.count(*)::integer from private.home_ownership_recovery_appeals a
+          where a.recovery_id = r.id and a.status = 'open')
+      from private.home_ownership_recoveries r
+      join public.homes h on h.id = r.home_id
+      where not private.staff_is_involved(r.home_id, r.claimant_id, r.owner_id, v_staff)
+      order by (private.recovery_state(r) in ('submitted', 'in_review', 'paused', 'ready')) desc,
+        r.created_at desc
+      limit 200;
+  end
+  $$;
+
+-- One case in full, for staff only: what reviewing it needs, and nothing of the Home's content.
+-- Each read is audited with the staff account.
+create function public.staff_ownership_recovery(p_recovery_id uuid)
+returns table (
+  id uuid, home_id uuid, home_name text, home_time_zone text, state text, created_at timestamptz,
+  statement text, staff_notes text, former_owner_outcome text,
+  review_started_at timestamptz, approved_at timestamptz, objection_ends_at timestamptz,
+  decided_at timestamptz,
+  owner_email text, owner_locale text, owner_last_sign_in_at timestamptz,
+  owner_seen_at timestamptz, owner_is_owner boolean,
+  claimant_email text, claimant_name text, claimant_role text, claimant_member_since timestamptz,
+  member_count integer,
+  objections jsonb, appeals jsonb
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_staff uuid := private.require_staff(false);
+    v_case private.home_ownership_recoveries;
+  begin
+    select * into v_case from private.home_ownership_recoveries r where r.id = p_recovery_id;
+    if not found
+       or private.staff_is_involved(v_case.home_id, v_case.claimant_id, v_case.owner_id, v_staff) then
+      return;
+    end if;
+    perform private.audit('ownership_recovery.viewed_by_staff', v_case.home_id, 'ownership_recovery',
+      v_case.id);
+    return query
+      select v_case.id, v_case.home_id, h.name, h.timezone, private.recovery_state(v_case), v_case.created_at,
+        v_case.statement, v_case.staff_notes, v_case.former_owner_outcome,
+        v_case.review_started_at, v_case.approved_at, v_case.objection_ends_at, v_case.decided_at,
+        private.confirmed_email(v_case.owner_id),
+        (select p.locale from public.user_preferences p where p.user_id = v_case.owner_id),
+        (select u.last_sign_in_at from auth.users u where u.id = v_case.owner_id),
+        v_case.owner_seen_at,
+        coalesce(private.home_role(v_case.home_id, v_case.owner_id) = 'owner', false),
+        private.confirmed_email(v_case.claimant_id),
+        (select p.display_name from public.user_preferences p where p.user_id = v_case.claimant_id),
+        private.home_role(v_case.home_id, v_case.claimant_id),
+        (select m.created_at from public.home_memberships m
+          where m.home_id = v_case.home_id and m.user_id = v_case.claimant_id),
+        (select pg_catalog.count(*)::integer from public.home_memberships m
+          where m.home_id = v_case.home_id),
+        coalesce((
+          select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'role', o.objector_role, 'reason', o.reason, 'createdAt', o.created_at)
+            order by o.created_at)
+          from private.home_ownership_recovery_objections o where o.recovery_id = v_case.id
+        ), '[]'::jsonb),
+        coalesce((
+          select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'id', a.id, 'reason', a.reason, 'status', a.status, 'createdAt', a.created_at,
+            'staffNotes', a.staff_notes)
+            order by a.created_at)
+          from private.home_ownership_recovery_appeals a where a.recovery_id = v_case.id
+        ), '[]'::jsonb)
+      from public.homes h where h.id = v_case.home_id;
+  end
+  $$;
+
+-- Staff act on a case: 'start_review' (submitted → in_review), 'approve' (in_review → approved,
+-- the 14-day objection period starts; other open cases of the Home are rejected), 'pause',
+-- 'resume' (back to where it was; an approved case starts a fresh 14-day period), 'reject'.
+-- Every decision needs a staff sign-in within 15 minutes and is audited with the staff account;
+-- p_notes is appended to the case's private notes. Outcomes: 'ok', 'not_found' (also when the staff
+-- member made the request, is its Owner or belongs to its Home), 'not_allowed'
+-- (the action does not fit the case's state), 'owner_returned', 'no_longer_valid'.
+create function public.staff_decide_ownership_recovery(
+  p_recovery_id uuid, p_action text, p_notes text, p_former_owner_outcome text default null
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_staff uuid := private.require_staff(true);
+    v_case private.home_ownership_recoveries;
+    v_state text;
+    v_id uuid;
+  begin
+    if p_action is null
+       or p_action not in ('start_review', 'approve', 'pause', 'resume', 'reject')
+       or char_length(coalesce(p_notes, '')) > 2000
+       or (p_action in ('approve', 'pause', 'reject') and char_length(btrim(coalesce(p_notes, ''))) < 10)
+       or (p_action = 'approve' and p_former_owner_outcome is distinct from 'member'
+           and p_former_owner_outcome is distinct from 'removed') then
+      raise exception 'invalid decision' using errcode = '22023';
+    end if;
+    select r.home_id into v_id from private.home_ownership_recoveries r where r.id = p_recovery_id;
+    if not found then
+      return 'not_found';
+    end if;
+    -- The Home lock first, as everywhere else; then the case, fresh.
+    if not private.lock_home(v_id) then
+      return 'not_found';
+    end if;
+    perform private.settle_owner_returned(v_id);
+    select * into v_case from private.home_ownership_recoveries r where r.id = p_recovery_id for update;
+    if not found
+       or private.staff_is_involved(v_case.home_id, v_case.claimant_id, v_case.owner_id, v_staff) then
+      return 'not_found';
+    end if;
+    v_state := private.recovery_state(v_case);
+    if v_state = 'owner_returned' then
+      return 'owner_returned';
+    end if;
+    if not (
+      (p_action = 'start_review' and v_state = 'submitted')
+      or (p_action = 'approve' and v_state = 'in_review')
+      or (p_action = 'pause' and v_state in ('submitted', 'in_review', 'approved', 'ready'))
+      or (p_action = 'resume' and v_state = 'paused')
+      or (p_action = 'reject' and v_state in ('submitted', 'in_review', 'approved', 'ready', 'paused'))
+    ) then
+      return 'not_allowed';
+    end if;
+    if p_action in ('approve', 'resume')
+       and (private.home_role(v_case.home_id, v_case.owner_id) is distinct from 'owner'
+            or coalesce(private.home_role(v_case.home_id, v_case.claimant_id), '')
+              not in ('administrator', 'member')) then
+      update private.home_ownership_recoveries
+        set status = 'invalid', paused_from = null, decided_at = pg_catalog.now(), decided_by = v_staff
+        where id = v_case.id;
+      perform private.audit('ownership_recovery.invalid', v_case.home_id, 'ownership_recovery', v_case.id);
+      return 'no_longer_valid';
+    end if;
+
+    update private.home_ownership_recoveries r set
+      status = case p_action
+        when 'start_review' then 'in_review'
+        when 'approve' then 'approved'
+        when 'pause' then 'paused'
+        when 'resume' then v_case.paused_from
+        else 'rejected' end,
+      paused_from = case p_action when 'pause' then v_case.status else null end,
+      review_started_at = case when p_action = 'start_review' then pg_catalog.now() else r.review_started_at end,
+      review_started_by = case when p_action = 'start_review' then v_staff else r.review_started_by end,
+      approved_at = case when p_action = 'approve' then pg_catalog.now() else r.approved_at end,
+      approved_by = case when p_action = 'approve' then v_staff else r.approved_by end,
+      former_owner_outcome = case when p_action = 'approve' then p_former_owner_outcome
+        else r.former_owner_outcome end,
+      objection_ends_at = case
+        when p_action = 'approve' or (p_action = 'resume' and v_case.paused_from = 'approved')
+          then pg_catalog.now() + interval '14 days'
+        else r.objection_ends_at end,
+      decided_at = case when p_action = 'reject' then pg_catalog.now() else r.decided_at end,
+      decided_by = case when p_action = 'reject' then v_staff else r.decided_by end,
+      staff_notes = case when btrim(coalesce(p_notes, '')) = '' then r.staff_notes
+        else pg_catalog.concat_ws(E'\n\n', r.staff_notes,
+          pg_catalog.to_char(pg_catalog.now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI') || ' UTC, '
+            || p_action || ': ' || btrim(p_notes)) end
+      where r.id = v_case.id;
+    perform private.audit('ownership_recovery.staff_' || p_action, v_case.home_id, 'ownership_recovery',
+      v_case.id, pg_catalog.jsonb_build_object('staff', v_staff));
+
+    -- Approving one request ends the competing ones.
+    if p_action = 'approve' then
+      for v_id in
+        update private.home_ownership_recoveries r
+          set status = 'rejected', paused_from = null, decided_at = pg_catalog.now(), decided_by = v_staff,
+            staff_notes = pg_catalog.concat_ws(E'\n\n', r.staff_notes, 'Another request was approved.')
+          where r.home_id = v_case.home_id and r.id <> v_case.id
+            and r.status in ('submitted', 'in_review', 'approved', 'paused')
+          returning r.id
+      loop
+        perform private.audit('ownership_recovery.staff_reject', v_case.home_id, 'ownership_recovery',
+          v_id, pg_catalog.jsonb_build_object('staff', v_staff));
+      end loop;
+    end if;
+    return 'ok';
+  end
+  $$;
+
+-- Staff close an appeal with their note. Nothing about the Home changes here; a reversal, if
+-- warranted, goes through the Home's normal ownership transfer. Outcomes: 'closed', 'not_found'.
+create function public.staff_close_recovery_appeal(p_appeal_id uuid, p_notes text) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_staff uuid := private.require_staff(true);
+    v_case private.home_ownership_recoveries;
+  begin
+    if p_notes is null or char_length(btrim(p_notes)) not between 10 and 2000 then
+      raise exception 'invalid notes' using errcode = '22023';
+    end if;
+    select r.* into v_case from private.home_ownership_recoveries r
+      join private.home_ownership_recovery_appeals a on a.recovery_id = r.id
+      where a.id = p_appeal_id;
+    if not found
+       or private.staff_is_involved(v_case.home_id, v_case.claimant_id, v_case.owner_id, v_staff) then
+      return 'not_found';
+    end if;
+    update private.home_ownership_recovery_appeals a
+      set status = 'closed', closed_at = pg_catalog.now(), closed_by = v_staff, staff_notes = btrim(p_notes)
+      where a.id = p_appeal_id and a.status = 'open';
+    if not found then
+      return 'not_found';
+    end if;
+    perform private.audit('ownership_recovery.appeal_closed', v_case.home_id, 'ownership_recovery',
+      v_case.id, pg_catalog.jsonb_build_object('staff', v_staff, 'appeal', p_appeal_id));
+    return 'closed';
+  end
+  $$;
+
+-- API access --------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.is_madeora_staff()',
+    'public.home_ownership_recovery_status(uuid)',
+    'public.request_ownership_recovery(uuid, text, uuid)',
+    'public.withdraw_ownership_recovery(uuid, uuid)',
+    'public.cancel_ownership_recoveries(uuid)',
+    'public.object_to_ownership_recovery(uuid, text)',
+    'public.accept_ownership_recovery(uuid, uuid)',
+    'public.my_recovered_homes()',
+    'public.appeal_ownership_recovery(uuid, text)',
+    'public.staff_ownership_recoveries()',
+    'public.staff_ownership_recovery(uuid)',
+    'public.staff_decide_ownership_recovery(uuid, text, text, text)',
+    'public.staff_close_recovery_appeal(uuid, text)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261021090000_background_jobs.sql
+-- ============================================================================
+-- S13: background jobs (brief S13; architecture.md §11, §22; ADR 0017).
+--
+-- Transactional outbox. Business functions call private.enqueue_job() inside their own
+-- transaction, so a job row exists exactly when the business change committed. A dispatcher that
+-- runs inside Trigger.dev claims due rows, triggers one task run per row and records the outcome.
+-- Each run then claims its execution here, so a duplicate run of the same idempotency key is
+-- skipped and two runs never execute one key at the same time.
+--
+-- Access: no API role (anon, authenticated, service_role) can read or write the two tables. The
+-- dispatcher and the job runs use the service role, which may only execute the functions below;
+-- every function validates its arguments and stores short error codes, never messages. Payloads
+-- hold ids only (packages/jobs/src/definition.ts).
+--
+-- No retention or purge here: the product specification leaves retention periods open. The health
+-- counts read only through partial indexes or a bounded time window, so they stay cheap as the
+-- history grows.
+
+-- Outbox --------------------------------------------------------------------------------------------
+
+create table private.job_outbox (
+  id uuid primary key default gen_random_uuid(),
+  job_name text not null
+    constraint job_outbox_job_name_check
+    check (job_name ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and char_length(job_name) <= 64),
+  job_version smallint not null constraint job_outbox_job_version_check
+    check (job_version between 1 and 1000),
+  idempotency_key text not null constraint job_outbox_idempotency_key_check
+    check (idempotency_key ~ '^[A-Za-z0-9:_.-]{1,200}$'),
+  payload jsonb not null constraint job_outbox_payload_check
+    check (jsonb_typeof(payload) = 'object' and pg_column_size(payload) <= 8192),
+  -- A random UUID v4, as the app generates them (packages/observability) and gen_random_uuid() does;
+  -- the dispatcher refuses any other shape, so the table does too.
+  correlation_id uuid not null constraint job_outbox_correlation_id_check
+    check (correlation_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+  status text not null default 'pending' constraint job_outbox_status_check
+    check (status in ('pending', 'dispatching', 'dispatched', 'dead')),
+  -- Dispatch attempts, counted when a row is claimed.
+  attempts smallint not null default 0 constraint job_outbox_attempts_check check (attempts >= 0),
+  -- Raised by each manual requeue, so Trigger.dev sees a new idempotency key.
+  generation smallint not null default 0
+    constraint job_outbox_generation_check check (generation >= 0),
+  available_at timestamptz not null default now(),
+  lease_until timestamptz,
+  trigger_run_id text constraint job_outbox_trigger_run_id_check
+    check (trigger_run_id ~ '^[A-Za-z0-9_-]{1,100}$'),
+  last_error_code text constraint job_outbox_last_error_code_check
+    check (last_error_code ~ '^[a-z0-9_.-]{1,64}$'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  dispatched_at timestamptz,
+  constraint job_outbox_key unique (job_name, idempotency_key),
+  constraint job_outbox_lease_check check ((status = 'dispatching') = (lease_until is not null))
+);
+
+comment on table private.job_outbox is
+  'Transactional outbox for background jobs (S13, ADR 0017). Service-role functions only.';
+
+-- Due rows, oldest first: pending ones by available_at, claimed ones by lease expiry.
+create index job_outbox_due_idx on private.job_outbox (available_at)
+  where status = 'pending';
+create index job_outbox_lease_idx on private.job_outbox (lease_until)
+  where status = 'dispatching';
+-- For the health counts (public.job_outbox_stats).
+create index job_outbox_dead_idx on private.job_outbox (updated_at) where status = 'dead';
+create index job_outbox_dispatched_idx on private.job_outbox (dispatched_at)
+  where status = 'dispatched';
+
+-- Executions ----------------------------------------------------------------------------------------
+
+create table private.job_executions (
+  job_name text not null constraint job_executions_job_name_check
+    check (job_name ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' and char_length(job_name) <= 64),
+  idempotency_key text not null constraint job_executions_idempotency_key_check
+    check (idempotency_key ~ '^[A-Za-z0-9:_.-]{1,200}$'),
+  status text not null constraint job_executions_status_check
+    check (status in ('running', 'succeeded', 'failed_retryable', 'failed_permanent')),
+  attempts integer not null constraint job_executions_attempts_check check (attempts >= 1),
+  -- Identifies the run holding the execution; only that run may record the outcome.
+  claim_token uuid,
+  lease_until timestamptz,
+  last_error_code text constraint job_executions_last_error_code_check
+    check (last_error_code ~ '^[a-z0-9_.-]{1,64}$'),
+  created_at timestamptz not null default now(),
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  primary key (job_name, idempotency_key),
+  constraint job_executions_running_check
+    check ((status = 'running') = (claim_token is not null and lease_until is not null))
+);
+
+comment on table private.job_executions is
+  'One row per job idempotency key: claims, outcomes and attempts (S13). Service-role functions only.';
+
+-- For the health counts: executions that failed, and running ones whose lease ran out.
+create index job_executions_failed_idx on private.job_executions (finished_at)
+  where status in ('failed_retryable', 'failed_permanent');
+create index job_executions_running_idx on private.job_executions (lease_until)
+  where status = 'running';
+
+-- Neither table is reachable through the Data API: schema private is not exposed and the API roles
+-- have no usage on it. RLS without policies and revoked grants keep it so even if that changes.
+alter table private.job_outbox enable row level security;
+alter table private.job_executions enable row level security;
+revoke all on private.job_outbox, private.job_executions from public, anon, authenticated, service_role;
+
+-- Shared argument checks ----------------------------------------------------------------------------
+
+create function private.check_job_error_code(p_code text) returns text
+  language plpgsql immutable set search_path = '' as $$
+  begin
+    if p_code is null or p_code !~ '^[a-z0-9_.-]{1,64}$' then
+      raise exception 'invalid error code' using errcode = '22023';
+    end if;
+    return p_code;
+  end
+  $$;
+
+-- Dispatch attempts before an outbox row is dead (packages/jobs/src/testing/fake-store.ts mirrors it).
+create function private.job_outbox_max_attempts() returns integer
+  language sql immutable set search_path = '' as $$ select 8 $$;
+
+create function private.check_lease_seconds(p_seconds integer) returns interval
+  language plpgsql immutable set search_path = '' as $$
+  begin
+    if p_seconds is null or p_seconds not between 10 and 3600 then
+      raise exception 'lease must be 10 to 3600 seconds' using errcode = '22023';
+    end if;
+    return make_interval(secs => p_seconds);
+  end
+  $$;
+
+-- Enqueue (inside business transactions) ------------------------------------------------------------
+
+-- Adds a job to the outbox in the caller's transaction and returns its id. The same job name,
+-- idempotency key and payload return the existing row unchanged, so a retried request never
+-- enqueues twice. The same key with a different payload is a programming error (one key, one piece
+-- of work) and raises 23505, rolling back the caller's transaction. Security invoker and executable
+-- by no API role: only migrations, security definer business functions (running as their owner)
+-- and the SQL Editor call it.
+create function private.enqueue_job(
+  p_job_name text,
+  p_job_version integer,
+  p_idempotency_key text,
+  p_payload jsonb,
+  p_correlation_id uuid default null,
+  p_available_at timestamptz default null
+) returns uuid
+  language plpgsql volatile security invoker set search_path = '' as $$
+  declare
+    v_id uuid;
+    v_payload jsonb;
+  begin
+    insert into private.job_outbox (
+      job_name, job_version, idempotency_key, payload, correlation_id, available_at
+    )
+    values (
+      p_job_name, p_job_version, p_idempotency_key, p_payload,
+      coalesce(p_correlation_id, gen_random_uuid()), coalesce(p_available_at, now())
+    )
+    on conflict on constraint job_outbox_key do nothing
+    returning id into v_id;
+    if v_id is null then
+      select o.id, o.payload into v_id, v_payload
+      from private.job_outbox o
+      where o.job_name = p_job_name and o.idempotency_key = p_idempotency_key;
+      if v_payload is distinct from p_payload then
+        raise exception 'job % key reused with a different payload', p_job_name
+          using errcode = '23505';
+      end if;
+    end if;
+    return v_id;
+  end
+  $$;
+
+-- Dispatcher (service role) -------------------------------------------------------------------------
+
+-- Claims up to p_limit due rows for p_lease_seconds and returns them. Due: pending and available,
+-- or claimed by a dispatcher whose lease ran out (it crashed). SKIP LOCKED means concurrent
+-- dispatchers never get the same row. A crashed-claim row that has used every attempt is dead.
+create function public.claim_job_outbox(p_limit integer, p_lease_seconds integer)
+  returns table (
+    id uuid,
+    job_name text,
+    job_version integer,
+    idempotency_key text,
+    payload jsonb,
+    correlation_id uuid,
+    attempts integer,
+    generation integer
+  )
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_lease interval := private.check_lease_seconds(p_lease_seconds);
+  begin
+    if p_limit is null or p_limit not between 1 and 100 then
+      raise exception 'limit must be 1 to 100' using errcode = '22023';
+    end if;
+
+    -- The same attempt limit as private.fail_job_outbox, for rows whose claim expired.
+    update private.job_outbox o
+    set status = 'dead', lease_until = null, last_error_code = 'lease_expired', updated_at = now()
+    where o.status = 'dispatching' and o.lease_until <= now()
+      and o.attempts >= private.job_outbox_max_attempts();
+
+    return query
+    with due as (
+      select o.id
+      from private.job_outbox o
+      where (o.status = 'pending' and o.available_at <= now())
+         or (o.status = 'dispatching' and o.lease_until <= now())
+      order by coalesce(o.lease_until, o.available_at), o.created_at
+      limit p_limit
+      for update skip locked
+    )
+    update private.job_outbox o
+    set status = 'dispatching',
+        attempts = o.attempts + 1,
+        lease_until = now() + v_lease,
+        updated_at = now()
+    from due
+    where o.id = due.id
+    returning o.id, o.job_name, o.job_version::integer, o.idempotency_key, o.payload,
+      o.correlation_id, o.attempts::integer, o.generation::integer;
+  end
+  $$;
+
+-- Marks a claimed row dispatched with the Trigger.dev run id. False when the row is not claimed
+-- (its lease expired and another dispatcher took it, or it was already completed).
+create function public.complete_job_outbox(p_id uuid, p_run_id text) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_run_id is null or p_run_id !~ '^[A-Za-z0-9_-]{1,100}$' then
+      raise exception 'invalid run id' using errcode = '22023';
+    end if;
+    update private.job_outbox o
+    set status = 'dispatched', lease_until = null, trigger_run_id = p_run_id,
+        dispatched_at = now(), last_error_code = null, updated_at = now()
+    where o.id = p_id and o.status = 'dispatching';
+    return found;
+  end
+  $$;
+
+-- Records a failed dispatch of a claimed row. Permanent failures and the last failed attempt
+-- (private.job_outbox_max_attempts(), 8) make it dead; otherwise it is pending again after
+-- 30 s × 2^(attempts − 1), at most one hour.
+-- Returns the new status, or 'missing' when the row is not claimed.
+create function public.fail_job_outbox(p_id uuid, p_error_code text, p_permanent boolean)
+  returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_code text := private.check_job_error_code(p_error_code);
+    v_status text;
+  begin
+    if p_permanent is null then
+      raise exception 'permanent must be true or false' using errcode = '22023';
+    end if;
+    update private.job_outbox o
+    set status = case
+          when p_permanent or o.attempts >= private.job_outbox_max_attempts() then 'dead'
+          else 'pending'
+        end,
+        lease_until = null,
+        available_at = case
+          when p_permanent or o.attempts >= private.job_outbox_max_attempts() then o.available_at
+          else now() + least(
+            make_interval(secs => 30 * power(2, greatest(o.attempts - 1, 0))),
+            interval '1 hour'
+          )
+        end,
+        last_error_code = v_code,
+        updated_at = now()
+    where o.id = p_id and o.status = 'dispatching'
+    returning o.status into v_status;
+    return coalesce(v_status, 'missing');
+  end
+  $$;
+
+-- Hands back claimed rows the dispatcher did not try (it stopped after Trigger.dev failed), without
+-- counting the attempt, available again in one minute. Returns how many were released.
+create function public.release_job_outbox(p_ids uuid[]) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_count integer;
+  begin
+    if p_ids is null or cardinality(p_ids) > 100 then
+      raise exception 'at most 100 ids' using errcode = '22023';
+    end if;
+    update private.job_outbox o
+    set status = 'pending', lease_until = null, attempts = greatest(o.attempts - 1, 0),
+        available_at = now() + interval '1 minute', updated_at = now()
+    where o.id = any (p_ids) and o.status = 'dispatching';
+    get diagnostics v_count = row_count;
+    return v_count;
+  end
+  $$;
+
+-- Manual recovery (docs/background-jobs.md): puts a dead or dispatched row back to pending with
+-- fresh attempts and a new generation, and clears a failed execution so the job runs again. An
+-- execution that succeeded stays succeeded: the run would be skipped as a duplicate.
+create function public.requeue_job_outbox(p_id uuid) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_job_name text;
+    v_key text;
+  begin
+    update private.job_outbox o
+    set status = 'pending', attempts = 0, generation = o.generation + 1, lease_until = null,
+        available_at = now(), trigger_run_id = null, dispatched_at = null, last_error_code = null,
+        updated_at = now()
+    where o.id = p_id and o.status in ('dead', 'dispatched')
+    returning o.job_name, o.idempotency_key into v_job_name, v_key;
+    if not found then
+      return false;
+    end if;
+    delete from private.job_executions e
+    where e.job_name = v_job_name and e.idempotency_key = v_key
+      and e.status in ('failed_retryable', 'failed_permanent');
+    return true;
+  end
+  $$;
+
+-- Executions (service role, from inside job runs) ---------------------------------------------------
+
+-- Claims the execution of one idempotency key for a run. Returns the state and, when claimed, a
+-- token that the run must present to record the outcome:
+--   claimed    no run yet, the last run failed and may be retried, or a run's lease expired;
+--   succeeded  a run already succeeded (the caller skips: duplicate);
+--   failed     a run failed permanently (the caller skips until a requeue);
+--   running    another run holds an unexpired lease (the caller retries once it ends, at
+--              lease_until).
+create function public.begin_job_execution(
+  p_job_name text, p_idempotency_key text, p_lease_seconds integer
+) returns table (state text, claim_token uuid, attempt integer, lease_until timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_lease interval := private.check_lease_seconds(p_lease_seconds);
+    v_token uuid := gen_random_uuid();
+    v_row private.job_executions;
+  begin
+    -- Concurrent first runs: one inserts, the other waits on the key and then sees `running`.
+    insert into private.job_executions as e (
+      job_name, idempotency_key, status, attempts, claim_token, lease_until
+    )
+    values (p_job_name, p_idempotency_key, 'running', 1, v_token, now() + v_lease)
+    on conflict (job_name, idempotency_key) do nothing;
+    if found then
+      return query select 'claimed'::text, v_token, 1, now() + v_lease;
+      return;
+    end if;
+
+    select * into strict v_row
+    from private.job_executions e
+    where e.job_name = p_job_name and e.idempotency_key = p_idempotency_key
+    for update;
+
+    if v_row.status = 'succeeded' then
+      return query select 'succeeded'::text, null::uuid, v_row.attempts, null::timestamptz;
+    elsif v_row.status = 'failed_permanent' then
+      return query select 'failed'::text, null::uuid, v_row.attempts, null::timestamptz;
+    elsif v_row.status = 'running' and v_row.lease_until > now() then
+      return query select 'running'::text, null::uuid, v_row.attempts, v_row.lease_until;
+    else
+      update private.job_executions e
+      set status = 'running', attempts = e.attempts + 1, claim_token = v_token,
+          lease_until = now() + v_lease, started_at = now(), finished_at = null
+      where e.job_name = p_job_name and e.idempotency_key = p_idempotency_key;
+      return query select 'claimed'::text, v_token, v_row.attempts + 1, now() + v_lease;
+    end if;
+  end
+  $$;
+
+-- Records the outcome of a claimed execution. False when p_claim_token no longer holds it (the
+-- lease expired and another run took over), so a late run cannot overwrite a newer outcome.
+create function public.finish_job_execution(
+  p_job_name text,
+  p_idempotency_key text,
+  p_claim_token uuid,
+  p_outcome text,
+  p_error_code text default null
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_outcome is null or p_outcome not in ('succeeded', 'failed_retryable', 'failed_permanent') then
+      raise exception 'invalid outcome' using errcode = '22023';
+    end if;
+    if (p_outcome = 'succeeded') <> (p_error_code is null) then
+      raise exception 'an error code goes with a failure only' using errcode = '22023';
+    end if;
+    if p_error_code is not null then
+      perform private.check_job_error_code(p_error_code);
+    end if;
+    update private.job_executions e
+    set status = p_outcome, claim_token = null, lease_until = null,
+        last_error_code = p_error_code, finished_at = now()
+    where e.job_name = p_job_name and e.idempotency_key = p_idempotency_key
+      and e.status = 'running' and e.claim_token = p_claim_token;
+    return found;
+  end
+  $$;
+
+-- Health (service role): counts only, for the dispatcher's log line and the runbook. Each count
+-- reads a partial index or a bounded window, never the whole history.
+--   pending, dispatching, dead       outbox rows in that state;
+--   oldest_pending_seconds           how long the oldest due row has waited (0 when none is due);
+--   failed_executions                runs that failed and were not requeued;
+--   stalled_executions               runs still `running` 5 minutes after their lease ended: killed
+--                                    at their maximum duration or crashed on the last attempt;
+--   unexecuted_dispatches            rows dispatched between 7 days and 1 hour ago whose run never
+--                                    claimed its execution (cancelled, expired, or lost).
+create function public.job_outbox_stats()
+  returns table (
+    pending bigint,
+    dispatching bigint,
+    dead bigint,
+    oldest_pending_seconds integer,
+    failed_executions bigint,
+    stalled_executions bigint,
+    unexecuted_dispatches bigint
+  )
+  language sql stable security definer set search_path = '' as $$
+    select
+      (select count(*) from private.job_outbox o where o.status = 'pending'),
+      (select count(*) from private.job_outbox o where o.status = 'dispatching'),
+      (select count(*) from private.job_outbox o where o.status = 'dead'),
+      coalesce((
+        select extract(epoch from now() - min(o.available_at))::integer
+        from private.job_outbox o
+        where o.status = 'pending' and o.available_at <= now()
+      ), 0),
+      (select count(*) from private.job_executions e
+        where e.status in ('failed_retryable', 'failed_permanent')),
+      (select count(*) from private.job_executions e
+        where e.status = 'running' and e.lease_until < now() - interval '5 minutes'),
+      (select count(*) from private.job_outbox o
+        where o.status = 'dispatched'
+          and o.dispatched_at between now() - interval '7 days' and now() - interval '1 hour'
+          and not exists (
+            select 1 from private.job_executions e
+            where e.job_name = o.job_name and e.idempotency_key = o.idempotency_key
+          ))
+  $$;
+
+-- Grants ----------------------------------------------------------------------------------------------
+
+-- Supabase's default privileges grant every new function in schema public to anon and authenticated;
+-- these are for the service role only.
+revoke execute on function
+  public.claim_job_outbox(integer, integer),
+  public.complete_job_outbox(uuid, text),
+  public.fail_job_outbox(uuid, text, boolean),
+  public.release_job_outbox(uuid[]),
+  public.requeue_job_outbox(uuid),
+  public.begin_job_execution(text, text, integer),
+  public.finish_job_execution(text, text, uuid, text, text),
+  public.job_outbox_stats()
+from public, anon, authenticated;
+
+grant execute on function
+  public.claim_job_outbox(integer, integer),
+  public.complete_job_outbox(uuid, text),
+  public.fail_job_outbox(uuid, text, boolean),
+  public.release_job_outbox(uuid[]),
+  public.requeue_job_outbox(uuid),
+  public.begin_job_execution(text, text, integer),
+  public.finish_job_execution(text, text, uuid, text, text),
+  public.job_outbox_stats()
+to service_role;
+
+-- ============================================================================
+-- supabase/migrations/20261022090000_notifications.sql
+-- ============================================================================
+-- S14: notifications core (brief S14; spec "Confirmed global adult notification defaults with
+-- per-Home overrides", "Confirmed verified Home ownership recovery"; architecture.md §39, §11).
+--
+-- * public.notifications: the in-app store, one row per account and event. A person reads their own
+--   rows (RLS, and only while they still belong to the notification's Home); nobody writes them
+--   through the API. In-app delivery is a row written in the business transaction, so it never
+--   depends on email.
+-- * public.notification_preferences / public.notification_quiet_hours: global defaults (home_id
+--   null) and per-Home overrides. A missing Home row means "inherited"; reset deletes it.
+-- * private.notify_user(): the one delivery function. It re-checks the recipient and membership,
+--   resolves the effective choice now, stores the notification (deduplicated) and, in the same
+--   transaction, enqueues the email job in the S13 outbox. Essential security notices cannot be
+--   switched off or deferred.
+-- * Triggers on ownership-recovery cases and join requests call it; a trigger and
+--   private.prepare_invitation_email enqueue invitation emails.
+-- * service_role-only functions give the Trigger.dev jobs exactly what they need (an address, a
+--   template's inputs) and record outcomes. The jobs hold the service key, so they never touch a
+--   table directly (ADR 0017).
+--
+-- Quiet hours defer optional email to the end of the window. Nothing else is silenced: there is no
+-- push channel yet, and in-app notifications always appear (marked as arrived during quiet hours).
+
+-- Categories ------------------------------------------------------------------------------------------
+
+-- Whether a category is essential (true), optional (false), or unknown (null). Essential messages
+-- (account recovery and ownership recovery, spec) ignore muting, opt-outs and quiet hours.
+create function private.notification_category_essential(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_category when 'security' then true when 'invitations' then false end;
+  $$;
+
+-- The store -----------------------------------------------------------------------------------------
+
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  -- The source Home; null for notices about the account or about a Home the person is not (yet) in.
+  home_id uuid references public.homes (id) on delete cascade,
+  category text not null constraint notifications_category_check
+    check (category in ('security', 'invitations')),
+  -- What happened, as a code the app turns into words in the reader's language.
+  kind text not null constraint notifications_kind_check
+    check (kind ~ '^[a-z][a-z_]*(\.[a-z][a-z_]*)+$' and char_length(kind) <= 64),
+  -- Ids, dates and codes only: never names, free text or evidence.
+  params jsonb not null default '{}' constraint notifications_params_check
+    check (jsonb_typeof(params) = 'object' and pg_column_size(params) <= 2048),
+  -- Names the event; one notification per account and key, however often delivery is attempted.
+  dedupe_key text not null constraint notifications_dedupe_key_check
+    check (dedupe_key ~ '^[A-Za-z0-9:_.-]{1,200}$'),
+  -- False when the person turned the in-app channel off for this category: the row then only
+  -- carries the email's state.
+  show_in_app boolean not null,
+  during_quiet_hours boolean not null default false,
+  email_status text not null default 'none' constraint notifications_email_status_check
+    check (email_status in ('none', 'queued', 'sent', 'failed', 'skipped', 'not_configured')),
+  email_error_code text constraint notifications_email_error_code_check
+    check (email_error_code ~ '^[a-z0-9_.-]{1,64}$'),
+  -- A random UUID v4 (S13): the same id appears in the job's logs.
+  correlation_id uuid not null,
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  constraint notifications_dedupe unique (user_id, dedupe_key)
+);
+
+comment on table public.notifications is
+  'In-app notifications, one row per account and event (S14). Written only by private.notify_user.';
+
+create index notifications_inbox_idx on public.notifications (user_id, created_at desc)
+  where show_in_app;
+create index notifications_unread_idx on public.notifications (user_id) where show_in_app and read_at is null;
+create index notifications_home_idx on public.notifications (home_id) where home_id is not null;
+
+alter table public.notifications enable row level security;
+revoke all on table public.notifications from anon, authenticated;
+-- No email state, error code or correlation id for the API: the person sees the notice itself.
+grant select (id, home_id, category, kind, params, during_quiet_hours, created_at, read_at)
+  on table public.notifications to authenticated;
+
+-- Own rows, and Home notices only while still a member (spec: revoked membership).
+create policy notifications_select_own on public.notifications
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and show_in_app
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = notifications.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+-- Preferences ---------------------------------------------------------------------------------------
+
+create table public.notification_preferences (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  -- Null: the account-wide default. Set: an override for this Home only.
+  home_id uuid references public.homes (id) on delete cascade,
+  -- Optional categories only; essential ones cannot be configured.
+  category text not null constraint notification_preferences_category_check
+    check (category in ('invitations')),
+  channel text not null constraint notification_preferences_channel_check
+    check (channel in ('in_app', 'email')),
+  enabled boolean not null,
+  updated_at timestamptz not null default now()
+);
+
+create unique index notification_preferences_global_key
+  on public.notification_preferences (user_id, category, channel) where home_id is null;
+create unique index notification_preferences_home_key
+  on public.notification_preferences (user_id, home_id, category, channel) where home_id is not null;
+
+alter table public.notification_preferences enable row level security;
+revoke all on table public.notification_preferences from anon, authenticated;
+grant select on table public.notification_preferences to authenticated;
+create policy notification_preferences_select_own on public.notification_preferences
+  for select to authenticated using (user_id = (select auth.uid()));
+
+create table public.notification_quiet_hours (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  home_id uuid references public.homes (id) on delete cascade,
+  -- A Home row with enabled = false turns quiet hours off for that Home although the account has some.
+  enabled boolean not null,
+  start_time time not null,
+  end_time time not null,
+  -- Wall-clock times in this IANA zone, so the database never has to guess a device zone.
+  time_zone text not null constraint notification_quiet_hours_zone_check
+    check (char_length(time_zone) <= 64
+      and time_zone ~ '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'),
+  updated_at timestamptz not null default now(),
+  constraint notification_quiet_hours_window_check check (start_time <> end_time)
+);
+
+create unique index notification_quiet_hours_global_key
+  on public.notification_quiet_hours (user_id) where home_id is null;
+create unique index notification_quiet_hours_home_key
+  on public.notification_quiet_hours (user_id, home_id) where home_id is not null;
+
+alter table public.notification_quiet_hours enable row level security;
+revoke all on table public.notification_quiet_hours from anon, authenticated;
+grant select on table public.notification_quiet_hours to authenticated;
+create policy notification_quiet_hours_select_own on public.notification_quiet_hours
+  for select to authenticated using (user_id = (select auth.uid()));
+
+-- Leaving or being removed from a Home ends the person's overrides there, so a later rejoin
+-- starts from the account defaults (spec: no stale Home settings).
+create function private.drop_home_notification_settings() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from public.notification_preferences p
+      where p.user_id = old.user_id and p.home_id = old.home_id;
+    delete from public.notification_quiet_hours q
+      where q.user_id = old.user_id and q.home_id = old.home_id;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_drop_notification_settings
+  after delete on public.home_memberships
+  for each row execute function private.drop_home_notification_settings();
+
+-- Resolution (the single source of truth for what is effective) -----------------------------------
+
+-- The effective choice for one category and channel in one Home (null: no Home context, so only
+-- the account defaults apply): essential first, then the Home override, then the account default,
+-- then the built-in default (in-app on, email off: email is opt-in).
+create function private.effective_notification_channel(
+  p_user_id uuid, p_home_id uuid, p_category text, p_channel text
+) returns boolean
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_value boolean;
+  begin
+    if private.notification_category_essential(p_category) then
+      return true;
+    end if;
+    if p_home_id is not null then
+      select p.enabled into v_value from public.notification_preferences p
+        where p.user_id = p_user_id and p.home_id = p_home_id
+          and p.category = p_category and p.channel = p_channel;
+      if found then
+        return v_value;
+      end if;
+    end if;
+    select p.enabled into v_value from public.notification_preferences p
+      where p.user_id = p_user_id and p.home_id is null
+        and p.category = p_category and p.channel = p_channel;
+    if found then
+      return v_value;
+    end if;
+    return p_channel = 'in_app';
+  end
+  $$;
+
+-- Whether p_at falls in the person's quiet hours for this Home, and when that window ends. The
+-- Home's own row wins (also when it turns quiet hours off); otherwise the account row.
+create function private.notification_quiet_state(p_user_id uuid, p_home_id uuid, p_at timestamptz)
+returns table (quiet boolean, ends_at timestamptz)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_row public.notification_quiet_hours;
+    v_local timestamp;
+    v_time time;
+    v_end_local timestamp;
+  begin
+    if p_home_id is not null then
+      select * into v_row from public.notification_quiet_hours q
+        where q.user_id = p_user_id and q.home_id = p_home_id;
+    end if;
+    if v_row.id is null then
+      select * into v_row from public.notification_quiet_hours q
+        where q.user_id = p_user_id and q.home_id is null;
+    end if;
+    if v_row.id is null or not v_row.enabled then
+      return query select false, null::timestamptz;
+      return;
+    end if;
+    v_local := p_at at time zone v_row.time_zone;
+    v_time := v_local::time;
+    if v_row.start_time < v_row.end_time then
+      if v_time >= v_row.start_time and v_time < v_row.end_time then
+        v_end_local := v_local::date + v_row.end_time;
+      end if;
+    elsif v_time >= v_row.start_time then
+      v_end_local := (v_local::date + 1) + v_row.end_time;
+    elsif v_time < v_row.end_time then
+      v_end_local := v_local::date + v_row.end_time;
+    end if;
+    if v_end_local is null then
+      return query select false, null::timestamptz;
+    else
+      return query select true, v_end_local at time zone v_row.time_zone;
+    end if;
+  end
+  $$;
+
+-- Whether an account can receive anything now. Account deactivation (not built yet) will extend
+-- this one function.
+create function private.can_receive_notifications(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from auth.users u
+    where u.id = p_user_id and u.email_confirmed_at is not null and u.deleted_at is null
+  );
+  $$;
+
+-- The correlation id of the request that is running, when the app forwarded one as the
+-- x-correlation-id header (PostgREST exposes request headers); a fresh one otherwise. Only a
+-- random UUID v4 is accepted, as the job tables require.
+create function private.request_correlation_id() returns uuid
+  language plpgsql volatile set search_path = '' as $$
+  declare
+    v_value text;
+  begin
+    begin
+      v_value := (current_setting('request.headers', true)::jsonb) ->> 'x-correlation-id';
+    exception when others then
+      v_value := null;
+    end;
+    if v_value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+      return v_value::uuid;
+    end if;
+    return gen_random_uuid();
+  end
+  $$;
+
+-- Delivery ----------------------------------------------------------------------------------------
+
+-- Delivers one notification to one account, inside the caller's transaction. Returns the new
+-- notification's id, or null when nothing was delivered (the account cannot receive, it is not in
+-- the Home, nothing is enabled, or this event was already delivered). Rules, evaluated now:
+--   * a Home notice goes only to a current member of that Home;
+--   * in-app and email follow the effective choice for the category and Home; essential
+--     categories ignore it;
+--   * email also needs p_email (the event may email at all) and a confirmed address;
+--   * optional email is deferred to the end of quiet hours; essential email never is;
+--   * the email job is enqueued in this transaction, with the notification id as its only payload.
+create function private.notify_user(
+  p_user_id uuid,
+  p_home_id uuid,
+  p_category text,
+  p_kind text,
+  p_params jsonb,
+  p_dedupe_key text,
+  p_email boolean default false
+) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_essential boolean := private.notification_category_essential(p_category);
+    v_in_app boolean;
+    v_email boolean;
+    v_address text;
+    v_quiet record;
+    v_correlation uuid := private.request_correlation_id();
+    v_id uuid;
+    v_status text := 'none';
+  begin
+    -- A programming error (an unknown category) is loud; everything below must never be able to
+    -- undo the business change this runs inside, so it is isolated in a sub-transaction.
+    if v_essential is null then
+      raise exception 'unknown notification category' using errcode = '22023';
+    end if;
+    begin
+      if p_user_id is null or not private.can_receive_notifications(p_user_id) then
+        return null;
+      end if;
+      if p_home_id is not null and private.home_role(p_home_id, p_user_id) is null then
+        return null;
+      end if;
+
+      v_in_app := private.effective_notification_channel(p_user_id, p_home_id, p_category, 'in_app');
+      v_email := p_email
+        and private.effective_notification_channel(p_user_id, p_home_id, p_category, 'email');
+      v_address := private.confirmed_email(p_user_id);
+      if v_email and v_address is null then
+        v_email := false;
+        v_status := 'skipped';
+      end if;
+      if not v_in_app and not v_email then
+        return null;
+      end if;
+      if v_email then
+        v_status := 'queued';
+      end if;
+
+      select * into v_quiet from private.notification_quiet_state(p_user_id, p_home_id, now());
+
+      insert into public.notifications (
+        user_id, home_id, category, kind, params, dedupe_key, show_in_app, during_quiet_hours,
+        email_status, correlation_id
+      ) values (
+        p_user_id, p_home_id, p_category, p_kind, coalesce(p_params, '{}'::jsonb), p_dedupe_key,
+        v_in_app, v_quiet.quiet, v_status, v_correlation
+      )
+      on conflict on constraint notifications_dedupe do nothing
+      returning id into v_id;
+      if v_id is null then
+        return null;
+      end if;
+
+      if v_email then
+        -- In its own sub-transaction: if the outbox cannot take the job, the in-app notice stays
+        -- and only the email is marked failed (in-app delivery never depends on email).
+        begin
+          perform private.enqueue_job(
+            'notification-email', 1, 'notification-email:' || v_id::text,
+            pg_catalog.jsonb_build_object('notificationId', v_id),
+            v_correlation,
+            case when not v_essential and v_quiet.quiet then v_quiet.ends_at else now() end
+          );
+        exception when others then
+          update public.notifications n
+            set email_status = 'failed', email_error_code = 'enqueue_failed'
+            where n.id = v_id;
+          raise warning 'notify_user: email job not queued (sqlstate %)', sqlstate;
+        end;
+      end if;
+      return v_id;
+    exception when others then
+      -- Nothing here may block a security-critical change; the sqlstate is all that is logged.
+      raise warning 'notify_user: not delivered (sqlstate %)', sqlstate;
+      return null;
+    end;
+  end
+  $$;
+
+-- Tells the person who asked how their case ended. If they are no longer a member of the Home (the
+-- reason it ended may be that they left or were removed), a Home notice would be invisible to them,
+-- so the notice goes without the Home.
+create function private.notify_claimant_ended(
+  p_case private.home_ownership_recoveries, p_kind text, p_key text
+) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    perform private.notify_user(
+      p_case.claimant_id,
+      case when private.home_role(p_case.home_id, p_case.claimant_id) is null then null
+           else p_case.home_id end,
+      'security', p_kind, pg_catalog.jsonb_build_object('recoveryId', p_case.id), p_key, true);
+  end
+  $$;
+
+-- Ownership recovery events (S12b carry-over) ------------------------------------------------------
+
+-- One trigger turns every state change of a recovery case into notifications, in the same
+-- transaction as the change, so no path (staff, Owner, claimant, objection, membership change,
+-- timeout settling) can change a case unnoticed. What each person learns:
+--   the person who asked: where their request stands (in-app and email);
+--   the Owner: that a request exists (in-app), and review start and approval (in-app and email);
+--   other members: that a review is open, that the objection period began, and that it ended
+--     (in-app only); never who asked, nor evidence, objections or staff notes.
+-- Keys that can repeat (pause, resume) carry a microsecond timestamp, so each event is its own
+-- notification; keys of one-time events do not.
+create function private.notify_recovery_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_params jsonb := pg_catalog.jsonb_build_object('recoveryId', new.id);
+    v_ends jsonb;
+    v_ends_epoch text;
+    v_stamp text := pg_catalog.floor(
+      pg_catalog.date_part('epoch', pg_catalog.clock_timestamp()) * 1000000)::bigint::text;
+    v_prefix text := 'recovery:' || new.id::text || ':';
+    v_member uuid;
+    v_everyone boolean := false;
+  begin
+    if tg_op = 'INSERT' then
+      perform private.notify_user(new.owner_id, new.home_id, 'security', 'recovery.owner_requested',
+        v_params, v_prefix || 'requested:owner');
+      for v_member in
+        select m.user_id from public.home_memberships m
+        where m.home_id = new.home_id and m.user_id not in (new.claimant_id, new.owner_id)
+      loop
+        perform private.notify_user(v_member, new.home_id, 'security', 'recovery.member_requested',
+          v_params, v_prefix || 'requested:' || v_member::text);
+      end loop;
+      return null;
+    end if;
+
+    if new.status is not distinct from old.status
+       and new.objection_ends_at is not distinct from old.objection_ends_at then
+      return null;
+    end if;
+
+    if new.status = 'in_review' and old.status = 'submitted' then
+      perform private.notify_user(new.owner_id, new.home_id, 'security', 'recovery.owner_review_started',
+        v_params, v_prefix || 'review:owner', true);
+      perform private.notify_user(new.claimant_id, new.home_id, 'security',
+        'recovery.claimant_review_started', v_params, v_prefix || 'review:claimant', true);
+
+    elsif new.status = 'in_review' and old.status = 'paused' then
+      perform private.notify_user(new.claimant_id, new.home_id, 'security',
+        'recovery.claimant_resumed', v_params, v_prefix || 'resumed:' || v_stamp, true);
+
+    elsif new.status = 'submitted' and old.status = 'paused' then
+      perform private.notify_user(new.claimant_id, new.home_id, 'security',
+        'recovery.claimant_resumed', v_params, v_prefix || 'resumed:' || v_stamp, true);
+
+    elsif new.status = 'approved' and new.objection_ends_at is not null then
+      v_ends_epoch := pg_catalog.floor(pg_catalog.date_part('epoch', new.objection_ends_at))::bigint::text;
+      v_params := v_params || pg_catalog.jsonb_build_object(
+        'objectionEndsAt', pg_catalog.to_char(new.objection_ends_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
+      perform private.notify_user(new.owner_id, new.home_id, 'security', 'recovery.owner_approved',
+        v_params, v_prefix || 'approved:owner:' || v_ends_epoch, true);
+      perform private.notify_user(new.claimant_id, new.home_id, 'security',
+        'recovery.claimant_approved', v_params, v_prefix || 'approved:claimant:' || v_ends_epoch, true);
+      for v_member in
+        select m.user_id from public.home_memberships m
+        where m.home_id = new.home_id and m.user_id not in (new.claimant_id, new.owner_id)
+      loop
+        perform private.notify_user(v_member, new.home_id, 'security',
+          'recovery.member_objection_open', v_params,
+          v_prefix || 'objection:' || v_member::text || ':' || v_ends_epoch);
+      end loop;
+      -- The person who asked hears when the period is over and they can accept: a job that runs
+      -- then and re-checks the case (public.deliver_recovery_ready).
+      begin
+        perform private.enqueue_job(
+          'recovery-ready', 1, 'recovery-ready:' || new.id::text || ':' || v_ends_epoch,
+          pg_catalog.jsonb_build_object(
+            'recoveryId', new.id,
+            'objectionEndsAt', pg_catalog.to_char(new.objection_ends_at at time zone 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+          private.request_correlation_id(), new.objection_ends_at);
+      exception when others then
+        raise warning 'recovery-ready job not queued (sqlstate %)', sqlstate;
+      end;
+
+    elsif new.status = 'paused' and old.status <> 'paused' then
+      perform private.notify_user(new.claimant_id, new.home_id, 'security',
+        'recovery.claimant_paused', v_params, v_prefix || 'paused:' || v_stamp, true);
+
+    elsif new.status = 'rejected' and old.status <> 'rejected' then
+      perform private.notify_claimant_ended(new, 'recovery.claimant_rejected', v_prefix || 'rejected');
+      v_everyone := true;
+
+    elsif new.status in ('cancelled', 'owner_returned') and old.status <> new.status then
+      perform private.notify_claimant_ended(new, 'recovery.claimant_ended_owner_access',
+        v_prefix || 'ended:claimant');
+      v_everyone := true;
+
+    elsif new.status = 'invalid' and old.status <> 'invalid' then
+      perform private.notify_claimant_ended(new, 'recovery.claimant_invalid', v_prefix || 'invalid');
+      v_everyone := true;
+
+    elsif new.status = 'withdrawn' and old.status <> 'withdrawn' then
+      v_everyone := true;
+
+    elsif new.status = 'completed' and old.status <> 'completed' then
+      perform private.notify_user(new.claimant_id, new.home_id, 'security',
+        'recovery.claimant_completed', v_params, v_prefix || 'completed:claimant', true);
+      -- A former Owner who is removed from the Home gets a notice without the Home (they will
+      -- not belong to it when they read it); one who stays gets the Home's.
+      if new.former_owner_outcome = 'removed' then
+        perform private.notify_user(new.owner_id, null, 'security',
+          'recovery.former_owner_completed_removed', v_params, v_prefix || 'completed:owner', true);
+      else
+        perform private.notify_user(new.owner_id, new.home_id, 'security',
+          'recovery.former_owner_completed', v_params, v_prefix || 'completed:owner', true);
+      end if;
+      for v_member in
+        select m.user_id from public.home_memberships m
+        where m.home_id = new.home_id and m.user_id not in (new.claimant_id, new.owner_id)
+      loop
+        perform private.notify_user(v_member, new.home_id, 'security', 'recovery.member_completed',
+          v_params, v_prefix || 'completed:' || v_member::text);
+      end loop;
+    end if;
+
+    -- Everyone who was told a review was open hears that it ended (not who asked or why).
+    if v_everyone then
+      for v_member in
+        select m.user_id from public.home_memberships m
+        where m.home_id = new.home_id and m.user_id not in (new.claimant_id)
+      loop
+        perform private.notify_user(v_member, new.home_id, 'security', 'recovery.member_ended',
+          v_params, v_prefix || 'ended:' || v_member::text);
+      end loop;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_ownership_recoveries_notify
+  after insert or update of status, objection_ends_at on private.home_ownership_recoveries
+  for each row execute function private.notify_recovery_change();
+
+-- When the objection period is over, tells the person who asked that they can accept. Called by
+-- the recovery-ready job at objection_ends_at, with the end it was queued for: a case that was
+-- paused, resumed with a new period, rejected, ended or whose Owner returned in the meantime no
+-- longer matches, and nothing is sent. Outcomes: 'notified', 'not_ready' (also when it already was).
+create function public.deliver_recovery_ready(p_recovery_id uuid, p_objection_ends_at timestamptz)
+returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_case private.home_ownership_recoveries;
+  begin
+    select * into v_case from private.home_ownership_recoveries r where r.id = p_recovery_id;
+    if not found
+       or v_case.status <> 'approved'
+       or pg_catalog.date_trunc('second', v_case.objection_ends_at)
+         is distinct from pg_catalog.date_trunc('second', p_objection_ends_at)
+       or private.recovery_state(v_case) <> 'ready' then
+      return 'not_ready';
+    end if;
+    if private.notify_user(
+      v_case.claimant_id, v_case.home_id, 'security', 'recovery.claimant_ready',
+      pg_catalog.jsonb_build_object('recoveryId', v_case.id),
+      'recovery:' || v_case.id::text || ':ready:' ||
+        pg_catalog.floor(pg_catalog.date_part('epoch', p_objection_ends_at))::bigint::text,
+      true
+    ) is null then
+      return 'not_ready';
+    end if;
+    return 'notified';
+  end
+  $$;
+
+-- Join request events (optional category "invitations") ---------------------------------------------
+
+-- Managers who can decide a new request are told (in-app by default); the applicant is told the
+-- decision. The applicant's notice has no Home: they are not a member when it is declined.
+create function private.notify_join_request_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_member uuid;
+    v_params jsonb := pg_catalog.jsonb_build_object('requestId', new.id);
+  begin
+    if tg_op = 'INSERT' then
+      if new.status = 'pending' then
+        for v_member in
+          select m.user_id from public.home_memberships m
+          where m.home_id = new.home_id and m.user_id <> new.applicant_id
+            and private.can_manage_invitations(new.home_id, m.user_id, new.role)
+        loop
+          perform private.notify_user(v_member, new.home_id, 'invitations', 'join_request.received',
+            v_params, 'join-request:' || new.id::text || ':received:' || v_member::text, true);
+        end loop;
+      end if;
+    elsif old.status = 'pending' and new.status in ('approved', 'declined') then
+      perform private.notify_user(new.applicant_id, null, 'invitations', 'join_request.decided',
+        v_params || pg_catalog.jsonb_build_object('decision', new.status),
+        'join-request:' || new.id::text || ':decided', true);
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_join_requests_notify
+  after insert or update of status on private.home_join_requests
+  for each row execute function private.notify_join_request_change();
+
+-- Invitation emails through the outbox (S10 carry-over) -----------------------------------------------
+
+-- Counts the sends of an email invitation: the first send, then every resend and renewal. The job's
+-- idempotency key is (invitation, send number), so a retried job never sends a send twice and a
+-- superseded send (a newer one exists) is skipped.
+alter table private.home_invitations
+  add column email_sends integer not null default 0
+  constraint home_invitations_email_sends_check check (email_sends >= 0);
+
+-- The first email, enqueued in the transaction that creates the invitation: the send number is set
+-- before the row is written, the job is queued once the row exists.
+create function private.number_first_invitation_email() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if new.kind = 'email' then
+      new.email_sends := 1;
+    end if;
+    return new;
+  end
+  $$;
+
+create function private.enqueue_first_invitation_email() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if new.kind = 'email' then
+      perform private.enqueue_job(
+        'invitation-email', 1, 'invitation-email:' || new.id::text || ':1',
+        pg_catalog.jsonb_build_object('invitationId', new.id, 'send', 1),
+        private.request_correlation_id());
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger home_invitations_number_first_email
+  before insert on private.home_invitations
+  for each row execute function private.number_first_invitation_email();
+create trigger home_invitations_enqueue_first_email
+  after insert on private.home_invitations
+  for each row execute function private.enqueue_first_invitation_email();
+
+-- Resend and renew: as before (S10), and the email is queued in the same transaction instead of
+-- being sent by the web request. Same return values as S10.
+create function private.prepare_invitation_email_v2(
+  p_home_id uuid, p_invitation_id uuid, p_renew boolean
+) returns table (outcome text, expires_at timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_found record;
+    v_inv private.home_invitations;
+    v_send integer;
+  begin
+    select * into v_found from private.invitation_for_manager(p_home_id, p_invitation_id, v_user_id);
+    if v_found.o_outcome <> 'ok' then
+      return query select v_found.o_outcome, null::timestamptz;
+      return;
+    end if;
+    v_inv := v_found.o_invitation;
+    if v_inv.kind <> 'email' then
+      return query select 'not_email'::text, null::timestamptz;
+      return;
+    end if;
+    if private.invitation_state(v_inv) <> 'active' then
+      return query select 'not_active'::text, null::timestamptz;
+      return;
+    end if;
+    -- The recipient already used it: a manager decides their request instead.
+    if exists (
+      select 1 from private.home_join_requests r
+      where r.invitation_id = v_inv.id and r.status = 'pending'
+    ) then
+      return query select 'has_request'::text, null::timestamptz;
+      return;
+    end if;
+    if not private.count_invitation_send(v_inv.id, v_user_id) then
+      return query select 'rate_limited'::text, null::timestamptz;
+      return;
+    end if;
+
+    if p_renew then
+      update private.home_invitations i
+        set token = private.new_invitation_token('email'),
+            expires_at = pg_catalog.now() + interval '7 days'
+        where i.id = v_inv.id;
+      perform private.audit('invitation.renewed', p_home_id, 'invitation', v_inv.id);
+    else
+      perform private.audit('invitation.resent', p_home_id, 'invitation', v_inv.id);
+    end if;
+
+    update private.home_invitations i set email_sends = i.email_sends + 1
+      where i.id = v_inv.id returning i.email_sends into v_send;
+    perform private.enqueue_job(
+      'invitation-email', 1, 'invitation-email:' || v_inv.id::text || ':' || v_send::text,
+      pg_catalog.jsonb_build_object('invitationId', v_inv.id, 'send', v_send),
+      private.request_correlation_id());
+
+    return query select 'ok'::text, i.expires_at from private.home_invitations i where i.id = v_inv.id;
+  end
+  $$;
+
+drop function public.resend_home_invitation(uuid, uuid);
+drop function public.renew_home_invitation(uuid, uuid);
+drop function private.prepare_invitation_email(uuid, uuid, boolean);
+alter function private.prepare_invitation_email_v2(uuid, uuid, boolean)
+  rename to prepare_invitation_email;
+
+create function public.resend_home_invitation(p_home_id uuid, p_invitation_id uuid)
+returns table (outcome text, expires_at timestamptz)
+  language sql security definer set search_path = '' as $$
+  select * from private.prepare_invitation_email(p_home_id, p_invitation_id, false);
+  $$;
+
+create function public.renew_home_invitation(p_home_id uuid, p_invitation_id uuid)
+returns table (outcome text, expires_at timestamptz)
+  language sql security definer set search_path = '' as $$
+  select * from private.prepare_invitation_email(p_home_id, p_invitation_id, true);
+  $$;
+
+-- Only the email job records delivery now; a manager cannot write the status through the API.
+drop function public.record_home_invitation_delivery(uuid, uuid, text);
+
+-- Job access (service role only) -------------------------------------------------------------------------
+
+-- What the invitation-email job needs to send send number p_send. Outcomes: 'ok' (the row has the
+-- data), 'superseded' (a newer send exists), 'not_active' (revoked, used, expired, or its inviter
+-- lost the authority), 'not_found'. The link is read here, at send time, so a payload never holds it.
+create function public.get_invitation_email(p_invitation_id uuid, p_send integer)
+returns table (
+  outcome text, recipient_email text, email_locale text, role text, token text,
+  expires_at timestamptz, home_name text, home_time_zone text
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_inv private.home_invitations;
+  begin
+    select * into v_inv from private.home_invitations i
+      where i.id = p_invitation_id and i.kind = 'email';
+    if not found then
+      return query select 'not_found'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text, null::text;
+      return;
+    end if;
+    if p_send is null or p_send < v_inv.email_sends then
+      return query select 'superseded'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text, null::text;
+      return;
+    end if;
+    if private.invitation_state(v_inv) <> 'active' then
+      return query select 'not_active'::text, null::text, null::text, null::text, null::text,
+        null::timestamptz, null::text, null::text;
+      return;
+    end if;
+    return query
+      select 'ok'::text, v_inv.recipient_email, v_inv.email_locale, v_inv.role, v_inv.token,
+        v_inv.expires_at, h.name, h.timezone
+      from public.homes h where h.id = v_inv.home_id;
+  end
+  $$;
+
+-- Records what happened to send number p_send; a stale send cannot overwrite a newer one's status.
+create function public.record_invitation_email(p_invitation_id uuid, p_send integer, p_status text)
+returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_status is null or p_status not in ('sent', 'failed', 'not_configured') then
+      raise exception 'invalid delivery status' using errcode = '22023';
+    end if;
+    update private.home_invitations i set delivery_status = p_status
+      where i.id = p_invitation_id and i.kind = 'email' and i.email_sends = p_send;
+    return found;
+  end
+  $$;
+
+-- What the notification-email job needs, re-checked now (the choice, the membership and the
+-- address may have changed since the notification was made). Outcomes: 'ok', 'not_found',
+-- 'already_done' (not queued any more), 'not_member', 'disabled', 'no_address', 'cannot_receive'.
+create function public.get_notification_email(p_notification_id uuid)
+returns table (
+  outcome text, recipient_email text, locale text, kind text, category text, home_id uuid,
+  home_name text, home_time_zone text, params jsonb
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_n public.notifications;
+    v_address text;
+    v_home public.homes;
+    v_locale text;
+  begin
+    select * into v_n from public.notifications n where n.id = p_notification_id;
+    if not found then
+      return query select 'not_found'::text, null::text, null::text, null::text, null::text,
+        null::uuid, null::text, null::text, null::jsonb;
+      return;
+    end if;
+    if v_n.email_status not in ('queued', 'failed') then
+      return query select 'already_done'::text, null::text, null::text, null::text, null::text,
+        null::uuid, null::text, null::text, null::jsonb;
+      return;
+    end if;
+    if not private.can_receive_notifications(v_n.user_id) then
+      return query select 'cannot_receive'::text, null::text, null::text, null::text, null::text,
+        null::uuid, null::text, null::text, null::jsonb;
+      return;
+    end if;
+    if v_n.home_id is not null then
+      select * into v_home from public.homes h where h.id = v_n.home_id;
+      if private.home_role(v_n.home_id, v_n.user_id) is null then
+        return query select 'not_member'::text, null::text, null::text, null::text, null::text,
+          null::uuid, null::text, null::text, null::jsonb;
+        return;
+      end if;
+    end if;
+    if not private.effective_notification_channel(v_n.user_id, v_n.home_id, v_n.category, 'email') then
+      return query select 'disabled'::text, null::text, null::text, null::text, null::text,
+        null::uuid, null::text, null::text, null::jsonb;
+      return;
+    end if;
+    v_address := private.confirmed_email(v_n.user_id);
+    if v_address is null then
+      return query select 'no_address'::text, null::text, null::text, null::text, null::text,
+        null::uuid, null::text, null::text, null::jsonb;
+      return;
+    end if;
+    select p.locale into v_locale from public.user_preferences p where p.user_id = v_n.user_id;
+    return query
+      select 'ok'::text, v_address, coalesce(v_locale, 'en'), v_n.kind, v_n.category, v_n.home_id,
+        v_home.name, v_home.timezone, v_n.params;
+  end
+  $$;
+
+-- Records the email's outcome. Only a queued or failed email changes (a sent one stays sent).
+create function public.record_notification_email(
+  p_notification_id uuid, p_status text, p_error_code text default null
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_status is null or p_status not in ('sent', 'failed', 'skipped', 'not_configured') then
+      raise exception 'invalid email status' using errcode = '22023';
+    end if;
+    if p_error_code is not null then
+      perform private.check_job_error_code(p_error_code);
+    end if;
+    update public.notifications n set email_status = p_status, email_error_code = p_error_code
+      where n.id = p_notification_id and n.email_status in ('queued', 'failed');
+    return found;
+  end
+  $$;
+
+-- Whether the caller belongs to the Home, holding a share lock on the membership row until the end
+-- of the transaction, so a concurrent removal waits for the write that follows and its cleanup
+-- trigger then deletes it (no override survives the membership).
+create function private.lock_membership(p_home_id uuid, p_user_id uuid) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    perform 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = p_user_id for share;
+    return found;
+  end
+  $$;
+
+-- Reading and changing your own settings ----------------------------------------------------------------
+
+-- Your settings as they take effect: the account defaults (home_id null) and every Home you belong
+-- to, for each optional category and channel, with whether you set it explicitly (overridden) or it
+-- is inherited (a Home) or the built-in default (the account row).
+create function public.get_notification_settings()
+returns table (home_id uuid, category text, channel text, enabled boolean, overridden boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select s.home_id, c.category, ch.channel,
+        private.effective_notification_channel(v_user_id, s.home_id, c.category, ch.channel),
+        exists (
+          select 1 from public.notification_preferences p
+          where p.user_id = v_user_id and p.home_id is not distinct from s.home_id
+            and p.category = c.category and p.channel = ch.channel
+        )
+      from (
+        select null::uuid as home_id
+        union all
+        select m.home_id from public.home_memberships m where m.user_id = v_user_id
+      ) s
+      cross join (values ('invitations')) c (category)
+      cross join (values ('in_app'), ('email')) ch (channel)
+      order by s.home_id nulls first, c.category, ch.channel;
+  end
+  $$;
+
+-- Whether email can be a channel for you: you have a confirmed address.
+create function public.my_notification_channels() returns table (email_verified boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query select private.confirmed_email(v_user_id) is not null;
+  end
+  $$;
+
+-- Sets one choice for the account (p_home_id null) or for one Home you belong to. Outcomes: 'ok',
+-- 'not_found' (not a member of that Home). Essential categories cannot be configured (22023).
+create function public.set_notification_preference(
+  p_category text, p_channel text, p_enabled boolean, p_home_id uuid default null
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_category is distinct from 'invitations' or p_channel not in ('in_app', 'email')
+       or p_enabled is null then
+      raise exception 'invalid notification preference' using errcode = '22023';
+    end if;
+    if p_home_id is not null and not private.lock_membership(p_home_id, v_user_id) then
+      return 'not_found';
+    end if;
+    if p_home_id is null then
+      insert into public.notification_preferences (user_id, category, channel, enabled)
+        values (v_user_id, p_category, p_channel, p_enabled)
+        on conflict (user_id, category, channel) where home_id is null
+        do update set enabled = excluded.enabled, updated_at = now();
+    else
+      insert into public.notification_preferences (user_id, home_id, category, channel, enabled)
+        values (v_user_id, p_home_id, p_category, p_channel, p_enabled)
+        on conflict (user_id, home_id, category, channel) where home_id is not null
+        do update set enabled = excluded.enabled, updated_at = now();
+    end if;
+    return 'ok';
+  end
+  $$;
+
+-- Goes back to inheriting (a Home) or to the built-in default (the account).
+create function public.reset_notification_preference(
+  p_category text, p_channel text, p_home_id uuid default null
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_category is distinct from 'invitations' or p_channel not in ('in_app', 'email') then
+      raise exception 'invalid notification preference' using errcode = '22023';
+    end if;
+    delete from public.notification_preferences p
+      where p.user_id = v_user_id and p.home_id is not distinct from p_home_id
+        and p.category = p_category and p.channel = p_channel;
+    return found;
+  end
+  $$;
+
+-- Sets quiet hours for the account or one Home (a Home row overrides the account's, also with
+-- enabled = false). Times are wall-clock in p_time_zone, which must be a real IANA zone. Outcomes:
+-- 'ok', 'not_found' (not a member of that Home). start = end is invalid (22023).
+create function public.set_notification_quiet_hours(
+  p_enabled boolean, p_start time, p_end time, p_time_zone text, p_home_id uuid default null
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_enabled is null or p_start is null or p_end is null or p_start = p_end
+       or p_time_zone is null
+       or not exists (select 1 from pg_catalog.pg_timezone_names z where z.name = p_time_zone) then
+      raise exception 'invalid quiet hours' using errcode = '22023';
+    end if;
+    if p_home_id is not null and not private.lock_membership(p_home_id, v_user_id) then
+      return 'not_found';
+    end if;
+    if p_home_id is null then
+      insert into public.notification_quiet_hours (user_id, enabled, start_time, end_time, time_zone)
+        values (v_user_id, p_enabled, p_start, p_end, p_time_zone)
+        on conflict (user_id) where home_id is null
+        do update set enabled = excluded.enabled, start_time = excluded.start_time,
+          end_time = excluded.end_time, time_zone = excluded.time_zone, updated_at = now();
+    else
+      insert into public.notification_quiet_hours (user_id, home_id, enabled, start_time, end_time, time_zone)
+        values (v_user_id, p_home_id, p_enabled, p_start, p_end, p_time_zone)
+        on conflict (user_id, home_id) where home_id is not null
+        do update set enabled = excluded.enabled, start_time = excluded.start_time,
+          end_time = excluded.end_time, time_zone = excluded.time_zone, updated_at = now();
+    end if;
+    return 'ok';
+  end
+  $$;
+
+create function public.reset_notification_quiet_hours(p_home_id uuid default null) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    delete from public.notification_quiet_hours q
+      where q.user_id = v_user_id and q.home_id is not distinct from p_home_id;
+    return found;
+  end
+  $$;
+
+-- Marks your own notifications read: the listed ids, or all of them (p_ids null). Returns how many
+-- changed. Notices of a Home you left are not yours to touch any more and are left alone.
+create function public.mark_notifications_read(p_ids uuid[] default null) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_count integer;
+  begin
+    if p_ids is not null and pg_catalog.cardinality(p_ids) > 100 then
+      raise exception 'at most 100 ids' using errcode = '22023';
+    end if;
+    update public.notifications n set read_at = now()
+      where n.user_id = v_user_id and n.show_in_app and n.read_at is null
+        and (p_ids is null or n.id = any (p_ids))
+        and (n.home_id is null or private.home_role(n.home_id, v_user_id) is not null);
+    get diagnostics v_count = row_count;
+    return v_count;
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------------
+
+-- Supabase's default privileges give every new function in schema public to anon and authenticated.
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.get_notification_settings()',
+    'public.my_notification_channels()',
+    'public.set_notification_preference(text, text, boolean, uuid)',
+    'public.reset_notification_preference(text, text, uuid)',
+    'public.set_notification_quiet_hours(boolean, time, time, text, uuid)',
+    'public.reset_notification_quiet_hours(uuid)',
+    'public.mark_notifications_read(uuid[])',
+    'public.resend_home_invitation(uuid, uuid)',
+    'public.renew_home_invitation(uuid, uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- The jobs' functions: the service role only.
+  foreach v_function in array array[
+    'public.deliver_recovery_ready(uuid, timestamptz)',
+    'public.get_invitation_email(uuid, integer)',
+    'public.record_invitation_email(uuid, integer, text)',
+    'public.get_notification_email(uuid)',
+    'public.record_notification_email(uuid, text, text)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261023090000_file_storage.sql
+-- ============================================================================
+-- S15: file storage and quotas (brief S15; spec "Confirmed MVP personal and Home storage
+-- allowances", "Confirmed full-storage behavior", "Confirmed deleted-file storage accounting",
+-- "Confirmed deleted-file recovery period", "Confirmed progressive storage warnings"; architecture.md
+-- §10, §36; ADR 0019).
+--
+-- * private.stored_files: the authority for every stored file: its pool, purpose, opaque object keys,
+--   declared and verified type and size, checksum and lifecycle. Object keys are generated here from
+--   256 random bits and never accepted from a client; possessing one grants nothing.
+-- * private.storage_pools: one allowance per account and per Home (null = the environment default
+--   in private.storage_defaults). Every function that adds bytes locks the pool row, so two uploads
+--   at the same time cannot both take the last free space.
+-- * Usage = ready files + deleted files still recoverable + unexpired pending reservations.
+-- * public.create_upload_intent (the signed-in person), public.finalize_upload (the server only,
+--   after it verified the bytes), public.set_my_avatar / public.set_my_home_avatar (the person
+--   themselves), public.authorize_file_read (every view of a file asks again).
+-- * Objects are removed by jobs (ADR 0017) from a queue of deletions, so a row that disappears with
+--   its account or Home never leaves an object behind unnoticed.
+-- * Warnings at 80% and 95%, once per crossing, as in-app notices to the account holder or to the
+--   Home's storage managers (the Owner, or an Administrator granted manageHomeSettings).
+--
+-- Allowance amounts are open in the spec until pricing is decided. The values seeded below are
+-- development placeholders, changed with one SQL update (docs/file-storage.md), never promises.
+
+-- Uploads are audited by id only (architecture §10): intent opened, finalize outcome, abandoned.
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file'
+  ));
+
+-- Defaults and pools --------------------------------------------------------------------------------
+
+create table private.storage_defaults (
+  pool_kind text primary key constraint storage_defaults_pool_kind_check
+    check (pool_kind in ('personal', 'home')),
+  allowance_bytes bigint not null constraint storage_defaults_allowance_check
+    check (allowance_bytes >= 0),
+  updated_at timestamptz not null default now()
+);
+
+comment on table private.storage_defaults is
+  'S15: default storage allowance per pool kind. Development placeholders until pricing is decided.';
+
+insert into private.storage_defaults (pool_kind, allowance_bytes) values
+  ('personal', 1073741824),  -- 1 GiB, placeholder
+  ('home', 5368709120);      -- 5 GiB, placeholder
+
+create table private.storage_pools (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  -- Null: the default for the pool's kind.
+  allowance_bytes bigint constraint storage_pools_allowance_check check (allowance_bytes >= 0),
+  -- The warning last notified (0, 80 or 95) and how many upward crossings there have been, so each
+  -- new crossing gets its own notification and a repeated check none.
+  warning_level smallint not null default 0
+    constraint storage_pools_warning_level_check check (warning_level in (0, 80, 95)),
+  warning_crossings integer not null default 0,
+  created_at timestamptz not null default now(),
+  constraint storage_pools_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1),
+  constraint storage_pools_user_key unique (owner_user_id),
+  constraint storage_pools_home_key unique (owner_home_id)
+);
+
+comment on table private.storage_pools is
+  'S15: one storage allowance per account and per Home. Not exposed through the API.';
+
+-- Files ----------------------------------------------------------------------------------------------
+
+create table private.stored_files (
+  id uuid primary key default gen_random_uuid(),
+  pool_id uuid not null references private.storage_pools (id) on delete cascade,
+  purpose text not null constraint stored_files_purpose_check check (purpose in ('avatar')),
+  created_by uuid references auth.users (id) on delete set null,
+  -- Double-submit safety: the same request id from the same person is the same intent.
+  request_id uuid not null,
+  -- Where the browser puts the raw upload, and where the server stores the processed file. Both are
+  -- generated here; the raw upload is deleted once processed (the original is not kept, §37).
+  upload_key text not null constraint stored_files_upload_key_check
+    check (upload_key ~ '^(u|h)/[0-9a-f]{64}$'),
+  object_key text not null constraint stored_files_object_key_check
+    check (object_key ~ '^(u|h)/[0-9a-f]{64}$'),
+  declared_type text not null constraint stored_files_declared_type_check
+    check (declared_type ~ '^[a-z]+/[a-z0-9.+-]{1,60}$'),
+  declared_size bigint not null constraint stored_files_declared_size_check
+    check (declared_size > 0),
+  -- Set at finalize from what the server verified, never from the client.
+  content_type text constraint stored_files_content_type_check
+    check (content_type ~ '^[a-z]+/[a-z0-9.+-]{1,60}$'),
+  size_bytes bigint constraint stored_files_size_check check (size_bytes > 0),
+  sha256 text constraint stored_files_sha256_check check (sha256 ~ '^[0-9a-f]{64}$'),
+  status text not null default 'pending' constraint stored_files_status_check
+    check (status in ('pending', 'ready', 'failed', 'deleted', 'purged')),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  finalized_at timestamptz,
+  -- One finalize at a time (H1): the server claims the upload for a short lease before it reads and
+  -- processes the bytes, and may try only a few times per upload.
+  claimed_until timestamptz,
+  finalize_attempts smallint not null default 0
+    constraint stored_files_finalize_attempts_check check (finalize_attempts >= 0),
+  deleted_at timestamptz,
+  purge_after timestamptz,
+  constraint stored_files_request_key unique (created_by, request_id),
+  constraint stored_files_upload_key_key unique (upload_key),
+  constraint stored_files_object_key_key unique (object_key),
+  constraint stored_files_ready_facts check (
+    status not in ('ready', 'deleted', 'purged')
+    or (content_type is not null and size_bytes is not null and sha256 is not null)
+  ),
+  constraint stored_files_deleted_facts check (
+    status <> 'deleted' or (deleted_at is not null and purge_after is not null)
+  )
+);
+
+create index stored_files_pool_idx on private.stored_files (pool_id, status);
+create index stored_files_creator_recent_idx on private.stored_files (created_by, created_at);
+
+comment on table private.stored_files is
+  'S15: every stored file, its pool, keys, verified facts and lifecycle. Not exposed through the API.';
+
+-- Objects to remove from the bucket, one row per key. A job deletes the object and marks it done;
+-- a missing object counts as deleted. Unique per key, so queueing twice is harmless.
+create table private.storage_object_deletions (
+  id uuid primary key default gen_random_uuid(),
+  object_key text not null constraint storage_object_deletions_key_check
+    check (object_key ~ '^(u|h)/[0-9a-f]{64}$'),
+  reason text not null constraint storage_object_deletions_reason_check
+    check (reason in ('processed', 'expired', 'failed', 'purged', 'owner_deleted')),
+  created_at timestamptz not null default now(),
+  done_at timestamptz,
+  constraint storage_object_deletions_key unique (object_key)
+);
+
+create index storage_object_deletions_open_idx on private.storage_object_deletions (created_at)
+  where done_at is null;
+
+alter table private.storage_defaults enable row level security;
+alter table private.storage_pools enable row level security;
+alter table private.stored_files enable row level security;
+alter table private.storage_object_deletions enable row level security;
+revoke all on private.storage_defaults, private.storage_pools, private.stored_files,
+  private.storage_object_deletions
+from public, anon, authenticated, service_role;
+
+-- Avatars point at files. Only the functions below write these columns (no column grant).
+alter table public.user_preferences
+  add column avatar_file_id uuid references private.stored_files (id) on delete set null;
+alter table public.home_member_profiles
+  add column avatar_file_id uuid references private.stored_files (id) on delete set null;
+-- The person reads their own row (RLS, S11), now including the avatar; writing it stays with
+-- set_my_home_avatar. user_preferences is already readable by its owner in full.
+grant select (avatar_file_id) on table public.home_member_profiles to authenticated;
+
+-- Policy ---------------------------------------------------------------------------------------------
+
+-- What a purpose accepts from a browser: the largest upload and the declared types. Avatars are
+-- re-encoded by the server to a 512x512 WebP (brief S15, owner may change the limits).
+create function private.upload_max_bytes(p_purpose text) returns bigint
+  language sql immutable set search_path = '' as $$
+  select case p_purpose when 'avatar' then 5242880::bigint end;
+  $$;
+
+create function private.upload_type_allowed(p_purpose text, p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then p_type in ('image/jpeg', 'image/png', 'image/webp')
+    else false
+  end;
+  $$;
+
+-- What the server may store for a purpose after processing.
+create function private.stored_type_allowed(p_purpose text, p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_purpose when 'avatar' then p_type = 'image/webp' else false end;
+  $$;
+
+-- Limits (brief S15, owner may change): intents per account per hour, pending uploads per account,
+-- how long an intent stays open, and the recovery window for deleted files (spec: 7 days).
+create function private.storage_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'intents_per_hour' then 30
+    when 'pending_per_account' then 5
+    when 'intent_minutes' then 15
+    when 'recovery_days' then 7
+    when 'finalize_attempts' then 3
+    when 'finalize_lease_seconds' then 120
+  end;
+  $$;
+
+create function private.new_object_key(p_prefix text) returns text
+  language sql volatile set search_path = '' as $$
+  select p_prefix || '/' || pg_catalog.encode(extensions.gen_random_bytes(32), 'hex');
+  $$;
+
+-- One audit row about a stored file: ids and short codes only, never keys, names or contents.
+create function private.audit_stored_file(
+  p_actor uuid, p_file_id uuid, p_action text, p_details jsonb default '{}'::jsonb
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  insert into private.audit_events (actor_user_id, home_id, action, subject_type, subject_id, details)
+    values (p_actor, null, p_action, 'stored_file', p_file_id, p_details);
+  $$;
+
+-- Pools and usage -------------------------------------------------------------------------------------
+
+-- The pool of an account or a Home (exactly one argument set), created on first use and locked for
+-- the rest of the transaction.
+create function private.lock_storage_pool(p_user_id uuid, p_home_id uuid)
+returns private.storage_pools
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_pool private.storage_pools;
+  begin
+    if num_nonnulls(p_user_id, p_home_id) <> 1 then
+      raise exception 'exactly one pool owner' using errcode = '22023';
+    end if;
+    if p_user_id is not null then
+      insert into private.storage_pools (owner_user_id) values (p_user_id)
+        on conflict (owner_user_id) do nothing;
+      select * into v_pool from private.storage_pools p where p.owner_user_id = p_user_id for update;
+    else
+      insert into private.storage_pools (owner_home_id) values (p_home_id)
+        on conflict (owner_home_id) do nothing;
+      select * into v_pool from private.storage_pools p where p.owner_home_id = p_home_id for update;
+    end if;
+    return v_pool;
+  end
+  $$;
+
+create function private.storage_allowance(p_pool private.storage_pools) returns bigint
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(
+    p_pool.allowance_bytes,
+    (select d.allowance_bytes from private.storage_defaults d
+      where d.pool_kind = case when p_pool.owner_user_id is not null then 'personal' else 'home' end)
+  );
+  $$;
+
+-- Bytes a pool holds: ready files, deleted files still recoverable (spec: they count until purged),
+-- and unexpired pending reservations (so a check at request time holds at execution time).
+create function private.storage_usage(p_pool_id uuid, p_except_file uuid default null)
+returns table (ready_bytes bigint, deleted_bytes bigint, reserved_bytes bigint)
+  language sql stable security definer set search_path = '' as $$
+  select
+    coalesce(sum(f.size_bytes) filter (where f.status = 'ready'), 0)::bigint,
+    coalesce(sum(f.size_bytes) filter (where f.status = 'deleted'), 0)::bigint,
+    coalesce(sum(f.declared_size) filter (
+      where f.status = 'pending' and f.expires_at > pg_catalog.now()
+    ), 0)::bigint
+  from private.stored_files f
+  where f.pool_id = p_pool_id and f.status in ('ready', 'deleted', 'pending')
+    and f.id is distinct from p_except_file;
+  $$;
+
+-- Who manages a Home's storage: the Owner, or an Administrator granted manageHomeSettings
+-- (packages/domain "home.storage.view").
+create function private.can_view_home_storage(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.has_home_capability(p_home_id, p_user_id, 'manageHomeSettings');
+  $$;
+
+-- Recomputes a pool's warning level from its committed usage (ready + recoverable deleted) and
+-- notifies on each upward crossing of 80% or 95%; going below resets the level so a later crossing
+-- warns again. Call it with the pool locked.
+create function private.storage_reassess(p_pool_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_pool private.storage_pools;
+    v_usage record;
+    v_allowance bigint;
+    v_used bigint;
+    v_level smallint := 0;
+    v_kind text;
+    v_member record;
+  begin
+    select * into v_pool from private.storage_pools p where p.id = p_pool_id;
+    if not found then
+      return;
+    end if;
+    select * into v_usage from private.storage_usage(p_pool_id);
+    v_allowance := private.storage_allowance(v_pool);
+    v_used := v_usage.ready_bytes + v_usage.deleted_bytes;
+    if v_used > 0 and (v_allowance = 0 or v_used * 100 >= v_allowance * 95) then
+      v_level := 95;
+    elsif v_used > 0 and v_used * 100 >= v_allowance * 80 then
+      v_level := 80;
+    end if;
+    if v_level = v_pool.warning_level then
+      return;
+    end if;
+    if v_level < v_pool.warning_level then
+      update private.storage_pools p set warning_level = v_level where p.id = p_pool_id;
+      return;
+    end if;
+
+    update private.storage_pools p
+      set warning_level = v_level, warning_crossings = p.warning_crossings + 1
+      where p.id = p_pool_id
+      returning * into v_pool;
+    if v_pool.owner_user_id is not null then
+      perform private.notify_user(
+        v_pool.owner_user_id, null, 'storage',
+        case v_level when 95 then 'storage.personal_critical' else 'storage.personal_warning' end,
+        pg_catalog.jsonb_build_object('level', v_level),
+        'storage:' || v_pool.id || ':' || v_pool.warning_crossings
+      );
+    else
+      for v_member in
+        select m.user_id from public.home_memberships m
+        where m.home_id = v_pool.owner_home_id
+          and private.can_view_home_storage(m.home_id, m.user_id)
+      loop
+        perform private.notify_user(
+          v_member.user_id, v_pool.owner_home_id, 'storage',
+          case v_level when 95 then 'storage.home_critical' else 'storage.home_warning' end,
+          pg_catalog.jsonb_build_object('level', v_level),
+          'storage:' || v_pool.id || ':' || v_pool.warning_crossings
+        );
+      end loop;
+    end if;
+  end
+  $$;
+
+-- Queues an object for removal and the job that removes it.
+create function private.queue_object_deletion(p_key text, p_reason text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+  begin
+    insert into private.storage_object_deletions (object_key, reason) values (p_key, p_reason)
+      on conflict on constraint storage_object_deletions_key do nothing
+      returning id into v_id;
+    if v_id is not null then
+      perform private.enqueue_job(
+        'storage-object-delete', 1, 'storage-object:' || v_id::text,
+        pg_catalog.jsonb_build_object('deletionId', v_id),
+        private.request_correlation_id()
+      );
+    end if;
+  end
+  $$;
+
+-- A file someone stopped using: still counted and recoverable for 7 days, then purged by a job.
+create function private.retire_file(p_file_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+  begin
+    update private.stored_files f
+      set status = 'deleted', deleted_at = pg_catalog.now(),
+        purge_after = pg_catalog.now() + pg_catalog.make_interval(days => private.storage_limit('recovery_days'))
+      where f.id = p_file_id and f.status = 'ready'
+      returning * into v_file;
+    if found then
+      perform private.enqueue_job(
+        'storage-file-purge', 1, 'storage-file:' || v_file.id::text || ':purge:' ||
+          pg_catalog.to_char(v_file.deleted_at at time zone 'UTC', 'YYYYMMDDHH24MISSUS'),
+        pg_catalog.jsonb_build_object('fileId', v_file.id),
+        private.request_correlation_id(),
+        v_file.purge_after
+      );
+    end if;
+  end
+  $$;
+
+-- Retires an avatar file of p_user_id that nothing of theirs uses any more.
+create function private.retire_avatar_if_unused(p_user_id uuid, p_file_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_file_id is null then
+      return;
+    end if;
+    if exists (
+      select 1 from public.user_preferences up
+      where up.user_id = p_user_id and up.avatar_file_id = p_file_id
+    ) or exists (
+      select 1 from public.home_member_profiles hp
+      where hp.user_id = p_user_id and hp.avatar_file_id = p_file_id
+    ) then
+      return;
+    end if;
+    perform private.retire_file(p_file_id);
+  end
+  $$;
+
+-- A departure deletes the Home profile (S11); its avatar override is no longer used.
+create function private.retire_avatar_on_profile_delete() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform private.retire_avatar_if_unused(old.user_id, old.avatar_file_id);
+    return null;
+  end
+  $$;
+
+create trigger home_member_profiles_retire_avatar
+  after delete on public.home_member_profiles
+  for each row when (old.avatar_file_id is not null)
+  execute function private.retire_avatar_on_profile_delete();
+
+-- A row that disappears with its account or Home (cascade) queues its objects, so nothing stays in
+-- the bucket unnoticed. Whole-account and whole-Home recovery periods come with those steps.
+create function private.queue_objects_on_file_delete() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if old.status <> 'purged' then
+      perform private.queue_object_deletion(old.object_key, 'owner_deleted');
+    end if;
+    if old.status in ('pending', 'failed') then
+      perform private.queue_object_deletion(old.upload_key, 'owner_deleted');
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger stored_files_queue_objects
+  after delete on private.stored_files
+  for each row execute function private.queue_objects_on_file_delete();
+
+-- Uploads (the signed-in person) ----------------------------------------------------------------------
+
+-- Opens an upload into the caller's personal pool. Outcomes: 'ok' (with the file id, the key to
+-- put the bytes at and when the intent ends), 'storage_full', 'rate_limited', 'conflict' (the
+-- request id was used for a different upload). Invalid purpose, type or size: 22023.
+create function public.create_upload_intent(
+  p_purpose text, p_content_type text, p_size bigint, p_request_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+  begin
+    if p_request_id is null or p_size is null or p_size <= 0
+       or private.upload_max_bytes(p_purpose) is null
+       or p_size > private.upload_max_bytes(p_purpose)
+       or not private.upload_type_allowed(p_purpose, p_content_type) then
+      raise exception 'invalid upload' using errcode = '22023';
+    end if;
+
+    -- The pool lock also serialises one person's concurrent intents, so the checks below hold.
+    v_pool := private.lock_storage_pool(v_user_id, null);
+
+    select * into v_existing from private.stored_files f
+      where f.created_by = v_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = p_purpose and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.expires_at > pg_catalog.now() then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if (select count(*) from private.stored_files f
+        where f.created_by = v_user_id and f.created_at > pg_catalog.now() - interval '1 hour')
+         >= private.storage_limit('intents_per_hour')
+       or (select count(*) from private.stored_files f
+        where f.created_by = v_user_id and f.status = 'pending' and f.expires_at > pg_catalog.now())
+         >= private.storage_limit('pending_per_account') then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, p_purpose, v_user_id, p_request_id, private.new_object_key('u'),
+      private.new_object_key('u'), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+
+    -- Cleans up after the intent ends, whatever happened to it.
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', p_purpose, 'size', p_size)
+    );
+
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+-- One of the caller's own uploads, for the server to verify before it finalizes. Nobody else's.
+create function public.get_my_upload(p_file_id uuid)
+returns table (
+  purpose text, status text, upload_key text, object_key text, declared_type text,
+  declared_size bigint, expires_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select f.purpose, case
+          when f.status = 'pending' and f.expires_at <= pg_catalog.now() then 'expired'
+          else f.status
+        end,
+        f.upload_key, f.object_key, f.declared_type, f.declared_size, f.expires_at
+      from private.stored_files f
+      where f.id = p_file_id and f.created_by = v_user_id;
+  end
+  $$;
+
+-- Claims one of the caller's own pending uploads for finalizing, before the server reads and
+-- processes its bytes, so the same upload is never processed twice at once and only a few times in
+-- all (H1: each attempt costs a download and an image decode). Outcomes: 'claimed', 'busy' (another
+-- finalize holds the lease), 'limit' (attempts used up), 'ready' (already finalized), 'expired',
+-- 'not_found' (not the caller's, or failed or deleted).
+create function public.claim_my_upload(p_file_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_file private.stored_files;
+  begin
+    select * into v_file from private.stored_files f
+      where f.id = p_file_id and f.created_by = v_user_id
+      for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_file.status = 'ready' then
+      return 'ready';
+    end if;
+    if v_file.status <> 'pending' then
+      return 'not_found';
+    end if;
+    if v_file.expires_at <= pg_catalog.now() then
+      return 'expired';
+    end if;
+    if v_file.claimed_until is not null and v_file.claimed_until > pg_catalog.now() then
+      return 'busy';
+    end if;
+    if v_file.finalize_attempts >= private.storage_limit('finalize_attempts') then
+      return 'limit';
+    end if;
+    update private.stored_files f
+      set claimed_until = pg_catalog.now()
+          + pg_catalog.make_interval(secs => private.storage_limit('finalize_lease_seconds')),
+        finalize_attempts = f.finalize_attempts + 1
+      where f.id = v_file.id;
+    return 'claimed';
+  end
+  $$;
+
+-- Gives back the claim on one of the caller's own pending uploads (the bytes were not there yet, or
+-- storage could not be reached), so a later attempt may run. Returns whether anything changed.
+create function public.release_my_upload(p_file_id uuid) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    update private.stored_files f set claimed_until = null
+      where f.id = p_file_id and f.created_by = v_user_id and f.status = 'pending'
+        and f.claimed_until is not null;
+    return found;
+  end
+  $$;
+
+-- Gives up one of the caller's own pending uploads (the server found the bytes wrong: 'mismatch' or
+-- 'invalid_image'). Its objects are queued for removal. Returns whether anything changed.
+create function public.abandon_my_upload(p_file_id uuid, p_reason text) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_file private.stored_files;
+  begin
+    if p_reason is null or p_reason not in ('mismatch', 'invalid_image') then
+      raise exception 'invalid reason' using errcode = '22023';
+    end if;
+    update private.stored_files f set status = 'failed', claimed_until = null
+      where f.id = p_file_id and f.created_by = v_user_id and f.status = 'pending'
+      returning * into v_file;
+    if not found then
+      return false;
+    end if;
+    perform private.queue_object_deletion(v_file.upload_key, 'failed');
+    perform private.queue_object_deletion(v_file.object_key, 'failed');
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.abandoned', pg_catalog.jsonb_build_object('reason', p_reason)
+    );
+    return true;
+  end
+  $$;
+
+-- Finalize (the server only) --------------------------------------------------------------------------
+
+-- Marks p_user_id's pending upload ready with the facts the server verified and the processed
+-- object it stored. Only the service role may call this: these facts are trusted. Re-checks
+-- ownership, expiry, the stored type and the pool's capacity with the real size, under the pool lock.
+-- Outcomes: 'ready', 'not_found' (not theirs, or not pending), 'expired', 'invalid', 'storage_full'.
+-- Anything but 'ready' leaves the file failed with its objects queued for removal.
+create function public.finalize_upload(
+  p_user_id uuid, p_file_id uuid, p_content_type text, p_size bigint, p_sha256 text
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_outcome text;
+  begin
+    select * into v_file from private.stored_files f
+      where f.id = p_file_id and f.created_by = p_user_id;
+    if not found then
+      return 'not_found';
+    end if;
+    -- Pool first, then the file: the same lock order as every other writer.
+    select * into v_pool from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'ready' and v_file.sha256 = p_sha256 then
+      return 'ready';
+    end if;
+    if v_file.status <> 'pending' then
+      return 'not_found';
+    end if;
+
+    if v_file.expires_at <= pg_catalog.now() then
+      v_outcome := 'expired';
+    elsif p_size is null or p_size <= 0 or p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$'
+       or not private.stored_type_allowed(v_file.purpose, p_content_type) then
+      v_outcome := 'invalid';
+    else
+      select * into v_usage from private.storage_usage(v_pool.id, v_file.id);
+      if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+         > private.storage_allowance(v_pool) then
+        v_outcome := 'storage_full';
+      end if;
+    end if;
+
+    if v_outcome is not null then
+      update private.stored_files f set status = 'failed', claimed_until = null
+        where f.id = v_file.id;
+      perform private.queue_object_deletion(v_file.upload_key, 'failed');
+      perform private.queue_object_deletion(v_file.object_key, 'failed');
+      perform private.audit_stored_file(
+        p_user_id, v_file.id, 'stored_file.finalize_refused',
+        pg_catalog.jsonb_build_object('outcome', v_outcome)
+      );
+      return v_outcome;
+    end if;
+
+    update private.stored_files f
+      set status = 'ready', content_type = p_content_type, size_bytes = p_size, sha256 = p_sha256,
+        finalized_at = pg_catalog.now(), claimed_until = null
+      where f.id = v_file.id;
+    perform private.queue_object_deletion(v_file.upload_key, 'processed');
+    perform private.storage_reassess(v_pool.id);
+    perform private.audit_stored_file(
+      p_user_id, v_file.id, 'stored_file.finalized', pg_catalog.jsonb_build_object('size', p_size)
+    );
+    return 'ready';
+  end
+  $$;
+
+-- Avatars ----------------------------------------------------------------------------------------------
+
+-- The caller's ready avatar file, or null: anything else is 'not found' (22023 below).
+create function private.own_ready_avatar(p_user_id uuid, p_file_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.stored_files f
+    join private.storage_pools p on p.id = f.pool_id
+    where f.id = p_file_id and f.created_by = p_user_id and p.owner_user_id = p_user_id
+      and f.purpose = 'avatar' and f.status = 'ready'
+  );
+  $$;
+
+-- Sets (or with null removes) the caller's global avatar. Outcomes: 'ok', 'not_found' (the file is
+-- not the caller's own ready avatar). The replaced file is retired if nothing else uses it.
+create function public.set_my_avatar(p_file_id uuid default null) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_old uuid;
+  begin
+    perform private.lock_storage_pool(v_user_id, null);
+    if p_file_id is not null and not private.own_ready_avatar(v_user_id, p_file_id) then
+      return 'not_found';
+    end if;
+    select up.avatar_file_id into v_old from public.user_preferences up
+      where up.user_id = v_user_id for update;
+    insert into public.user_preferences (user_id, avatar_file_id) values (v_user_id, p_file_id)
+      on conflict (user_id) do update set avatar_file_id = excluded.avatar_file_id;
+    if v_old is distinct from p_file_id then
+      perform private.retire_avatar_if_unused(v_user_id, v_old);
+    end if;
+    return 'ok';
+  end
+  $$;
+
+-- Sets (or with null resets to the global avatar) the caller's avatar in one Home they belong to.
+-- Outcomes: 'ok', 'not_found' (not a member, or not the caller's own ready avatar).
+create function public.set_my_home_avatar(p_home_id uuid, p_file_id uuid default null) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_old uuid;
+  begin
+    if p_home_id is null or not private.lock_membership(p_home_id, v_user_id) then
+      return 'not_found';
+    end if;
+    perform private.lock_storage_pool(v_user_id, null);
+    if p_file_id is not null and not private.own_ready_avatar(v_user_id, p_file_id) then
+      return 'not_found';
+    end if;
+    select hp.avatar_file_id into v_old from public.home_member_profiles hp
+      where hp.home_id = p_home_id and hp.user_id = v_user_id for update;
+    insert into public.home_member_profiles (home_id, user_id, avatar_file_id)
+      values (p_home_id, v_user_id, p_file_id)
+      on conflict (home_id, user_id) do update set avatar_file_id = excluded.avatar_file_id;
+    if v_old is distinct from p_file_id then
+      perform private.retire_avatar_if_unused(v_user_id, v_old);
+    end if;
+    return 'ok';
+  end
+  $$;
+
+-- Reading files ---------------------------------------------------------------------------------------
+
+-- The object behind a file the caller may see now, or no row: the same answer for a file that does
+-- not exist, is not ready, or is not theirs to see. Avatars: the person themselves, and current
+-- members of a Home in which the file is that person's effective avatar (the Home override, else
+-- the global one). A former member, or a member of another Home, gets nothing.
+create function public.authorize_file_read(p_file_id uuid)
+returns table (object_key text, content_type text, size_bytes bigint, sha256 text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select f.object_key, f.content_type, f.size_bytes, f.sha256
+      from private.stored_files f
+      where f.id = p_file_id and f.status = 'ready' and f.purpose = 'avatar'
+        and (
+          f.created_by = v_user_id
+          or exists (
+            select 1
+            from public.home_memberships owner_m
+            join public.home_memberships viewer_m
+              on viewer_m.home_id = owner_m.home_id and viewer_m.user_id = v_user_id
+            left join public.home_member_profiles hp
+              on hp.home_id = owner_m.home_id and hp.user_id = owner_m.user_id
+            left join public.user_preferences up on up.user_id = owner_m.user_id
+            where owner_m.user_id = f.created_by
+              and coalesce(hp.avatar_file_id, up.avatar_file_id) = f.id
+          )
+        );
+  end
+  $$;
+
+-- Usage -------------------------------------------------------------------------------------------------
+
+-- The caller's personal storage: allowance, bytes in use, bytes held by recoverable deleted files,
+-- bytes reserved by uploads in progress, and the warning level (0, 80, 95).
+create function public.my_storage_usage()
+returns table (
+  allowance_bytes bigint, used_bytes bigint, deleted_bytes bigint, reserved_bytes bigint,
+  warning_level smallint
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_pool private.storage_pools;
+    v_usage record;
+  begin
+    select * into v_pool from private.storage_pools p where p.owner_user_id = v_user_id;
+    if not found then
+      return query select (select d.allowance_bytes from private.storage_defaults d
+        where d.pool_kind = 'personal'), 0::bigint, 0::bigint, 0::bigint, 0::smallint;
+      return;
+    end if;
+    select * into v_usage from private.storage_usage(v_pool.id);
+    return query select private.storage_allowance(v_pool), v_usage.ready_bytes,
+      v_usage.deleted_bytes, v_usage.reserved_bytes, v_pool.warning_level;
+  end
+  $$;
+
+-- A Home's storage, for its storage managers only (42501 for anyone else, whether or not the Home
+-- exists).
+create function public.home_storage_usage(p_home_id uuid)
+returns table (
+  allowance_bytes bigint, used_bytes bigint, deleted_bytes bigint, reserved_bytes bigint,
+  warning_level smallint
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_pool private.storage_pools;
+    v_usage record;
+  begin
+    if p_home_id is null or not private.can_view_home_storage(p_home_id, v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    select * into v_pool from private.storage_pools p where p.owner_home_id = p_home_id;
+    if not found then
+      return query select (select d.allowance_bytes from private.storage_defaults d
+        where d.pool_kind = 'home'), 0::bigint, 0::bigint, 0::bigint, 0::smallint;
+      return;
+    end if;
+    select * into v_usage from private.storage_usage(v_pool.id);
+    return query select private.storage_allowance(v_pool), v_usage.ready_bytes,
+      v_usage.deleted_bytes, v_usage.reserved_bytes, v_pool.warning_level;
+  end
+  $$;
+
+-- Operators (service role, from the SQL Editor): change one pool's allowance (null: back to the
+-- default) and reassess its warning. Existing files are never deleted by a lower allowance (spec);
+-- the pool simply refuses new files until it has room. Returns false for an unknown owner.
+create function public.set_storage_allowance(p_user_id uuid, p_home_id uuid, p_bytes bigint)
+returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_pool private.storage_pools;
+  begin
+    if p_bytes is not null and p_bytes < 0 then
+      raise exception 'invalid allowance' using errcode = '22023';
+    end if;
+    if (p_user_id is not null and not exists (select 1 from auth.users u where u.id = p_user_id))
+       or (p_home_id is not null and not exists (select 1 from public.homes h where h.id = p_home_id)) then
+      return false;
+    end if;
+    v_pool := private.lock_storage_pool(p_user_id, p_home_id);
+    update private.storage_pools p set allowance_bytes = p_bytes where p.id = v_pool.id;
+    perform private.storage_reassess(v_pool.id);
+    return true;
+  end
+  $$;
+
+-- Jobs (service role) -------------------------------------------------------------------------------------
+
+-- storage-upload-expire: after an intent ends, a pending upload becomes failed; a failed one has
+-- its objects queued for removal; a ready one has its raw upload queued (in case the server could
+-- not delete it), and a ready avatar nobody chose is retired. Idempotent. Returns the file's status
+-- afterwards, or 'missing'.
+create function public.expire_upload(p_file_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+  begin
+    select * into v_file from private.stored_files f where f.id = p_file_id;
+    if not found then
+      return 'missing';
+    end if;
+    -- Pool first, then the file: the same lock order as every other writer.
+    perform 1 from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'pending' and v_file.expires_at <= pg_catalog.now() then
+      update private.stored_files f set status = 'failed' where f.id = v_file.id
+        returning * into v_file;
+    end if;
+    if v_file.status = 'failed' then
+      perform private.queue_object_deletion(v_file.upload_key, 'expired');
+      perform private.queue_object_deletion(v_file.object_key, 'expired');
+    elsif v_file.status <> 'pending' then
+      perform private.queue_object_deletion(v_file.upload_key, 'processed');
+    end if;
+    -- A finished avatar that was never chosen (the browser stopped after finalize) would count
+    -- forever without being visible anywhere: it is retired like a replaced one (M2).
+    if v_file.status = 'ready' and v_file.purpose = 'avatar' then
+      perform private.retire_avatar_if_unused(v_file.created_by, v_file.id);
+      select * into v_file from private.stored_files f where f.id = p_file_id;
+    end if;
+    return v_file.status;
+  end
+  $$;
+
+-- storage-file-purge: a deleted file past its recovery window is purged: the space is released,
+-- the warning reassessed and the object queued for removal. A file restored meanwhile (S16) or
+-- not yet due is left alone. Returns the status afterwards, or 'missing'.
+create function public.purge_stored_file(p_file_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+  begin
+    select * into v_file from private.stored_files f where f.id = p_file_id;
+    if not found then
+      return 'missing';
+    end if;
+    perform 1 from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'deleted' and v_file.purge_after <= pg_catalog.now() then
+      update private.stored_files f set status = 'purged' where f.id = v_file.id
+        returning * into v_file;
+      perform private.queue_object_deletion(v_file.object_key, 'purged');
+      perform private.storage_reassess(v_file.pool_id);
+    end if;
+    return v_file.status;
+  end
+  $$;
+
+-- storage-object-delete: the key to remove, if still open; then mark it done.
+create function public.get_storage_object_deletion(p_deletion_id uuid)
+returns table (object_key text, done boolean)
+  language sql stable security definer set search_path = '' as $$
+  select d.object_key, d.done_at is not null
+  from private.storage_object_deletions d where d.id = p_deletion_id;
+  $$;
+
+create function public.complete_storage_object_deletion(p_deletion_id uuid) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    update private.storage_object_deletions d set done_at = pg_catalog.now()
+      where d.id = p_deletion_id and d.done_at is null;
+    return found;
+  end
+  $$;
+
+-- Health for the runbook: open deletions and the oldest one.
+create function public.storage_stats()
+returns table (open_deletions bigint, oldest_open_deletion_seconds integer, pending_uploads bigint)
+  language sql stable security definer set search_path = '' as $$
+  select
+    (select count(*) from private.storage_object_deletions d where d.done_at is null),
+    (select extract(epoch from pg_catalog.now() - min(d.created_at))::integer
+      from private.storage_object_deletions d where d.done_at is null),
+    (select count(*) from private.stored_files f where f.status = 'pending');
+  $$;
+
+-- Notifications: storage warnings ------------------------------------------------------------------------
+
+-- A new essential category: storage warnings are in-app only (spec "Confirmed progressive storage
+-- warnings"), sent once per crossing, and not something to mute (brief S15, owner may change).
+create or replace function private.notification_category_essential(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_category
+    when 'security' then true when 'storage' then true when 'invitations' then false
+  end;
+  $$;
+
+alter table public.notifications drop constraint notifications_category_check;
+alter table public.notifications add constraint notifications_category_check
+  check (category in ('security', 'invitations', 'storage'));
+
+-- Members ----------------------------------------------------------------------------------------------
+
+-- The directory (S11) gains each member's effective avatar file id (the Home override, else the
+-- global one). The file itself is still authorized on every view (authorize_file_read).
+drop function public.home_directory(uuid);
+create function public.home_directory(p_home_id uuid)
+returns table (
+  membership_id uuid,
+  role text,
+  joined_at timestamptz,
+  is_self boolean,
+  name text,
+  accent_color text,
+  avatar_file_id uuid
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or p_home_id is null or not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+
+    return query
+      select
+        m.id,
+        m.role,
+        m.created_at,
+        m.user_id = v_user_id,
+        coalesce(p.nickname, p.display_name, up.display_name),
+        coalesce(p.accent_color, up.accent_color),
+        coalesce(p.avatar_file_id, up.avatar_file_id)
+      from public.home_memberships m
+      left join public.home_member_profiles p
+        on p.home_id = m.home_id and p.user_id = m.user_id
+      left join public.user_preferences up on up.user_id = m.user_id
+      where m.home_id = p_home_id
+      order by m.created_at, m.id;
+  end
+  $$;
+
+comment on function public.home_directory(uuid) is
+  'S11/S15: the members of a Home the caller belongs to, with effective name, colour and avatar file id.';
+
+-- Grants ---------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.home_directory(uuid)',
+    'public.create_upload_intent(text, text, bigint, uuid)',
+    'public.get_my_upload(uuid)',
+    'public.claim_my_upload(uuid)',
+    'public.release_my_upload(uuid)',
+    'public.abandon_my_upload(uuid, text)',
+    'public.set_my_avatar(uuid)',
+    'public.set_my_home_avatar(uuid, uuid)',
+    'public.authorize_file_read(uuid)',
+    'public.my_storage_usage()',
+    'public.home_storage_usage(uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Trusted facts and jobs: the service role only.
+  foreach v_function in array array[
+    'public.finalize_upload(uuid, uuid, text, bigint, text)',
+    'public.set_storage_allowance(uuid, uuid, bigint)',
+    'public.expire_upload(uuid)',
+    'public.purge_stored_file(uuid)',
+    'public.get_storage_object_deletion(uuid)',
+    'public.complete_storage_object_deletion(uuid)',
+    'public.storage_stats()'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+end
+$$;
+
+-- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'private.upload_max_bytes(text)',
+    'private.upload_type_allowed(text, text)',
+    'private.stored_type_allowed(text, text)',
+    'private.storage_limit(text)',
+    'private.new_object_key(text)',
+    'private.lock_storage_pool(uuid, uuid)',
+    'private.storage_allowance(private.storage_pools)',
+    'private.storage_usage(uuid, uuid)',
+    'private.can_view_home_storage(uuid, uuid)',
+    'private.storage_reassess(uuid)',
+    'private.queue_object_deletion(text, text)',
+    'private.retire_file(uuid)',
+    'private.retire_avatar_if_unused(uuid, uuid)',
+    'private.retire_avatar_on_profile_delete()',
+    'private.queue_objects_on_file_delete()',
+    'private.own_ready_avatar(uuid, uuid)',
+    'private.audit_stored_file(uuid, uuid, text, jsonb)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261024090000_trash_and_recovery.sql
+-- ============================================================================
+-- S16: trash and recovery (architecture.md §36; spec "Confirmed central personal and Home trash
+-- organization", "Confirmed deletion and recovery of parent items with attachments", "Confirmed
+-- meaningful conflict handling on item restoration", "Confirmed individual and selected-item bulk
+-- restoration", "Confirmed early permanent deletion from file trash", "Confirmed recovery period for
+-- individually deleted items").
+--
+-- A deleted item becomes a trash entry: it stays recoverable for 7 days (the same setting as deleted
+-- files), then a job purges it. Exclusively attached files go to the file trash with it: still
+-- counted against the quota, restored together, released when purged. Personal and Home trash are
+-- separate scopes. Restoring is per item and never overwrites active data.
+--
+-- Nothing here is exposed as a table. The sample record type at the end is the worked example that
+-- real modules (tasks in S18, recipes in S24, ...) copy: they add a case to the three dispatch
+-- functions and call private.trash_move from their own delete function.
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry'
+  ));
+
+-- Entries ---------------------------------------------------------------------------------------------
+
+create table private.trash_entries (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  -- Which module and record type, so the list can filter and the hooks know what to do. Each module
+  -- step extends these two lists.
+  module text not null constraint trash_entries_module_check check (module in ('sample')),
+  item_type text not null constraint trash_entries_item_type_check check (item_type in ('sample')),
+  subject_id uuid not null,
+  -- What the list shows (a title). Cleared once the entry is restored or purged.
+  label text constraint trash_entries_label_check check (char_length(label) <= 200),
+  deleted_by uuid references auth.users (id) on delete set null,
+  deleted_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  status text not null default 'trashed'
+    constraint trash_entries_status_check check (status in ('trashed', 'restored', 'purged')),
+  settled_at timestamptz,
+  constraint trash_entries_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1),
+  constraint trash_entries_window check (expires_at > deleted_at),
+  constraint trash_entries_settled check ((status = 'trashed') = (settled_at is null))
+);
+
+-- One open entry per item, so two deletes at once or a repeated delete make one entry.
+create unique index trash_entries_one_open_idx on private.trash_entries (item_type, subject_id)
+  where status = 'trashed';
+create index trash_entries_user_idx on private.trash_entries (owner_user_id, deleted_at desc)
+  where status = 'trashed';
+create index trash_entries_home_idx on private.trash_entries (owner_home_id, deleted_at desc)
+  where status = 'trashed';
+
+comment on table private.trash_entries is
+  'S16: deleted items awaiting restore or purge, personal or per Home. Not exposed through the API.';
+
+-- The files that went to the file trash together with an entry, so a restore knows which to bring back.
+create table private.trash_entry_files (
+  entry_id uuid not null references private.trash_entries (id) on delete cascade,
+  file_id uuid not null references private.stored_files (id) on delete cascade,
+  primary key (entry_id, file_id)
+);
+
+alter table private.trash_entries enable row level security;
+alter table private.trash_entry_files enable row level security;
+revoke all on private.trash_entries, private.trash_entry_files from public, anon, authenticated;
+
+-- Limits ----------------------------------------------------------------------------------------------
+
+create function private.trash_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'batch' then 100        -- ids per restore or purge request
+    when 'empty_batch' then 200  -- entries one "empty trash" call purges
+    when 'list' then 500         -- rows one list returns
+  end;
+  $$;
+
+-- Who may see and act on an entry. Personal trash: its owner. Home trash: a current member who
+-- deleted the item themselves, or the Owner / an Administrator granted manageHomeSettings (the
+-- engine action home.trash.viewAll). The per-module permission matrix is open in the spec, so this
+-- is the generic rule; a module step may narrow or widen it for its own item type. The answer for
+-- "may not see" is the same as for "does not exist" everywhere it is used.
+create function private.can_see_trash_entry(p_entry private.trash_entries, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  -- Every term is false, never null, when it does not hold: a null here would slip past "not allowed".
+  select p_user_id is not null and (
+    coalesce(p_entry.owner_user_id = p_user_id, false)
+    or (
+      p_entry.owner_home_id is not null
+      and exists (
+        select 1 from public.home_memberships m
+        where m.home_id = p_entry.owner_home_id and m.user_id = p_user_id
+      )
+      and (
+        coalesce(p_entry.deleted_by = p_user_id, false)
+        or private.has_home_capability(p_entry.owner_home_id, p_user_id, 'manageHomeSettings')
+      )
+    )
+  );
+  $$;
+
+create function private.audit_trash_entry(
+  p_actor uuid, p_entry private.trash_entries, p_action text
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  -- Ids and type names only: never the label.
+  insert into private.audit_events (actor_user_id, home_id, action, subject_type, subject_id, details)
+    values (
+      p_actor, p_entry.owner_home_id, p_action, 'trash_entry', p_entry.id,
+      pg_catalog.jsonb_build_object('module', p_entry.module, 'itemType', p_entry.item_type)
+    );
+  $$;
+
+-- Files ------------------------------------------------------------------------------------------------
+
+-- Brings a deleted file back. It keeps its place in the pool, so nothing is charged twice. False when
+-- the file is gone (purged by expiry or an early delete): the caller reports it.
+create function private.restore_file(p_file_id uuid) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+  begin
+    select * into v_file from private.stored_files f where f.id = p_file_id;
+    if not found then
+      return false;
+    end if;
+    -- Pool first, then the file: the same lock order as every other writer.
+    perform 1 from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'ready' then
+      return true;
+    end if;
+    if v_file.status = 'deleted' and v_file.purge_after > pg_catalog.now() then
+      update private.stored_files f
+        set status = 'ready', deleted_at = null, purge_after = null
+        where f.id = v_file.id;
+      return true;
+    end if;
+    return false;
+  end
+  $$;
+
+-- Removes a deleted file for good now: releases its space and queues the object. A file that is not
+-- (or no longer) deleted is left alone.
+create function private.purge_file_now(p_file_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+  begin
+    select * into v_file from private.stored_files f where f.id = p_file_id;
+    if not found then
+      return;
+    end if;
+    perform 1 from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'deleted' then
+      update private.stored_files f set status = 'purged' where f.id = v_file.id
+        returning * into v_file;
+      perform private.queue_object_deletion(v_file.object_key, 'purged');
+      perform private.storage_reassess(v_file.pool_id);
+    end if;
+  end
+  $$;
+
+-- Moving an item to the trash ----------------------------------------------------------------------------
+
+-- The one way an item enters the trash. The module's own delete function has already checked that the
+-- actor may delete the item and has marked it deleted; p_file_ids are the files attached to it and
+-- to nothing else. Idempotent per item: a second call returns the open entry.
+create function private.trash_move(
+  p_actor uuid, p_module text, p_item_type text, p_subject_id uuid,
+  p_owner_user_id uuid, p_owner_home_id uuid, p_label text, p_file_ids uuid[] default '{}'
+) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_entry private.trash_entries;
+    v_file_id uuid;
+    v_pool_id uuid;
+  begin
+    select * into v_entry from private.trash_entries t
+      where t.item_type = p_item_type and t.subject_id = p_subject_id and t.status = 'trashed';
+    if found then
+      return v_entry.id;
+    end if;
+    insert into private.trash_entries (
+      owner_user_id, owner_home_id, module, item_type, subject_id, label, deleted_by, expires_at
+    ) values (
+      p_owner_user_id, p_owner_home_id, p_module, p_item_type, p_subject_id,
+      left(p_label, 200), p_actor,
+      pg_catalog.now() + pg_catalog.make_interval(days => private.storage_limit('recovery_days'))
+    ) returning * into v_entry;
+
+    -- Pools in a fixed order, so two deletes touching the same pools cannot wait on each other.
+    perform 1 from private.storage_pools p
+      where p.id in (select f.pool_id from private.stored_files f where f.id = any (coalesce(p_file_ids, '{}')))
+      order by p.id for update;
+    for v_file_id in select distinct unnest(coalesce(p_file_ids, '{}')) loop
+      select f.pool_id into v_pool_id from private.stored_files f where f.id = v_file_id;
+      if v_pool_id is null then
+        continue;
+      end if;
+      perform 1 from private.storage_pools p where p.id = v_pool_id for update;
+      -- Still counted while it is in the trash; the usual purge job removes it at the end of the same
+      -- window if nobody restores or deletes it first.
+      perform private.retire_file(v_file_id);
+      if exists (select 1 from private.stored_files f where f.id = v_file_id and f.status = 'deleted') then
+        insert into private.trash_entry_files (entry_id, file_id) values (v_entry.id, v_file_id);
+      end if;
+    end loop;
+
+    perform private.enqueue_job(
+      'trash-entry-purge', 1, 'trash-entry:' || v_entry.id::text || ':purge',
+      pg_catalog.jsonb_build_object('entryId', v_entry.id),
+      private.request_correlation_id(),
+      v_entry.expires_at
+    );
+    perform private.audit_trash_entry(p_actor, v_entry, 'trash_entry.moved');
+    return v_entry.id;
+  end
+  $$;
+
+-- The sample record type's table. A reference module, not reachable through the API: tests and the
+-- browser tests create samples directly and call private.trash_sample_delete (below). Real modules
+-- copy its shape: a soft-delete column, a real uniqueness constraint among active items (the slot), an
+-- optional parent and an optional attached file, and a delete function that checks the actor and
+-- calls private.trash_move.
+
+create table private.trash_samples (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  name text not null constraint trash_samples_name_check check (char_length(name) between 1 and 200),
+  slot text constraint trash_samples_slot_check check (slot ~ '^[a-z0-9-]{1,40}$'),
+  parent_id uuid references private.trash_samples (id) on delete set null,
+  file_id uuid references private.stored_files (id) on delete set null,
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint trash_samples_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+create unique index trash_samples_user_slot_idx on private.trash_samples (owner_user_id, slot)
+  where slot is not null and deleted_at is null and owner_user_id is not null;
+create unique index trash_samples_home_slot_idx on private.trash_samples (owner_home_id, slot)
+  where slot is not null and deleted_at is null and owner_home_id is not null;
+
+alter table private.trash_samples enable row level security;
+revoke all on private.trash_samples from public, anon, authenticated;
+
+comment on table private.trash_samples is
+  'S16: the reference record type for trash and recovery. Not exposed through the API.';
+
+-- Per-type hooks ---------------------------------------------------------------------------------------
+-- A module adds a case to each. Matching names or titles are never a conflict.
+
+-- The reason an entry cannot simply be restored, or null. The kind says what is in the way and
+-- trash_conflict_options says what the person may choose.
+create function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_sample private.trash_samples;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        select * into v_sample from private.trash_samples s where s.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if v_sample.parent_id is not null and exists (
+          select 1 from private.trash_samples p
+          where p.id = v_sample.parent_id and p.deleted_at is not null
+        ) then
+          return 'parent_unavailable';
+        end if;
+        if v_sample.slot is not null and exists (
+          select 1 from private.trash_samples o
+          where o.id <> v_sample.id and o.deleted_at is null and o.slot = v_sample.slot
+            and o.owner_user_id is not distinct from v_sample.owner_user_id
+            and o.owner_home_id is not distinct from v_sample.owner_home_id
+        ) then
+          return 'slot_taken';
+        end if;
+        return null;
+    end case;
+    return null;
+  end
+  $$;
+
+create function private.trash_conflict_options(p_kind text) returns text[]
+  language sql immutable set search_path = '' as $$
+  select case p_kind
+    when 'slot_taken' then array['clear_slot']
+    when 'parent_unavailable' then array['detach_parent']
+    else array[]::text[]
+  end;
+  $$;
+
+-- Applies the person's chosen resolution to the still-trashed item.
+create function private.trash_resolve(p_entry private.trash_entries, p_resolution text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        if p_resolution = 'clear_slot' then
+          update private.trash_samples s set slot = null where s.id = p_entry.subject_id;
+        elsif p_resolution = 'detach_parent' then
+          update private.trash_samples s set parent_id = null where s.id = p_entry.subject_id;
+        end if;
+    end case;
+  end
+  $$;
+
+-- Brings the item and its trashed files back. Returns how many files could not come back.
+create function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+    v_lost integer := 0;
+    v_lost_ids uuid[] := '{}';
+    v_ref uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      if not private.restore_file(v_file_id) then
+        v_lost := v_lost + 1;
+        v_lost_ids := v_lost_ids || v_file_id;
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        -- The file the item uses must be usable too: it may have gone to the trash with another
+        -- item that shared it (the last one deleted takes it along).
+        select s.file_id into v_ref from private.trash_samples s where s.id = p_entry.subject_id;
+        if v_ref is not null and not (v_ref = any (v_lost_ids)) and not private.restore_file(v_ref) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_ref;
+        end if;
+        update private.trash_samples s
+          set deleted_at = null,
+            -- A reference to a file that is gone would be broken: drop it, the caller reports it.
+            file_id = case when s.file_id = any (v_lost_ids) then null else s.file_id end
+          where s.id = p_entry.subject_id;
+    end case;
+    return v_lost;
+  end
+  $$;
+
+-- Removes the item for good and releases its exclusively attached files.
+create function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      -- Never release a file another active item still uses.
+      if not exists (
+        select 1 from private.trash_samples s where s.file_id = v_file_id and s.deleted_at is null
+      ) then
+        perform private.purge_file_now(v_file_id);
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        delete from private.trash_samples s where s.id = p_entry.subject_id and s.deleted_at is not null;
+    end case;
+  end
+  $$;
+
+-- One entry: restore and purge ---------------------------------------------------------------------------
+
+-- Restores one entry for p_user_id. Outcomes: 'restored', 'needs_resolution' (conflict and options
+-- say what the person may choose), 'expired', 'not_found' (also for an entry the person may not see
+-- or one already settled). Call it inside a block that turns an error into 'failed'.
+create function private.trash_restore_one(p_user_id uuid, p_entry_id uuid, p_resolution text)
+returns table (outcome text, conflict text, options text[], attachments_lost integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_entry private.trash_entries;
+    v_kind text;
+    v_round integer := 0;
+    v_resolution text := p_resolution;
+    v_lost integer;
+  begin
+    select * into v_entry from private.trash_entries t where t.id = p_entry_id for update;
+    if not found or v_entry.status <> 'trashed' or not private.can_see_trash_entry(v_entry, p_user_id) then
+      return query select 'not_found', null::text, null::text[], 0;
+      return;
+    end if;
+    if v_entry.expires_at <= pg_catalog.now() then
+      return query select 'expired', null::text, null::text[], 0;
+      return;
+    end if;
+    loop
+      v_kind := private.trash_conflict(v_entry);
+      exit when v_kind is null;
+      if v_kind = 'item_missing' then
+        return query select 'not_found', null::text, null::text[], 0;
+        return;
+      end if;
+      -- A chosen resolution counts only when it answers a conflict that is really there.
+      if v_resolution is not null and v_resolution = any (private.trash_conflict_options(v_kind))
+         and v_round < 3 then
+        perform private.trash_resolve(v_entry, v_resolution);
+        v_resolution := null;
+        v_round := v_round + 1;
+        continue;
+      end if;
+      return query select 'needs_resolution', v_kind, private.trash_conflict_options(v_kind), 0;
+      return;
+    end loop;
+    begin
+      v_lost := private.trash_item_restore(v_entry);
+    exception when unique_violation then
+      -- An active item took the place between the check and the restore: ask again, change nothing.
+      v_kind := coalesce(private.trash_conflict(v_entry), 'slot_taken');
+      return query select 'needs_resolution', v_kind, private.trash_conflict_options(v_kind), 0;
+      return;
+    end;
+    return query select 'restored', null::text, null::text[], v_lost;
+    update private.trash_entries t
+      set status = 'restored', settled_at = pg_catalog.now(), label = null
+      where t.id = v_entry.id;
+    perform private.audit_trash_entry(p_user_id, v_entry, 'trash_entry.restored');
+  end
+  $$;
+
+-- Purges one entry now (early delete, or the job after the window). Returns 'purged' or 'not_found'.
+create function private.trash_purge_one(p_user_id uuid, p_entry_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_entry private.trash_entries;
+  begin
+    select * into v_entry from private.trash_entries t where t.id = p_entry_id for update;
+    if not found or v_entry.status <> 'trashed'
+       or (p_user_id is not null and not private.can_see_trash_entry(v_entry, p_user_id)) then
+      return 'not_found';
+    end if;
+    perform private.trash_item_purge(v_entry);
+    update private.trash_entries t
+      set status = 'purged', settled_at = pg_catalog.now(), label = null
+      where t.id = v_entry.id;
+    perform private.audit_trash_entry(p_user_id, v_entry, 'trash_entry.purged');
+    return 'purged';
+  end
+  $$;
+
+-- The signed-in person's trash ------------------------------------------------------------------------------
+
+-- The caller's trash for one scope: their personal trash (p_home_id null) or a Home they belong to,
+-- showing only what they may see. Expired entries (waiting for the job) are not offered. 42501 for a
+-- Home the caller does not belong to, whether or not it exists.
+create function public.list_trash(
+  p_home_id uuid default null, p_module text default null, p_item_type text default null,
+  p_deleted_from timestamptz default null, p_deleted_to timestamptz default null
+) returns table (
+  entry_id uuid, module text, item_type text, label text, deleted_at timestamptz,
+  expires_at timestamptz, deleted_by_me boolean, file_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_home_id is not null and not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select t.id, t.module, t.item_type, t.label, t.deleted_at, t.expires_at,
+        t.deleted_by is not distinct from v_user_id,
+        (select count(*)::integer from private.trash_entry_files ef
+          join private.stored_files sf on sf.id = ef.file_id
+          where ef.entry_id = t.id and sf.status <> 'purged')
+      from private.trash_entries t
+      where t.status = 'trashed' and t.expires_at > pg_catalog.now()
+        and case when p_home_id is null then t.owner_user_id = v_user_id
+          else t.owner_home_id = p_home_id end
+        and private.can_see_trash_entry(t, v_user_id)
+        and (p_module is null or t.module = p_module)
+        and (p_item_type is null or t.item_type = p_item_type)
+        and (p_deleted_from is null or t.deleted_at >= p_deleted_from)
+        and (p_deleted_to is null or t.deleted_at < p_deleted_to)
+      order by t.deleted_at desc, t.id
+      limit private.trash_limit('list');
+  end
+  $$;
+
+-- Restores the chosen entries, each on its own: a conflict, an expired entry or a failure in one never
+-- stops the others, and nothing active is overwritten. p_resolutions maps an entry id to the
+-- resolution the person chose for it. 22023 for a malformed request.
+create function public.restore_trash_entries(p_entry_ids uuid[], p_resolutions jsonb default '{}'::jsonb)
+returns table (
+  entry_id uuid, outcome text, conflict text, options text[], attachments_lost integer
+)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+    v_resolution text;
+    v_result record;
+  begin
+    if p_entry_ids is null or cardinality(p_entry_ids) not between 1 and private.trash_limit('batch')
+       or p_resolutions is null or pg_catalog.jsonb_typeof(p_resolutions) <> 'object' then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- Every requested entry is locked first, in id order: two overlapping batches then queue on the
+    -- entries and never hold one entry's pool while waiting for another entry.
+    perform 1 from private.trash_entries t where t.id = any (p_entry_ids) order by t.id for update;
+    -- A fixed order keeps two overlapping requests from waiting on each other.
+    for v_id in select distinct x from unnest(p_entry_ids) as x order by x loop
+      v_resolution := p_resolutions ->> v_id::text;
+      begin
+        select * into v_result from private.trash_restore_one(v_user_id, v_id, v_resolution);
+        entry_id := v_id; outcome := v_result.outcome; conflict := v_result.conflict;
+        options := v_result.options; attachments_lost := v_result.attachments_lost;
+      exception when others then
+        entry_id := v_id; outcome := 'failed'; conflict := null; options := null; attachments_lost := 0;
+      end;
+      return next;
+    end loop;
+  end
+  $$;
+
+-- Deletes the chosen entries for good, each only if the caller may. Outcomes: 'purged', 'not_found'
+-- (not theirs to see, or already settled), 'failed'. The API asks for explicit confirmation first.
+create function public.purge_trash_entries(p_entry_ids uuid[])
+returns table (entry_id uuid, outcome text)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+  begin
+    if p_entry_ids is null or cardinality(p_entry_ids) not between 1 and private.trash_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- Every requested entry is locked first, in id order: two overlapping batches then queue on the
+    -- entries and never hold one entry's pool while waiting for another entry.
+    perform 1 from private.trash_entries t where t.id = any (p_entry_ids) order by t.id for update;
+    for v_id in select distinct x from unnest(p_entry_ids) as x order by x loop
+      begin
+        entry_id := v_id; outcome := private.trash_purge_one(v_user_id, v_id);
+      exception when others then
+        entry_id := v_id; outcome := 'failed';
+      end;
+      return next;
+    end loop;
+  end
+  $$;
+
+-- Empties the caller's trash for one scope: what they may see that was deleted at or before
+-- p_deleted_before (the moment their page was loaded, so nothing listed later is touched), up to one
+-- batch. Entries they may not see, and entries already past their window, are not touched. The result
+-- has one row per entry; a full batch means more may remain, so call again. 42501 for a Home the
+-- caller does not belong to, 22023 without a cutoff.
+create function public.empty_trash(p_home_id uuid default null, p_deleted_before timestamptz default null)
+returns table (entry_id uuid, outcome text)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_ids uuid[];
+    v_id uuid;
+  begin
+    if p_deleted_before is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_home_id is not null and not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    select coalesce(array_agg(x.id order by x.id), '{}') into v_ids from (
+      select t.id from private.trash_entries t
+      where t.status = 'trashed' and t.expires_at > pg_catalog.now() and t.deleted_at <= p_deleted_before
+        and case when p_home_id is null then t.owner_user_id = v_user_id
+          else t.owner_home_id = p_home_id end
+        and private.can_see_trash_entry(t, v_user_id)
+      order by t.id
+      limit private.trash_limit('empty_batch')
+    ) x;
+    -- Every requested entry is locked first, in id order: two overlapping batches then queue on the
+    -- entries and never hold one entry's pool while waiting for another entry.
+    perform 1 from private.trash_entries t where t.id = any (v_ids) order by t.id for update;
+    foreach v_id in array v_ids loop
+      begin
+        entry_id := v_id; outcome := private.trash_purge_one(v_user_id, v_id);
+      exception when others then
+        entry_id := v_id; outcome := 'failed';
+      end;
+      return next;
+    end loop;
+  end
+  $$;
+
+-- The job -----------------------------------------------------------------------------------------------------
+
+-- trash-entry-purge: purges an entry whose window has ended. An entry restored or purged meanwhile, or
+-- not yet due, is left alone. Returns the entry's status afterwards, or 'missing'.
+create function public.purge_expired_trash_entry(p_entry_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_entry private.trash_entries;
+    v_status text;
+  begin
+    select * into v_entry from private.trash_entries t where t.id = p_entry_id for update;
+    if not found then
+      return 'missing';
+    end if;
+    v_status := v_entry.status;
+    if v_status = 'trashed' and v_entry.expires_at <= pg_catalog.now() then
+      perform private.trash_purge_one(null, v_entry.id);
+      v_status := 'purged';
+    end if;
+    return v_status;
+  end
+  $$;
+
+-- Health for the runbook: entries past their window that are still waiting, and the oldest.
+create function public.trash_stats()
+returns table (open_entries bigint, overdue_entries bigint, oldest_overdue_seconds integer)
+  language sql stable security definer set search_path = '' as $$
+  select
+    (select count(*) from private.trash_entries t where t.status = 'trashed'),
+    (select count(*) from private.trash_entries t
+      where t.status = 'trashed' and t.expires_at <= pg_catalog.now()),
+    (select extract(epoch from pg_catalog.now() - min(t.expires_at))::integer
+      from private.trash_entries t where t.status = 'trashed' and t.expires_at <= pg_catalog.now());
+  $$;
+
+-- The sample record type's delete function ----------------------------------------------------------------------
+
+-- Deletes a sample as p_actor: personal samples by their owner, Home samples by any current member.
+-- Its attached file goes to the file trash with it unless another active sample uses it too.
+create function private.trash_sample_delete(p_actor uuid, p_id uuid) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_sample private.trash_samples;
+    v_files uuid[] := '{}';
+  begin
+    select * into v_sample from private.trash_samples s where s.id = p_id for update;
+    if not found or v_sample.deleted_at is not null or not (
+      v_sample.owner_user_id = p_actor
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = v_sample.owner_home_id and m.user_id = p_actor
+      )
+    ) then
+      raise exception 'not found' using errcode = 'P0002';
+    end if;
+    update private.trash_samples s set deleted_at = pg_catalog.now() where s.id = v_sample.id;
+    if v_sample.file_id is not null and not exists (
+      select 1 from private.trash_samples o
+      where o.file_id = v_sample.file_id and o.id <> v_sample.id and o.deleted_at is null
+    ) then
+      v_files := array[v_sample.file_id];
+    end if;
+    return private.trash_move(
+      p_actor, 'sample', 'sample', v_sample.id, v_sample.owner_user_id, v_sample.owner_home_id,
+      v_sample.name, v_files
+    );
+  end
+  $$;
+
+-- Grants ---------------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.list_trash(uuid, text, text, timestamptz, timestamptz)',
+    'public.restore_trash_entries(uuid[], jsonb)',
+    'public.purge_trash_entries(uuid[])',
+    'public.empty_trash(uuid, timestamptz)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- The job and the runbook: the service role only.
+  foreach v_function in array array[
+    'public.purge_expired_trash_entry(uuid)',
+    'public.trash_stats()'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  foreach v_function in array array[
+    'private.trash_limit(text)',
+    'private.can_see_trash_entry(private.trash_entries, uuid)',
+    'private.audit_trash_entry(uuid, private.trash_entries, text)',
+    'private.restore_file(uuid)',
+    'private.purge_file_now(uuid)',
+    'private.trash_move(uuid, text, text, uuid, uuid, uuid, text, uuid[])',
+    'private.trash_conflict(private.trash_entries)',
+    'private.trash_conflict_options(text)',
+    'private.trash_resolve(private.trash_entries, text)',
+    'private.trash_item_restore(private.trash_entries)',
+    'private.trash_item_purge(private.trash_entries)',
+    'private.trash_restore_one(uuid, uuid, text)',
+    'private.trash_purge_one(uuid, uuid)',
+    'private.trash_sample_delete(uuid, uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261025090000_dashboards.sql
+-- ============================================================================
+-- S17: the dashboard engine (brief S17; architecture.md §15; spec "Confirmed editable starter
+-- personal dashboard for new adult accounts", "Confirmed selected Home widgets on the global personal
+-- dashboard", "Confirmed dashboard ownership", "Agreed customization behavior").
+--
+-- A dashboard layout belongs either to one person (their personal dashboard) or to one Home (the
+-- Home's shared dashboard). A person or Home without a saved row sees the current starter layout,
+-- which lives in application code; the first save stores a concrete copy, so a later starter change
+-- never overwrites a customized dashboard.
+--
+-- Who may change what (owner decisions, 2026-10-16):
+-- - a personal dashboard: its owner only;
+-- - a Home dashboard: every current member reads it; the Owner, and Administrators the Owner granted
+--   the new capability manageHomeDashboard, save it;
+-- - templates are private to their owner until shared into a Home. A personal-kind template may be
+--   shared into any Home its owner belongs to; a home-kind template only into a Home whose dashboard
+--   its owner may edit. Members of that Home see shared templates while the sharer still belongs to
+--   it. Applying one is an ordinary save of the target dashboard, so the save rule above decides.
+--
+-- The layout's inner structure (widget types, positions, configuration) is validated by the
+-- application's versioned Zod schema before every save; the database checks its shape and size, and
+-- a reader re-validates and drops what it does not recognise. Nothing here is exposed as a table.
+
+-- Audit subjects ----------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template'
+  ));
+
+-- The new Administrator capability ----------------------------------------------------------------
+
+-- packages/domain delegableCapabilities lists the same names.
+create or replace function private.is_delegable_capability(p_capability text) returns boolean
+  language sql immutable security definer set search_path = '' as $$
+  select p_capability in (
+    'manageHomeSettings', 'manageInvitations', 'removeMembers', 'manageHomeDashboard'
+  );
+  $$;
+
+-- Limits ------------------------------------------------------------------------------------------
+
+create function private.dashboard_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'layout_bytes' then 65536  -- one stored layout, as JSON text
+    when 'templates' then 50         -- active templates per person
+    when 'name_chars' then 80        -- a template name
+  end;
+  $$;
+
+-- A layout's outer shape: an object with schema version 1, a widgets array and a placements object,
+-- no larger than the limit. The application validates everything inside it.
+create function private.is_dashboard_layout(p_layout jsonb) returns boolean
+  language sql immutable set search_path = '' as $$
+  -- Never null: a missing key must answer false, not slip past a "not" as null.
+  select coalesce(
+    pg_catalog.jsonb_typeof(p_layout) = 'object'
+      and p_layout -> 'version' = '1'::jsonb
+      and pg_catalog.jsonb_typeof(p_layout -> 'widgets') = 'array'
+      and pg_catalog.jsonb_typeof(p_layout -> 'placements') = 'object'
+      and pg_catalog.octet_length(p_layout::text) <= private.dashboard_limit('layout_bytes'),
+    false);
+  $$;
+
+-- Who may save a Home's dashboard: the Owner, or an Administrator granted manageHomeDashboard
+-- (packages/domain decideHomeAction "home.dashboard.edit" makes the same decision).
+create function private.can_edit_home_dashboard(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.has_home_capability(p_home_id, p_user_id, 'manageHomeDashboard');
+  $$;
+
+create function private.is_home_member(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null and exists (
+    select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = p_user_id
+  );
+  $$;
+
+-- Layouts -----------------------------------------------------------------------------------------
+
+create table private.dashboard_layouts (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  layout jsonb not null
+    constraint dashboard_layouts_layout_check check (private.is_dashboard_layout(layout)),
+  -- Increases by one on every save; a save names the revision it started from (optimistic
+  -- concurrency), so two editors never silently overwrite each other.
+  revision integer not null default 1 constraint dashboard_layouts_revision_check check (revision >= 1),
+  -- What the last reset or template apply replaced, for one-step Undo. Cleared by any other save.
+  previous_layout jsonb
+    constraint dashboard_layouts_previous_check
+      check (previous_layout is null or private.is_dashboard_layout(previous_layout)),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint dashboard_layouts_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+create unique index dashboard_layouts_user_idx on private.dashboard_layouts (owner_user_id)
+  where owner_user_id is not null;
+create unique index dashboard_layouts_home_idx on private.dashboard_layouts (owner_home_id)
+  where owner_home_id is not null;
+
+comment on table private.dashboard_layouts is
+  'S17: saved personal and Home dashboard layouts. Not exposed through the API.';
+
+alter table private.dashboard_layouts enable row level security;
+revoke all on private.dashboard_layouts from public, anon, authenticated;
+
+-- The caller's personal dashboard (p_home_id null) or a Home's dashboard. No row means "the starter
+-- layout" (layout null, revision 0). can_edit says whether the caller may save it; can_undo whether a
+-- reset or template apply can be undone. 42501 "not permitted" for a Home the caller does not belong
+-- to, whether or not it exists.
+create function public.get_dashboard(p_home_id uuid default null)
+returns table (layout jsonb, revision integer, can_edit boolean, can_undo boolean, updated_at timestamptz)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_row private.dashboard_layouts;
+    v_can_edit boolean;
+  begin
+    if p_home_id is null then
+      select * into v_row from private.dashboard_layouts d where d.owner_user_id = v_user_id;
+      v_can_edit := true;
+    else
+      if not private.is_home_member(p_home_id, v_user_id) then
+        raise exception 'not permitted' using errcode = '42501';
+      end if;
+      select * into v_row from private.dashboard_layouts d where d.owner_home_id = p_home_id;
+      v_can_edit := private.can_edit_home_dashboard(p_home_id, v_user_id);
+    end if;
+    return query select v_row.layout, coalesce(v_row.revision, 0), v_can_edit,
+      v_can_edit and v_row.previous_layout is not null, v_row.updated_at;
+  end
+  $$;
+
+-- Saves a dashboard if nobody saved it since p_expected_revision (0: it was still the starter).
+-- p_previous, when given, is what this save replaces (the layout the caller read at that revision,
+-- or the starter it showed), kept for one-step Undo; a plain edit passes null and clears it.
+-- Outcomes: 'saved' with the new revision, 'conflict' with the current one, 'not_permitted' (a Home
+-- member who may not edit it). 42501 "not permitted" for a Home the caller does not belong to; 22023
+-- for a malformed layout.
+create function public.save_dashboard(
+  p_layout jsonb, p_expected_revision integer, p_home_id uuid default null,
+  p_previous jsonb default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_row private.dashboard_layouts;
+    v_current integer;
+  begin
+    if p_home_id is not null and not private.is_home_member(p_home_id, v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    if not private.is_dashboard_layout(p_layout)
+       or (p_previous is not null and not private.is_dashboard_layout(p_previous))
+       or p_expected_revision is null or p_expected_revision < 0 then
+      raise exception 'invalid layout' using errcode = '22023';
+    end if;
+    if p_home_id is not null and not private.can_edit_home_dashboard(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+
+    if p_expected_revision = 0 then
+      -- The first save. A concurrent first save makes this insert do nothing: a conflict.
+      insert into private.dashboard_layouts (owner_user_id, owner_home_id, layout, previous_layout, updated_by)
+        values (
+          case when p_home_id is null then v_user_id end, p_home_id, p_layout, p_previous, v_user_id
+        )
+        on conflict do nothing
+        returning * into v_row;
+    else
+      update private.dashboard_layouts d
+        set layout = p_layout, previous_layout = p_previous, revision = d.revision + 1,
+          updated_by = v_user_id, updated_at = pg_catalog.now()
+        where (case when p_home_id is null then d.owner_user_id = v_user_id
+          else d.owner_home_id = p_home_id end)
+          and d.revision = p_expected_revision
+        returning * into v_row;
+    end if;
+
+    if v_row.id is null then
+      select d.revision into v_current from private.dashboard_layouts d
+        where case when p_home_id is null then d.owner_user_id = v_user_id
+          else d.owner_home_id = p_home_id end;
+      return query select 'conflict', coalesce(v_current, 0);
+      return;
+    end if;
+    if p_home_id is not null then
+      -- Ids and counts only: never widget settings.
+      perform private.audit('home_dashboard.saved', p_home_id, 'home', p_home_id,
+        pg_catalog.jsonb_build_object(
+          'revision', v_row.revision,
+          'widgets', pg_catalog.jsonb_array_length(p_layout -> 'widgets'),
+          'undoable', p_previous is not null));
+    end if;
+    return query select 'saved', v_row.revision;
+  end
+  $$;
+
+-- Puts back what the last reset or template apply replaced. Outcomes: 'saved' with the new revision,
+-- 'conflict' (someone saved since p_expected_revision), 'nothing_to_undo', 'not_permitted'.
+create function public.undo_dashboard_change(p_expected_revision integer, p_home_id uuid default null)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_row private.dashboard_layouts;
+  begin
+    if p_home_id is not null and not private.is_home_member(p_home_id, v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    if p_home_id is not null and not private.can_edit_home_dashboard(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    select * into v_row from private.dashboard_layouts d
+      where case when p_home_id is null then d.owner_user_id = v_user_id
+        else d.owner_home_id = p_home_id end
+      for update;
+    if v_row.id is null then
+      return query select 'nothing_to_undo', 0;
+      return;
+    end if;
+    if v_row.revision <> p_expected_revision then
+      return query select 'conflict', v_row.revision;
+      return;
+    end if;
+    if v_row.previous_layout is null then
+      return query select 'nothing_to_undo', v_row.revision;
+      return;
+    end if;
+    update private.dashboard_layouts d
+      set layout = d.previous_layout, previous_layout = null, revision = d.revision + 1,
+        updated_by = v_user_id, updated_at = pg_catalog.now()
+      where d.id = v_row.id
+      returning * into v_row;
+    if p_home_id is not null then
+      perform private.audit('home_dashboard.undone', p_home_id, 'home', p_home_id,
+        pg_catalog.jsonb_build_object('revision', v_row.revision));
+    end if;
+    return query select 'saved', v_row.revision;
+  end
+  $$;
+
+-- Templates ---------------------------------------------------------------------------------------
+
+create table private.dashboard_templates (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null references auth.users (id) on delete cascade,
+  -- Which dashboard it fits: a personal dashboard or a Home dashboard.
+  kind text not null constraint dashboard_templates_kind_check check (kind in ('personal', 'home')),
+  name text not null constraint dashboard_templates_name_check
+    check (
+      char_length(name) between 1 and private.dashboard_limit('name_chars')
+      and name = pg_catalog.btrim(name)
+      and name !~ '[[:cntrl:]]'
+    ),
+  layout jsonb not null
+    constraint dashboard_templates_layout_check check (private.is_dashboard_layout(layout)),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- Set while the template is in the owner's trash (S16).
+  deleted_at timestamptz
+);
+
+create index dashboard_templates_owner_idx on private.dashboard_templates (owner_user_id)
+  where deleted_at is null;
+
+create table private.dashboard_template_shares (
+  template_id uuid not null references private.dashboard_templates (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  shared_by uuid not null references auth.users (id) on delete cascade,
+  shared_at timestamptz not null default now(),
+  primary key (template_id, home_id)
+);
+
+create index dashboard_template_shares_home_idx on private.dashboard_template_shares (home_id);
+
+comment on table private.dashboard_templates is
+  'S17: dashboard templates, private to their owner until shared. Not exposed through the API.';
+comment on table private.dashboard_template_shares is
+  'S17: templates shared into a Home. Not exposed through the API.';
+
+alter table private.dashboard_templates enable row level security;
+alter table private.dashboard_template_shares enable row level security;
+revoke all on private.dashboard_templates, private.dashboard_template_shares
+  from public, anon, authenticated;
+
+-- A share ends when the person who shared it leaves the Home (or is removed), so nothing of theirs
+-- stays behind in a Home they no longer belong to.
+create function private.end_departed_template_shares() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from private.dashboard_template_shares s
+      where s.home_id = old.home_id and s.shared_by = old.user_id;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_end_template_shares
+  after delete on public.home_memberships
+  for each row execute function private.end_departed_template_shares();
+
+-- Whether p_user_id may share a template of p_kind into p_home_id (owner decision "split by target").
+create function private.can_share_template(p_kind text, p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select case p_kind
+    when 'personal' then private.is_home_member(p_home_id, p_user_id)
+    when 'home' then private.can_edit_home_dashboard(p_home_id, p_user_id)
+    else false
+  end;
+  $$;
+
+create function private.audit_template(
+  p_action text, p_home_id uuid, p_template_id uuid
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  -- Ids only: never the name or the layout.
+  select private.audit(p_action, p_home_id, 'dashboard_template', p_template_id);
+  $$;
+
+-- The templates the caller may see: their own (with every Home they shared it into), and those
+-- shared into a Home they belong to by someone who still belongs to it. p_home_id narrows the list
+-- to templates shared into that Home (42501 "not permitted" when the caller is not a member).
+-- shared_home_ids only ever lists Homes the caller belongs to. Never the sharer's identity.
+create function public.list_dashboard_templates(p_home_id uuid default null)
+returns table (
+  template_id uuid, name text, kind text, layout jsonb, is_mine boolean, shared_home_ids uuid[],
+  updated_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_home_id is not null and not private.is_home_member(p_home_id, v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select t.id, t.name, t.kind, t.layout, t.owner_user_id = v_user_id,
+        coalesce((
+          select pg_catalog.array_agg(s.home_id order by s.home_id)
+          from private.dashboard_template_shares s
+          where s.template_id = t.id and private.is_home_member(s.home_id, v_user_id)
+        ), '{}'),
+        t.updated_at
+      from private.dashboard_templates t
+      where t.deleted_at is null
+        and (
+          (p_home_id is null and t.owner_user_id = v_user_id)
+          or exists (
+            select 1 from private.dashboard_template_shares s
+            where s.template_id = t.id
+              and (p_home_id is null or s.home_id = p_home_id)
+              and private.is_home_member(s.home_id, v_user_id)
+              and private.is_home_member(s.home_id, s.shared_by)
+          )
+        )
+      order by t.owner_user_id = v_user_id desc, t.name, t.id;
+  end
+  $$;
+
+-- Saves a new private template. Outcomes: 'created' with its id, 'limit_reached'. 22023 for an
+-- invalid kind, name or layout.
+create function public.create_dashboard_template(p_name text, p_kind text, p_layout jsonb)
+returns table (outcome text, template_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+  begin
+    if p_kind is null or p_kind not in ('personal', 'home') or not private.is_dashboard_layout(p_layout)
+       or p_name is null or char_length(p_name) not between 1 and private.dashboard_limit('name_chars')
+       or p_name <> pg_catalog.btrim(p_name) or p_name ~ '[[:cntrl:]]' then
+      raise exception 'invalid template' using errcode = '22023';
+    end if;
+    -- One person's creates run one at a time, so two at once cannot pass the limit together.
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('dashboard_templates:' || v_user_id::text, 0));
+    if (select pg_catalog.count(*) from private.dashboard_templates t
+        where t.owner_user_id = v_user_id and t.deleted_at is null)
+       >= private.dashboard_limit('templates') then
+      return query select 'limit_reached', null::uuid;
+      return;
+    end if;
+    insert into private.dashboard_templates (owner_user_id, kind, name, layout)
+      values (v_user_id, p_kind, p_name, p_layout)
+      returning id into v_id;
+    return query select 'created', v_id;
+  end
+  $$;
+
+-- Renames one of the caller's own templates. Outcomes: 'ok', 'not_found'.
+create function public.rename_dashboard_template(p_template_id uuid, p_name text) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_name is null or char_length(p_name) not between 1 and private.dashboard_limit('name_chars')
+       or p_name <> pg_catalog.btrim(p_name) or p_name ~ '[[:cntrl:]]' then
+      raise exception 'invalid name' using errcode = '22023';
+    end if;
+    update private.dashboard_templates t set name = p_name, updated_at = pg_catalog.now()
+      where t.id = p_template_id and t.owner_user_id = v_user_id and t.deleted_at is null;
+    return case when found then 'ok' else 'not_found' end;
+  end
+  $$;
+
+-- Shares one of the caller's own templates into a Home. Outcomes: 'shared', 'unchanged',
+-- 'not_permitted' (a member who may not share a template of this kind there), 'not_found' (not
+-- their template, or not a Home they belong to).
+create function public.share_dashboard_template(p_template_id uuid, p_home_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_template private.dashboard_templates;
+  begin
+    select * into v_template from private.dashboard_templates t
+      where t.id = p_template_id and t.owner_user_id = v_user_id and t.deleted_at is null;
+    if not found or not private.is_home_member(p_home_id, v_user_id) then
+      return 'not_found';
+    end if;
+    if not private.can_share_template(v_template.kind, p_home_id, v_user_id) then
+      return 'not_permitted';
+    end if;
+    insert into private.dashboard_template_shares (template_id, home_id, shared_by)
+      values (v_template.id, p_home_id, v_user_id)
+      on conflict do nothing;
+    if not found then
+      return 'unchanged';
+    end if;
+    perform private.audit_template('dashboard_template.shared', p_home_id, v_template.id);
+    return 'shared';
+  end
+  $$;
+
+-- Ends a template's share in a Home: its owner, or someone who may edit that Home's dashboard.
+-- Outcomes: 'removed', 'not_found'.
+create function public.unshare_dashboard_template(p_template_id uuid, p_home_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.is_home_member(p_home_id, v_user_id) then
+      return 'not_found';
+    end if;
+    delete from private.dashboard_template_shares s
+      using private.dashboard_templates t
+      where s.template_id = p_template_id and s.home_id = p_home_id and t.id = s.template_id
+        and (t.owner_user_id = v_user_id or private.can_edit_home_dashboard(p_home_id, v_user_id))
+        -- Someone else's template in the trash is not visible, so it is not theirs to touch.
+        and (t.deleted_at is null or t.owner_user_id = v_user_id);
+    if not found then
+      return 'not_found';
+    end if;
+    perform private.audit_template('dashboard_template.unshared', p_home_id, p_template_id);
+    return 'removed';
+  end
+  $$;
+
+-- Moves one of the caller's templates to their personal trash (S16): restorable for 7 days with its
+-- shares, then purged. Returns the trash entry id, or null when it is not theirs or not found.
+create function public.delete_dashboard_template(p_template_id uuid) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_template private.dashboard_templates;
+  begin
+    select * into v_template from private.dashboard_templates t
+      where t.id = p_template_id and t.owner_user_id = v_user_id and t.deleted_at is null
+      for update;
+    if not found then
+      return null;
+    end if;
+    update private.dashboard_templates t set deleted_at = pg_catalog.now() where t.id = v_template.id;
+    return private.trash_move(
+      v_user_id, 'dashboard', 'dashboard_template', v_template.id, v_user_id, null, v_template.name
+    );
+  end
+  $$;
+
+-- Trash hooks (S16) for the template type ---------------------------------------------------------
+
+alter table private.trash_entries drop constraint trash_entries_module_check;
+alter table private.trash_entries add constraint trash_entries_module_check
+  check (module in ('sample', 'dashboard'));
+alter table private.trash_entries drop constraint trash_entries_item_type_check;
+alter table private.trash_entries add constraint trash_entries_item_type_check
+  check (item_type in ('sample', 'dashboard_template'));
+
+-- The four dispatch functions again, with a case for templates. A template has no restore conflict:
+-- matching names never are one, and the per-person limit applies to creating, not to restoring.
+create or replace function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_sample private.trash_samples;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        select * into v_sample from private.trash_samples s where s.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if v_sample.parent_id is not null and exists (
+          select 1 from private.trash_samples p
+          where p.id = v_sample.parent_id and p.deleted_at is not null
+        ) then
+          return 'parent_unavailable';
+        end if;
+        if v_sample.slot is not null and exists (
+          select 1 from private.trash_samples o
+          where o.id <> v_sample.id and o.deleted_at is null and o.slot = v_sample.slot
+            and o.owner_user_id is not distinct from v_sample.owner_user_id
+            and o.owner_home_id is not distinct from v_sample.owner_home_id
+        ) then
+          return 'slot_taken';
+        end if;
+        return null;
+      when 'dashboard_template' then
+        if not exists (
+          select 1 from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+    end case;
+    return null;
+  end
+  $$;
+
+create or replace function private.trash_resolve(p_entry private.trash_entries, p_resolution text)
+returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        if p_resolution = 'clear_slot' then
+          update private.trash_samples s set slot = null where s.id = p_entry.subject_id;
+        elsif p_resolution = 'detach_parent' then
+          update private.trash_samples s set parent_id = null where s.id = p_entry.subject_id;
+        end if;
+      when 'dashboard_template' then
+        -- No conflicts, so nothing to resolve.
+        null;
+    end case;
+  end
+  $$;
+
+create or replace function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+    v_lost integer := 0;
+    v_lost_ids uuid[] := '{}';
+    v_ref uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      if not private.restore_file(v_file_id) then
+        v_lost := v_lost + 1;
+        v_lost_ids := v_lost_ids || v_file_id;
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        -- The file the item uses must be usable too: it may have gone to the trash with another
+        -- item that shared it (the last one deleted takes it along).
+        select s.file_id into v_ref from private.trash_samples s where s.id = p_entry.subject_id;
+        if v_ref is not null and not (v_ref = any (v_lost_ids)) and not private.restore_file(v_ref) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_ref;
+        end if;
+        update private.trash_samples s
+          set deleted_at = null,
+            -- A reference to a file that is gone would be broken: drop it, the caller reports it.
+            file_id = case when s.file_id = any (v_lost_ids) then null else s.file_id end
+          where s.id = p_entry.subject_id;
+      when 'dashboard_template' then
+        -- Its shares come back with it; a share into a Home the owner has since left was already
+        -- ended by home_memberships_end_template_shares.
+        update private.dashboard_templates t set deleted_at = null, updated_at = pg_catalog.now()
+          where t.id = p_entry.subject_id;
+    end case;
+    return v_lost;
+  end
+  $$;
+
+create or replace function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      -- Never release a file another active item still uses.
+      if not exists (
+        select 1 from private.trash_samples s where s.file_id = v_file_id and s.deleted_at is null
+      ) then
+        perform private.purge_file_now(v_file_id);
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        delete from private.trash_samples s where s.id = p_entry.subject_id and s.deleted_at is not null;
+      when 'dashboard_template' then
+        -- Its shares go with it (on delete cascade).
+        delete from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null;
+    end case;
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.get_dashboard(uuid)',
+    'public.save_dashboard(jsonb, integer, uuid, jsonb)',
+    'public.undo_dashboard_change(integer, uuid)',
+    'public.list_dashboard_templates(uuid)',
+    'public.create_dashboard_template(text, text, jsonb)',
+    'public.rename_dashboard_template(uuid, text)',
+    'public.share_dashboard_template(uuid, uuid)',
+    'public.unshare_dashboard_template(uuid, uuid)',
+    'public.delete_dashboard_template(uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  foreach v_function in array array[
+    'private.is_delegable_capability(text)',
+    'private.dashboard_limit(text)',
+    'private.is_dashboard_layout(jsonb)',
+    'private.can_edit_home_dashboard(uuid, uuid)',
+    'private.is_home_member(uuid, uuid)',
+    'private.end_departed_template_shares()',
+    'private.can_share_template(text, uuid, uuid)',
+    'private.audit_template(text, uuid, uuid)',
+    'private.trash_conflict(private.trash_entries)',
+    'private.trash_resolve(private.trash_entries, text)',
+    'private.trash_item_restore(private.trash_entries)',
+    'private.trash_item_purge(private.trash_entries)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261026090000_tasks.sql
+-- ============================================================================
+-- S18: tasks core (brief plans/steps/S18-brief.md; ADR 0022; spec "Confirmed independent tasks
+-- without cross-task dependencies", "Confirmed basic task activity information", "Confirmed reusable
+-- task labels", "Confirmed multiple named task lists and All Tasks view", "Confirmed optional task
+-- start and due dates", "Confirmed multiple Home task assignees with shared completion", "Confirmed
+-- chronological task comments", "Confirmed task priority levels", "Confirmed simple task subtasks",
+-- "Confirmed member departure and removal: content ownership" (task reassignment rule)).
+--
+-- Every list, task and label belongs to one context: a person (their Personal space) or a Home.
+-- Nothing here is exposed as a table; people use security-definer functions that run with their own
+-- session and recheck the confirmed caller and their current membership on every call. A Home the
+-- caller does not belong to answers 42501 "not permitted" exactly like one that does not exist; a
+-- task, list, label, subtask or comment they may not see answers 'not_found' exactly like a missing one.
+--
+-- Who may do what (default picked in the brief, owner may override; the per-module permission matrix
+-- is open in the spec). packages/domain/src/permissions/tasks.ts makes the same decisions:
+-- - Personal context: its owner, for everything. Personal tasks have no assignees.
+-- - Home: every current member views lists, tasks, labels, subtasks and comments, creates tasks in
+--   an active list and comments; a task's creator, its assignees and task managers edit it (content,
+--   labels, subtasks, list) and complete or reopen it; its creator and task managers delete it; only
+--   task managers set assignees (spec: "the existing Home task-management permission") and manage
+--   lists and labels. Task managers: the Owner, and Administrators granted the new delegable
+--   capability manageHomeTasks. A member edits and deletes only their own comments.
+--
+-- People are never identified by account id outside their own Personal context: Home answers name
+-- members by membership id (the stable Home-member identifier of public.home_directory) and say
+-- "is me"; a departed member reads as null, so attribution stays without granting anything.
+--
+-- Concurrency: tasks, lists, labels, subtasks and comments carry a revision; an edit names the
+-- revision it started from and a stale one answers 'conflict' instead of overwriting. Completion is
+-- set-to-state under the task's row lock, so simultaneous completions record one actor and one
+-- event. Creates take a client-generated id, so a retried request returns the same row.
+
+-- Audit subjects and the new Administrator capability ----------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label'
+  ));
+
+-- packages/domain delegableCapabilities lists the same names.
+create or replace function private.is_delegable_capability(p_capability text) returns boolean
+  language sql immutable security definer set search_path = '' as $$
+  select p_capability in (
+    'manageHomeSettings', 'manageInvitations', 'removeMembers', 'manageHomeDashboard',
+    'manageHomeTasks'
+  );
+  $$;
+
+-- Limits and text rules ----------------------------------------------------------------------------
+
+-- apps/web/src/tasks/schema.ts uses the same numbers.
+create function private.task_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'lists' then 100              -- non-deleted lists per context
+    when 'labels' then 100             -- labels per context
+    when 'labels_per_task' then 20
+    when 'assignees_per_task' then 20
+    when 'subtasks' then 100           -- subtasks per task
+    when 'page' then 50                -- tasks one listing returns
+    when 'max_offset' then 10000
+    when 'comments_page' then 100
+    when 'list_name' then 60
+    when 'label_name' then 40
+    when 'title' then 200              -- task and subtask titles
+    when 'description' then 5000
+    when 'comment' then 2000
+  end;
+  $$;
+
+-- What two names compare as when looking for confusing duplicates: compatibility-normalized, lower
+-- case, runs of whitespace as one space.
+create function private.task_name_key(p_name text) returns text
+  language sql immutable strict set search_path = '' as $$
+  select pg_catalog.lower(pg_catalog.regexp_replace(pg_catalog.normalize(p_name, 'NFKC'), '\s+', ' ', 'g'));
+  $$;
+
+-- Plain multi-line text (descriptions, comments): within the limit, not only whitespace, and no
+-- control characters other than tab, line feed and carriage return.
+create function private.is_plain_text(p_text text, p_max integer) returns boolean
+  language sql immutable strict set search_path = '' as $$
+  select pg_catalog.char_length(p_text) between 1 and p_max
+    and pg_catalog.btrim(p_text, E' \t\r\n') <> ''
+    and p_text !~ '[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]';
+  $$;
+
+-- Tables -------------------------------------------------------------------------------------------
+
+create table private.task_lists (
+  id uuid primary key,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  name text not null constraint task_lists_name_check check (private.is_visible_name(name, 60)),
+  position integer not null default 0,
+  archived_at timestamptz,
+  -- Set while the list is in the trash (S16).
+  deleted_at timestamptz,
+  revision integer not null default 1 constraint task_lists_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint task_lists_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+create index task_lists_user_idx on private.task_lists (owner_user_id, position)
+  where deleted_at is null and owner_user_id is not null;
+create index task_lists_home_idx on private.task_lists (owner_home_id, position)
+  where deleted_at is null and owner_home_id is not null;
+
+create table private.tasks (
+  id uuid primary key,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  -- Exactly one list while the task is active. Purging a list leaves its trashed tasks without one;
+  -- restoring them then asks for a destination.
+  list_id uuid references private.task_lists (id) on delete set null,
+  title text not null constraint tasks_title_check check (private.is_visible_name(title, 200)),
+  description text constraint tasks_description_check
+    check (description is null or private.is_plain_text(description, 5000)),
+  -- Calendar dates in the context's timezone (date-only: never converted to instants).
+  start_date date,
+  due_date date,
+  -- Null is "unspecified", distinct from an explicit 'normal' (it sorts as Normal).
+  priority text constraint tasks_priority_check check (priority in ('low', 'normal', 'high', 'urgent')),
+  completed_at timestamptz,
+  completed_by uuid references auth.users (id) on delete set null,
+  -- The last reopening, shown next to the completion (spec: who completed or reopened it, and when).
+  reopened_at timestamptz,
+  reopened_by uuid references auth.users (id) on delete set null,
+  -- Set when an assignee left the Home while the task was open (spec reassignment rule); cleared when
+  -- a task manager sets the assignees again.
+  needs_reassignment boolean not null default false,
+  revision integer not null default 1 constraint tasks_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint tasks_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1),
+  constraint tasks_dates_check check (start_date is null or due_date is null or start_date <= due_date),
+  constraint tasks_list_check check (list_id is not null or deleted_at is not null),
+  constraint tasks_completed_by_check check (completed_at is not null or completed_by is null),
+  -- So assignees can name the task's Home in their own foreign key.
+  constraint tasks_id_home_key unique (id, owner_home_id)
+);
+
+create index tasks_list_idx on private.tasks (list_id) where deleted_at is null;
+create index tasks_home_idx on private.tasks (owner_home_id, due_date)
+  where deleted_at is null and owner_home_id is not null;
+create index tasks_user_idx on private.tasks (owner_user_id, due_date)
+  where deleted_at is null and owner_user_id is not null;
+
+-- A Home task's assignees. Both foreign keys hold the rule "a current member of the task's Home":
+-- the assignment names the task's Home, and the membership must exist; when it ends (leaving,
+-- removal, account deletion) the assignment ends with it.
+create table private.task_assignees (
+  task_id uuid not null,
+  home_id uuid not null,
+  user_id uuid not null,
+  assigned_by uuid references auth.users (id) on delete set null,
+  assigned_at timestamptz not null default now(),
+  primary key (task_id, user_id),
+  foreign key (task_id, home_id) references private.tasks (id, owner_home_id) on delete cascade,
+  foreign key (home_id, user_id) references public.home_memberships (home_id, user_id) on delete cascade
+);
+
+create index task_assignees_member_idx on private.task_assignees (home_id, user_id);
+
+create table private.task_labels (
+  id uuid primary key,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  name text not null constraint task_labels_name_check check (private.is_visible_name(name, 40)),
+  -- An accent palette id of packages/design-tokens (palette.ts; the app checks the same list); null
+  -- is the neutral default. The name is always shown with it, so colour never carries meaning alone.
+  color text constraint task_labels_color_check
+    check (color in (
+      'purple', 'blue', 'sky', 'teal', 'green', 'ochre', 'amber', 'orange', 'red', 'pink', 'magenta',
+      'slate'
+    )),
+  revision integer not null default 1 constraint task_labels_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint task_labels_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+create index task_labels_user_idx on private.task_labels (owner_user_id) where owner_user_id is not null;
+create index task_labels_home_idx on private.task_labels (owner_home_id) where owner_home_id is not null;
+
+-- Labels on a task; the functions only link labels of the task's own context.
+create table private.task_label_links (
+  task_id uuid not null references private.tasks (id) on delete cascade,
+  label_id uuid not null references private.task_labels (id) on delete cascade,
+  primary key (task_id, label_id)
+);
+
+create index task_label_links_label_idx on private.task_label_links (label_id);
+
+create table private.subtasks (
+  id uuid primary key,
+  task_id uuid not null references private.tasks (id) on delete cascade,
+  title text not null constraint subtasks_title_check check (private.is_visible_name(title, 200)),
+  position integer not null default 0,
+  completed_at timestamptz,
+  completed_by uuid references auth.users (id) on delete set null,
+  revision integer not null default 1 constraint subtasks_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index subtasks_task_idx on private.subtasks (task_id, position);
+
+create table private.task_comments (
+  id uuid primary key,
+  task_id uuid not null references private.tasks (id) on delete cascade,
+  -- Null once the author's account is deleted: the text stays, attributed to nobody.
+  author_id uuid references auth.users (id) on delete set null,
+  body text not null constraint task_comments_body_check check (private.is_plain_text(body, 2000)),
+  revision integer not null default 1 constraint task_comments_revision_check check (revision >= 1),
+  -- The clock, not the transaction start, so comments keep the order they were written in.
+  created_at timestamptz not null default clock_timestamp(),
+  edited_at timestamptz
+);
+
+create index task_comments_task_idx on private.task_comments (task_id, created_at, id);
+
+comment on table private.task_lists is 'S18: named task lists, personal or per Home. Not exposed through the API.';
+comment on table private.tasks is 'S18: personal and Home tasks. Not exposed through the API.';
+comment on table private.task_assignees is 'S18: Home task assignees (current members). Not exposed through the API.';
+comment on table private.task_labels is 'S18: reusable task labels per context. Not exposed through the API.';
+comment on table private.task_label_links is 'S18: labels on tasks. Not exposed through the API.';
+comment on table private.subtasks is 'S18: single-level task checklists. Not exposed through the API.';
+comment on table private.task_comments is 'S18: chronological plain-text task comments. Not exposed through the API.';
+
+alter table private.task_lists enable row level security;
+alter table private.tasks enable row level security;
+alter table private.task_assignees enable row level security;
+alter table private.task_labels enable row level security;
+alter table private.task_label_links enable row level security;
+alter table private.subtasks enable row level security;
+alter table private.task_comments enable row level security;
+revoke all on private.task_lists, private.tasks, private.task_assignees, private.task_labels,
+  private.task_label_links, private.subtasks, private.task_comments
+  from public, anon, authenticated;
+
+-- Member departure (spec "Confirmed task reassignment rule") ---------------------------------------
+
+-- Before a membership ends, the open tasks of that Home the person was assigned to are flagged for
+-- reassignment; the assignment itself then ends through its foreign key. Content, dates and
+-- completion history stay; completed tasks keep their attribution and are not flagged.
+create function private.flag_departed_assignments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    update private.tasks t set needs_reassignment = true
+      where t.owner_home_id = old.home_id and t.completed_at is null and not t.needs_reassignment
+        and exists (
+          select 1 from private.task_assignees a where a.task_id = t.id and a.user_id = old.user_id
+        );
+    return old;
+  end
+  $$;
+
+create trigger home_memberships_flag_task_assignments
+  before delete on public.home_memberships
+  for each row execute function private.flag_departed_assignments();
+
+-- Permission helpers (the engine in packages/domain mirrors these) ----------------------------------
+
+-- Whether p_user_id may see the context: its owner, or a current member of the Home.
+create function private.in_task_context(p_owner_user_id uuid, p_owner_home_id uuid, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  -- Every term is false, never null, when it does not hold.
+  select p_user_id is not null and (
+    coalesce(p_owner_user_id = p_user_id, false)
+    or (p_owner_home_id is not null and private.is_home_member(p_owner_home_id, p_user_id))
+  );
+  $$;
+
+-- Task managers: the Personal space's owner; in a Home the Owner and Administrators granted
+-- manageHomeTasks (engine action home.tasks.manage).
+create function private.can_manage_tasks(p_owner_user_id uuid, p_owner_home_id uuid, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and (
+    coalesce(p_owner_user_id = p_user_id, false)
+    or (p_owner_home_id is not null
+      and private.has_home_capability(p_owner_home_id, p_user_id, 'manageHomeTasks'))
+  );
+  $$;
+
+create function private.is_task_assignee(p_task_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.task_assignees a where a.task_id = p_task_id and a.user_id = p_user_id
+  );
+  $$;
+
+-- Edit and complete: a task manager, or a current member who created it or is assigned to it.
+create function private.can_edit_task(p_task private.tasks, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.can_manage_tasks(p_task.owner_user_id, p_task.owner_home_id, p_user_id)
+    or (
+      p_task.owner_home_id is not null
+      and private.is_home_member(p_task.owner_home_id, p_user_id)
+      and (coalesce(p_task.created_by = p_user_id, false) or private.is_task_assignee(p_task.id, p_user_id))
+    );
+  $$;
+
+-- Delete to the trash: a task manager, or the current member who created it.
+create function private.can_delete_task(p_task private.tasks, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.can_manage_tasks(p_task.owner_user_id, p_task.owner_home_id, p_user_id)
+    or (
+      p_task.owner_home_id is not null
+      and private.is_home_member(p_task.owner_home_id, p_user_id)
+      and coalesce(p_task.created_by = p_user_id, false)
+    );
+  $$;
+
+-- 42501 "not permitted" for a Home the caller does not belong to (or that does not exist).
+create function private.require_task_context(p_home_id uuid, p_user_id uuid) returns void
+  language plpgsql stable security definer set search_path = '' as $$
+  begin
+    if p_home_id is not null and not private.is_home_member(p_home_id, p_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+  end
+  $$;
+
+-- Whether one already loaded row belongs to the caller's chosen context. Queries over a table write
+-- the same condition inline as ((p_home_id is null and x.owner_user_id = user) or x.owner_home_id =
+-- p_home_id), so the planner can use the per-context indexes (a function call would hide them).
+create function private.is_context(
+  p_owner_user_id uuid, p_owner_home_id uuid, p_home_id uuid, p_user_id uuid
+) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(case when p_home_id is null then p_owner_user_id = p_user_id
+    else p_owner_home_id = p_home_id end, false);
+  $$;
+
+-- "Today" in the context: the Home's own timezone for a Home (whoever views it); for the Personal
+-- space the person's effective timezone is known to the app only (it may be the browser's), so the
+-- app passes its date, accepted only within a day of the UTC date (every zone is).
+create function private.task_today(p_home_id uuid, p_today date) returns date
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_home_id is not null then
+      (select (pg_catalog.now() at time zone h.timezone)::date from public.homes h where h.id = p_home_id)
+    when p_today is not null
+      and p_today between (pg_catalog.now() at time zone 'UTC')::date - 1
+        and (pg_catalog.now() at time zone 'UTC')::date + 1 then p_today
+    else (pg_catalog.now() at time zone 'UTC')::date
+  end;
+  $$;
+
+-- A person as a Home answer may name them: their current membership id in that Home, or null (the
+-- Personal space, a departed member or a deleted account).
+create function private.member_ref(p_home_id uuid, p_user_id uuid) returns uuid
+  language sql stable security definer set search_path = '' as $$
+  select m.id from public.home_memberships m where m.home_id = p_home_id and m.user_id = p_user_id;
+  $$;
+
+create function private.audit_task(
+  p_action text, p_home_id uuid, p_subject_type text, p_subject_id uuid, p_details jsonb default '{}'::jsonb
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  -- Ids and counts only: never titles, names, descriptions or comments. Home actions only.
+  select case when p_home_id is not null
+    then private.audit(p_action, p_home_id, p_subject_type, p_subject_id, p_details) end;
+  $$;
+
+-- The caller's context ------------------------------------------------------------------------------
+
+-- What the caller may do in a context, and its "today". 42501 for a Home they are not in.
+create function public.get_task_context(p_home_id uuid default null, p_today date default null)
+returns table (can_manage boolean, can_create boolean, today date)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    return query select
+      private.can_manage_tasks(case when p_home_id is null then v_user_id end, p_home_id, v_user_id),
+      true,
+      private.task_today(p_home_id, p_today);
+  end
+  $$;
+
+-- Lists ---------------------------------------------------------------------------------------------
+
+-- The context's lists in their order, with counts of open and of all active tasks (the impact review
+-- before archiving or deleting). Archived lists only when asked.
+create function public.list_task_lists(p_home_id uuid default null, p_include_archived boolean default false)
+returns table (
+  id uuid, name text, "position" integer, archived boolean, revision integer,
+  open_tasks integer, active_tasks integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    return query
+      select l.id, l.name, l.position, l.archived_at is not null, l.revision,
+        (select count(*)::integer from private.tasks t
+          where t.list_id = l.id and t.deleted_at is null and t.completed_at is null),
+        (select count(*)::integer from private.tasks t where t.list_id = l.id and t.deleted_at is null)
+      from private.task_lists l
+      where ((p_home_id is null and l.owner_user_id = v_user_id) or l.owner_home_id = p_home_id)
+        and l.deleted_at is null and (coalesce(p_include_archived, false) or l.archived_at is null)
+      order by l.archived_at is not null, l.position, l.created_at, l.id
+      limit private.task_limit('lists');
+  end
+  $$;
+
+-- Serializes name checks and limits within one context, so two creates cannot both pass.
+create function private.lock_task_context(p_kind text, p_home_id uuid, p_user_id uuid) returns void
+  language sql volatile security definer set search_path = '' as $$
+  select pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_kind || ':' || coalesce(p_home_id, p_user_id)::text, 0));
+  $$;
+
+create function private.task_list_name_taken(
+  p_home_id uuid, p_user_id uuid, p_name text, p_except uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.task_lists l
+    where ((p_home_id is null and l.owner_user_id = p_user_id) or l.owner_home_id = p_home_id)
+      and l.deleted_at is null and l.id is distinct from p_except
+      and private.task_name_key(l.name) = private.task_name_key(p_name)
+  );
+  $$;
+
+-- Creates a list (task managers). Outcomes: 'created', 'exists' (a retry of the caller's own create),
+-- 'id_taken', 'duplicate_name', 'limit_reached', 'not_permitted'. 22023 for an invalid name.
+create function public.create_task_list(p_id uuid, p_name text, p_home_id uuid default null)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.task_lists;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_id is null or p_name is null or not private.is_visible_name(p_name, private.task_limit('list_name')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_existing from private.task_lists l where l.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id
+         and private.is_context(v_existing.owner_user_id, v_existing.owner_home_id, p_home_id, v_user_id) then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if not private.can_manage_tasks(case when p_home_id is null then v_user_id end, p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    perform private.lock_task_context('task_lists', p_home_id, v_user_id);
+    if private.task_list_name_taken(p_home_id, v_user_id, p_name, null) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    if (select count(*) from private.task_lists l
+        where ((p_home_id is null and l.owner_user_id = v_user_id) or l.owner_home_id = p_home_id)
+          and l.deleted_at is null) >= private.task_limit('lists') then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.task_lists (id, owner_user_id, owner_home_id, name, position, created_by)
+      values (
+        p_id, case when p_home_id is null then v_user_id end, p_home_id, p_name,
+        coalesce((select max(l.position) + 1 from private.task_lists l
+          where ((p_home_id is null and l.owner_user_id = v_user_id) or l.owner_home_id = p_home_id)
+            and l.deleted_at is null), 0),
+        v_user_id
+      )
+      on conflict (id) do nothing;
+    if not found then
+      -- The same id arrived twice at once: the other request created it (or someone else holds it).
+      return query select case when l.created_by = v_user_id then 'exists' else 'id_taken' end,
+        case when l.created_by = v_user_id then l.revision end
+        from private.task_lists l where l.id = p_id;
+      return;
+    end if;
+    perform private.audit_task('task_list.created', p_home_id, 'task_list', p_id);
+    return query select 'created', 1;
+  end
+  $$;
+
+-- Loads a list for a change by p_user_id, locked. Null when it is missing, deleted or not theirs to see.
+create function private.lock_task_list(p_list_id uuid, p_user_id uuid) returns private.task_lists
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_list private.task_lists;
+  begin
+    select * into v_list from private.task_lists l where l.id = p_list_id for update;
+    if not found or v_list.deleted_at is not null
+       or not private.in_task_context(v_list.owner_user_id, v_list.owner_home_id, p_user_id) then
+      return null;
+    end if;
+    return v_list;
+  end
+  $$;
+
+-- Renames, archives or unarchives a list (task managers). Outcomes: 'saved' (with the new revision),
+-- 'conflict' (with the current one), 'duplicate_name', 'has_open_tasks' (archiving a list that still
+-- has open tasks: move, complete or delete them first), 'not_found', 'not_permitted'.
+create function public.update_task_list(
+  p_list_id uuid, p_expected_revision integer, p_name text, p_archived boolean
+) returns table (outcome text, revision integer, open_tasks integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_list private.task_lists;
+    v_open integer;
+  begin
+    if p_list_id is null or p_expected_revision is null or p_archived is null or p_name is null
+       or not private.is_visible_name(p_name, private.task_limit('list_name')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The context lock first, then the row: the same order as reorder_task_lists and create, so
+    -- a rename and a reorder of the same context queue instead of deadlocking.
+    select * into v_list from private.task_lists l where l.id = p_list_id;
+    if found and private.in_task_context(v_list.owner_user_id, v_list.owner_home_id, v_user_id) then
+      perform private.lock_task_context('task_lists', v_list.owner_home_id, v_list.owner_user_id);
+    end if;
+    v_list := private.lock_task_list(p_list_id, v_user_id);
+    if v_list.id is null then
+      return query select 'not_found', null::integer, null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_list.owner_user_id, v_list.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer, null::integer;
+      return;
+    end if;
+    if v_list.revision <> p_expected_revision then
+      return query select 'conflict', v_list.revision, null::integer;
+      return;
+    end if;
+    if p_name <> v_list.name then
+      if private.task_list_name_taken(
+        v_list.owner_home_id, coalesce(v_list.owner_user_id, v_user_id), p_name, v_list.id
+      ) then
+        return query select 'duplicate_name', null::integer, null::integer;
+        return;
+      end if;
+    end if;
+    if p_archived and v_list.archived_at is null then
+      -- The list row is locked, so a task created or moved into it meanwhile has committed or waits.
+      select count(*)::integer into v_open from private.tasks t
+        where t.list_id = v_list.id and t.deleted_at is null and t.completed_at is null;
+      if v_open > 0 then
+        return query select 'has_open_tasks', null::integer, v_open;
+        return;
+      end if;
+    end if;
+    update private.task_lists l
+      set name = p_name,
+        archived_at = case when p_archived then coalesce(l.archived_at, pg_catalog.now()) end,
+        revision = l.revision + 1, updated_at = pg_catalog.now()
+      where l.id = v_list.id
+      returning * into v_list;
+    perform private.audit_task('task_list.updated', v_list.owner_home_id, 'task_list', v_list.id,
+      pg_catalog.jsonb_build_object('archived', p_archived));
+    return query select 'saved', v_list.revision, null::integer;
+  end
+  $$;
+
+-- Puts the context's lists in the given order (task managers); lists not named keep their place
+-- after the named ones. Outcomes: 'saved', 'not_permitted'.
+create function public.reorder_task_lists(p_list_ids uuid[], p_home_id uuid default null)
+returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_list_ids is null or cardinality(p_list_ids) not between 1 and private.task_limit('lists') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.can_manage_tasks(case when p_home_id is null then v_user_id end, p_home_id, v_user_id) then
+      return 'not_permitted';
+    end if;
+    perform private.lock_task_context('task_lists', p_home_id, v_user_id);
+    update private.task_lists l
+      set position = coalesce(o.ord, cardinality(p_list_ids) + l.position)::integer,
+        updated_at = pg_catalog.now()
+      from private.task_lists l2
+      left join (select x.id, x.ord from unnest(p_list_ids) with ordinality as x (id, ord)) o
+        on o.id = l2.id
+      where l.id = l2.id and l.deleted_at is null
+        and ((p_home_id is null and l.owner_user_id = v_user_id) or l.owner_home_id = p_home_id);
+    return 'saved';
+  end
+  $$;
+
+-- Moves a list to the trash (task managers), only when no active task is in it: the impact review
+-- asks the person to move or delete its tasks first, so no task is silently hidden. Outcomes:
+-- 'deleted' (with the trash entry), 'conflict', 'has_tasks' (with the count), 'not_found',
+-- 'not_permitted'.
+create function public.delete_task_list(p_list_id uuid, p_expected_revision integer)
+returns table (outcome text, entry_id uuid, active_tasks integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_list private.task_lists;
+    v_active integer;
+  begin
+    if p_list_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_list := private.lock_task_list(p_list_id, v_user_id);
+    if v_list.id is null then
+      return query select 'not_found', null::uuid, null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_list.owner_user_id, v_list.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::uuid, null::integer;
+      return;
+    end if;
+    if v_list.revision <> p_expected_revision then
+      return query select 'conflict', null::uuid, null::integer;
+      return;
+    end if;
+    select count(*)::integer into v_active from private.tasks t
+      where t.list_id = v_list.id and t.deleted_at is null;
+    if v_active > 0 then
+      return query select 'has_tasks', null::uuid, v_active;
+      return;
+    end if;
+    update private.task_lists l set deleted_at = pg_catalog.now() where l.id = v_list.id;
+    return query select 'deleted',
+      private.trash_move(v_user_id, 'tasks', 'task_list', v_list.id, v_list.owner_user_id,
+        v_list.owner_home_id, v_list.name),
+      null::integer;
+  end
+  $$;
+
+-- Labels --------------------------------------------------------------------------------------------
+
+-- The context's labels by name, with how many active tasks use each (the impact count before
+-- removal: every member sees every task of the context, so the count reveals nothing hidden).
+create function public.list_task_labels(p_home_id uuid default null)
+returns table (id uuid, name text, color text, revision integer, task_count integer)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    return query
+      select l.id, l.name, l.color, l.revision,
+        (select count(*)::integer from private.task_label_links k
+          join private.tasks t on t.id = k.task_id
+          where k.label_id = l.id and t.deleted_at is null)
+      from private.task_labels l
+      where ((p_home_id is null and l.owner_user_id = v_user_id) or l.owner_home_id = p_home_id)
+      order by private.task_name_key(l.name), l.id
+      limit private.task_limit('labels');
+  end
+  $$;
+
+create function private.task_label_name_taken(
+  p_home_id uuid, p_user_id uuid, p_name text, p_except uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.task_labels l
+    where ((p_home_id is null and l.owner_user_id = p_user_id) or l.owner_home_id = p_home_id)
+      and l.id is distinct from p_except
+      and private.task_name_key(l.name) = private.task_name_key(p_name)
+  );
+  $$;
+
+create function private.is_task_label_color(p_color text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select p_color is null or p_color in (
+      'purple', 'blue', 'sky', 'teal', 'green', 'ochre', 'amber', 'orange', 'red', 'pink', 'magenta',
+      'slate'
+    );
+  $$;
+
+-- Creates a label (task managers). Outcomes as create_task_list.
+create function public.create_task_label(
+  p_id uuid, p_name text, p_color text default null, p_home_id uuid default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.task_labels;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_id is null or p_name is null or not private.is_visible_name(p_name, private.task_limit('label_name'))
+       or not private.is_task_label_color(p_color) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_existing from private.task_labels l where l.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id
+         and private.is_context(v_existing.owner_user_id, v_existing.owner_home_id, p_home_id, v_user_id) then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if not private.can_manage_tasks(case when p_home_id is null then v_user_id end, p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    perform private.lock_task_context('task_labels', p_home_id, v_user_id);
+    if private.task_label_name_taken(p_home_id, v_user_id, p_name, null) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    if (select count(*) from private.task_labels l
+        where ((p_home_id is null and l.owner_user_id = v_user_id) or l.owner_home_id = p_home_id))
+       >= private.task_limit('labels') then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.task_labels (id, owner_user_id, owner_home_id, name, color, created_by)
+      values (p_id, case when p_home_id is null then v_user_id end, p_home_id, p_name, p_color, v_user_id)
+      on conflict (id) do nothing;
+    if not found then
+      return query select case when l.created_by = v_user_id then 'exists' else 'id_taken' end,
+        case when l.created_by = v_user_id then l.revision end
+        from private.task_labels l where l.id = p_id;
+      return;
+    end if;
+    perform private.audit_task('task_label.created', p_home_id, 'task_label', p_id);
+    return query select 'created', 1;
+  end
+  $$;
+
+create function private.lock_task_label(p_label_id uuid, p_user_id uuid) returns private.task_labels
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_label private.task_labels;
+  begin
+    select * into v_label from private.task_labels l where l.id = p_label_id for update;
+    if not found or not private.in_task_context(v_label.owner_user_id, v_label.owner_home_id, p_user_id) then
+      return null;
+    end if;
+    return v_label;
+  end
+  $$;
+
+-- Renames or recolours a label (task managers): every task shows the new name at once; nothing else
+-- about the tasks changes. Outcomes: 'saved', 'conflict', 'duplicate_name', 'not_found', 'not_permitted'.
+create function public.update_task_label(
+  p_label_id uuid, p_expected_revision integer, p_name text, p_color text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_label private.task_labels;
+  begin
+    if p_label_id is null or p_expected_revision is null or p_name is null
+       or not private.is_visible_name(p_name, private.task_limit('label_name'))
+       or not private.is_task_label_color(p_color) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_label from private.task_labels l where l.id = p_label_id;
+    if found and private.in_task_context(v_label.owner_user_id, v_label.owner_home_id, v_user_id) then
+      perform private.lock_task_context('task_labels', v_label.owner_home_id, v_label.owner_user_id);
+    end if;
+    v_label := private.lock_task_label(p_label_id, v_user_id);
+    if v_label.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_label.owner_user_id, v_label.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_label.revision <> p_expected_revision then
+      return query select 'conflict', v_label.revision;
+      return;
+    end if;
+    if private.task_label_name_taken(
+      v_label.owner_home_id, coalesce(v_label.owner_user_id, v_user_id), p_name, v_label.id
+    ) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    update private.task_labels l
+      set name = p_name, color = p_color, revision = l.revision + 1, updated_at = pg_catalog.now()
+      where l.id = v_label.id
+      returning * into v_label;
+    perform private.audit_task('task_label.updated', v_label.owner_home_id, 'task_label', v_label.id);
+    return query select 'saved', v_label.revision;
+  end
+  $$;
+
+-- Removes a label (task managers) after the impact review: it is detached from its tasks, which are
+-- not otherwise changed. A label renamed or recoloured since the review answers 'conflict'.
+-- Outcomes: 'deleted' (with how many tasks it was on), 'conflict', 'not_found', 'not_permitted'.
+create function public.delete_task_label(p_label_id uuid, p_expected_revision integer)
+returns table (outcome text, detached integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_label private.task_labels;
+    v_count integer;
+  begin
+    if p_label_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_label := private.lock_task_label(p_label_id, v_user_id);
+    if v_label.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_label.owner_user_id, v_label.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_label.revision <> p_expected_revision then
+      return query select 'conflict', null::integer;
+      return;
+    end if;
+    select count(*)::integer into v_count from private.task_label_links k where k.label_id = v_label.id;
+    delete from private.task_labels l where l.id = v_label.id;
+    perform private.audit_task('task_label.deleted', v_label.owner_home_id, 'task_label', v_label.id,
+      pg_catalog.jsonb_build_object('detached', v_count));
+    return query select 'deleted', v_count;
+  end
+  $$;
+
+-- Tasks: shared checks -----------------------------------------------------------------------------
+
+-- Whether every id names a label of the context, at most the per-task limit.
+create function private.valid_task_labels(
+  p_label_ids uuid[], p_owner_user_id uuid, p_owner_home_id uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(cardinality(p_label_ids), 0) <= private.task_limit('labels_per_task')
+    and (select count(*) from private.task_labels l
+      where l.id = any (coalesce(p_label_ids, '{}'))
+        and l.owner_user_id is not distinct from p_owner_user_id
+        and l.owner_home_id is not distinct from p_owner_home_id)
+      = (select count(distinct x) from unnest(coalesce(p_label_ids, '{}')) as x);
+  $$;
+
+create function private.replace_task_labels(p_task_id uuid, p_label_ids uuid[]) returns void
+  language sql volatile security definer set search_path = '' as $$
+  delete from private.task_label_links k
+    where k.task_id = p_task_id and not (k.label_id = any (coalesce(p_label_ids, '{}')));
+  insert into private.task_label_links (task_id, label_id)
+    select p_task_id, x from unnest(coalesce(p_label_ids, '{}')) as x
+    on conflict do nothing;
+  $$;
+
+-- Membership ids of the Home turned into account ids; null when any is not a current member.
+create function private.member_users(p_home_id uuid, p_member_ids uuid[]) returns uuid[]
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when (select count(*) from public.home_memberships m
+          where m.home_id = p_home_id and m.id = any (coalesce(p_member_ids, '{}')))
+       = (select count(distinct x) from unnest(coalesce(p_member_ids, '{}')) as x)
+    then coalesce((select array_agg(m.user_id order by m.user_id) from public.home_memberships m
+      where m.home_id = p_home_id and m.id = any (coalesce(p_member_ids, '{}'))), '{}')
+  end;
+  $$;
+
+create function private.replace_task_assignees(
+  p_task_id uuid, p_home_id uuid, p_user_ids uuid[], p_actor uuid
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  delete from private.task_assignees a
+    where a.task_id = p_task_id and not (a.user_id = any (coalesce(p_user_ids, '{}')));
+  insert into private.task_assignees (task_id, home_id, user_id, assigned_by)
+    select p_task_id, p_home_id, x, p_actor from unnest(coalesce(p_user_ids, '{}')) as x
+    on conflict do nothing;
+  $$;
+
+-- A task's list for a change: locked for share (an archive or delete of the list waits) and usable
+-- when it is active, not archived, and in the given context.
+create function private.usable_task_list(
+  p_list_id uuid, p_owner_user_id uuid, p_owner_home_id uuid
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_list private.task_lists;
+  begin
+    select * into v_list from private.task_lists l where l.id = p_list_id for share;
+    return found and v_list.deleted_at is null and v_list.archived_at is null
+      and v_list.owner_user_id is not distinct from p_owner_user_id
+      and v_list.owner_home_id is not distinct from p_owner_home_id;
+  end
+  $$;
+
+-- Loads a task for a change by p_user_id, locked. Null when missing, deleted or not theirs to see.
+create function private.lock_task(p_task_id uuid, p_user_id uuid) returns private.tasks
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_task private.tasks;
+  begin
+    select * into v_task from private.tasks t where t.id = p_task_id for update;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, p_user_id) then
+      return null;
+    end if;
+    return v_task;
+  end
+  $$;
+
+create function private.valid_task_fields(
+  p_title text, p_description text, p_start date, p_due date, p_priority text
+) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(
+    p_title is not null and private.is_visible_name(p_title, private.task_limit('title'))
+    and (p_description is null or private.is_plain_text(p_description, private.task_limit('description')))
+    and (p_start is null or p_due is null or p_start <= p_due)
+    and (p_priority is null or p_priority in ('low', 'normal', 'high', 'urgent')),
+    false);
+  $$;
+
+-- Tasks: create, edit, assign, move, complete, delete -----------------------------------------------
+
+-- Creates a task in an active list of the context. Any current member may create; assignees (Home
+-- tasks only) need a task manager. Outcomes: 'created', 'exists' (a retry), 'id_taken',
+-- 'list_unavailable', 'invalid_label', 'invalid_assignee', 'not_permitted'. 22023 for invalid fields.
+create function public.create_task(
+  p_id uuid, p_list_id uuid, p_title text, p_description text default null,
+  p_start_date date default null, p_due_date date default null, p_priority text default null,
+  p_label_ids uuid[] default '{}', p_assignee_ids uuid[] default '{}', p_home_id uuid default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.tasks;
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_users uuid[] := '{}';
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_id is null or p_list_id is null
+       or not private.valid_task_fields(p_title, p_description, p_start_date, p_due_date, p_priority) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_existing from private.tasks t where t.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id
+         and private.is_context(v_existing.owner_user_id, v_existing.owner_home_id, p_home_id, v_user_id) then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if not private.usable_task_list(p_list_id, v_owner_user, p_home_id) then
+      return query select 'list_unavailable', null::integer;
+      return;
+    end if;
+    if not private.valid_task_labels(p_label_ids, v_owner_user, p_home_id) then
+      return query select 'invalid_label', null::integer;
+      return;
+    end if;
+    if coalesce(cardinality(p_assignee_ids), 0) > 0 then
+      if p_home_id is null then
+        return query select 'invalid_assignee', null::integer;
+        return;
+      end if;
+      if not private.can_manage_tasks(null, p_home_id, v_user_id) then
+        return query select 'not_permitted', null::integer;
+        return;
+      end if;
+      v_users := private.member_users(p_home_id, p_assignee_ids);
+      if v_users is null or cardinality(v_users) > private.task_limit('assignees_per_task') then
+        return query select 'invalid_assignee', null::integer;
+        return;
+      end if;
+    end if;
+    insert into private.tasks (
+      id, owner_user_id, owner_home_id, list_id, title, description, start_date, due_date, priority,
+      created_by, updated_by
+    ) values (
+      p_id, v_owner_user, p_home_id, p_list_id, p_title, p_description, p_start_date, p_due_date,
+      p_priority, v_user_id, v_user_id
+    )
+    on conflict (id) do nothing;
+    if not found then
+      return query select case when t.created_by = v_user_id then 'exists' else 'id_taken' end,
+        case when t.created_by = v_user_id then t.revision end
+        from private.tasks t where t.id = p_id;
+      return;
+    end if;
+    perform private.replace_task_labels(p_id, p_label_ids);
+    if p_home_id is not null then
+      perform private.replace_task_assignees(p_id, p_home_id, v_users, v_user_id);
+    end if;
+    perform private.audit_task('task.created', p_home_id, 'task', p_id,
+      pg_catalog.jsonb_build_object('assignees', cardinality(v_users)));
+    return query select 'created', 1;
+  end
+  $$;
+
+-- Saves a task's content (title, description, dates, priority, labels) if nobody changed it since
+-- p_expected_revision. Outcomes: 'saved', 'conflict', 'invalid_label', 'not_found', 'not_permitted'.
+-- Omitted optional fields are cleared (null), so the caller always sends the whole content.
+create function public.update_task(
+  p_task_id uuid, p_expected_revision integer, p_title text, p_label_ids uuid[],
+  p_description text default null, p_start_date date default null, p_due_date date default null,
+  p_priority text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+  begin
+    if p_task_id is null or p_expected_revision is null or p_label_ids is null
+       or not private.valid_task_fields(p_title, p_description, p_start_date, p_due_date, p_priority) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_task.revision <> p_expected_revision then
+      return query select 'conflict', v_task.revision;
+      return;
+    end if;
+    if not private.valid_task_labels(p_label_ids, v_task.owner_user_id, v_task.owner_home_id) then
+      return query select 'invalid_label', null::integer;
+      return;
+    end if;
+    update private.tasks t
+      set title = p_title, description = p_description, start_date = p_start_date,
+        due_date = p_due_date, priority = p_priority, revision = t.revision + 1,
+        updated_by = v_user_id, updated_at = pg_catalog.now()
+      where t.id = v_task.id
+      returning * into v_task;
+    perform private.replace_task_labels(v_task.id, p_label_ids);
+    return query select 'saved', v_task.revision;
+  end
+  $$;
+
+-- Sets a Home task's assignees (task managers only), as membership ids of current members; clears
+-- the reassignment flag. Outcomes: 'saved', 'conflict', 'invalid_assignee', 'not_found', 'not_permitted'.
+create function public.set_task_assignees(
+  p_task_id uuid, p_expected_revision integer, p_member_ids uuid[]
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_users uuid[];
+  begin
+    if p_task_id is null or p_expected_revision is null or p_member_ids is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if v_task.owner_home_id is null or not private.can_manage_tasks(null, v_task.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_task.revision <> p_expected_revision then
+      return query select 'conflict', v_task.revision;
+      return;
+    end if;
+    v_users := private.member_users(v_task.owner_home_id, p_member_ids);
+    if v_users is null or cardinality(v_users) > private.task_limit('assignees_per_task') then
+      return query select 'invalid_assignee', null::integer;
+      return;
+    end if;
+    perform private.replace_task_assignees(v_task.id, v_task.owner_home_id, v_users, v_user_id);
+    update private.tasks t
+      set needs_reassignment = false, revision = t.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where t.id = v_task.id
+      returning * into v_task;
+    perform private.audit_task('task.assignees_set', v_task.owner_home_id, 'task', v_task.id,
+      pg_catalog.jsonb_build_object('assignees', cardinality(v_users)));
+    return query select 'saved', v_task.revision;
+  end
+  $$;
+
+-- Moves a task to another active list of the same context, keeping everything else. Outcomes:
+-- 'saved', 'conflict', 'list_unavailable' (deleted, archived, missing or in another context),
+-- 'not_found', 'not_permitted'.
+create function public.move_task(p_task_id uuid, p_expected_revision integer, p_list_id uuid)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+  begin
+    if p_task_id is null or p_expected_revision is null or p_list_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_task.revision <> p_expected_revision then
+      return query select 'conflict', v_task.revision;
+      return;
+    end if;
+    if not private.usable_task_list(p_list_id, v_task.owner_user_id, v_task.owner_home_id) then
+      return query select 'list_unavailable', null::integer;
+      return;
+    end if;
+    if v_task.list_id = p_list_id then
+      return query select 'saved', v_task.revision;
+      return;
+    end if;
+    update private.tasks t
+      set list_id = p_list_id, revision = t.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where t.id = v_task.id
+      returning * into v_task;
+    return query select 'saved', v_task.revision;
+  end
+  $$;
+
+-- Completes or reopens a task: one shared state for every assignee. Set-to-state under the row
+-- lock, so of two simultaneous completions one records the actor and the event and the other
+-- answers 'already_completed' with that actor; a retry changes nothing. Reopening keeps the
+-- subtasks' states and records who reopened it; it needs the task's list to be active
+-- ('list_unavailable' otherwise). Outcomes: 'completed', 'reopened', 'already_completed',
+-- 'already_open', 'list_unavailable', 'not_found', 'not_permitted'; completed_by_me /
+-- completed_by_member name the actual completer.
+create function public.set_task_completion(p_task_id uuid, p_completed boolean)
+returns table (
+  outcome text, completed_at timestamptz, completed_by_me boolean, completed_by_member uuid
+)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_outcome text;
+  begin
+    if p_task_id is null or p_completed is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::timestamptz, false, null::uuid;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::timestamptz, false, null::uuid;
+      return;
+    end if;
+    if p_completed and v_task.completed_at is not null then
+      v_outcome := 'already_completed';
+    elsif not p_completed and v_task.completed_at is null then
+      v_outcome := 'already_open';
+    elsif not p_completed
+       and not private.usable_task_list(v_task.list_id, v_task.owner_user_id, v_task.owner_home_id) then
+      -- Reopening inside an archived (or deleted) list would leave an open task that All Tasks does
+      -- not show: the person moves it to an active list, or unarchives the list, first.
+      v_outcome := 'list_unavailable';
+    else
+      update private.tasks t
+        set completed_at = case when p_completed then pg_catalog.now() end,
+          completed_by = case when p_completed then v_user_id end,
+          reopened_at = case when p_completed then t.reopened_at else pg_catalog.now() end,
+          reopened_by = case when p_completed then t.reopened_by else v_user_id end
+        where t.id = v_task.id
+        returning * into v_task;
+      v_outcome := case when p_completed then 'completed' else 'reopened' end;
+      -- One event per state change, never one per assignee.
+      perform private.audit_task('task.' || v_outcome, v_task.owner_home_id, 'task', v_task.id);
+    end if;
+    return query select v_outcome, v_task.completed_at,
+      coalesce(v_task.completed_by = v_user_id, false),
+      private.member_ref(v_task.owner_home_id, v_task.completed_by);
+  end
+  $$;
+
+-- Moves a task to the trash with its subtasks, comments, labels and assignees (they stay attached and
+-- come back with it). Its creator or a task manager. Outcomes: 'deleted' (with the entry),
+-- 'not_found', 'not_permitted'.
+create function public.delete_task(p_task_id uuid)
+returns table (outcome text, entry_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+  begin
+    if p_task_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::uuid;
+      return;
+    end if;
+    if not private.can_delete_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::uuid;
+      return;
+    end if;
+    update private.tasks t set deleted_at = pg_catalog.now() where t.id = v_task.id;
+    -- No files yet: attachments arrive in S19 and will pass their exclusive files here.
+    return query select 'deleted',
+      private.trash_move(v_user_id, 'tasks', 'task', v_task.id, v_task.owner_user_id,
+        v_task.owner_home_id, v_task.title);
+  end
+  $$;
+
+-- Tasks: reading -----------------------------------------------------------------------------------
+
+-- Priority order for sorting: unspecified sorts as Normal (spec), Low < Normal < High < Urgent.
+create function private.task_priority_rank(p_priority text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_priority when 'low' then 1 when 'high' then 3 when 'urgent' then 4 else 2 end;
+  $$;
+
+-- One page of the context's tasks (p_list_id null: All Tasks, every active list), filtered and
+-- sorted, with the filtered total. Only small fields: the details come from get_task.
+--   p_status: 'open', 'completed' or 'all'. p_when: 'any', 'upcoming' (open, start after today),
+--   'active' (open, started or no start, not overdue), 'overdue' (open, due before today).
+--   p_hide_future: leaves out open tasks that start after today (not with 'upcoming').
+--   p_priorities: any of 'low', 'normal', 'high', 'urgent', 'unset'. p_label_ids: any of them.
+--   p_assignee: 'any', 'me', 'unassigned', 'needs_reassignment' or 'member' (p_assignee_member).
+--   p_sort: 'due', 'priority_desc', 'priority_asc' or 'created'; ties by due date, creation, id.
+create function public.list_tasks(
+  p_home_id uuid default null, p_list_id uuid default null, p_today date default null,
+  p_status text default 'open', p_when text default 'any', p_hide_future boolean default false,
+  p_priorities text[] default null, p_label_ids uuid[] default null,
+  p_assignee text default 'any', p_assignee_member uuid default null,
+  p_sort text default 'due', p_limit integer default 50, p_offset integer default 0
+) returns table (
+  id uuid, list_id uuid, list_name text, title text, start_date date, due_date date,
+  priority text, completed_at timestamptz, needs_reassignment boolean, overdue boolean,
+  upcoming boolean, subtasks_done integer, subtasks_total integer, comment_count integer,
+  label_ids uuid[], assignee_member_ids uuid[], assigned_to_me boolean, can_complete boolean,
+  revision integer, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_member_user uuid;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_status is null or p_status not in ('open', 'completed', 'all')
+       or p_when is null or p_when not in ('any', 'upcoming', 'active', 'overdue')
+       or p_assignee is null or p_assignee not in ('any', 'me', 'unassigned', 'needs_reassignment', 'member')
+       or (p_assignee = 'member') <> (p_assignee_member is not null)
+       or p_sort is null or p_sort not in ('due', 'priority_desc', 'priority_asc', 'created')
+       or p_limit is null or p_limit not between 1 and private.task_limit('page')
+       or p_offset is null or p_offset not between 0 and private.task_limit('max_offset')
+       or (p_priorities is not null and not (p_priorities <@ array['low', 'normal', 'high', 'urgent', 'unset']))
+       or coalesce(cardinality(p_label_ids), 0) > private.task_limit('labels') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, p_today);
+    if p_assignee = 'member' then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_assignee_member;
+      -- A member who is not (or no longer) in this Home is assigned to nothing.
+      v_member_user := coalesce(v_member_user, '00000000-0000-0000-0000-000000000000');
+    end if;
+    return query
+      with base as (
+        select t.*, l.name as l_name, t as t_row
+        from private.tasks t
+        join private.task_lists l on l.id = t.list_id
+        where ((p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id)
+          and t.deleted_at is null and l.deleted_at is null
+          and (case when p_list_id is null then l.archived_at is null else l.id = p_list_id end)
+          and (p_status = 'all' or (p_status = 'open') = (t.completed_at is null))
+          and (p_when = 'any' or (t.completed_at is null and case p_when
+            when 'upcoming' then t.start_date > v_today
+            when 'active' then (t.start_date is null or t.start_date <= v_today)
+              and not coalesce(t.due_date < v_today, false)
+            when 'overdue' then t.due_date < v_today
+          end))
+          and (not coalesce(p_hide_future, false) or p_when = 'upcoming' or t.completed_at is not null
+            or not coalesce(t.start_date > v_today, false))
+          and (p_priorities is null or coalesce(t.priority, 'unset') = any (p_priorities))
+          and (coalesce(cardinality(p_label_ids), 0) = 0 or exists (
+            select 1 from private.task_label_links k where k.task_id = t.id and k.label_id = any (p_label_ids)))
+          and (case p_assignee
+            when 'any' then true
+            when 'me' then private.is_task_assignee(t.id, v_user_id)
+            when 'unassigned' then not exists (select 1 from private.task_assignees a where a.task_id = t.id)
+            when 'needs_reassignment' then t.needs_reassignment
+            when 'member' then private.is_task_assignee(t.id, v_member_user)
+          end)
+      ), page as (
+        select b.*, count(*) over ()::integer as total
+        from base b
+        order by
+          case when p_sort = 'priority_desc' then private.task_priority_rank(b.priority) end desc,
+          case when p_sort = 'priority_asc' then private.task_priority_rank(b.priority) end asc,
+          case when p_sort = 'created' then b.created_at end desc,
+          b.due_date asc nulls last, b.created_at asc, b.id asc
+        limit p_limit offset p_offset
+      )
+      select p.id, p.list_id, p.l_name, p.title, p.start_date, p.due_date, p.priority, p.completed_at,
+        p.needs_reassignment,
+        p.completed_at is null and coalesce(p.due_date < v_today, false),
+        p.completed_at is null and coalesce(p.start_date > v_today, false),
+        (select count(*)::integer from private.subtasks s where s.task_id = p.id and s.completed_at is not null),
+        (select count(*)::integer from private.subtasks s where s.task_id = p.id),
+        (select count(*)::integer from private.task_comments c where c.task_id = p.id),
+        coalesce((select array_agg(k.label_id order by k.label_id) from private.task_label_links k
+          where k.task_id = p.id), '{}'),
+        -- Oldest membership first, as in get_task, so every view lists assignees alike.
+        coalesce((select array_agg(m.id order by m.created_at, m.id) from private.task_assignees a
+          join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+          where a.task_id = p.id), '{}'),
+        private.is_task_assignee(p.id, v_user_id),
+        private.can_edit_task(p.t_row, v_user_id),
+        p.revision, p.total
+      from page p
+      order by
+        case when p_sort = 'priority_desc' then private.task_priority_rank(p.priority) end desc,
+        case when p_sort = 'priority_asc' then private.task_priority_rank(p.priority) end asc,
+        case when p_sort = 'created' then p.created_at end desc,
+        p.due_date asc nulls last, p.created_at asc, p.id asc;
+  end
+  $$;
+
+-- One task with everything its detail page shows, or null when it is missing, deleted or not the
+-- caller's to see. People are membership ids (null: departed, or the Personal space) and "is me".
+create function public.get_task(p_task_id uuid, p_today date default null) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_list private.task_lists;
+    v_home uuid;
+    v_today date;
+  begin
+    if p_task_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return null;
+    end if;
+    select * into v_list from private.task_lists l where l.id = v_task.list_id;
+    v_home := v_task.owner_home_id;
+    v_today := private.task_today(v_home, p_today);
+    return pg_catalog.jsonb_build_object(
+      'id', v_task.id,
+      'homeId', v_home,
+      'list', pg_catalog.jsonb_build_object('id', v_list.id, 'name', v_list.name,
+        'archived', v_list.archived_at is not null),
+      'title', v_task.title,
+      'description', v_task.description,
+      'startDate', v_task.start_date,
+      'dueDate', v_task.due_date,
+      'priority', v_task.priority,
+      'revision', v_task.revision,
+      'needsReassignment', v_task.needs_reassignment,
+      'overdue', v_task.completed_at is null and coalesce(v_task.due_date < v_today, false),
+      'upcoming', v_task.completed_at is null and coalesce(v_task.start_date > v_today, false),
+      'createdAt', v_task.created_at,
+      'createdBy', pg_catalog.jsonb_build_object('me', coalesce(v_task.created_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.created_by)),
+      'updatedAt', v_task.updated_at,
+      'updatedBy', pg_catalog.jsonb_build_object('me', coalesce(v_task.updated_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.updated_by)),
+      'completedAt', v_task.completed_at,
+      'completedBy', case when v_task.completed_at is not null then pg_catalog.jsonb_build_object(
+        'me', coalesce(v_task.completed_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.completed_by)) end,
+      'reopenedAt', v_task.reopened_at,
+      'reopenedBy', case when v_task.reopened_at is not null then pg_catalog.jsonb_build_object(
+        'me', coalesce(v_task.reopened_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.reopened_by)) end,
+      'assignees', coalesce((select pg_catalog.jsonb_agg(m.id order by m.created_at, m.id)
+        from private.task_assignees a
+        join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+        where a.task_id = v_task.id), '[]'::jsonb),
+      'labels', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', l.id, 'name', l.name, 'color', l.color) order by private.task_name_key(l.name), l.id)
+        from private.task_label_links k join private.task_labels l on l.id = k.label_id
+        where k.task_id = v_task.id), '[]'::jsonb),
+      'subtasks', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', s.id, 'title', s.title, 'completed', s.completed_at is not null,
+          'revision', s.revision) order by s.position, s.created_at, s.id)
+        from private.subtasks s where s.task_id = v_task.id), '[]'::jsonb),
+      'commentCount', (select count(*) from private.task_comments c where c.task_id = v_task.id),
+      'can', pg_catalog.jsonb_build_object(
+        'edit', private.can_edit_task(v_task, v_user_id),
+        'complete', private.can_edit_task(v_task, v_user_id),
+        'assign', v_home is not null and private.can_manage_tasks(null, v_home, v_user_id),
+        'delete', private.can_delete_task(v_task, v_user_id),
+        'comment', true)
+    );
+  end
+  $$;
+
+-- Subtasks (whoever may edit the parent) ------------------------------------------------------------
+
+-- Loads the parent of a subtask change, locked, and says whether p_user_id may change its checklist.
+-- 'not_found' / 'not_permitted' / null (allowed).
+create function private.subtask_parent_refusal(p_task private.tasks, p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_task.id is null then 'not_found'
+    when not private.can_edit_task(p_task, p_user_id) then 'not_permitted'
+  end;
+  $$;
+
+-- Adds a subtask at the end. Outcomes: 'created', 'exists', 'id_taken', 'limit_reached',
+-- 'not_found', 'not_permitted'.
+create function public.add_subtask(p_id uuid, p_task_id uuid, p_title text)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_existing private.subtasks;
+    v_refusal text;
+  begin
+    if p_id is null or p_task_id is null or p_title is null
+       or not private.is_visible_name(p_title, private.task_limit('title')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    v_refusal := private.subtask_parent_refusal(v_task, v_user_id);
+    if v_refusal is not null then
+      return query select v_refusal, null::integer;
+      return;
+    end if;
+    select * into v_existing from private.subtasks s where s.id = p_id;
+    if found then
+      if v_existing.task_id = v_task.id and v_existing.created_by = v_user_id then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if (select count(*) from private.subtasks s where s.task_id = v_task.id) >= private.task_limit('subtasks') then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.subtasks (id, task_id, title, position, created_by)
+      values (p_id, v_task.id, p_title,
+        coalesce((select max(s.position) + 1 from private.subtasks s where s.task_id = v_task.id), 0),
+        v_user_id)
+      on conflict (id) do nothing;
+    if not found then
+      return query select case when s.task_id = v_task.id and s.created_by = v_user_id then 'exists'
+          else 'id_taken' end,
+        case when s.task_id = v_task.id and s.created_by = v_user_id then s.revision end
+        from private.subtasks s where s.id = p_id;
+      return;
+    end if;
+    return query select 'created', 1;
+  end
+  $$;
+
+-- The subtask and its parent, locked parent first (the same order as every task change).
+create function private.lock_subtask(p_id uuid, p_user_id uuid, out o_task private.tasks, out o_subtask private.subtasks)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_task_id uuid;
+  begin
+    select s.task_id into v_task_id from private.subtasks s where s.id = p_id;
+    if v_task_id is null then
+      return;
+    end if;
+    o_task := private.lock_task(v_task_id, p_user_id);
+    if o_task.id is null then
+      return;
+    end if;
+    select * into o_subtask from private.subtasks s where s.id = p_id for update;
+  end
+  $$;
+
+-- Renames a subtask. Outcomes: 'saved', 'conflict', 'not_found', 'not_permitted'.
+create function public.rename_subtask(p_id uuid, p_expected_revision integer, p_title text)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_locked record;
+    v_refusal text;
+    v_subtask private.subtasks;
+  begin
+    if p_id is null or p_expected_revision is null or p_title is null
+       or not private.is_visible_name(p_title, private.task_limit('title')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_locked from private.lock_subtask(p_id, v_user_id);
+    v_refusal := private.subtask_parent_refusal(v_locked.o_task, v_user_id);
+    if v_refusal is null and (v_locked.o_subtask).id is null then
+      v_refusal := 'not_found';
+    end if;
+    if v_refusal is not null then
+      return query select v_refusal, null::integer;
+      return;
+    end if;
+    v_subtask := v_locked.o_subtask;
+    if v_subtask.revision <> p_expected_revision then
+      return query select 'conflict', v_subtask.revision;
+      return;
+    end if;
+    update private.subtasks s set title = p_title, revision = s.revision + 1, updated_at = pg_catalog.now()
+      where s.id = v_subtask.id
+      returning * into v_subtask;
+    return query select 'saved', v_subtask.revision;
+  end
+  $$;
+
+-- Ticks or unticks a subtask (set-to-state, so a repeated toggle changes nothing). The parent's own
+-- completion is never changed by this. Outcomes: 'saved' (with the subtask's revision), 'not_found',
+-- 'not_permitted'.
+create function public.set_subtask_completion(p_id uuid, p_completed boolean)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_locked record;
+    v_refusal text;
+    v_subtask private.subtasks;
+  begin
+    if p_id is null or p_completed is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_locked from private.lock_subtask(p_id, v_user_id);
+    v_refusal := private.subtask_parent_refusal(v_locked.o_task, v_user_id);
+    if v_refusal is null and (v_locked.o_subtask).id is null then
+      v_refusal := 'not_found';
+    end if;
+    if v_refusal is not null then
+      return query select v_refusal, null::integer;
+      return;
+    end if;
+    v_subtask := v_locked.o_subtask;
+    if (v_subtask.completed_at is not null) <> p_completed then
+      update private.subtasks s
+        set completed_at = case when p_completed then pg_catalog.now() end,
+          completed_by = case when p_completed then v_user_id end,
+          revision = s.revision + 1, updated_at = pg_catalog.now()
+        where s.id = v_subtask.id
+        returning * into v_subtask;
+    end if;
+    return query select 'saved', v_subtask.revision;
+  end
+  $$;
+
+-- Puts a task's subtasks in the given order; subtasks not named follow. Outcomes: 'saved',
+-- 'not_found', 'not_permitted'.
+create function public.reorder_subtasks(p_task_id uuid, p_subtask_ids uuid[]) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_refusal text;
+  begin
+    if p_task_id is null or p_subtask_ids is null
+       or cardinality(p_subtask_ids) not between 1 and private.task_limit('subtasks') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    v_refusal := private.subtask_parent_refusal(v_task, v_user_id);
+    if v_refusal is not null then
+      return v_refusal;
+    end if;
+    update private.subtasks s
+      set position = coalesce(o.ord, cardinality(p_subtask_ids) + s.position)::integer,
+        updated_at = pg_catalog.now()
+      from private.subtasks s2
+      left join (select x.id, x.ord from unnest(p_subtask_ids) with ordinality as x (id, ord)) o
+        on o.id = s2.id
+      where s.id = s2.id and s.task_id = v_task.id;
+    return 'saved';
+  end
+  $$;
+
+-- Removes a subtask (the page confirms first). Outcomes: 'deleted', 'not_found', 'not_permitted'.
+create function public.delete_subtask(p_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_locked record;
+    v_refusal text;
+  begin
+    if p_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_locked from private.lock_subtask(p_id, v_user_id);
+    v_refusal := private.subtask_parent_refusal(v_locked.o_task, v_user_id);
+    if v_refusal is null and (v_locked.o_subtask).id is null then
+      v_refusal := 'not_found';
+    end if;
+    if v_refusal is not null then
+      return v_refusal;
+    end if;
+    delete from private.subtasks s where s.id = p_id;
+    return 'deleted';
+  end
+  $$;
+
+-- Comments (every member who can view the task; authors edit and delete their own) ------------------
+
+-- A page of a task's comments, oldest first. 'not_found' rows are never returned: a task the caller
+-- may not see gives an empty page with task_found false.
+create function public.list_task_comments(
+  p_task_id uuid, p_offset integer default 0, p_limit integer default 100
+) returns table (
+  id uuid, body text, created_at timestamptz, edited_at timestamptz, revision integer,
+  author_me boolean, author_member uuid, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+  begin
+    if p_task_id is null or p_offset is null or p_offset not between 0 and private.task_limit('max_offset')
+       or p_limit is null or p_limit not between 1 and private.task_limit('comments_page') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return;
+    end if;
+    return query
+      select c.id, c.body, c.created_at, c.edited_at, c.revision,
+        coalesce(c.author_id = v_user_id, false),
+        private.member_ref(v_task.owner_home_id, c.author_id),
+        (count(*) over ())::integer
+      from private.task_comments c
+      where c.task_id = v_task.id
+      order by c.created_at, c.id
+      limit p_limit offset p_offset;
+  end
+  $$;
+
+-- Adds a comment. The task row is locked for share so a delete to the trash waits. Outcomes:
+-- 'created', 'exists' (a retried send), 'id_taken', 'not_found'.
+create function public.add_task_comment(p_id uuid, p_task_id uuid, p_body text)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_existing private.task_comments;
+  begin
+    if p_id is null or p_task_id is null or p_body is null
+       or not private.is_plain_text(p_body, private.task_limit('comment')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id for share;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    select * into v_existing from private.task_comments c where c.id = p_id;
+    if found then
+      if v_existing.task_id = v_task.id and v_existing.author_id = v_user_id then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    insert into private.task_comments (id, task_id, author_id, body) values (p_id, v_task.id, v_user_id, p_body)
+      on conflict (id) do nothing;
+    if not found then
+      -- A retried send that arrived while the first was still saving.
+      return query select case when c.task_id = v_task.id and c.author_id = v_user_id then 'exists'
+          else 'id_taken' end,
+        case when c.task_id = v_task.id and c.author_id = v_user_id then c.revision end
+        from private.task_comments c where c.id = p_id;
+      return;
+    end if;
+    return query select 'created', 1;
+  end
+  $$;
+
+-- The caller's own comment on a task they can still see, locked. Null otherwise.
+create function private.lock_own_comment(p_id uuid, p_user_id uuid) returns private.task_comments
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_comment private.task_comments;
+    v_task private.tasks;
+  begin
+    select * into v_comment from private.task_comments c where c.id = p_id for update;
+    if not found then
+      return null;
+    end if;
+    select * into v_task from private.tasks t where t.id = v_comment.task_id;
+    if v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, p_user_id) then
+      return null;
+    end if;
+    return v_comment;
+  end
+  $$;
+
+-- Edits the caller's own comment. Outcomes: 'saved', 'conflict', 'not_found', 'not_permitted'
+-- (someone else's comment).
+create function public.update_task_comment(p_id uuid, p_expected_revision integer, p_body text)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_comment private.task_comments;
+  begin
+    if p_id is null or p_expected_revision is null or p_body is null
+       or not private.is_plain_text(p_body, private.task_limit('comment')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_comment := private.lock_own_comment(p_id, v_user_id);
+    if v_comment.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if v_comment.author_id is distinct from v_user_id then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_comment.revision <> p_expected_revision then
+      return query select 'conflict', v_comment.revision;
+      return;
+    end if;
+    if v_comment.body = p_body then
+      return query select 'saved', v_comment.revision;
+      return;
+    end if;
+    update private.task_comments c
+      set body = p_body, revision = c.revision + 1, edited_at = pg_catalog.clock_timestamp()
+      where c.id = v_comment.id
+      returning * into v_comment;
+    return query select 'saved', v_comment.revision;
+  end
+  $$;
+
+-- Deletes the caller's own comment. Outcomes: 'deleted', 'not_found', 'not_permitted'.
+create function public.delete_task_comment(p_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_comment private.task_comments;
+  begin
+    if p_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_comment := private.lock_own_comment(p_id, v_user_id);
+    if v_comment.id is null then
+      return 'not_found';
+    end if;
+    if v_comment.author_id is distinct from v_user_id then
+      return 'not_permitted';
+    end if;
+    delete from private.task_comments c where c.id = v_comment.id;
+    return 'deleted';
+  end
+  $$;
+
+-- Trash hooks (S16) for tasks and task lists --------------------------------------------------------
+
+alter table private.trash_entries drop constraint trash_entries_module_check;
+alter table private.trash_entries add constraint trash_entries_module_check
+  check (module in ('sample', 'dashboard', 'tasks'));
+alter table private.trash_entries drop constraint trash_entries_item_type_check;
+alter table private.trash_entries add constraint trash_entries_item_type_check
+  check (item_type in ('sample', 'dashboard_template', 'task', 'task_list'));
+
+-- Resolutions may carry one argument after a colon ('move_to_list:<list id>'): the option is the
+-- part before it. Otherwise unchanged from S16.
+create or replace function private.trash_restore_one(p_user_id uuid, p_entry_id uuid, p_resolution text)
+returns table (outcome text, conflict text, options text[], attachments_lost integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_entry private.trash_entries;
+    v_kind text;
+    v_round integer := 0;
+    v_resolution text := p_resolution;
+    v_lost integer;
+  begin
+    select * into v_entry from private.trash_entries t where t.id = p_entry_id for update;
+    if not found or v_entry.status <> 'trashed' or not private.can_see_trash_entry(v_entry, p_user_id) then
+      return query select 'not_found', null::text, null::text[], 0;
+      return;
+    end if;
+    if v_entry.expires_at <= pg_catalog.now() then
+      return query select 'expired', null::text, null::text[], 0;
+      return;
+    end if;
+    loop
+      v_kind := private.trash_conflict(v_entry);
+      exit when v_kind is null;
+      if v_kind = 'item_missing' then
+        return query select 'not_found', null::text, null::text[], 0;
+        return;
+      end if;
+      -- A chosen resolution counts only when it answers a conflict that is really there.
+      if v_resolution is not null
+         and pg_catalog.split_part(v_resolution, ':', 1) = any (private.trash_conflict_options(v_kind))
+         and v_round < 3 then
+        perform private.trash_resolve(v_entry, v_resolution);
+        v_resolution := null;
+        v_round := v_round + 1;
+        continue;
+      end if;
+      return query select 'needs_resolution', v_kind, private.trash_conflict_options(v_kind), 0;
+      return;
+    end loop;
+    begin
+      v_lost := private.trash_item_restore(v_entry);
+    exception when unique_violation then
+      -- An active item took the place between the check and the restore: ask again, change nothing.
+      v_kind := coalesce(private.trash_conflict(v_entry), 'slot_taken');
+      return query select 'needs_resolution', v_kind, private.trash_conflict_options(v_kind), 0;
+      return;
+    end;
+    return query select 'restored', null::text, null::text[], v_lost;
+    update private.trash_entries t
+      set status = 'restored', settled_at = pg_catalog.now(), label = null
+      where t.id = v_entry.id;
+    perform private.audit_trash_entry(p_user_id, v_entry, 'trash_entry.restored');
+  end
+  $$;
+
+create or replace function private.trash_conflict_options(p_kind text) returns text[]
+  language sql immutable set search_path = '' as $$
+  select case p_kind
+    when 'slot_taken' then array['clear_slot']
+    when 'parent_unavailable' then array['detach_parent']
+    -- The person picks another active list of the same context (argument: its id).
+    when 'list_unavailable' then array['move_to_list']
+    else array[]::text[]
+  end;
+  $$;
+
+-- The four dispatch functions again, with cases for tasks and task lists. A task's real conflict is
+-- its list: deleted, archived or purged meanwhile. A list has none (matching names never are one;
+-- duplicate names are refused only when a person creates or renames).
+create or replace function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_sample private.trash_samples;
+    v_task private.tasks;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        select * into v_sample from private.trash_samples s where s.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if v_sample.parent_id is not null and exists (
+          select 1 from private.trash_samples p
+          where p.id = v_sample.parent_id and p.deleted_at is not null
+        ) then
+          return 'parent_unavailable';
+        end if;
+        if v_sample.slot is not null and exists (
+          select 1 from private.trash_samples o
+          where o.id <> v_sample.id and o.deleted_at is null and o.slot = v_sample.slot
+            and o.owner_user_id is not distinct from v_sample.owner_user_id
+            and o.owner_home_id is not distinct from v_sample.owner_home_id
+        ) then
+          return 'slot_taken';
+        end if;
+        return null;
+      when 'dashboard_template' then
+        if not exists (
+          select 1 from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+      when 'task' then
+        select * into v_task from private.tasks t where t.id = p_entry.subject_id;
+        if not found or v_task.deleted_at is null then
+          return 'item_missing';
+        end if;
+        if v_task.list_id is null or not exists (
+          select 1 from private.task_lists l
+          where l.id = v_task.list_id and l.deleted_at is null and l.archived_at is null
+        ) then
+          return 'list_unavailable';
+        end if;
+        return null;
+      when 'task_list' then
+        if not exists (
+          select 1 from private.task_lists l where l.id = p_entry.subject_id and l.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+    end case;
+    return null;
+  end
+  $$;
+
+create or replace function private.trash_resolve(p_entry private.trash_entries, p_resolution text)
+returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_arg text := pg_catalog.split_part(p_resolution, ':', 2);
+    v_task private.tasks;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        if p_resolution = 'clear_slot' then
+          update private.trash_samples s set slot = null where s.id = p_entry.subject_id;
+        elsif p_resolution = 'detach_parent' then
+          update private.trash_samples s set parent_id = null where s.id = p_entry.subject_id;
+        end if;
+      when 'dashboard_template' then
+        -- No conflicts, so nothing to resolve.
+        null;
+      when 'task' then
+        -- Only an active, unarchived list of the task's own context; anything else leaves the task
+        -- as it is, so the conflict is reported again.
+        if pg_catalog.split_part(p_resolution, ':', 1) = 'move_to_list'
+           and v_arg ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+          select * into v_task from private.tasks t where t.id = p_entry.subject_id for update;
+          if found and exists (
+            select 1 from private.task_lists l
+            where l.id = v_arg::uuid and l.deleted_at is null and l.archived_at is null
+              and l.owner_user_id is not distinct from v_task.owner_user_id
+              and l.owner_home_id is not distinct from v_task.owner_home_id
+          ) then
+            update private.tasks t set list_id = v_arg::uuid where t.id = v_task.id;
+          end if;
+        end if;
+      when 'task_list' then
+        null;
+    end case;
+  end
+  $$;
+
+create or replace function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+    v_lost integer := 0;
+    v_lost_ids uuid[] := '{}';
+    v_ref uuid;
+    v_task private.tasks;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      if not private.restore_file(v_file_id) then
+        v_lost := v_lost + 1;
+        v_lost_ids := v_lost_ids || v_file_id;
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        -- The file the item uses must be usable too: it may have gone to the trash with another
+        -- item that shared it (the last one deleted takes it along).
+        select s.file_id into v_ref from private.trash_samples s where s.id = p_entry.subject_id;
+        if v_ref is not null and not (v_ref = any (v_lost_ids)) and not private.restore_file(v_ref) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_ref;
+        end if;
+        update private.trash_samples s
+          set deleted_at = null,
+            -- A reference to a file that is gone would be broken: drop it, the caller reports it.
+            file_id = case when s.file_id = any (v_lost_ids) then null else s.file_id end
+          where s.id = p_entry.subject_id;
+      when 'dashboard_template' then
+        -- Its shares come back with it; a share into a Home the owner has since left was already
+        -- ended by home_memberships_end_template_shares.
+        update private.dashboard_templates t set deleted_at = null, updated_at = pg_catalog.now()
+          where t.id = p_entry.subject_id;
+      when 'task' then
+        -- Its subtasks, comments, labels and assignees never left it. Its list is locked for share
+        -- and checked again: a list deleted or archived since the conflict check makes this a
+        -- conflict (reported as one by the caller, which turns a unique violation into
+        -- needs_resolution), so no active task can end up in an unusable list.
+        select * into v_task from private.tasks t where t.id = p_entry.subject_id for update;
+        if v_task.list_id is null
+           or not private.usable_task_list(v_task.list_id, v_task.owner_user_id, v_task.owner_home_id) then
+          raise exception 'task list unavailable' using errcode = '23505';
+        end if;
+        update private.tasks t set deleted_at = null where t.id = v_task.id;
+      when 'task_list' then
+        update private.task_lists l set deleted_at = null, updated_at = pg_catalog.now()
+          where l.id = p_entry.subject_id;
+    end case;
+    return v_lost;
+  end
+  $$;
+
+create or replace function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      -- Never release a file another active item still uses.
+      if not exists (
+        select 1 from private.trash_samples s where s.file_id = v_file_id and s.deleted_at is null
+      ) then
+        perform private.purge_file_now(v_file_id);
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        delete from private.trash_samples s where s.id = p_entry.subject_id and s.deleted_at is not null;
+      when 'dashboard_template' then
+        -- Its shares go with it (on delete cascade).
+        delete from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null;
+      when 'task' then
+        -- Subtasks, comments, label links and assignees go with it (on delete cascade).
+        delete from private.tasks t where t.id = p_entry.subject_id and t.deleted_at is not null;
+      when 'task_list' then
+        -- Tasks of this list still in the trash lose their list (on delete set null); restoring one
+        -- then asks for another list.
+        delete from private.task_lists l where l.id = p_entry.subject_id and l.deleted_at is not null;
+    end case;
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.get_task_context(uuid, date)',
+    'public.list_task_lists(uuid, boolean)',
+    'public.create_task_list(uuid, text, uuid)',
+    'public.update_task_list(uuid, integer, text, boolean)',
+    'public.reorder_task_lists(uuid[], uuid)',
+    'public.delete_task_list(uuid, integer)',
+    'public.list_task_labels(uuid)',
+    'public.create_task_label(uuid, text, text, uuid)',
+    'public.update_task_label(uuid, integer, text, text)',
+    'public.delete_task_label(uuid, integer)',
+    'public.create_task(uuid, uuid, text, text, date, date, text, uuid[], uuid[], uuid)',
+    'public.update_task(uuid, integer, text, uuid[], text, date, date, text)',
+    'public.set_task_assignees(uuid, integer, uuid[])',
+    'public.move_task(uuid, integer, uuid)',
+    'public.set_task_completion(uuid, boolean)',
+    'public.delete_task(uuid)',
+    'public.list_tasks(uuid, uuid, date, text, text, boolean, text[], uuid[], text, uuid, text, integer, integer)',
+    'public.get_task(uuid, date)',
+    'public.add_subtask(uuid, uuid, text)',
+    'public.rename_subtask(uuid, integer, text)',
+    'public.set_subtask_completion(uuid, boolean)',
+    'public.reorder_subtasks(uuid, uuid[])',
+    'public.delete_subtask(uuid)',
+    'public.list_task_comments(uuid, integer, integer)',
+    'public.add_task_comment(uuid, uuid, text)',
+    'public.update_task_comment(uuid, integer, text)',
+    'public.delete_task_comment(uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  foreach v_function in array array[
+    'private.is_delegable_capability(text)',
+    'private.task_limit(text)',
+    'private.task_name_key(text)',
+    'private.is_plain_text(text, integer)',
+    'private.flag_departed_assignments()',
+    'private.in_task_context(uuid, uuid, uuid)',
+    'private.can_manage_tasks(uuid, uuid, uuid)',
+    'private.is_task_assignee(uuid, uuid)',
+    'private.can_edit_task(private.tasks, uuid)',
+    'private.can_delete_task(private.tasks, uuid)',
+    'private.require_task_context(uuid, uuid)',
+    'private.is_context(uuid, uuid, uuid, uuid)',
+    'private.task_today(uuid, date)',
+    'private.member_ref(uuid, uuid)',
+    'private.audit_task(text, uuid, text, uuid, jsonb)',
+    'private.lock_task_context(text, uuid, uuid)',
+    'private.task_list_name_taken(uuid, uuid, text, uuid)',
+    'private.lock_task_list(uuid, uuid)',
+    'private.task_label_name_taken(uuid, uuid, text, uuid)',
+    'private.is_task_label_color(text)',
+    'private.lock_task_label(uuid, uuid)',
+    'private.valid_task_labels(uuid[], uuid, uuid)',
+    'private.replace_task_labels(uuid, uuid[])',
+    'private.member_users(uuid, uuid[])',
+    'private.replace_task_assignees(uuid, uuid, uuid[], uuid)',
+    'private.usable_task_list(uuid, uuid, uuid)',
+    'private.lock_task(uuid, uuid)',
+    'private.valid_task_fields(text, text, date, date, text)',
+    'private.task_priority_rank(text)',
+    'private.subtask_parent_refusal(private.tasks, uuid)',
+    'private.lock_subtask(uuid, uuid)',
+    'private.lock_own_comment(uuid, uuid)',
+    'private.trash_restore_one(uuid, uuid, text)',
+    'private.trash_conflict_options(text)',
+    'private.trash_conflict(private.trash_entries)',
+    'private.trash_resolve(private.trash_entries, text)',
+    'private.trash_item_restore(private.trash_entries)',
+    'private.trash_item_purge(private.trash_entries)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261027090000_task_recurrence.sql
+-- ============================================================================
+-- S19: recurring tasks and their occurrence history (brief plans/steps/S19-brief.md; ADR 0023; spec
+-- "Confirmed recurring task and chore editing scope", "Confirmed recurring task and chore deletion
+-- scope", "Confirmed recurring task occurrence history", the recurrence notes of the label,
+-- priority, subtask, assignee and comment decisions, and "Confirmed member departure and removal:
+-- content ownership" (future recurring assignments are cleared)).
+--
+-- A series is a template (title, description, priority, labels, assignees, checklist titles, start
+-- offset) and a schedule in one context. Its occurrences are ordinary tasks (S18) that carry the
+-- series, the root of its chain and their original scheduled date, so each one has its own shared
+-- completion, checklist and comments. Every occurrence up to today exists plus exactly one upcoming;
+-- public.advance_task_series creates them when a task page is read (no background job in S19), and
+-- one per chain and date at most (a unique index), so retries, races and splits never duplicate.
+--
+-- "This and following" splits a chain: the current part (the head) ends the day before and a new
+-- head starts there. "Entire series" changes the head and every open occurrence of the chain.
+-- Completed occurrences are never changed; individually changed ("detached") open ones are kept.
+-- Removing following or all occurrences is one trash entry (item type task_series_removal) that
+-- restores them together.
+--
+-- Rights (default picked in the brief, mirrors packages/domain decideSeriesAction): one occurrence
+-- follows the S18 task rules; the series' creator and task managers change following or all
+-- occurrences, pause, resume and delete; only task managers change series assignees.
+--
+-- Schedules are dates only (tasks are date-only) in the Home's timezone, or the person's effective
+-- timezone passed by the app for their Personal space (private.task_today). A series never creates
+-- occurrences before the day it was created, rescheduled, resumed or restored.
+
+-- Audit subject, limits ------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series'
+  ));
+
+-- apps/web/src/tasks/schema.ts and packages/domain RECURRENCE_LIMITS use the same numbers.
+create or replace function private.task_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'lists' then 100              -- non-deleted lists per context
+    when 'labels' then 100             -- labels per context
+    when 'labels_per_task' then 20
+    when 'assignees_per_task' then 20
+    when 'subtasks' then 100           -- subtasks per task
+    when 'page' then 50                -- tasks one listing returns
+    when 'max_offset' then 10000
+    when 'comments_page' then 100
+    when 'list_name' then 60
+    when 'label_name' then 40
+    when 'title' then 200              -- task and subtask titles
+    when 'description' then 5000
+    when 'comment' then 2000
+    when 'series' then 200             -- active series per context (S19)
+    when 'series_interval' then 99     -- "every N" days, weeks, months or years
+    when 'series_count' then 999       -- "ends after N occurrences"
+    when 'start_offset' then 365       -- days a start date may lie before the due date
+    when 'series_per_advance' then 50  -- series one advance call looks at
+    when 'series_catch_up' then 100    -- occurrences one advance call creates per series
+    when 'history_page' then 50
+  end;
+  $$;
+
+-- Tables -------------------------------------------------------------------------------------------
+
+-- One part of a recurring series. A chain of parts (same root_id) is one series to people: a split
+-- ("this and following") ends the current part (superseded_at, until_date) and starts a new head.
+-- Only the head creates occurrences. next_date is the next date to create (null: ended);
+-- last_date the latest date created so far.
+create table private.task_series (
+  id uuid primary key,
+  root_id uuid not null,
+  previous_id uuid,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  list_id uuid references private.task_lists (id) on delete set null,
+  title text not null constraint task_series_title_check check (private.is_visible_name(title, 200)),
+  description text constraint task_series_description_check
+    check (description is null or private.is_plain_text(description, 5000)),
+  priority text constraint task_series_priority_check
+    check (priority in ('low', 'normal', 'high', 'urgent')),
+  start_offset integer constraint task_series_start_offset_check check (start_offset between 0 and 365),
+  frequency text not null constraint task_series_frequency_check
+    check (frequency in ('daily', 'weekly', 'monthly', 'yearly')),
+  interval_count integer not null constraint task_series_interval_check check (interval_count between 1 and 99),
+  weekdays smallint[] constraint task_series_weekdays_check check (
+    (frequency = 'weekly') = (weekdays is not null)
+    and (weekdays is null or (cardinality(weekdays) between 1 and 7 and weekdays <@ '{1,2,3,4,5,6,7}'))
+  ),
+  -- The schedule's anchor (its first date, and the day of month or week it counts from).
+  starts_on date not null,
+  -- After a split that kept the schedule: the first date this part may create (the anchor stays,
+  -- so "every 2 weeks" or "on the 31st" keeps its rhythm). Null: from starts_on.
+  active_from date,
+  ends_on date,
+  max_count integer constraint task_series_count_check check (max_count between 1 and 999),
+  -- The last date the schedule allows (the end date, the counted occurrences, or a split), or null.
+  until_date date,
+  next_date date,
+  last_date date,
+  paused_at timestamptz,
+  superseded_at timestamptz,
+  needs_reassignment boolean not null default false,
+  revision integer not null default 1 constraint task_series_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint task_series_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1),
+  constraint task_series_ends_check check (ends_on is null or ends_on >= starts_on),
+  constraint task_series_until_check check (until_date is null or until_date >= starts_on - 1),
+  constraint task_series_next_check check (next_date is null or next_date >= starts_on),
+  constraint task_series_id_home_key unique (id, owner_home_id)
+);
+
+create index task_series_root_idx on private.task_series (root_id);
+-- The heads an advance looks at: active, not ended, oldest progress first.
+create index task_series_home_head_idx on private.task_series (owner_home_id, last_date)
+  where owner_home_id is not null and superseded_at is null and deleted_at is null;
+create index task_series_user_head_idx on private.task_series (owner_user_id, last_date)
+  where owner_user_id is not null and superseded_at is null and deleted_at is null;
+create index task_series_list_idx on private.task_series (list_id)
+  where superseded_at is null and deleted_at is null;
+
+create table private.task_series_labels (
+  series_id uuid not null references private.task_series (id) on delete cascade,
+  label_id uuid not null references private.task_labels (id) on delete cascade,
+  primary key (series_id, label_id)
+);
+
+create index task_series_labels_label_idx on private.task_series_labels (label_id);
+
+-- Series assignees are current members by construction: the assignment ends with the membership
+-- (spec: future recurring assignments to a departed member are cleared).
+create table private.task_series_assignees (
+  series_id uuid not null,
+  home_id uuid not null,
+  user_id uuid not null,
+  primary key (series_id, user_id),
+  foreign key (series_id, home_id) references private.task_series (id, owner_home_id) on delete cascade,
+  foreign key (home_id, user_id) references public.home_memberships (home_id, user_id) on delete cascade
+);
+
+create index task_series_assignees_member_idx on private.task_series_assignees (home_id, user_id);
+
+-- The checklist every new occurrence starts with (titles only; each occurrence ticks its own).
+create table private.task_series_subtasks (
+  series_id uuid not null references private.task_series (id) on delete cascade,
+  position integer not null,
+  title text not null constraint task_series_subtasks_title_check check (private.is_visible_name(title, 200)),
+  primary key (series_id, position)
+);
+
+-- Occurrences: tasks that know their series part, their chain and their original scheduled date.
+alter table private.tasks
+  add column series_id uuid references private.task_series (id) on delete set null,
+  add column series_root_id uuid,
+  add column occurrence_date date,
+  -- Changed on its own ("this occurrence"): later series changes leave it as it is.
+  add column detached boolean not null default false,
+  add constraint tasks_series_check check (series_id is null or series_root_id is not null),
+  add constraint tasks_occurrence_check check (series_root_id is null or occurrence_date is not null);
+
+-- At most one occurrence per chain and date, whatever retries, races or splits do.
+create unique index tasks_occurrence_key on private.tasks (series_root_id, occurrence_date)
+  where series_root_id is not null;
+create index tasks_series_idx on private.tasks (series_id) where series_id is not null;
+
+-- What removing following or all occurrences took away, so the trash can bring it back.
+create table private.task_series_removals (
+  id uuid primary key default gen_random_uuid(),
+  root_id uuid not null,
+  head_id uuid not null,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  mode text not null constraint task_series_removals_mode_check check (mode in ('following', 'series')),
+  from_date date,
+  task_ids uuid[] not null,
+  -- The head's revision right after the removal: a different one later means the series changed.
+  head_revision integer not null,
+  previous_ends_on date,
+  previous_max_count integer,
+  previous_until_date date,
+  -- Set by the restore resolution 'restore_tasks_only': the occurrences come back, the series as it is.
+  tasks_only boolean not null default false,
+  created_at timestamptz not null default now(),
+  constraint task_series_removals_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+alter table private.task_series enable row level security;
+alter table private.task_series_labels enable row level security;
+alter table private.task_series_assignees enable row level security;
+alter table private.task_series_subtasks enable row level security;
+alter table private.task_series_removals enable row level security;
+revoke all on table private.task_series, private.task_series_labels, private.task_series_assignees,
+  private.task_series_subtasks, private.task_series_removals
+  from public, anon, authenticated;
+
+comment on table private.task_series is
+  'S19: recurring task series parts (template and schedule). Not exposed through the API.';
+
+-- Member departure ----------------------------------------------------------------------------------
+
+-- Before a membership ends, the series the person was assigned to are flagged for reassignment (new
+-- occurrences then carry the flag too); the assignment ends through its foreign key. S18's trigger
+-- flags their open occurrences.
+create function private.flag_departed_series_assignments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    update private.task_series s set needs_reassignment = true
+      where s.owner_home_id = old.home_id and s.deleted_at is null and s.superseded_at is null
+        and not s.needs_reassignment
+        and exists (
+          select 1 from private.task_series_assignees a where a.series_id = s.id and a.user_id = old.user_id
+        );
+    return old;
+  end
+  $$;
+
+create trigger home_memberships_flag_series_assignments
+  before delete on public.home_memberships
+  for each row execute function private.flag_departed_series_assignments();
+
+-- Schedule arithmetic (packages/domain/src/tasks/recurrence.ts mirrors it; shared vectors test both) --
+
+-- The date of a month offset from p_start, on p_start's day or the month's last day.
+create function private.series_month_date(p_start date, p_months integer) returns date
+  language sql immutable strict set search_path = '' as $$
+  select pg_catalog.make_date(
+    (pg_catalog.date_part('year', m)::integer),
+    (pg_catalog.date_part('month', m)::integer),
+    least(pg_catalog.date_part('day', p_start)::integer,
+      pg_catalog.date_part('day', m + interval '1 month' - interval '1 day')::integer))
+  from (select pg_catalog.date_trunc('month', p_start::timestamp) + pg_catalog.make_interval(months => p_months) as m) x;
+  $$;
+
+-- The first date of the pattern on or after p_from, never before p_starts_on, ignoring any end.
+--   daily: every p_interval days from the start; weekly: the ISO weekdays (1 Monday … 7 Sunday) of
+--   every p_interval-th Monday–Sunday week from the start's week; monthly: the start's day every
+--   p_interval months (29–31: the month's last day); yearly: the start's day every p_interval years
+--   (29 February: 28 February in other years).
+create function private.series_first_on_or_after(
+  p_frequency text, p_interval integer, p_weekdays smallint[], p_starts_on date, p_from date
+) returns date
+  language plpgsql immutable set search_path = '' as $$
+  declare
+    v_target date := greatest(p_from, p_starts_on);
+    v_first_week date;
+    v_week integer;
+    v_from date;
+    v_week_start date;
+    v_day integer;
+    v_index integer;
+    v_candidate date;
+  begin
+    if p_frequency is null or p_interval is null or p_interval < 1 or p_starts_on is null then
+      return null;
+    end if;
+    case p_frequency
+      when 'daily' then
+        return p_starts_on + ((v_target - p_starts_on + p_interval - 1) / p_interval) * p_interval;
+      when 'weekly' then
+        if coalesce(cardinality(p_weekdays), 0) = 0 then
+          return null;
+        end if;
+        v_first_week := p_starts_on - (pg_catalog.date_part('isodow', p_starts_on)::integer - 1);
+        v_week := (v_target - v_first_week) / 7;
+        v_from := v_target;
+        loop
+          if v_week % p_interval <> 0 then
+            v_week := ((v_week + p_interval - 1) / p_interval) * p_interval;
+            v_from := v_first_week + v_week * 7;
+          end if;
+          v_week_start := v_first_week + v_week * 7;
+          select min(d) into v_day from unnest(p_weekdays) as d where v_week_start + d - 1 >= v_from;
+          if v_day is not null then
+            return v_week_start + v_day - 1;
+          end if;
+          v_week := v_week + p_interval;
+          v_from := v_first_week + v_week * 7;
+        end loop;
+      when 'monthly', 'yearly' then
+        v_index := (pg_catalog.date_part('year', v_target)::integer * 12
+            + pg_catalog.date_part('month', v_target)::integer)
+          - (pg_catalog.date_part('year', p_starts_on)::integer * 12
+            + pg_catalog.date_part('month', p_starts_on)::integer);
+        if p_frequency = 'yearly' then
+          -- Whole years from the start, every p_interval of them.
+          v_index := pg_catalog.date_part('year', v_target)::integer - pg_catalog.date_part('year', p_starts_on)::integer;
+          v_index := greatest(0, ((v_index + p_interval - 1) / p_interval) * p_interval);
+          loop
+            v_candidate := private.series_month_date(p_starts_on, v_index * 12);
+            if v_candidate >= v_target then
+              return v_candidate;
+            end if;
+            v_index := v_index + p_interval;
+          end loop;
+        end if;
+        v_index := greatest(0, ((v_index + p_interval - 1) / p_interval) * p_interval);
+        loop
+          v_candidate := private.series_month_date(p_starts_on, v_index);
+          if v_candidate >= v_target then
+            return v_candidate;
+          end if;
+          v_index := v_index + p_interval;
+        end loop;
+      else
+        return null;
+    end case;
+  end
+  $$;
+
+-- Whether a schedule is well formed (the API checks the same with packages/domain isValidPattern).
+create function private.valid_series_rule(
+  p_frequency text, p_interval integer, p_weekdays smallint[], p_starts_on date, p_ends_on date,
+  p_max_count integer
+) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(
+    p_frequency in ('daily', 'weekly', 'monthly', 'yearly')
+    and p_interval between 1 and private.task_limit('series_interval')
+    and p_starts_on is not null
+    and p_starts_on between date '2000-01-01' and date '2199-12-31'
+    and (p_ends_on is null or p_ends_on between p_starts_on and date '2199-12-31')
+    and (p_max_count is null or p_max_count between 1 and private.task_limit('series_count'))
+    and case when p_frequency = 'weekly'
+      then cardinality(p_weekdays) between 1 and 7 and p_weekdays <@ '{1,2,3,4,5,6,7}'::smallint[]
+        and (select count(distinct d) from unnest(p_weekdays) as d) = cardinality(p_weekdays)
+      else p_weekdays is null end,
+    false);
+  $$;
+
+-- The last date a schedule allows: its end date, or the date of its p_max_count-th occurrence,
+-- whichever comes first; null when it never ends.
+create function private.series_until(
+  p_frequency text, p_interval integer, p_weekdays smallint[], p_starts_on date, p_ends_on date,
+  p_max_count integer
+) returns date
+  language plpgsql immutable set search_path = '' as $$
+  declare
+    v_date date;
+  begin
+    if p_max_count is null then
+      return p_ends_on;
+    end if;
+    v_date := private.series_first_on_or_after(p_frequency, p_interval, p_weekdays, p_starts_on, p_starts_on);
+    for i in 2 .. p_max_count loop
+      exit when p_ends_on is not null and v_date >= p_ends_on;
+      v_date := private.series_first_on_or_after(p_frequency, p_interval, p_weekdays, p_starts_on, v_date + 1);
+    end loop;
+    return case when p_ends_on is not null and p_ends_on < v_date then p_ends_on else v_date end;
+  end
+  $$;
+
+-- The next date of a part on or after p_from within its end, or null.
+create function private.series_next(p_series private.task_series, p_from date) returns date
+  language sql immutable set search_path = '' as $$
+  select case when p_series.until_date is null or d <= p_series.until_date then d end
+  from (select private.series_first_on_or_after(p_series.frequency, p_series.interval_count,
+    p_series.weekdays, p_series.starts_on,
+    greatest(p_from, coalesce(p_series.active_from, p_series.starts_on))) as d) x;
+  $$;
+
+-- Whether a date is on a part's schedule (within its start and end).
+create function private.series_has_date(p_series private.task_series, p_date date) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(private.series_next(p_series, p_date) = p_date, false);
+  $$;
+
+-- Up to p_limit dates of a part on or after p_from (for impact previews).
+create function private.series_dates(p_series private.task_series, p_from date, p_limit integer)
+returns date[]
+  language plpgsql immutable set search_path = '' as $$
+  declare
+    v_dates date[] := '{}';
+    v_next date := private.series_next(p_series, p_from);
+  begin
+    while v_next is not null and cardinality(v_dates) < p_limit loop
+      v_dates := v_dates || v_next;
+      v_next := private.series_next(p_series, v_next + 1);
+    end loop;
+    return v_dates;
+  end
+  $$;
+
+-- Permission helpers (packages/domain decideSeriesAction mirrors these) ----------------------------
+
+-- Change following or all occurrences, pause, resume, delete: a task manager, or the current member
+-- who created the series (its first part: a split keeps the creator).
+create function private.can_edit_series(p_series private.task_series, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.can_manage_tasks(p_series.owner_user_id, p_series.owner_home_id, p_user_id)
+    or (
+      p_series.owner_home_id is not null
+      and private.is_home_member(p_series.owner_home_id, p_user_id)
+      and coalesce(p_series.created_by = p_user_id, false)
+    );
+  $$;
+
+-- The head of an occurrence's chain, locked: the one part that creates occurrences, and the row
+-- every change to following or all occurrences of the chain locks first. Null when the series was
+-- removed entirely.
+create function private.lock_series_head(p_root_id uuid) returns private.task_series
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_head private.task_series;
+  begin
+    select * into v_head from private.task_series s
+      where s.root_id = p_root_id and s.superseded_at is null and s.deleted_at is null
+      for update;
+    return v_head;
+  end
+  $$;
+
+-- Whether an occurrence was changed in a way a series change must not undo: changed on its own,
+-- commented on, or with a ticked checklist item.
+create function private.occurrence_touched(p_task private.tasks) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_task.detached
+    or exists (select 1 from private.task_comments c where c.task_id = p_task.id)
+    or exists (select 1 from private.subtasks s where s.task_id = p_task.id and s.completed_at is not null);
+  $$;
+
+-- Occurrences -----------------------------------------------------------------------------------------
+
+-- Creates the head's occurrence for one date from its template, unless the chain already has one
+-- for that date (a retry, a race, or an occurrence kept from an earlier part). Its creator is the
+-- series' creator, so the S18 task rules give them the same rights on every occurrence.
+create function private.create_occurrence(p_series private.task_series, p_date date) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_id uuid := gen_random_uuid();
+  begin
+    insert into private.tasks (
+      id, owner_user_id, owner_home_id, list_id, title, description, start_date, due_date, priority,
+      needs_reassignment, created_by, created_at, updated_by, series_id, series_root_id, occurrence_date
+    ) values (
+      v_id, p_series.owner_user_id, p_series.owner_home_id, p_series.list_id, p_series.title,
+      p_series.description, case when p_series.start_offset is not null then p_date - p_series.start_offset end,
+      p_date, p_series.priority, p_series.needs_reassignment, p_series.created_by, pg_catalog.now(),
+      p_series.created_by, p_series.id, p_series.root_id, p_date
+    )
+    on conflict (series_root_id, occurrence_date) where series_root_id is not null do nothing;
+    if not found then
+      return null;
+    end if;
+    insert into private.task_label_links (task_id, label_id)
+      select v_id, l.label_id from private.task_series_labels l where l.series_id = p_series.id;
+    insert into private.task_assignees (task_id, home_id, user_id, assigned_by)
+      select v_id, a.home_id, a.user_id, p_series.created_by
+      from private.task_series_assignees a where a.series_id = p_series.id;
+    insert into private.subtasks (id, task_id, title, position, created_by)
+      select gen_random_uuid(), v_id, s.title, s.position, p_series.created_by
+      from private.task_series_subtasks s where s.series_id = p_series.id;
+    return v_id;
+  end
+  $$;
+
+-- Brings a locked head up to date: every occurrence up to p_today, plus one upcoming, at most
+-- series_catch_up per call (the rest next time). A missed date stays an open, overdue occurrence;
+-- nothing is skipped or completed. Nothing happens while it is paused, ended or its list unusable
+-- (lists refuse archiving and deletion while a series uses them). Returns how many it created.
+create function private.advance_series(p_series private.task_series, p_today date) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_next date := p_series.next_date;
+    v_last date := p_series.last_date;
+    v_created integer := 0;
+  begin
+    if p_series.id is null or p_series.paused_at is not null or p_series.deleted_at is not null
+       or p_series.superseded_at is not null or v_next is null then
+      return 0;
+    end if;
+    if not private.usable_task_list(p_series.list_id, p_series.owner_user_id, p_series.owner_home_id) then
+      return 0;
+    end if;
+    while v_next is not null and v_created < private.task_limit('series_catch_up')
+      and (v_next <= p_today or v_last is null or v_last <= p_today) loop
+      perform private.create_occurrence(p_series, v_next);
+      v_created := v_created + 1;
+      v_last := greatest(v_last, v_next);
+      v_next := private.series_next(p_series, v_next + 1);
+    end loop;
+    if v_next is distinct from p_series.next_date or v_last is distinct from p_series.last_date then
+      update private.task_series s set next_date = v_next, last_date = v_last where s.id = p_series.id;
+    end if;
+    return v_created;
+  end
+  $$;
+
+-- Creates the occurrences due in the caller's context (up to today plus one upcoming per series).
+-- Task pages call it before they read, so occurrences appear without a background job. Looks at
+-- most series_per_advance series per call, those furthest behind first. Returns how many it created.
+create function public.advance_task_series(p_home_id uuid default null, p_today date default null)
+returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_series private.task_series;
+    v_created integer := 0;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, p_today);
+    -- Locked one by one in id order (never two at once), so two page loads queue instead of
+    -- creating anything twice; the second sees the first's progress and has nothing left to do.
+    for v_series in
+      select * from private.task_series s
+      where ((p_home_id is null and s.owner_user_id = v_user_id) or s.owner_home_id = p_home_id)
+        and s.superseded_at is null and s.deleted_at is null and s.paused_at is null
+        and s.next_date is not null and (s.last_date is null or s.last_date <= v_today)
+      order by s.last_date nulls first, s.id
+      limit private.task_limit('series_per_advance')
+    loop
+      select * into v_series from private.task_series s where s.id = v_series.id for update;
+      if v_series.superseded_at is null and v_series.deleted_at is null then
+        v_created := v_created + private.advance_series(v_series, v_today);
+      end if;
+    end loop;
+    return v_created;
+  end
+  $$;
+
+-- Writes a template's labels, assignees and checklist (replacing what was there).
+create function private.set_series_template(
+  p_series_id uuid, p_home_id uuid, p_label_ids uuid[], p_user_ids uuid[], p_subtasks text[]
+) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_label_ids is not null then
+      delete from private.task_series_labels l where l.series_id = p_series_id;
+      insert into private.task_series_labels (series_id, label_id)
+        select p_series_id, x from unnest(p_label_ids) as x on conflict do nothing;
+    end if;
+    if p_user_ids is not null and p_home_id is not null then
+      delete from private.task_series_assignees a where a.series_id = p_series_id;
+      insert into private.task_series_assignees (series_id, home_id, user_id)
+        select p_series_id, p_home_id, x from unnest(p_user_ids) as x on conflict do nothing;
+    end if;
+    if p_subtasks is not null then
+      delete from private.task_series_subtasks s where s.series_id = p_series_id;
+      insert into private.task_series_subtasks (series_id, position, title)
+        select p_series_id, o::integer, x from unnest(p_subtasks) with ordinality as u (x, o);
+    end if;
+  end
+  $$;
+
+-- Creating a series ---------------------------------------------------------------------------------
+
+-- Creates a recurring task: the series and its first occurrences (from p_starts_on, never before
+-- today: no back-fill). The same rules as create_task: any current member, in an active list;
+-- assignees need a task manager. p_id is the series id from the client, so a retry returns the same
+-- series. Outcomes: 'created', 'exists', 'id_taken', 'list_unavailable', 'invalid_label',
+-- 'invalid_assignee', 'not_permitted', 'limit_reached', 'ended' (the schedule allows no date from
+-- today). first_task_id is the first occurrence (to open it). 22023 for invalid fields.
+create function public.create_task_series(
+  p_id uuid, p_list_id uuid, p_title text, p_frequency text, p_interval integer,
+  p_starts_on date, p_weekdays smallint[] default null, p_ends_on date default null,
+  p_max_count integer default null, p_description text default null, p_start_offset integer default null,
+  p_priority text default null, p_label_ids uuid[] default '{}', p_assignee_ids uuid[] default '{}',
+  p_home_id uuid default null, p_today date default null
+) returns table (outcome text, first_task_id uuid, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_existing private.task_series;
+    v_series private.task_series;
+    v_users uuid[] := '{}';
+    v_today date;
+    v_first uuid;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_id is null or p_list_id is null
+       or not private.valid_task_fields(p_title, p_description, null, null, p_priority)
+       or not private.valid_series_rule(p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count)
+       or (p_start_offset is not null and p_start_offset not between 0 and private.task_limit('start_offset')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, p_today);
+    select * into v_existing from private.task_series s where s.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id
+         and private.is_context(v_existing.owner_user_id, v_existing.owner_home_id, p_home_id, v_user_id) then
+        return query select 'exists',
+          (select t.id from private.tasks t where t.series_root_id = v_existing.root_id
+            and t.deleted_at is null order by t.occurrence_date limit 1),
+          v_existing.revision;
+      else
+        return query select 'id_taken', null::uuid, null::integer;
+      end if;
+      return;
+    end if;
+    if not private.usable_task_list(p_list_id, v_owner_user, p_home_id) then
+      return query select 'list_unavailable', null::uuid, null::integer;
+      return;
+    end if;
+    if not private.valid_task_labels(p_label_ids, v_owner_user, p_home_id) then
+      return query select 'invalid_label', null::uuid, null::integer;
+      return;
+    end if;
+    if coalesce(cardinality(p_assignee_ids), 0) > 0 then
+      if p_home_id is null then
+        return query select 'invalid_assignee', null::uuid, null::integer;
+        return;
+      end if;
+      if not private.can_manage_tasks(null, p_home_id, v_user_id) then
+        return query select 'not_permitted', null::uuid, null::integer;
+        return;
+      end if;
+      v_users := private.member_users(p_home_id, p_assignee_ids);
+      if v_users is null or cardinality(v_users) > private.task_limit('assignees_per_task') then
+        return query select 'invalid_assignee', null::uuid, null::integer;
+        return;
+      end if;
+    end if;
+    -- The per-context limit, counted under the context lock so two creates cannot both pass.
+    perform private.lock_task_context('task_series', p_home_id, v_user_id);
+    if (select count(*) from private.task_series s
+        where ((p_home_id is null and s.owner_user_id = v_user_id) or s.owner_home_id = p_home_id)
+          and s.superseded_at is null and s.deleted_at is null) >= private.task_limit('series') then
+      return query select 'limit_reached', null::uuid, null::integer;
+      return;
+    end if;
+    insert into private.task_series (
+      id, root_id, owner_user_id, owner_home_id, list_id, title, description, priority, start_offset,
+      frequency, interval_count, weekdays, starts_on, ends_on, max_count, until_date, created_by,
+      updated_by
+    ) values (
+      p_id, p_id, v_owner_user, p_home_id, p_list_id, p_title, p_description, p_priority, p_start_offset,
+      p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count,
+      private.series_until(p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count),
+      v_user_id, v_user_id
+    )
+    on conflict (id) do nothing
+    returning * into v_series;
+    if v_series.id is null then
+      return query select 'id_taken', null::uuid, null::integer;
+      return;
+    end if;
+    v_series.next_date := private.series_next(v_series, greatest(v_today, p_starts_on));
+    if v_series.next_date is null then
+      -- Every date of the schedule is in the past: nothing would ever be created.
+      delete from private.task_series s where s.id = v_series.id;
+      return query select 'ended', null::uuid, null::integer;
+      return;
+    end if;
+    update private.task_series s set next_date = v_series.next_date where s.id = v_series.id;
+    perform private.set_series_template(v_series.id, p_home_id, p_label_ids, v_users, null);
+    perform private.advance_series(v_series, v_today);
+    select t.id into v_first from private.tasks t
+      where t.series_root_id = v_series.id order by t.occurrence_date limit 1;
+    perform private.audit_task('task_series.created', p_home_id, 'task_series', v_series.id,
+      pg_catalog.jsonb_build_object('assignees', cardinality(v_users), 'frequency', p_frequency));
+    return query select 'created', v_first, 1;
+  end
+  $$;
+
+-- Changing following or all occurrences ------------------------------------------------------------
+
+-- What a change to following or all occurrences does, and its impact (spec "Confirmed recurring task
+-- and chore editing scope"). One occurrence is changed with the S18 functions (update_task,
+-- set_task_assignees, move_task), which mark it individually changed.
+--
+--   p_scope 'following': this occurrence and later ones (only from an open occurrence of the head
+--     part; 'scope_unavailable' otherwise). The head ends the day before and a new head starts here
+--     with the change; open later occurrences move to it. With no earlier occurrence in the chain
+--     it is the same as 'series'.
+--   p_scope 'series': the head and every open occurrence of the chain.
+--   Parts, each optional: content (p_set_content: title, description, priority, labels, start
+--   offset in days before the due date, and with p_copy_subtasks this occurrence's checklist as the
+--   checklist of occurrences created from now on); the list (p_list_id); assignees (p_assignee_ids,
+--   task managers only); the schedule (p_set_schedule: frequency, interval, weekdays, anchor date,
+--   end date, count).
+--
+-- Never changed: completed occurrences, and open ones changed individually (kept; this occurrence
+-- itself is always changed). A schedule change removes upcoming open occurrences that are no longer
+-- on it unless touched (changed individually, commented, or with a ticked item: kept), and creates
+-- from today on (no back-fill); overdue open ones stay, as missed history.
+--
+-- p_dry_run: the same work, rolled back, so the preview cannot disagree with the change. Outcomes:
+-- 'preview' and 'saved' (with impact: updated, kept, removed, completed, selectedRemoved, nextDates),
+-- 'conflict' (either revision is stale; revision: the series' current one), 'not_found',
+-- 'not_recurring', 'not_permitted', 'scope_unavailable', 'list_unavailable', 'invalid_label',
+-- 'invalid_assignee', 'ended' (the new schedule allows no date from today). task_id: this
+-- occurrence, or when the schedule change removed it the chain's next open occurrence.
+create function public.update_task_series(
+  p_task_id uuid, p_scope text, p_expected_task_revision integer, p_expected_series_revision integer,
+  p_dry_run boolean,
+  p_set_content boolean default false, p_title text default null, p_description text default null,
+  p_priority text default null, p_label_ids uuid[] default null, p_start_offset integer default null,
+  p_copy_subtasks boolean default false,
+  p_list_id uuid default null,
+  p_assignee_ids uuid[] default null,
+  p_set_schedule boolean default false, p_frequency text default null, p_interval integer default null,
+  p_weekdays smallint[] default null, p_starts_on date default null, p_ends_on date default null,
+  p_max_count integer default null,
+  p_today date default null
+) returns table (outcome text, impact jsonb, revision integer, task_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+    v_target private.task_series;
+    v_scope text := p_scope;
+    v_today date;
+    v_users uuid[];
+    v_boundary date;
+    v_occurrence private.tasks;
+    v_updated integer := 0;
+    v_kept integer := 0;
+    v_removed integer := 0;
+    v_completed integer := 0;
+    v_selected_removed boolean := false;
+    v_subtasks text[];
+    v_impact jsonb;
+    v_next_task uuid;
+  begin
+    if p_task_id is null or p_scope is null or p_scope not in ('following', 'series')
+       or p_expected_task_revision is null or p_expected_series_revision is null or p_dry_run is null
+       or p_set_content is null or p_set_schedule is null or p_copy_subtasks is null
+       or (p_set_content and (
+         not private.valid_task_fields(p_title, p_description, null, null, p_priority)
+         or p_label_ids is null
+         or (p_start_offset is not null and p_start_offset not between 0 and private.task_limit('start_offset'))))
+       or (p_set_schedule and not private.valid_series_rule(
+         p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count))
+       or not (p_set_content or p_set_schedule or p_list_id is not null or p_assignee_ids is not null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The series head before the occurrence, like every series-wide change: two of them started
+    -- from different occurrences of one series then queue instead of deadlocking (S19 review M1).
+    perform private.lock_series_head(
+      (select t.series_root_id from private.tasks t where t.id = p_task_id));
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if v_task.series_root_id is null then
+      return query select 'not_recurring', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    v_head := private.lock_series_head(v_task.series_root_id);
+    if v_head.id is null then
+      return query select 'not_recurring', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id)
+       or (p_assignee_ids is not null and (v_head.owner_home_id is null
+         or not private.can_manage_tasks(null, v_head.owner_home_id, v_user_id))) then
+      return query select 'not_permitted', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if v_task.revision <> p_expected_task_revision or v_head.revision <> p_expected_series_revision then
+      return query select 'conflict', null::jsonb, v_head.revision, null::uuid;
+      return;
+    end if;
+    if p_scope = 'following' and (v_task.series_id is distinct from v_head.id or v_task.completed_at is not null) then
+      return query select 'scope_unavailable', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if p_set_content and not private.valid_task_labels(p_label_ids, v_head.owner_user_id, v_head.owner_home_id) then
+      return query select 'invalid_label', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if p_list_id is not null
+       and not private.usable_task_list(p_list_id, v_head.owner_user_id, v_head.owner_home_id) then
+      return query select 'list_unavailable', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if p_assignee_ids is not null then
+      v_users := private.member_users(v_head.owner_home_id, p_assignee_ids);
+      if v_users is null or cardinality(v_users) > private.task_limit('assignees_per_task') then
+        return query select 'invalid_assignee', null::jsonb, null::integer, null::uuid;
+        return;
+      end if;
+    end if;
+    v_today := private.task_today(v_head.owner_home_id, p_today);
+    v_boundary := v_task.occurrence_date;
+    if v_scope = 'following' and v_head.previous_id is null and not exists (
+      select 1 from private.tasks t
+      where t.series_root_id = v_head.root_id and t.deleted_at is null and t.occurrence_date < v_boundary
+    ) then
+      v_scope := 'series';
+    end if;
+    if p_copy_subtasks then
+      select coalesce(array_agg(s.title order by s.position, s.created_at, s.id), '{}') into v_subtasks
+        from private.subtasks s where s.task_id = v_task.id;
+    end if;
+
+    begin
+      if v_scope = 'following' then
+        -- A new head from this occurrence on, with the old head's template and schedule; the old
+        -- head ends the day before. Same creator, so the creator keeps their rights.
+        insert into private.task_series (
+          id, root_id, previous_id, owner_user_id, owner_home_id, list_id, title, description,
+          priority, start_offset, frequency, interval_count, weekdays, starts_on, active_from,
+          ends_on, max_count, until_date, next_date, last_date, paused_at, needs_reassignment,
+          revision, created_by, created_at, updated_by
+        )
+        select gen_random_uuid(), h.root_id, h.id, h.owner_user_id, h.owner_home_id, h.list_id,
+          h.title, h.description, h.priority, h.start_offset, h.frequency, h.interval_count,
+          h.weekdays, h.starts_on, greatest(v_boundary, coalesce(h.active_from, h.starts_on)),
+          h.ends_on, h.max_count, h.until_date, h.next_date, h.last_date, h.paused_at,
+          h.needs_reassignment, h.revision + 1, h.created_by, h.created_at, v_user_id
+        from private.task_series h where h.id = v_head.id
+        returning * into v_target;
+        insert into private.task_series_labels (series_id, label_id)
+          select v_target.id, l.label_id from private.task_series_labels l where l.series_id = v_head.id;
+        insert into private.task_series_assignees (series_id, home_id, user_id)
+          select v_target.id, a.home_id, a.user_id from private.task_series_assignees a where a.series_id = v_head.id;
+        insert into private.task_series_subtasks (series_id, position, title)
+          select v_target.id, s.position, s.title from private.task_series_subtasks s where s.series_id = v_head.id;
+        -- Never before the old part's own start (S19 review H2): after a reschedule moved the start
+        -- later, an older open occurrence can lie before it; the old part then keeps no dates.
+        update private.task_series s
+          set superseded_at = pg_catalog.now(), next_date = null,
+            until_date = greatest(least(coalesce(s.until_date, v_boundary - 1), v_boundary - 1),
+              s.starts_on - 1),
+            updated_by = v_user_id, updated_at = pg_catalog.now()
+          where s.id = v_head.id;
+        update private.tasks t set series_id = v_target.id
+          where t.series_id = v_head.id and t.occurrence_date >= v_boundary
+            and t.deleted_at is null and t.completed_at is null;
+      else
+        v_target := v_head;
+        v_target.revision := v_head.revision + 1;
+      end if;
+
+      -- The template.
+      if p_set_content then
+        v_target.title := p_title;
+        v_target.description := p_description;
+        v_target.priority := p_priority;
+        v_target.start_offset := p_start_offset;
+      end if;
+      if p_list_id is not null then
+        v_target.list_id := p_list_id;
+      end if;
+      if p_assignee_ids is not null then
+        v_target.needs_reassignment := false;
+      end if;
+      if p_set_schedule then
+        v_target.frequency := p_frequency;
+        v_target.interval_count := p_interval;
+        v_target.weekdays := p_weekdays;
+        v_target.starts_on := p_starts_on;
+        -- A new part never creates dates before its first occurrence, whatever its anchor.
+        v_target.active_from := case when v_scope = 'following' then v_boundary end;
+        v_target.ends_on := p_ends_on;
+        v_target.max_count := p_max_count;
+        v_target.until_date := private.series_until(
+          p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count);
+      end if;
+      update private.task_series s
+        set list_id = v_target.list_id, title = v_target.title, description = v_target.description,
+          priority = v_target.priority, start_offset = v_target.start_offset,
+          frequency = v_target.frequency, interval_count = v_target.interval_count,
+          weekdays = v_target.weekdays, starts_on = v_target.starts_on,
+          active_from = v_target.active_from, ends_on = v_target.ends_on,
+          max_count = v_target.max_count, until_date = v_target.until_date,
+          -- A new schedule's next date is computed below; the old one may lie before a later start
+          -- (S19 review H1).
+          next_date = case when p_set_schedule then null else s.next_date end,
+          needs_reassignment = v_target.needs_reassignment, revision = v_target.revision,
+          updated_by = v_user_id, updated_at = pg_catalog.now()
+        where s.id = v_target.id
+        returning * into v_target;
+      perform private.set_series_template(v_target.id, v_target.owner_home_id,
+        case when p_set_content then p_label_ids end, v_users, v_subtasks);
+
+      -- The open occurrences in scope, locked in id order.
+      for v_occurrence in
+        select * from private.tasks t
+        where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is null
+          and (v_scope = 'series' or t.series_id = v_target.id)
+        order by t.id
+        for update
+      loop
+        if v_occurrence.id <> v_task.id and v_occurrence.detached then
+          v_kept := v_kept + 1;
+          continue;
+        end if;
+        if p_set_schedule and v_occurrence.occurrence_date > v_today
+           and not private.series_has_date(v_target, v_occurrence.occurrence_date) then
+          if private.occurrence_touched(v_occurrence) then
+            -- Kept as it is, and from now on treated as changed on its own.
+            update private.tasks t set detached = true where t.id = v_occurrence.id;
+            v_kept := v_kept + 1;
+          else
+            delete from private.tasks t where t.id = v_occurrence.id;
+            v_removed := v_removed + 1;
+            v_selected_removed := v_selected_removed or v_occurrence.id = v_task.id;
+          end if;
+          continue;
+        end if;
+        if not (p_set_content or p_list_id is not null or p_assignee_ids is not null) then
+          continue;
+        end if;
+        update private.tasks t
+          set title = case when p_set_content then p_title else t.title end,
+            description = case when p_set_content then p_description else t.description end,
+            priority = case when p_set_content then p_priority else t.priority end,
+            start_date = case when p_set_content
+              then case when p_start_offset is not null then t.due_date - p_start_offset end
+              else t.start_date end,
+            list_id = coalesce(p_list_id, t.list_id),
+            needs_reassignment = case when p_assignee_ids is not null then false else t.needs_reassignment end,
+            revision = t.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+          where t.id = v_occurrence.id;
+        if p_set_content then
+          perform private.replace_task_labels(v_occurrence.id, p_label_ids);
+        end if;
+        if p_assignee_ids is not null then
+          perform private.replace_task_assignees(v_occurrence.id, v_target.owner_home_id, v_users, v_user_id);
+        end if;
+        v_updated := v_updated + 1;
+      end loop;
+      select count(*)::integer into v_completed from private.tasks t
+        where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is not null
+          and (v_scope = 'series' or t.occurrence_date >= v_boundary);
+
+      if p_set_schedule then
+        -- Creation restarts from today (no back-fill), after whatever the chain still has.
+        v_target.next_date := private.series_next(v_target, v_today);
+        if v_target.next_date is null then
+          raise exception 'schedule ended' using errcode = 'MD002';
+        end if;
+        select max(t.occurrence_date) into v_target.last_date from private.tasks t
+          where t.series_root_id = v_head.root_id;
+        update private.task_series s set next_date = v_target.next_date, last_date = v_target.last_date
+          where s.id = v_target.id
+          returning * into v_target;
+      end if;
+      perform private.advance_series(v_target, v_today);
+      select * into v_target from private.task_series s where s.id = v_target.id;
+
+      v_impact := pg_catalog.jsonb_build_object(
+        'scope', v_scope,
+        'updated', v_updated,
+        'kept', v_kept,
+        'removed', v_removed,
+        'completed', v_completed,
+        'selectedRemoved', v_selected_removed,
+        'subtasksCopied', coalesce(cardinality(v_subtasks), 0),
+        'nextDates', pg_catalog.to_jsonb(private.series_dates(v_target, v_today, 5)));
+      if v_selected_removed then
+        select t.id into v_next_task from private.tasks t
+          where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is null
+            and t.occurrence_date >= v_today
+          order by t.occurrence_date limit 1;
+      else
+        v_next_task := v_task.id;
+      end if;
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        -- Everything above is rolled back; the impact stays.
+        return query select 'preview', v_impact, v_head.revision, v_task.id;
+        return;
+      when sqlstate 'MD002' then
+        return query select 'ended', null::jsonb, null::integer, null::uuid;
+        return;
+    end;
+    perform private.audit_task('task_series.updated', v_head.owner_home_id, 'task_series', v_head.root_id,
+      pg_catalog.jsonb_build_object('scope', v_scope, 'updated', v_updated, 'kept', v_kept,
+        'removed', v_removed, 'schedule', p_set_schedule, 'assignees', p_assignee_ids is not null));
+    return query select 'saved', v_impact, v_target.revision, v_next_task;
+  end
+  $$;
+
+-- Removing following or all occurrences ------------------------------------------------------------
+
+-- Removes this and later occurrences, or the whole series (spec "Confirmed recurring task and chore
+-- deletion scope"); one occurrence is deleted with delete_task. Completed occurrences always stay
+-- (history). 'following': only from an open occurrence of the head part; the series ends the day
+-- before, and this and later open occurrences go to the trash. 'series': the series stops and every
+-- open occurrence of it goes to the trash. Either is one trash entry (item type
+-- task_series_removal) that brings them back together. With no earlier occurrence, 'following'
+-- is 'series'. The series' creator or a task manager. p_dry_run returns the impact only.
+-- Outcomes: 'preview', 'deleted' (with the entry), 'conflict', 'not_found', 'not_recurring',
+-- 'not_permitted', 'scope_unavailable'. impact: scope, removed, completed.
+create function public.delete_task_series(
+  p_task_id uuid, p_scope text, p_expected_series_revision integer, p_dry_run boolean
+) returns table (outcome text, impact jsonb, entry_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+    v_scope text := p_scope;
+    v_ids uuid[];
+    v_completed integer;
+    v_impact jsonb;
+    v_removal private.task_series_removals;
+  begin
+    if p_task_id is null or p_scope is null or p_scope not in ('following', 'series')
+       or p_expected_series_revision is null or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The series head before the occurrence, like every series-wide change: two of them started
+    -- from different occurrences of one series then queue instead of deadlocking (S19 review M1).
+    perform private.lock_series_head(
+      (select t.series_root_id from private.tasks t where t.id = p_task_id));
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::jsonb, null::uuid;
+      return;
+    end if;
+    if v_task.series_root_id is null then
+      return query select 'not_recurring', null::jsonb, null::uuid;
+      return;
+    end if;
+    v_head := private.lock_series_head(v_task.series_root_id);
+    if v_head.id is null then
+      return query select 'not_recurring', null::jsonb, null::uuid;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::uuid;
+      return;
+    end if;
+    if v_head.revision <> p_expected_series_revision then
+      return query select 'conflict', null::jsonb, null::uuid;
+      return;
+    end if;
+    if p_scope = 'following' and (v_task.series_id is distinct from v_head.id or v_task.completed_at is not null) then
+      return query select 'scope_unavailable', null::jsonb, null::uuid;
+      return;
+    end if;
+    if v_scope = 'following' and v_head.previous_id is null and not exists (
+      select 1 from private.tasks t
+      where t.series_root_id = v_head.root_id and t.deleted_at is null
+        and t.occurrence_date < v_task.occurrence_date
+    ) then
+      v_scope := 'series';
+    end if;
+    -- The open occurrences that go, locked in id order (a completion waits, or has won).
+    select coalesce(array_agg(x.id order by x.id), '{}') into v_ids from (
+      select t.id from private.tasks t
+      where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is null
+        and (v_scope = 'series' or (t.series_id = v_head.id and t.occurrence_date >= v_task.occurrence_date))
+      order by t.id
+      for update
+    ) x;
+    select count(*)::integer into v_completed from private.tasks t
+      where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is not null
+        and (v_scope = 'series' or t.occurrence_date >= v_task.occurrence_date);
+    v_impact := pg_catalog.jsonb_build_object(
+      'scope', v_scope, 'removed', cardinality(v_ids), 'completed', v_completed);
+    if p_dry_run then
+      return query select 'preview', v_impact, null::uuid;
+      return;
+    end if;
+    insert into private.task_series_removals (
+      root_id, head_id, owner_user_id, owner_home_id, mode, from_date, task_ids, head_revision,
+      previous_ends_on, previous_max_count, previous_until_date
+    ) values (
+      v_head.root_id, v_head.id, v_head.owner_user_id, v_head.owner_home_id, v_scope,
+      case when v_scope = 'following' then v_task.occurrence_date end, v_ids, v_head.revision + 1,
+      v_head.ends_on, v_head.max_count, v_head.until_date
+    ) returning * into v_removal;
+    update private.tasks t set deleted_at = pg_catalog.now() where t.id = any (v_ids);
+    if v_scope = 'following' then
+      update private.task_series s
+        -- Never before the part's own start (S19 review H2), as in update_task_series.
+        set until_date = greatest(
+            least(coalesce(s.until_date, v_task.occurrence_date - 1), v_task.occurrence_date - 1),
+            s.starts_on - 1),
+          next_date = null, revision = s.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+        where s.id = v_head.id;
+    else
+      update private.task_series s
+        set revision = case when s.id = v_head.id then s.revision + 1 else s.revision end,
+          deleted_at = pg_catalog.now(), updated_by = v_user_id, updated_at = pg_catalog.now()
+        where s.root_id = v_head.root_id and s.deleted_at is null;
+    end if;
+    perform private.audit_task('task_series.removed', v_head.owner_home_id, 'task_series', v_head.root_id,
+      pg_catalog.jsonb_build_object('scope', v_scope, 'removed', cardinality(v_ids)));
+    return query select 'deleted', v_impact,
+      private.trash_move(v_user_id, 'tasks', 'task_series_removal', v_removal.id, v_head.owner_user_id,
+        v_head.owner_home_id, v_head.title);
+  end
+  $$;
+
+-- Pausing and resuming --------------------------------------------------------------------------------
+
+-- Pauses a series (no new occurrences; open ones stay) or resumes it from today (no back-fill). The
+-- series' creator or a task manager. Outcomes: 'saved', 'conflict', 'not_found', 'not_recurring',
+-- 'not_permitted'.
+create function public.set_task_series_paused(
+  p_task_id uuid, p_paused boolean, p_expected_series_revision integer, p_today date default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+  begin
+    if p_task_id is null or p_paused is null or p_expected_series_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The series head before the occurrence, like every series-wide change: two of them started
+    -- from different occurrences of one series then queue instead of deadlocking (S19 review M1).
+    perform private.lock_series_head(
+      (select t.series_root_id from private.tasks t where t.id = p_task_id));
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    v_head := private.lock_series_head(v_task.series_root_id);
+    if v_task.series_root_id is null or v_head.id is null then
+      return query select 'not_recurring', null::integer;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_head.revision <> p_expected_series_revision then
+      return query select 'conflict', v_head.revision;
+      return;
+    end if;
+    if p_paused = (v_head.paused_at is not null) then
+      return query select 'saved', v_head.revision;
+      return;
+    end if;
+    update private.task_series s
+      set paused_at = case when p_paused then pg_catalog.now() end,
+        -- Resuming continues from today: dates missed while paused are not created.
+        next_date = case when p_paused or s.next_date is null then s.next_date
+          else private.series_next(s, private.task_today(s.owner_home_id, p_today)) end,
+        revision = s.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where s.id = v_head.id
+      returning * into v_head;
+    if not p_paused then
+      perform private.advance_series(v_head, private.task_today(v_head.owner_home_id, p_today));
+    end if;
+    perform private.audit_task(case when p_paused then 'task_series.paused' else 'task_series.resumed' end,
+      v_head.owner_home_id, 'task_series', v_head.root_id);
+    return query select 'saved', v_head.revision;
+  end
+  $$;
+
+-- Occurrence history --------------------------------------------------------------------------------
+
+-- A page of a series' history, newest first (spec "Confirmed recurring task occurrence history"):
+-- every occurrence of the chain scheduled up to today, and any completed early; never a future one
+-- merely forecast. Each row: scheduled date, due date, status ('completed', 'completed_late' after
+-- its due date in the context's timezone, 'missed' for an overdue open one, 'open' for one due
+-- today), when it was completed and by whom (the actual completer, once). Occurrences in the trash
+-- are left out. p_filter: 'all', 'completed' or 'missed'. p_time_zone is the person's effective
+-- timezone for their Personal space (a Home uses its own). A task the caller may not see, or one that
+-- is not recurring, gives no rows.
+create function public.list_task_occurrences(
+  p_task_id uuid, p_filter text default 'all', p_offset integer default 0, p_limit integer default 50,
+  p_today date default null, p_time_zone text default null
+) returns table (
+  id uuid, occurrence_date date, due_date date, status text, completed_at timestamptz,
+  completed_by_me boolean, completed_by_member uuid, is_current boolean, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_today date;
+    v_zone text;
+  begin
+    if p_task_id is null or p_filter is null or p_filter not in ('all', 'completed', 'missed')
+       or p_offset is null or p_offset not between 0 and private.task_limit('max_offset')
+       or p_limit is null or p_limit not between 1 and private.task_limit('history_page') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null or v_task.series_root_id is null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return;
+    end if;
+    v_today := private.task_today(v_task.owner_home_id, p_today);
+    if v_task.owner_home_id is not null then
+      select h.timezone into v_zone from public.homes h where h.id = v_task.owner_home_id;
+    elsif p_time_zone is not null and exists (select 1 from pg_catalog.pg_timezone_names z where z.name = p_time_zone) then
+      v_zone := p_time_zone;
+    end if;
+    v_zone := coalesce(v_zone, 'UTC');
+    return query
+      with rows as (
+        select t.id, t.occurrence_date, t.due_date, t.completed_at, t.completed_by,
+          case
+            when t.completed_at is not null then
+              case when t.due_date is not null and (t.completed_at at time zone v_zone)::date > t.due_date
+                then 'completed_late' else 'completed' end
+            when t.due_date < v_today then 'missed'
+            else 'open'
+          end as status
+        from private.tasks t
+        where t.series_root_id = v_task.series_root_id and t.deleted_at is null
+          and (t.occurrence_date <= v_today or t.completed_at is not null)
+      )
+      select r.id, r.occurrence_date, r.due_date, r.status, r.completed_at,
+        coalesce(r.completed_by = v_user_id, false),
+        private.member_ref(v_task.owner_home_id, r.completed_by),
+        r.id = v_task.id,
+        (count(*) over ())::integer
+      from rows r
+      where p_filter = 'all'
+        or (p_filter = 'completed' and r.status in ('completed', 'completed_late'))
+        or (p_filter = 'missed' and r.status = 'missed')
+      order by r.occurrence_date desc, r.id
+      limit p_limit offset p_offset;
+  end
+  $$;
+
+-- S18 functions again ---------------------------------------------------------------------------------
+
+-- A change to one occurrence of a series ("this occurrence") marks it individually changed, so later
+-- changes to following or all occurrences leave it as it is. Otherwise unchanged from S18.
+
+-- Saves a task's content (title, description, dates, priority, labels) if nobody changed it since
+-- p_expected_revision. Outcomes: 'saved', 'conflict', 'invalid_label', 'not_found', 'not_permitted'.
+-- Omitted optional fields are cleared (null), so the caller always sends the whole content.
+create or replace function public.update_task(
+  p_task_id uuid, p_expected_revision integer, p_title text, p_label_ids uuid[],
+  p_description text default null, p_start_date date default null, p_due_date date default null,
+  p_priority text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+  begin
+    if p_task_id is null or p_expected_revision is null or p_label_ids is null
+       or not private.valid_task_fields(p_title, p_description, p_start_date, p_due_date, p_priority) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_task.revision <> p_expected_revision then
+      return query select 'conflict', v_task.revision;
+      return;
+    end if;
+    if not private.valid_task_labels(p_label_ids, v_task.owner_user_id, v_task.owner_home_id) then
+      return query select 'invalid_label', null::integer;
+      return;
+    end if;
+    update private.tasks t
+      set title = p_title, description = p_description, start_date = p_start_date,
+        due_date = p_due_date, priority = p_priority, detached = t.series_root_id is not null,
+        revision = t.revision + 1,
+        updated_by = v_user_id, updated_at = pg_catalog.now()
+      where t.id = v_task.id
+      returning * into v_task;
+    perform private.replace_task_labels(v_task.id, p_label_ids);
+    return query select 'saved', v_task.revision;
+  end
+  $$;
+
+-- Sets a Home task's assignees (task managers only), as membership ids of current members; clears
+-- the reassignment flag. Outcomes: 'saved', 'conflict', 'invalid_assignee', 'not_found', 'not_permitted'.
+create or replace function public.set_task_assignees(
+  p_task_id uuid, p_expected_revision integer, p_member_ids uuid[]
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_users uuid[];
+  begin
+    if p_task_id is null or p_expected_revision is null or p_member_ids is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if v_task.owner_home_id is null or not private.can_manage_tasks(null, v_task.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_task.revision <> p_expected_revision then
+      return query select 'conflict', v_task.revision;
+      return;
+    end if;
+    v_users := private.member_users(v_task.owner_home_id, p_member_ids);
+    if v_users is null or cardinality(v_users) > private.task_limit('assignees_per_task') then
+      return query select 'invalid_assignee', null::integer;
+      return;
+    end if;
+    perform private.replace_task_assignees(v_task.id, v_task.owner_home_id, v_users, v_user_id);
+    update private.tasks t
+      set needs_reassignment = false, detached = t.series_root_id is not null,
+        revision = t.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where t.id = v_task.id
+      returning * into v_task;
+    perform private.audit_task('task.assignees_set', v_task.owner_home_id, 'task', v_task.id,
+      pg_catalog.jsonb_build_object('assignees', cardinality(v_users)));
+    return query select 'saved', v_task.revision;
+  end
+  $$;
+
+-- Moves a task to another active list of the same context, keeping everything else. Outcomes:
+-- 'saved', 'conflict', 'list_unavailable' (deleted, archived, missing or in another context),
+-- 'not_found', 'not_permitted'.
+create or replace function public.move_task(p_task_id uuid, p_expected_revision integer, p_list_id uuid)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+  begin
+    if p_task_id is null or p_expected_revision is null or p_list_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_task.revision <> p_expected_revision then
+      return query select 'conflict', v_task.revision;
+      return;
+    end if;
+    if not private.usable_task_list(p_list_id, v_task.owner_user_id, v_task.owner_home_id) then
+      return query select 'list_unavailable', null::integer;
+      return;
+    end if;
+    if v_task.list_id = p_list_id then
+      return query select 'saved', v_task.revision;
+      return;
+    end if;
+    update private.tasks t
+      set list_id = p_list_id, detached = t.series_root_id is not null,
+        revision = t.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where t.id = v_task.id
+      returning * into v_task;
+    return query select 'saved', v_task.revision;
+  end
+  $$;
+
+-- Archiving or deleting a list that an active series creates occurrences into answers 'has_series'
+-- with how many (the person moves or ends those series first), like open tasks. Otherwise as S18.
+
+-- Renames, archives or unarchives a list (task managers). Outcomes: 'saved' (with the new revision),
+-- 'conflict' (with the current one), 'duplicate_name', 'has_open_tasks' (archiving a list that still
+-- has open tasks: move, complete or delete them first), 'not_found', 'not_permitted'.
+create or replace function public.update_task_list(
+  p_list_id uuid, p_expected_revision integer, p_name text, p_archived boolean
+) returns table (outcome text, revision integer, open_tasks integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_list private.task_lists;
+    v_open integer;
+  begin
+    if p_list_id is null or p_expected_revision is null or p_archived is null or p_name is null
+       or not private.is_visible_name(p_name, private.task_limit('list_name')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The context lock first, then the row: the same order as reorder_task_lists and create, so
+    -- a rename and a reorder of the same context queue instead of deadlocking.
+    select * into v_list from private.task_lists l where l.id = p_list_id;
+    if found and private.in_task_context(v_list.owner_user_id, v_list.owner_home_id, v_user_id) then
+      perform private.lock_task_context('task_lists', v_list.owner_home_id, v_list.owner_user_id);
+    end if;
+    v_list := private.lock_task_list(p_list_id, v_user_id);
+    if v_list.id is null then
+      return query select 'not_found', null::integer, null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_list.owner_user_id, v_list.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer, null::integer;
+      return;
+    end if;
+    if v_list.revision <> p_expected_revision then
+      return query select 'conflict', v_list.revision, null::integer;
+      return;
+    end if;
+    if p_name <> v_list.name then
+      if private.task_list_name_taken(
+        v_list.owner_home_id, coalesce(v_list.owner_user_id, v_user_id), p_name, v_list.id
+      ) then
+        return query select 'duplicate_name', null::integer, null::integer;
+        return;
+      end if;
+    end if;
+    if p_archived and v_list.archived_at is null then
+      -- The list row is locked, so a task created or moved into it meanwhile has committed or waits.
+      select count(*)::integer into v_open from private.tasks t
+        where t.list_id = v_list.id and t.deleted_at is null and t.completed_at is null;
+      if v_open > 0 then
+        return query select 'has_open_tasks', null::integer, v_open;
+        return;
+      end if;
+      -- A series creating occurrences into it would have nowhere to put them (S19).
+      select count(*)::integer into v_open from private.task_series s
+        where s.list_id = v_list.id and s.superseded_at is null and s.deleted_at is null
+          and s.next_date is not null;
+      if v_open > 0 then
+        return query select 'has_series', null::integer, v_open;
+        return;
+      end if;
+    end if;
+    update private.task_lists l
+      set name = p_name,
+        archived_at = case when p_archived then coalesce(l.archived_at, pg_catalog.now()) end,
+        revision = l.revision + 1, updated_at = pg_catalog.now()
+      where l.id = v_list.id
+      returning * into v_list;
+    perform private.audit_task('task_list.updated', v_list.owner_home_id, 'task_list', v_list.id,
+      pg_catalog.jsonb_build_object('archived', p_archived));
+    return query select 'saved', v_list.revision, null::integer;
+  end
+  $$;
+
+-- Moves a list to the trash (task managers), only when no active task is in it: the impact review
+-- asks the person to move or delete its tasks first, so no task is silently hidden. Outcomes:
+-- 'deleted' (with the trash entry), 'conflict', 'has_tasks' (with the count), 'not_found',
+-- 'not_permitted'.
+create or replace function public.delete_task_list(p_list_id uuid, p_expected_revision integer)
+returns table (outcome text, entry_id uuid, active_tasks integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_list private.task_lists;
+    v_active integer;
+  begin
+    if p_list_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_list := private.lock_task_list(p_list_id, v_user_id);
+    if v_list.id is null then
+      return query select 'not_found', null::uuid, null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_list.owner_user_id, v_list.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::uuid, null::integer;
+      return;
+    end if;
+    if v_list.revision <> p_expected_revision then
+      return query select 'conflict', null::uuid, null::integer;
+      return;
+    end if;
+    select count(*)::integer into v_active from private.tasks t
+      where t.list_id = v_list.id and t.deleted_at is null;
+    if v_active > 0 then
+      return query select 'has_tasks', null::uuid, v_active;
+      return;
+    end if;
+    select count(*)::integer into v_active from private.task_series s
+      where s.list_id = v_list.id and s.superseded_at is null and s.deleted_at is null
+        and s.next_date is not null;
+    if v_active > 0 then
+      return query select 'has_series', null::uuid, v_active;
+      return;
+    end if;
+    update private.task_lists l set deleted_at = pg_catalog.now() where l.id = v_list.id;
+    return query select 'deleted',
+      private.trash_move(v_user_id, 'tasks', 'task_list', v_list.id, v_list.owner_user_id,
+        v_list.owner_home_id, v_list.name),
+      null::integer;
+  end
+  $$;
+
+-- Reading: a task's series, and whether a row repeats -----------------------------------------------
+
+-- One task with everything its detail page shows, or null when it is missing, deleted or not the
+-- caller's to see. People are membership ids (null: departed, or the Personal space) and "is me".
+create or replace function public.get_task(p_task_id uuid, p_today date default null) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_list private.task_lists;
+    v_home uuid;
+    v_today date;
+    v_head private.task_series;
+  begin
+    if p_task_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return null;
+    end if;
+    select * into v_list from private.task_lists l where l.id = v_task.list_id;
+    v_home := v_task.owner_home_id;
+    v_today := private.task_today(v_home, p_today);
+    if v_task.series_root_id is not null then
+      select * into v_head from private.task_series s
+        where s.root_id = v_task.series_root_id and s.superseded_at is null and s.deleted_at is null;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'id', v_task.id,
+      'homeId', v_home,
+      'list', pg_catalog.jsonb_build_object('id', v_list.id, 'name', v_list.name,
+        'archived', v_list.archived_at is not null),
+      'title', v_task.title,
+      'description', v_task.description,
+      'startDate', v_task.start_date,
+      'dueDate', v_task.due_date,
+      'priority', v_task.priority,
+      'revision', v_task.revision,
+      'needsReassignment', v_task.needs_reassignment,
+      'overdue', v_task.completed_at is null and coalesce(v_task.due_date < v_today, false),
+      'upcoming', v_task.completed_at is null and coalesce(v_task.start_date > v_today, false),
+      'createdAt', v_task.created_at,
+      'createdBy', pg_catalog.jsonb_build_object('me', coalesce(v_task.created_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.created_by)),
+      'updatedAt', v_task.updated_at,
+      'updatedBy', pg_catalog.jsonb_build_object('me', coalesce(v_task.updated_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.updated_by)),
+      'completedAt', v_task.completed_at,
+      'completedBy', case when v_task.completed_at is not null then pg_catalog.jsonb_build_object(
+        'me', coalesce(v_task.completed_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.completed_by)) end,
+      'reopenedAt', v_task.reopened_at,
+      'reopenedBy', case when v_task.reopened_at is not null then pg_catalog.jsonb_build_object(
+        'me', coalesce(v_task.reopened_by = v_user_id, false),
+        'member', private.member_ref(v_home, v_task.reopened_by)) end,
+      'assignees', coalesce((select pg_catalog.jsonb_agg(m.id order by m.created_at, m.id)
+        from private.task_assignees a
+        join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+        where a.task_id = v_task.id), '[]'::jsonb),
+      'labels', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', l.id, 'name', l.name, 'color', l.color) order by private.task_name_key(l.name), l.id)
+        from private.task_label_links k join private.task_labels l on l.id = k.label_id
+        where k.task_id = v_task.id), '[]'::jsonb),
+      'subtasks', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', s.id, 'title', s.title, 'completed', s.completed_at is not null,
+          'revision', s.revision) order by s.position, s.created_at, s.id)
+        from private.subtasks s where s.task_id = v_task.id), '[]'::jsonb),
+      'commentCount', (select count(*) from private.task_comments c where c.task_id = v_task.id),
+      -- S19: the series this occurrence belongs to (its head), or null for a one-off task or when
+      -- the series was removed. The occurrence's own scheduled date stays even if its due date moved.
+      'occurrenceDate', v_task.occurrence_date,
+      'series', case when v_head.id is not null then pg_catalog.jsonb_build_object(
+        'revision', v_head.revision,
+        'frequency', v_head.frequency,
+        'interval', v_head.interval_count,
+        'weekdays', pg_catalog.to_jsonb(v_head.weekdays),
+        'startsOn', v_head.starts_on,
+        'endsOn', v_head.ends_on,
+        'count', v_head.max_count,
+        'startOffset', v_head.start_offset,
+        'listId', v_head.list_id,
+        'paused', v_head.paused_at is not null,
+        'ended', v_head.next_date is null and v_head.paused_at is null,
+        -- The next open occurrence after today, or the next date still to be created.
+        'nextDate', coalesce((select min(t.occurrence_date) from private.tasks t
+          where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is null
+            and t.occurrence_date > v_today), v_head.next_date),
+        'inHead', v_task.series_id is not distinct from v_head.id,
+        'detached', v_task.detached,
+        'needsReassignment', v_head.needs_reassignment,
+        'assignees', coalesce((select pg_catalog.jsonb_agg(m.id order by m.created_at, m.id)
+          from private.task_series_assignees a
+          join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+          where a.series_id = v_head.id), '[]'::jsonb),
+        'checklistSize', (select count(*) from private.task_series_subtasks s where s.series_id = v_head.id),
+        'can', pg_catalog.jsonb_build_object(
+          'edit', private.can_edit_series(v_head, v_user_id),
+          'assign', v_home is not null and private.can_manage_tasks(null, v_home, v_user_id),
+          'delete', private.can_edit_series(v_head, v_user_id))) end,
+      'can', pg_catalog.jsonb_build_object(
+        'edit', private.can_edit_task(v_task, v_user_id),
+        'complete', private.can_edit_task(v_task, v_user_id),
+        'assign', v_home is not null and private.can_manage_tasks(null, v_home, v_user_id),
+        'delete', private.can_delete_task(v_task, v_user_id),
+        'comment', true)
+    );
+  end
+  $$;
+
+-- Rows say whether they are an occurrence of a series ("Repeats"). The result type changes, so the
+-- S18 function is dropped and created again; otherwise unchanged.
+drop function public.list_tasks(uuid, uuid, date, text, text, boolean, text[], uuid[], text, uuid, text, integer, integer);
+
+-- One page of the context's tasks (p_list_id null: All Tasks, every active list), filtered and
+-- sorted, with the filtered total. Only small fields: the details come from get_task.
+--   p_status: 'open', 'completed' or 'all'. p_when: 'any', 'upcoming' (open, start after today),
+--   'active' (open, started or no start, not overdue), 'overdue' (open, due before today).
+--   p_hide_future: leaves out open tasks that start after today (not with 'upcoming').
+--   p_priorities: any of 'low', 'normal', 'high', 'urgent', 'unset'. p_label_ids: any of them.
+--   p_assignee: 'any', 'me', 'unassigned', 'needs_reassignment' or 'member' (p_assignee_member).
+--   p_sort: 'due', 'priority_desc', 'priority_asc' or 'created'; ties by due date, creation, id.
+create function public.list_tasks(
+  p_home_id uuid default null, p_list_id uuid default null, p_today date default null,
+  p_status text default 'open', p_when text default 'any', p_hide_future boolean default false,
+  p_priorities text[] default null, p_label_ids uuid[] default null,
+  p_assignee text default 'any', p_assignee_member uuid default null,
+  p_sort text default 'due', p_limit integer default 50, p_offset integer default 0
+) returns table (
+  id uuid, list_id uuid, list_name text, title text, start_date date, due_date date,
+  priority text, completed_at timestamptz, needs_reassignment boolean, overdue boolean,
+  upcoming boolean, subtasks_done integer, subtasks_total integer, comment_count integer,
+  label_ids uuid[], assignee_member_ids uuid[], assigned_to_me boolean, can_complete boolean,
+  revision integer, total_count integer, recurring boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_member_user uuid;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_status is null or p_status not in ('open', 'completed', 'all')
+       or p_when is null or p_when not in ('any', 'upcoming', 'active', 'overdue')
+       or p_assignee is null or p_assignee not in ('any', 'me', 'unassigned', 'needs_reassignment', 'member')
+       or (p_assignee = 'member') <> (p_assignee_member is not null)
+       or p_sort is null or p_sort not in ('due', 'priority_desc', 'priority_asc', 'created')
+       or p_limit is null or p_limit not between 1 and private.task_limit('page')
+       or p_offset is null or p_offset not between 0 and private.task_limit('max_offset')
+       or (p_priorities is not null and not (p_priorities <@ array['low', 'normal', 'high', 'urgent', 'unset']))
+       or coalesce(cardinality(p_label_ids), 0) > private.task_limit('labels') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, p_today);
+    if p_assignee = 'member' then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_assignee_member;
+      -- A member who is not (or no longer) in this Home is assigned to nothing.
+      v_member_user := coalesce(v_member_user, '00000000-0000-0000-0000-000000000000');
+    end if;
+    return query
+      with base as (
+        select t.*, l.name as l_name, t as t_row
+        from private.tasks t
+        join private.task_lists l on l.id = t.list_id
+        where ((p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id)
+          and t.deleted_at is null and l.deleted_at is null
+          and (case when p_list_id is null then l.archived_at is null else l.id = p_list_id end)
+          and (p_status = 'all' or (p_status = 'open') = (t.completed_at is null))
+          and (p_when = 'any' or (t.completed_at is null and case p_when
+            when 'upcoming' then t.start_date > v_today
+            when 'active' then (t.start_date is null or t.start_date <= v_today)
+              and not coalesce(t.due_date < v_today, false)
+            when 'overdue' then t.due_date < v_today
+          end))
+          and (not coalesce(p_hide_future, false) or p_when = 'upcoming' or t.completed_at is not null
+            or not coalesce(t.start_date > v_today, false))
+          and (p_priorities is null or coalesce(t.priority, 'unset') = any (p_priorities))
+          and (coalesce(cardinality(p_label_ids), 0) = 0 or exists (
+            select 1 from private.task_label_links k where k.task_id = t.id and k.label_id = any (p_label_ids)))
+          and (case p_assignee
+            when 'any' then true
+            when 'me' then private.is_task_assignee(t.id, v_user_id)
+            when 'unassigned' then not exists (select 1 from private.task_assignees a where a.task_id = t.id)
+            when 'needs_reassignment' then t.needs_reassignment
+            when 'member' then private.is_task_assignee(t.id, v_member_user)
+          end)
+      ), page as (
+        select b.*, count(*) over ()::integer as total
+        from base b
+        order by
+          case when p_sort = 'priority_desc' then private.task_priority_rank(b.priority) end desc,
+          case when p_sort = 'priority_asc' then private.task_priority_rank(b.priority) end asc,
+          case when p_sort = 'created' then b.created_at end desc,
+          b.due_date asc nulls last, b.created_at asc, b.id asc
+        limit p_limit offset p_offset
+      )
+      select p.id, p.list_id, p.l_name, p.title, p.start_date, p.due_date, p.priority, p.completed_at,
+        p.needs_reassignment,
+        p.completed_at is null and coalesce(p.due_date < v_today, false),
+        p.completed_at is null and coalesce(p.start_date > v_today, false),
+        (select count(*)::integer from private.subtasks s where s.task_id = p.id and s.completed_at is not null),
+        (select count(*)::integer from private.subtasks s where s.task_id = p.id),
+        (select count(*)::integer from private.task_comments c where c.task_id = p.id),
+        coalesce((select array_agg(k.label_id order by k.label_id) from private.task_label_links k
+          where k.task_id = p.id), '{}'),
+        -- Oldest membership first, as in get_task, so every view lists assignees alike.
+        coalesce((select array_agg(m.id order by m.created_at, m.id) from private.task_assignees a
+          join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+          where a.task_id = p.id), '{}'),
+        private.is_task_assignee(p.id, v_user_id),
+        private.can_edit_task(p.t_row, v_user_id),
+        p.revision, p.total, p.series_root_id is not null
+      from page p
+      order by
+        case when p_sort = 'priority_desc' then private.task_priority_rank(p.priority) end desc,
+        case when p_sort = 'priority_asc' then private.task_priority_rank(p.priority) end asc,
+        case when p_sort = 'created' then p.created_at end desc,
+        p.due_date asc nulls last, p.created_at asc, p.id asc;
+  end
+  $$;
+
+-- Trash: series removals ------------------------------------------------------------------------------
+
+alter table private.trash_entries drop constraint trash_entries_item_type_check;
+alter table private.trash_entries add constraint trash_entries_item_type_check
+  check (item_type in ('sample', 'dashboard_template', 'task', 'task_list', 'task_series_removal'));
+
+create or replace function private.trash_conflict_options(p_kind text) returns text[]
+  language sql immutable set search_path = '' as $$
+  select case p_kind
+    when 'slot_taken' then array['clear_slot']
+    when 'parent_unavailable' then array['detach_parent']
+    -- The person picks another active list of the same context (argument: its id).
+    when 'list_unavailable' then array['move_to_list']
+    -- A removed series changed since (edited, split, paused, removed again): bring back only the
+    -- removed occurrences and leave the series as it is now.
+    when 'series_changed' then array['restore_tasks_only']
+    else array[]::text[]
+  end;
+  $$;
+
+-- The four dispatch functions again, with the case for a series removal. Its conflicts: a removed
+-- occurrence's list (or the series' list) is gone or archived (move_to_list:<id>), or the series
+-- changed since (restore_tasks_only). Task and list cases unchanged from S18.
+create or replace function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_sample private.trash_samples;
+    v_task private.tasks;
+    v_removal private.task_series_removals;
+    v_head private.task_series;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        select * into v_sample from private.trash_samples s where s.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if v_sample.parent_id is not null and exists (
+          select 1 from private.trash_samples p
+          where p.id = v_sample.parent_id and p.deleted_at is not null
+        ) then
+          return 'parent_unavailable';
+        end if;
+        if v_sample.slot is not null and exists (
+          select 1 from private.trash_samples o
+          where o.id <> v_sample.id and o.deleted_at is null and o.slot = v_sample.slot
+            and o.owner_user_id is not distinct from v_sample.owner_user_id
+            and o.owner_home_id is not distinct from v_sample.owner_home_id
+        ) then
+          return 'slot_taken';
+        end if;
+        return null;
+      when 'dashboard_template' then
+        if not exists (
+          select 1 from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+      when 'task' then
+        select * into v_task from private.tasks t where t.id = p_entry.subject_id;
+        if not found or v_task.deleted_at is null then
+          return 'item_missing';
+        end if;
+        if v_task.list_id is null or not exists (
+          select 1 from private.task_lists l
+          where l.id = v_task.list_id and l.deleted_at is null and l.archived_at is null
+        ) then
+          return 'list_unavailable';
+        end if;
+        return null;
+      when 'task_list' then
+        if not exists (
+          select 1 from private.task_lists l where l.id = p_entry.subject_id and l.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+      when 'task_series_removal' then
+        -- Removed occurrences need an active list, like a task; then the series must be as the
+        -- removal left it (unless the person chose to bring back only the occurrences).
+        select * into v_removal from private.task_series_removals r where r.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if not v_removal.tasks_only then
+          select * into v_head from private.task_series s where s.id = v_removal.head_id;
+        end if;
+        if exists (
+          select 1 from private.tasks t
+          where t.id = any (v_removal.task_ids) and t.deleted_at is not null
+            and (t.list_id is null or not exists (
+              select 1 from private.task_lists l
+              where l.id = t.list_id and l.deleted_at is null and l.archived_at is null))
+        ) or (v_head.id is not null and (v_head.list_id is null or not exists (
+          select 1 from private.task_lists l
+          where l.id = v_head.list_id and l.deleted_at is null and l.archived_at is null))) then
+          return 'list_unavailable';
+        end if;
+        if not v_removal.tasks_only
+           and (v_head.id is null or v_head.revision <> v_removal.head_revision
+             or v_head.superseded_at is not null) then
+          return 'series_changed';
+        end if;
+        return null;
+    end case;
+    return null;
+  end
+  $$;
+
+create or replace function private.trash_resolve(p_entry private.trash_entries, p_resolution text)
+returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_arg text := pg_catalog.split_part(p_resolution, ':', 2);
+    v_task private.tasks;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        if p_resolution = 'clear_slot' then
+          update private.trash_samples s set slot = null where s.id = p_entry.subject_id;
+        elsif p_resolution = 'detach_parent' then
+          update private.trash_samples s set parent_id = null where s.id = p_entry.subject_id;
+        end if;
+      when 'dashboard_template' then
+        -- No conflicts, so nothing to resolve.
+        null;
+      when 'task' then
+        -- Only an active, unarchived list of the task's own context; anything else leaves the task
+        -- as it is, so the conflict is reported again.
+        if pg_catalog.split_part(p_resolution, ':', 1) = 'move_to_list'
+           and v_arg ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+          select * into v_task from private.tasks t where t.id = p_entry.subject_id for update;
+          if found and exists (
+            select 1 from private.task_lists l
+            where l.id = v_arg::uuid and l.deleted_at is null and l.archived_at is null
+              and l.owner_user_id is not distinct from v_task.owner_user_id
+              and l.owner_home_id is not distinct from v_task.owner_home_id
+          ) then
+            update private.tasks t set list_id = v_arg::uuid where t.id = v_task.id;
+          end if;
+        end if;
+      when 'task_list' then
+        null;
+      when 'task_series_removal' then
+        if p_resolution = 'restore_tasks_only' then
+          update private.task_series_removals r set tasks_only = true where r.id = p_entry.subject_id;
+        elsif pg_catalog.split_part(p_resolution, ':', 1) = 'move_to_list'
+           and v_arg ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+          -- The removed occurrences whose list is gone move to the chosen active list of their
+          -- context; so does the series, when its own list is gone.
+          update private.tasks t set list_id = v_arg::uuid
+            from private.task_series_removals r
+            where r.id = p_entry.subject_id and t.id = any (r.task_ids) and t.deleted_at is not null
+              and exists (
+                select 1 from private.task_lists l
+                where l.id = v_arg::uuid and l.deleted_at is null and l.archived_at is null
+                  and l.owner_user_id is not distinct from t.owner_user_id
+                  and l.owner_home_id is not distinct from t.owner_home_id)
+              and (t.list_id is null or not exists (
+                select 1 from private.task_lists u
+                where u.id = t.list_id and u.deleted_at is null and u.archived_at is null));
+          update private.task_series s set list_id = v_arg::uuid
+            from private.task_series_removals r
+            where r.id = p_entry.subject_id and s.root_id = r.root_id
+              and exists (
+                select 1 from private.task_lists l
+                where l.id = v_arg::uuid and l.deleted_at is null and l.archived_at is null
+                  and l.owner_user_id is not distinct from s.owner_user_id
+                  and l.owner_home_id is not distinct from s.owner_home_id)
+              and (s.list_id is null or not exists (
+                select 1 from private.task_lists u
+                where u.id = s.list_id and u.deleted_at is null and u.archived_at is null));
+        end if;
+    end case;
+  end
+  $$;
+
+create or replace function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+    v_lost integer := 0;
+    v_lost_ids uuid[] := '{}';
+    v_ref uuid;
+    v_task private.tasks;
+    v_removal private.task_series_removals;
+    v_head private.task_series;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      if not private.restore_file(v_file_id) then
+        v_lost := v_lost + 1;
+        v_lost_ids := v_lost_ids || v_file_id;
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        -- The file the item uses must be usable too: it may have gone to the trash with another
+        -- item that shared it (the last one deleted takes it along).
+        select s.file_id into v_ref from private.trash_samples s where s.id = p_entry.subject_id;
+        if v_ref is not null and not (v_ref = any (v_lost_ids)) and not private.restore_file(v_ref) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_ref;
+        end if;
+        update private.trash_samples s
+          set deleted_at = null,
+            -- A reference to a file that is gone would be broken: drop it, the caller reports it.
+            file_id = case when s.file_id = any (v_lost_ids) then null else s.file_id end
+          where s.id = p_entry.subject_id;
+      when 'dashboard_template' then
+        -- Its shares come back with it; a share into a Home the owner has since left was already
+        -- ended by home_memberships_end_template_shares.
+        update private.dashboard_templates t set deleted_at = null, updated_at = pg_catalog.now()
+          where t.id = p_entry.subject_id;
+      when 'task' then
+        -- Its subtasks, comments, labels and assignees never left it. Its list is locked for share
+        -- and checked again: a list deleted or archived since the conflict check makes this a
+        -- conflict (reported as one by the caller, which turns a unique violation into
+        -- needs_resolution), so no active task can end up in an unusable list.
+        select * into v_task from private.tasks t where t.id = p_entry.subject_id for update;
+        if v_task.list_id is null
+           or not private.usable_task_list(v_task.list_id, v_task.owner_user_id, v_task.owner_home_id) then
+          raise exception 'task list unavailable' using errcode = '23505';
+        end if;
+        update private.tasks t set deleted_at = null where t.id = v_task.id;
+      when 'task_list' then
+        update private.task_lists l set deleted_at = null, updated_at = pg_catalog.now()
+          where l.id = p_entry.subject_id;
+      when 'task_series_removal' then
+        -- The removed occurrences come back (each one's list locked for share and checked, as for a
+        -- task); then, unless only the occurrences were asked for, the series as before the removal,
+        -- creating again from today (dates that passed meanwhile are not created).
+        select * into v_removal from private.task_series_removals r where r.id = p_entry.subject_id;
+        for v_task in
+          select * from private.tasks t
+          where t.id = any (v_removal.task_ids) and t.deleted_at is not null
+          order by t.id for update
+        loop
+          if v_task.list_id is null
+             or not private.usable_task_list(v_task.list_id, v_task.owner_user_id, v_task.owner_home_id) then
+            raise exception 'task list unavailable' using errcode = '23505';
+          end if;
+          update private.tasks t set deleted_at = null where t.id = v_task.id;
+        end loop;
+        if not v_removal.tasks_only then
+          select * into v_head from private.task_series s where s.id = v_removal.head_id for update;
+          if v_head.id is null or v_head.revision <> v_removal.head_revision
+             or not private.usable_task_list(v_head.list_id, v_head.owner_user_id, v_head.owner_home_id) then
+            raise exception 'series changed' using errcode = '23505';
+          end if;
+          if v_removal.mode = 'series' then
+            update private.task_series s set deleted_at = null
+              where s.root_id = v_removal.root_id and s.deleted_at is not null;
+          end if;
+          update private.task_series s
+            set until_date = v_removal.previous_until_date, revision = s.revision + 1,
+              updated_at = pg_catalog.now()
+            where s.id = v_head.id
+            returning * into v_head;
+          update private.task_series s
+            set next_date = private.series_next(v_head, private.task_today(v_head.owner_home_id, null))
+            where s.id = v_head.id
+            returning * into v_head;
+        end if;
+    end case;
+    return v_lost;
+  end
+  $$;
+
+create or replace function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      -- Never release a file another active item still uses.
+      if not exists (
+        select 1 from private.trash_samples s where s.file_id = v_file_id and s.deleted_at is null
+      ) then
+        perform private.purge_file_now(v_file_id);
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        delete from private.trash_samples s where s.id = p_entry.subject_id and s.deleted_at is not null;
+      when 'dashboard_template' then
+        -- Its shares go with it (on delete cascade).
+        delete from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null;
+      when 'task' then
+        -- Subtasks, comments, label links and assignees go with it (on delete cascade).
+        delete from private.tasks t where t.id = p_entry.subject_id and t.deleted_at is not null;
+      when 'task_list' then
+        -- Tasks of this list still in the trash lose their list (on delete set null); restoring one
+        -- then asks for another list.
+        delete from private.task_lists l where l.id = p_entry.subject_id and l.deleted_at is not null;
+      when 'task_series_removal' then
+        -- The removed occurrences still in the trash go (with their checklists and comments). A
+        -- removed series whose definition is still deleted goes too; its completed occurrences stay
+        -- as completed tasks without a series.
+        delete from private.tasks t
+          using private.task_series_removals r
+          where r.id = p_entry.subject_id and t.id = any (r.task_ids) and t.deleted_at is not null;
+        if exists (
+          select 1 from private.task_series_removals r
+          join private.task_series s on s.root_id = r.root_id
+          where r.id = p_entry.subject_id and r.mode = 'series' and s.deleted_at is not null
+        ) then
+          update private.tasks t
+            set series_id = null, series_root_id = null, occurrence_date = null
+            from private.task_series_removals r
+            where r.id = p_entry.subject_id and t.series_root_id = r.root_id;
+          delete from private.task_series s
+            using private.task_series_removals r
+            where r.id = p_entry.subject_id and s.root_id = r.root_id;
+        end if;
+        delete from private.task_series_removals r where r.id = p_entry.subject_id;
+    end case;
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.advance_task_series(uuid, date)',
+    'public.create_task_series(uuid, uuid, text, text, integer, date, smallint[], date, integer, text, integer, text, uuid[], uuid[], uuid, date)',
+    'public.update_task_series(uuid, text, integer, integer, boolean, boolean, text, text, text, uuid[], integer, boolean, uuid, uuid[], boolean, text, integer, smallint[], date, date, integer, date)',
+    'public.delete_task_series(uuid, text, integer, boolean)',
+    'public.set_task_series_paused(uuid, boolean, integer, date)',
+    'public.list_task_occurrences(uuid, text, integer, integer, date, text)',
+    'public.list_tasks(uuid, uuid, date, text, text, boolean, text[], uuid[], text, uuid, text, integer, integer)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  foreach v_function in array array[
+    'private.task_limit(text)',
+    'private.flag_departed_series_assignments()',
+    'private.series_month_date(date, integer)',
+    'private.series_first_on_or_after(text, integer, smallint[], date, date)',
+    'private.valid_series_rule(text, integer, smallint[], date, date, integer)',
+    'private.series_until(text, integer, smallint[], date, date, integer)',
+    'private.series_next(private.task_series, date)',
+    'private.series_has_date(private.task_series, date)',
+    'private.series_dates(private.task_series, date, integer)',
+    'private.can_edit_series(private.task_series, uuid)',
+    'private.lock_series_head(uuid)',
+    'private.occurrence_touched(private.tasks)',
+    'private.create_occurrence(private.task_series, date)',
+    'private.advance_series(private.task_series, date)',
+    'private.set_series_template(uuid, uuid, uuid[], uuid[], text[])',
+    'private.trash_conflict_options(text)',
+    'private.trash_conflict(private.trash_entries)',
+    'private.trash_resolve(private.trash_entries, text)',
+    'private.trash_item_restore(private.trash_entries)',
+    'private.trash_item_purge(private.trash_entries)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261028090000_task_reminders_templates_bulk.sql
+-- ============================================================================
+-- S19b: task reminders, task templates and bulk task actions (brief plans/steps/S19b-brief.md;
+-- ADR 0024; spec "Confirmed individual task reminders", "Confirmed reusable task templates",
+-- "Confirmed basic bulk task actions", "Confirmed global adult notification defaults with per-Home
+-- overrides").
+--
+-- Reminders. At most one per task (private.task_reminders): at a wall-clock date and time, or N days
+-- before the due date at a chosen time (tasks are date-only, so the time is always the person's
+-- choice). A Home task's reminder uses the Home's timezone; a Personal task's the person's effective
+-- timezone, which the app passes. Setting one enqueues the task-reminder job in the S13 outbox for
+-- that instant; the job calls deliver_task_reminder, which re-checks everything at delivery and
+-- notifies through private.notify_user (category 'reminders'), so preferences, Home overrides,
+-- quiet hours and dedupe are the S14 ones. Every change bumps the reminder's revision, and a job
+-- for an older revision does nothing. A changed or removed due date puts a before-due reminder on
+-- hold ('needs_review') until the person moves it with the due date or removes it.
+--
+-- Recurring series have an optional before-due reminder template per chain
+-- (private.task_series_reminders), copied onto every new occurrence. Changing it on an occurrence
+-- takes the S19 scopes; occurrences given their own reminder ('this occurrence') keep it. A series
+-- with a template creates occurrences early enough for their reminder (today + days before + 1),
+-- and an hourly job advances those series (advance_reminder_series).
+--
+-- Templates (private.task_templates): reusable task content owned by a Personal space or a Home.
+-- Creating a task from one is one transaction with its whole checklist.
+--
+-- Bulk actions (bulk_update_tasks): complete, priority, labels, move, each task in its own
+-- sub-transaction under the S18 per-task rules, with per-task results and a dry run.
+--
+-- DST: a wall-clock time is turned into an instant by PostgreSQL's rule: a time inside a
+-- spring-forward gap moves forward by the gap, a repeated time is the later (standard-time) one. The
+-- app shows the server's resolved time, and says when either case applied (private.zoned_dst_case).
+
+-- Audit subject, limits ------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template'
+  ));
+
+-- apps/web/src/tasks/schema.ts uses the same numbers.
+create or replace function private.task_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'lists' then 100              -- non-deleted lists per context
+    when 'labels' then 100             -- labels per context
+    when 'labels_per_task' then 20
+    when 'assignees_per_task' then 20
+    when 'subtasks' then 100           -- subtasks per task
+    when 'page' then 50                -- tasks one listing returns
+    when 'max_offset' then 10000
+    when 'comments_page' then 100
+    when 'list_name' then 60
+    when 'label_name' then 40
+    when 'title' then 200              -- task and subtask titles
+    when 'description' then 5000
+    when 'comment' then 2000
+    when 'series' then 200             -- active series per context (S19)
+    when 'series_interval' then 99     -- "every N" days, weeks, months or years
+    when 'series_count' then 999       -- "ends after N occurrences"
+    when 'start_offset' then 365       -- days a start date may lie before the due date
+    when 'series_per_advance' then 50  -- series one advance call looks at
+    when 'series_catch_up' then 100    -- occurrences one advance call creates per series
+    when 'history_page' then 50
+    when 'reminder_days' then 30       -- "N days before the due date" (S19b)
+    when 'templates' then 100          -- templates per context
+    when 'template_name' then 60
+    when 'bulk' then 100               -- tasks one bulk action changes
+  end;
+  $$;
+
+-- Notifications: the optional category 'reminders' ---------------------------------------------------
+
+create or replace function private.notification_category_essential(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_category
+    when 'security' then true when 'storage' then true
+    when 'invitations' then false when 'reminders' then false
+  end;
+  $$;
+
+alter table public.notifications drop constraint notifications_category_check;
+alter table public.notifications add constraint notifications_category_check
+  check (category in ('security', 'invitations', 'storage', 'reminders'));
+
+alter table public.notification_preferences drop constraint notification_preferences_category_check;
+alter table public.notification_preferences add constraint notification_preferences_category_check
+  check (category in ('invitations', 'reminders'));
+
+-- The optional categories a person can configure (packages/domain optionalNotificationCategories).
+create function private.notification_category_optional(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_category in ('invitations', 'reminders'), false);
+  $$;
+
+create or replace function public.get_notification_settings()
+returns table (home_id uuid, category text, channel text, enabled boolean, overridden boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select s.home_id, c.category, ch.channel,
+        private.effective_notification_channel(v_user_id, s.home_id, c.category, ch.channel),
+        exists (
+          select 1 from public.notification_preferences p
+          where p.user_id = v_user_id and p.home_id is not distinct from s.home_id
+            and p.category = c.category and p.channel = ch.channel
+        )
+      from (
+        select null::uuid as home_id
+        union all
+        select m.home_id from public.home_memberships m where m.user_id = v_user_id
+      ) s
+      cross join (values ('invitations'), ('reminders')) c (category)
+      cross join (values ('in_app'), ('email')) ch (channel)
+      order by s.home_id nulls first, c.category, ch.channel;
+  end
+  $$;
+
+create or replace function public.set_notification_preference(
+  p_category text, p_channel text, p_enabled boolean, p_home_id uuid default null
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.notification_category_optional(p_category) or p_channel not in ('in_app', 'email')
+       or p_enabled is null then
+      raise exception 'invalid notification preference' using errcode = '22023';
+    end if;
+    if p_home_id is not null and not private.lock_membership(p_home_id, v_user_id) then
+      return 'not_found';
+    end if;
+    if p_home_id is null then
+      insert into public.notification_preferences (user_id, category, channel, enabled)
+        values (v_user_id, p_category, p_channel, p_enabled)
+        on conflict (user_id, category, channel) where home_id is null
+        do update set enabled = excluded.enabled, updated_at = now();
+    else
+      insert into public.notification_preferences (user_id, home_id, category, channel, enabled)
+        values (v_user_id, p_home_id, p_category, p_channel, p_enabled)
+        on conflict (user_id, home_id, category, channel) where home_id is not null
+        do update set enabled = excluded.enabled, updated_at = now();
+    end if;
+    return 'ok';
+  end
+  $$;
+
+create or replace function public.reset_notification_preference(
+  p_category text, p_channel text, p_home_id uuid default null
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if not private.notification_category_optional(p_category) or p_channel not in ('in_app', 'email') then
+      raise exception 'invalid notification preference' using errcode = '22023';
+    end if;
+    delete from public.notification_preferences p
+      where p.user_id = v_user_id and p.home_id is not distinct from p_home_id
+        and p.category = p_category and p.channel = p_channel;
+    return found;
+  end
+  $$;
+
+-- Tables -----------------------------------------------------------------------------------------------
+
+-- A task's reminder. status: 'scheduled' (waiting for its time), 'needs_review' (a before-due
+-- reminder whose due date changed or went: not delivered until the person decides), 'sent',
+-- 'not_sent' (its time came while the task was completed, deleted or had nobody to remind, or an
+-- occurrence was created after its time), 'off' (an occurrence whose own choice is "no reminder",
+-- so a later series change leaves it alone). own: chosen on this task ('this occurrence', or any
+-- task that is not an occurrence); false: copied from its series' template.
+create table private.task_reminders (
+  task_id uuid primary key references private.tasks (id) on delete cascade,
+  mode text constraint task_reminders_mode_check check (mode in ('absolute', 'relative')),
+  -- absolute: the wall-clock date and time as entered, in time_zone.
+  local_at timestamp,
+  -- relative: days before the due date, at this wall-clock time in time_zone.
+  days_before smallint constraint task_reminders_days_check check (days_before between 0 and 30),
+  time_of_day time,
+  time_zone text constraint task_reminders_zone_check
+    check (char_length(time_zone) <= 64
+      and time_zone ~ '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'),
+  fire_at timestamptz,
+  status text not null constraint task_reminders_status_check
+    check (status in ('scheduled', 'needs_review', 'sent', 'not_sent', 'off')),
+  own boolean not null default true,
+  revision integer not null default 1 constraint task_reminders_revision_check check (revision >= 1),
+  set_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  delivered_at timestamptz,
+  constraint task_reminders_shape_check check (
+    (status = 'off' and mode is null and local_at is null and days_before is null
+      and time_of_day is null and fire_at is null)
+    or (mode = 'absolute' and local_at is not null and days_before is null and time_of_day is null
+      and time_zone is not null)
+    or (mode = 'relative' and local_at is null and days_before is not null and time_of_day is not null
+      and time_zone is not null)
+  ),
+  constraint task_reminders_fire_check check (status <> 'scheduled' or fire_at is not null)
+);
+
+-- A chain's before-due reminder template (one per series root, so S19 splits keep it). Never
+-- deleted while the chain exists: "off" is days_before null, so its revision only grows.
+create table private.task_series_reminders (
+  root_id uuid primary key,
+  days_before smallint constraint task_series_reminders_days_check check (days_before between 0 and 30),
+  time_of_day time,
+  time_zone text constraint task_series_reminders_zone_check
+    check (char_length(time_zone) <= 64
+      and time_zone ~ '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'),
+  revision integer not null default 1 constraint task_series_reminders_revision_check check (revision >= 1),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint task_series_reminders_shape_check check (
+    (days_before is null and time_of_day is null)
+    or (days_before is not null and time_of_day is not null and time_zone is not null)
+  )
+);
+
+-- Whether every checklist title is a visible name within the limit.
+create function private.valid_subtask_titles(p_titles text[]) returns boolean
+  language sql immutable set search_path = '' as $$
+  select p_titles is not null
+    and coalesce(cardinality(p_titles), 0) <= private.task_limit('subtasks')
+    and not exists (
+      select 1 from unnest(p_titles) as x
+      where x is null or not private.is_visible_name(x, private.task_limit('title'))
+    );
+  $$;
+
+-- Reusable task content, owned by one Personal space or Home (spec "Confirmed reusable task
+-- templates"). Label ids have no foreign key on purpose: a label deleted later is left out (and
+-- disclosed) when the template is used, never silently recreated.
+create table private.task_templates (
+  id uuid primary key,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  name text not null constraint task_templates_name_check check (private.is_visible_name(name, 60)),
+  title text not null constraint task_templates_title_check check (private.is_visible_name(title, 200)),
+  description text constraint task_templates_description_check
+    check (description is null or private.is_plain_text(description, 5000)),
+  priority text constraint task_templates_priority_check
+    check (priority in ('low', 'normal', 'high', 'urgent')),
+  label_ids uuid[] not null default '{}' constraint task_templates_labels_check
+    check (cardinality(label_ids) <= 20),
+  subtasks text[] not null default '{}' constraint task_templates_subtasks_check
+    check (private.valid_subtask_titles(subtasks)),
+  revision integer not null default 1 constraint task_templates_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint task_templates_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+create index task_templates_home_idx on private.task_templates (owner_home_id) where owner_home_id is not null;
+create index task_templates_user_idx on private.task_templates (owner_user_id) where owner_user_id is not null;
+
+alter table private.task_reminders enable row level security;
+alter table private.task_series_reminders enable row level security;
+alter table private.task_templates enable row level security;
+revoke all on table private.task_reminders, private.task_series_reminders, private.task_templates
+  from public, anon, authenticated;
+
+-- Time zones and wall-clock times --------------------------------------------------------------------
+
+create function private.valid_time_zone(p_zone text) returns boolean
+  language sql stable set search_path = '' as $$
+  select p_zone is not null and char_length(p_zone) <= 64
+    and exists (select 1 from pg_catalog.pg_timezone_names z where z.name = p_zone);
+  $$;
+
+-- Whether a wall-clock time in a zone falls in a spring-forward gap ('gap': it does not exist that
+-- day, and PostgreSQL moves it forward by the gap) or happens twice ('overlap': the later, standard
+-- time is used); null otherwise. The app says so next to the resolved time.
+create function private.zoned_dst_case(p_local timestamp, p_zone text) returns text
+  language plpgsql stable set search_path = '' as $$
+  declare
+    v_at timestamptz;
+    v_before interval;
+    v_alt timestamptz;
+  begin
+    if p_local is null or p_zone is null then
+      return null;
+    end if;
+    v_at := p_local at time zone p_zone;
+    if (v_at at time zone p_zone) <> p_local then
+      return 'gap';
+    end if;
+    -- The UTC offset three hours earlier; when the same wall-clock time also maps from that offset
+    -- to an earlier instant, the time happens twice.
+    v_before := ((v_at - interval '3 hours') at time zone p_zone)
+      - ((v_at - interval '3 hours') at time zone 'UTC');
+    v_alt := (p_local - v_before) at time zone 'UTC';
+    if v_alt <> v_at and (v_alt at time zone p_zone) = p_local then
+      return 'overlap';
+    end if;
+    return null;
+  end
+  $$;
+
+-- The wall-clock time of a before-due reminder.
+create function private.reminder_local(p_due date, p_days integer, p_time time) returns timestamp
+  language sql immutable set search_path = '' as $$
+  select case when p_due is not null and p_days is not null and p_time is not null
+    then (p_due - p_days) + p_time end;
+  $$;
+
+-- The zone a context's reminders use: the Home's own; for the Personal space the person's effective
+-- timezone, which only the app knows (it may be the browser's), passed and checked here.
+create function private.reminder_zone(p_home_id uuid, p_zone text) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  begin
+    if p_home_id is not null then
+      return (select h.timezone from public.homes h where h.id = p_home_id);
+    end if;
+    if not private.valid_time_zone(p_zone) then
+      raise exception 'invalid time zone' using errcode = '22023';
+    end if;
+    return p_zone;
+  end
+  $$;
+
+-- Reminders: writing and scheduling -----------------------------------------------------------------
+
+-- Writes a task's reminder (a new revision) and, when its time is still to come, enqueues the
+-- task-reminder job for that time. A job for an earlier revision then finds a newer one and does
+-- nothing. A time already past is stored as 'not_sent' (an occurrence created late; people cannot
+-- choose a past time). Returns the row.
+create function private.put_task_reminder(
+  p_task_id uuid, p_mode text, p_local_at timestamp, p_days integer, p_time time, p_zone text,
+  p_due date, p_own boolean, p_user_id uuid
+) returns private.task_reminders
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_local timestamp := case when p_mode = 'absolute' then p_local_at
+      else private.reminder_local(p_due, p_days, p_time) end;
+    v_fire timestamptz := v_local at time zone p_zone;
+    v_status text;
+    v_row private.task_reminders;
+  begin
+    v_status := case
+      when v_local is null then 'needs_review'
+      when v_fire > pg_catalog.now() then 'scheduled'
+      else 'not_sent' end;
+    insert into private.task_reminders as r (
+      task_id, mode, local_at, days_before, time_of_day, time_zone, fire_at, status, own, set_by
+    ) values (
+      p_task_id, p_mode, case when p_mode = 'absolute' then p_local_at end,
+      case when p_mode = 'relative' then p_days end, case when p_mode = 'relative' then p_time end,
+      p_zone, case when v_local is not null then v_fire end, v_status, p_own, p_user_id
+    )
+    on conflict (task_id) do update
+      set mode = excluded.mode, local_at = excluded.local_at, days_before = excluded.days_before,
+        time_of_day = excluded.time_of_day, time_zone = excluded.time_zone, fire_at = excluded.fire_at,
+        status = excluded.status, own = excluded.own, set_by = excluded.set_by,
+        revision = r.revision + 1, updated_at = pg_catalog.now(), delivered_at = null
+    returning * into v_row;
+    if v_row.status = 'scheduled' then
+      perform private.enqueue_job(
+        'task-reminder', 1, 'task-reminder:' || p_task_id::text || ':' || v_row.revision::text,
+        pg_catalog.jsonb_build_object('taskId', p_task_id, 'revision', v_row.revision),
+        private.request_correlation_id(), v_row.fire_at);
+    end if;
+    return v_row;
+  end
+  $$;
+
+-- Removes a task's own reminder. An occurrence of a series with a reminder template keeps an 'off'
+-- row instead, so a later series change does not give it one again.
+create function private.clear_task_reminder(p_task private.tasks, p_user_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_task.series_root_id is not null and exists (
+      select 1 from private.task_series_reminders s
+      where s.root_id = p_task.series_root_id and s.days_before is not null
+    ) then
+      insert into private.task_reminders as r (task_id, status, own, set_by)
+        values (p_task.id, 'off', true, p_user_id)
+        on conflict (task_id) do update
+          set mode = null, local_at = null, days_before = null, time_of_day = null, time_zone = null,
+            fire_at = null, status = 'off', own = true, set_by = excluded.set_by,
+            revision = r.revision + 1, updated_at = pg_catalog.now(), delivered_at = null;
+    else
+      delete from private.task_reminders r where r.task_id = p_task.id;
+    end if;
+  end
+  $$;
+
+-- A new occurrence starts with its series' reminder (S19 creates occurrences in
+-- private.create_occurrence; this trigger keeps that function unchanged).
+create function private.copy_series_reminder() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_template private.task_series_reminders;
+  begin
+    select * into v_template from private.task_series_reminders s
+      where s.root_id = new.series_root_id and s.days_before is not null;
+    if found then
+      perform private.put_task_reminder(new.id, 'relative', null, v_template.days_before,
+        v_template.time_of_day, v_template.time_zone, new.due_date, false, v_template.updated_by);
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger tasks_copy_series_reminder
+  after insert on private.tasks
+  for each row when (new.series_root_id is not null)
+  execute function private.copy_series_reminder();
+
+-- A changed or removed due date puts a before-due reminder on hold (spec: show the effect and
+-- require review rather than silently delivering at an unintended time). The new revision makes
+-- any queued job a no-op.
+create function private.hold_reminder_on_due_change() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    update private.task_reminders r
+      set status = 'needs_review', fire_at = null, revision = r.revision + 1,
+        updated_at = pg_catalog.now()
+      where r.task_id = new.id and r.mode = 'relative' and r.status in ('scheduled', 'not_sent');
+    return null;
+  end
+  $$;
+
+create trigger tasks_hold_reminder_on_due_change
+  after update of due_date on private.tasks
+  for each row when (old.due_date is distinct from new.due_date)
+  execute function private.hold_reminder_on_due_change();
+
+-- A chain's template goes when the last part of the chain does (purging an entire-series removal).
+create function private.drop_series_reminder() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if not exists (select 1 from private.task_series s where s.root_id = old.root_id) then
+      delete from private.task_series_reminders r where r.root_id = old.root_id;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger task_series_drop_reminder
+  after delete on private.task_series
+  for each row execute function private.drop_series_reminder();
+
+-- Series generation with reminders ------------------------------------------------------------------
+
+-- How many days ahead a chain must create occurrences so that each exists before its reminder:
+-- days before + 1 (the extra day covers the hourly advance and zones); 0 without a template.
+create function private.series_reminder_lead(p_root_id uuid) returns integer
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((select r.days_before + 1 from private.task_series_reminders r
+    where r.root_id = p_root_id and r.days_before is not null), 0);
+  $$;
+
+-- S19's advance, now also creating every occurrence up to today + the reminder lead (each then gets
+-- its reminder in time). Without a template it behaves exactly as before: up to today plus one.
+create or replace function private.advance_series(p_series private.task_series, p_today date) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_next date := p_series.next_date;
+    v_last date := p_series.last_date;
+    v_created integer := 0;
+    v_horizon date;
+  begin
+    if p_series.id is null or p_series.paused_at is not null or p_series.deleted_at is not null
+       or p_series.superseded_at is not null or v_next is null then
+      return 0;
+    end if;
+    if not private.usable_task_list(p_series.list_id, p_series.owner_user_id, p_series.owner_home_id) then
+      return 0;
+    end if;
+    v_horizon := p_today + private.series_reminder_lead(p_series.root_id);
+    while v_next is not null and v_created < private.task_limit('series_catch_up')
+      and (v_next <= v_horizon or v_last is null or v_last <= p_today) loop
+      perform private.create_occurrence(p_series, v_next);
+      v_created := v_created + 1;
+      v_last := greatest(v_last, v_next);
+      v_next := private.series_next(p_series, v_next + 1);
+    end loop;
+    if v_next is distinct from p_series.next_date or v_last is distinct from p_series.last_date then
+      update private.task_series s set next_date = v_next, last_date = v_last where s.id = p_series.id;
+    end if;
+    return v_created;
+  end
+  $$;
+
+create or replace function public.advance_task_series(p_home_id uuid default null, p_today date default null)
+returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_series private.task_series;
+    v_created integer := 0;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, p_today);
+    -- Locked one by one in id order (never two at once), so two page loads queue instead of
+    -- creating anything twice; the second sees the first's progress and has nothing left to do.
+    for v_series in
+      select * from private.task_series s
+      where ((p_home_id is null and s.owner_user_id = v_user_id) or s.owner_home_id = p_home_id)
+        and s.superseded_at is null and s.deleted_at is null and s.paused_at is null
+        and s.next_date is not null
+        and (s.last_date is null or s.last_date <= v_today
+          or s.next_date <= v_today + private.series_reminder_lead(s.root_id))
+      order by s.last_date nulls first, s.id
+      limit private.task_limit('series_per_advance')
+    loop
+      select * into v_series from private.task_series s where s.id = v_series.id for update;
+      if v_series.superseded_at is null and v_series.deleted_at is null then
+        v_created := v_created + private.advance_series(v_series, v_today);
+      end if;
+    end loop;
+    return v_created;
+  end
+  $$;
+
+-- Called hourly by the task-reminder-advance job (service role): advances series with a reminder
+-- template whose next occurrence is within reach of its reminder, so reminders arrive even when
+-- nobody opens a task page. "Today" is the Home's, or for a Personal series its reminder's zone.
+-- At most p_limit series per call, those closest first. Returns how many occurrences it created.
+create function public.advance_reminder_series(p_limit integer) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_row record;
+    v_series private.task_series;
+    v_today date;
+    v_created integer := 0;
+  begin
+    if p_limit is null or p_limit not between 1 and 500 then
+      raise exception 'invalid limit' using errcode = '22023';
+    end if;
+    for v_row in
+      select s.id, r.time_zone as zone from private.task_series s
+      join private.task_series_reminders r on r.root_id = s.root_id and r.days_before is not null
+      left join public.homes h on h.id = s.owner_home_id
+      where s.superseded_at is null and s.deleted_at is null and s.paused_at is null
+        and s.next_date is not null
+        and s.next_date <= (pg_catalog.now() at time zone coalesce(h.timezone, r.time_zone))::date
+          + r.days_before + 1
+      order by s.next_date, s.id
+      limit p_limit
+    loop
+      select * into v_series from private.task_series s where s.id = v_row.id for update;
+      if v_series.superseded_at is null and v_series.deleted_at is null then
+        v_today := case when v_series.owner_home_id is not null
+          then private.task_today(v_series.owner_home_id, null)
+          else (pg_catalog.now() at time zone v_row.zone)::date end;
+        v_created := v_created + private.advance_series(v_series, v_today);
+      end if;
+    end loop;
+    return v_created;
+  end
+  $$;
+
+-- Reminders: reading ---------------------------------------------------------------------------------
+
+-- A task's reminder and everything its editor shows, or null when the task is missing, deleted or not
+-- the caller's to see: the reminder (with the resolved time and any DST case), the series' template
+-- for an occurrence, who will be reminded (membership ids; the Personal space reminds its owner),
+-- what the caller may change, and how the caller would receive it here (in-app, email).
+create function public.get_task_reminder(p_task_id uuid, p_time_zone text default null) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_reminder private.task_reminders;
+    v_template private.task_series_reminders;
+    v_head private.task_series;
+    v_recipients uuid[];
+    v_assigned boolean;
+    v_zone text;
+    v_review_local timestamp;
+  begin
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return null;
+    end if;
+    select * into v_reminder from private.task_reminders r where r.task_id = v_task.id;
+    if v_task.series_root_id is not null then
+      select * into v_template from private.task_series_reminders s where s.root_id = v_task.series_root_id;
+      select * into v_head from private.task_series s
+        where s.root_id = v_task.series_root_id and s.superseded_at is null and s.deleted_at is null;
+    end if;
+    if v_task.owner_home_id is not null then
+      select coalesce(array_agg(m.id order by m.created_at, m.id), '{}') into v_recipients
+        from private.task_assignees a
+        join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+        where a.task_id = v_task.id;
+      v_assigned := cardinality(v_recipients) > 0;
+      if not v_assigned then
+        v_recipients := array_remove(array[private.member_ref(v_task.owner_home_id,
+          coalesce(v_reminder.set_by, v_user_id))], null);
+      end if;
+      v_zone := (select h.timezone from public.homes h where h.id = v_task.owner_home_id);
+    else
+      v_zone := case when private.valid_time_zone(p_time_zone) then p_time_zone end;
+    end if;
+    if v_reminder.status = 'needs_review' then
+      v_review_local := private.reminder_local(v_task.due_date, v_reminder.days_before, v_reminder.time_of_day);
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'taskId', v_task.id,
+      'dueDate', v_task.due_date,
+      'completed', v_task.completed_at is not null,
+      'recurring', v_task.series_root_id is not null,
+      'canEdit', private.can_edit_task(v_task, v_user_id),
+      'canEditSeries', case when v_head.id is null then false else private.can_edit_series(v_head, v_user_id) end,
+      'timeZone', v_zone,
+      'reminder', case when v_reminder.task_id is null then null else pg_catalog.jsonb_build_object(
+        'mode', v_reminder.mode,
+        'localAt', v_reminder.local_at,
+        'daysBefore', v_reminder.days_before,
+        'time', pg_catalog.to_char(v_reminder.time_of_day, 'HH24:MI'),
+        'timeZone', v_reminder.time_zone,
+        'fireAt', v_reminder.fire_at,
+        'dst', private.zoned_dst_case(coalesce(v_reminder.local_at,
+          private.reminder_local(v_task.due_date, v_reminder.days_before, v_reminder.time_of_day)),
+          v_reminder.time_zone),
+        'status', v_reminder.status,
+        'own', v_reminder.own,
+        'revision', v_reminder.revision,
+        'reviewFireAt', case when v_review_local is not null then v_review_local at time zone v_reminder.time_zone end,
+        'reviewDst', private.zoned_dst_case(v_review_local, v_reminder.time_zone)
+      ) end,
+      'seriesReminder', case when v_template.root_id is null then null else pg_catalog.jsonb_build_object(
+        'active', v_template.days_before is not null,
+        'daysBefore', v_template.days_before,
+        'time', pg_catalog.to_char(v_template.time_of_day, 'HH24:MI'),
+        'revision', v_template.revision
+      ) end,
+      'recipients', case when v_task.owner_home_id is null then null else pg_catalog.to_jsonb(v_recipients) end,
+      'recipientsAreAssignees', coalesce(v_assigned, false),
+      'channels', pg_catalog.jsonb_build_object(
+        'inApp', private.effective_notification_channel(v_user_id, v_task.owner_home_id, 'reminders', 'in_app'),
+        'email', private.effective_notification_channel(v_user_id, v_task.owner_home_id, 'reminders', 'email')
+          and private.confirmed_email(v_user_id) is not null)
+    );
+  end
+  $$;
+
+-- Titles of reminded tasks for the notification centre, only for tasks the caller can see now (a
+-- reminder never shows a title the reader lost access to). At most 100 ids.
+create function public.task_reminder_titles(p_task_ids uuid[])
+returns table (task_id uuid, title text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_task_ids is null or cardinality(p_task_ids) > 100 then
+      raise exception 'at most 100 ids' using errcode = '22023';
+    end if;
+    return query
+      select t.id, t.title from private.tasks t
+      where t.id = any (p_task_ids) and t.deleted_at is null
+        and private.in_task_context(t.owner_user_id, t.owner_home_id, v_user_id);
+  end
+  $$;
+
+-- Reminders: changing --------------------------------------------------------------------------------
+
+-- Sets a task's reminder (spec "Confirmed individual task reminders").
+--   p_scope 'this': this task only (any task; on an occurrence it becomes its own and later series
+--     changes keep it). Either mode. The S18 edit rule; not on a completed task.
+--   p_scope 'following' / 'series' (occurrences only; the series' creator or a task manager;
+--     before-due only): the chain's template, and the open occurrences from this one on
+--     ('following') or all of them ('series') that have no reminder of their own. Completed
+--     occurrences never change; an occurrence whose new time has passed keeps what it had.
+-- p_mode 'absolute': p_local_at, a wall-clock date and time; 'relative': p_days_before (0-30) days
+-- before the due date at p_time. The zone is the Home's, or p_time_zone for the Personal space.
+-- p_expected_revision: the task's reminder revision (0 when it has none); p_expected_series_revision:
+-- the template's (0 when none), for the series scopes.
+-- p_dry_run: the same work, rolled back. Outcomes: 'preview', 'saved' (fire_at, dst; for the series
+-- scopes impact: updated, kept, past, completed), 'conflict' (revision: the current one),
+-- 'not_found', 'not_permitted', 'not_recurring', 'scope_unavailable', 'task_completed',
+-- 'needs_due_date', 'in_past'. 22023 for invalid input.
+create function public.set_task_reminder(
+  p_task_id uuid, p_scope text, p_mode text, p_expected_revision integer,
+  p_local_at timestamp default null, p_days_before integer default null, p_time time default null,
+  p_time_zone text default null, p_expected_series_revision integer default null,
+  p_dry_run boolean default false
+) returns table (outcome text, fire_at timestamptz, dst text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+    v_reminder private.task_reminders;
+    v_template private.task_series_reminders;
+    v_zone text;
+    v_local timestamp;
+    v_fire timestamptz;
+    v_occurrence private.tasks;
+    v_existing private.task_reminders;
+    v_updated integer := 0;
+    v_kept integer := 0;
+    v_past integer := 0;
+    v_completed integer := 0;
+    v_impact jsonb;
+    v_revision integer;
+  begin
+    if p_task_id is null or p_scope is null or p_scope not in ('this', 'following', 'series')
+       or p_mode is null or p_mode not in ('absolute', 'relative')
+       or p_expected_revision is null or p_dry_run is null
+       or (p_mode = 'absolute' and (p_local_at is null or p_days_before is not null or p_time is not null))
+       or (p_mode = 'relative' and (p_local_at is not null or p_time is null
+         or p_days_before is null or p_days_before not between 0 and private.task_limit('reminder_days')))
+       or (p_scope <> 'this' and (p_mode <> 'relative' or p_expected_series_revision is null)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_scope <> 'this' then
+      -- The series head before the occurrence, like every series-wide change (S19 review M1).
+      perform private.lock_series_head(
+        (select t.series_root_id from private.tasks t where t.id = p_task_id));
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::timestamptz, null::text, null::jsonb, null::integer;
+      return;
+    end if;
+    v_zone := private.reminder_zone(v_task.owner_home_id, p_time_zone);
+
+    if p_scope = 'this' then
+      if not private.can_edit_task(v_task, v_user_id) then
+        return query select 'not_permitted', null::timestamptz, null::text, null::jsonb, null::integer;
+        return;
+      end if;
+      select * into v_reminder from private.task_reminders r where r.task_id = v_task.id for update;
+      if coalesce(v_reminder.revision, 0) <> p_expected_revision then
+        return query select 'conflict', null::timestamptz, null::text, null::jsonb, coalesce(v_reminder.revision, 0);
+        return;
+      end if;
+      if v_task.completed_at is not null then
+        return query select 'task_completed', null::timestamptz, null::text, null::jsonb, null::integer;
+        return;
+      end if;
+      if p_mode = 'relative' and v_task.due_date is null then
+        return query select 'needs_due_date', null::timestamptz, null::text, null::jsonb, null::integer;
+        return;
+      end if;
+      v_local := case when p_mode = 'absolute' then p_local_at
+        else private.reminder_local(v_task.due_date, p_days_before, p_time) end;
+      v_fire := v_local at time zone v_zone;
+      if v_fire <= pg_catalog.now() then
+        return query select 'in_past', v_fire, private.zoned_dst_case(v_local, v_zone), null::jsonb, null::integer;
+        return;
+      end if;
+      if p_dry_run then
+        return query select 'preview', v_fire, private.zoned_dst_case(v_local, v_zone), null::jsonb,
+          coalesce(v_reminder.revision, 0);
+        return;
+      end if;
+      v_reminder := private.put_task_reminder(v_task.id, p_mode, p_local_at, p_days_before, p_time,
+        v_zone, v_task.due_date, true, v_user_id);
+      perform private.audit_task('task.reminder_set', v_task.owner_home_id, 'task', v_task.id,
+        pg_catalog.jsonb_build_object('mode', p_mode));
+      return query select 'saved', v_reminder.fire_at, private.zoned_dst_case(v_local, v_zone),
+        null::jsonb, v_reminder.revision;
+      return;
+    end if;
+
+    -- Following or entire series.
+    if v_task.series_root_id is null then
+      return query select 'not_recurring', null::timestamptz, null::text, null::jsonb, null::integer;
+      return;
+    end if;
+    v_head := private.lock_series_head(v_task.series_root_id);
+    if v_head.id is null then
+      return query select 'not_recurring', null::timestamptz, null::text, null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id) then
+      return query select 'not_permitted', null::timestamptz, null::text, null::jsonb, null::integer;
+      return;
+    end if;
+    select * into v_template from private.task_series_reminders s where s.root_id = v_head.root_id for update;
+    if coalesce(v_template.revision, 0) <> p_expected_series_revision then
+      return query select 'conflict', null::timestamptz, null::text, null::jsonb, coalesce(v_template.revision, 0);
+      return;
+    end if;
+    if p_scope = 'following' and v_task.completed_at is not null then
+      return query select 'scope_unavailable', null::timestamptz, null::text, null::jsonb, null::integer;
+      return;
+    end if;
+
+    begin
+      insert into private.task_series_reminders as s (root_id, days_before, time_of_day, time_zone, updated_by)
+        values (v_head.root_id, p_days_before, p_time, v_zone, v_user_id)
+        on conflict (root_id) do update
+          set days_before = excluded.days_before, time_of_day = excluded.time_of_day,
+            time_zone = excluded.time_zone, updated_by = excluded.updated_by,
+            revision = s.revision + 1, updated_at = pg_catalog.now()
+        returning s.revision into v_revision;
+      for v_occurrence in
+        select * from private.tasks t
+        where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is null
+          and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date)
+        order by t.id
+        for update
+      loop
+        select * into v_existing from private.task_reminders r where r.task_id = v_occurrence.id for update;
+        if v_occurrence.id <> v_task.id and coalesce(v_existing.own, false) then
+          v_kept := v_kept + 1;
+          continue;
+        end if;
+        v_local := private.reminder_local(v_occurrence.due_date, p_days_before, p_time);
+        if v_local is null or (v_local at time zone v_zone) <= pg_catalog.now() then
+          v_past := v_past + 1;
+          continue;
+        end if;
+        perform private.put_task_reminder(v_occurrence.id, 'relative', null, p_days_before, p_time,
+          v_zone, v_occurrence.due_date, false, v_user_id);
+        v_updated := v_updated + 1;
+      end loop;
+      select count(*)::integer into v_completed from private.tasks t
+        where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is not null
+          and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date);
+      -- Occurrences now due for creation (the reminder lead) are created with their reminder.
+      perform private.advance_series(v_head,
+        case when v_head.owner_home_id is not null then private.task_today(v_head.owner_home_id, null)
+          else (pg_catalog.now() at time zone v_zone)::date end);
+      v_local := private.reminder_local(v_task.due_date, p_days_before, p_time);
+      v_impact := pg_catalog.jsonb_build_object(
+        'scope', p_scope, 'updated', v_updated, 'kept', v_kept, 'past', v_past,
+        'completed', v_completed);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_local at time zone v_zone, private.zoned_dst_case(v_local, v_zone),
+          v_impact, coalesce(v_template.revision, 0);
+        return;
+    end;
+    perform private.audit_task('task_series.reminder_set', v_head.owner_home_id, 'task_series', v_head.root_id,
+      pg_catalog.jsonb_build_object('scope', p_scope, 'updated', v_updated, 'kept', v_kept));
+    return query select 'saved', v_local at time zone v_zone, private.zoned_dst_case(v_local, v_zone),
+      v_impact, v_revision;
+  end
+  $$;
+
+-- Removes a task's reminder. 'this': this task only (an occurrence of a series with a reminder then
+-- has "no reminder" as its own choice). 'following' / 'series': the chain's template is switched off,
+-- and the open occurrences in scope without their own reminder lose theirs (this occurrence always
+-- does). Same rights, revisions and dry run as set_task_reminder. Outcomes: 'preview', 'deleted'
+-- (impact for the series scopes), 'conflict', 'not_found', 'not_permitted', 'not_recurring'.
+create function public.remove_task_reminder(
+  p_task_id uuid, p_scope text, p_expected_revision integer,
+  p_expected_series_revision integer default null, p_dry_run boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+    v_reminder private.task_reminders;
+    v_template private.task_series_reminders;
+    v_occurrence private.tasks;
+    v_existing private.task_reminders;
+    v_removed integer := 0;
+    v_kept integer := 0;
+    v_completed integer := 0;
+    v_impact jsonb;
+    v_revision integer;
+  begin
+    if p_task_id is null or p_scope is null or p_scope not in ('this', 'following', 'series')
+       or p_expected_revision is null or p_dry_run is null
+       or (p_scope <> 'this' and p_expected_series_revision is null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_scope <> 'this' then
+      perform private.lock_series_head(
+        (select t.series_root_id from private.tasks t where t.id = p_task_id));
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+
+    if p_scope = 'this' then
+      if not private.can_edit_task(v_task, v_user_id) then
+        return query select 'not_permitted', null::jsonb, null::integer;
+        return;
+      end if;
+      select * into v_reminder from private.task_reminders r where r.task_id = v_task.id for update;
+      if coalesce(v_reminder.revision, 0) <> p_expected_revision then
+        return query select 'conflict', null::jsonb, coalesce(v_reminder.revision, 0);
+        return;
+      end if;
+      if p_dry_run then
+        return query select 'preview', null::jsonb, coalesce(v_reminder.revision, 0);
+        return;
+      end if;
+      perform private.clear_task_reminder(v_task, v_user_id);
+      perform private.audit_task('task.reminder_removed', v_task.owner_home_id, 'task', v_task.id);
+      return query select 'deleted', null::jsonb,
+        (select r.revision from private.task_reminders r where r.task_id = v_task.id);
+      return;
+    end if;
+
+    if v_task.series_root_id is null then
+      return query select 'not_recurring', null::jsonb, null::integer;
+      return;
+    end if;
+    v_head := private.lock_series_head(v_task.series_root_id);
+    if v_head.id is null then
+      return query select 'not_recurring', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    select * into v_template from private.task_series_reminders s where s.root_id = v_head.root_id for update;
+    if coalesce(v_template.revision, 0) <> p_expected_series_revision then
+      return query select 'conflict', null::jsonb, coalesce(v_template.revision, 0);
+      return;
+    end if;
+
+    begin
+      if v_template.root_id is not null then
+        update private.task_series_reminders s
+          set days_before = null, time_of_day = null, revision = s.revision + 1,
+            updated_by = v_user_id, updated_at = pg_catalog.now()
+          where s.root_id = v_head.root_id
+          returning s.revision into v_revision;
+      end if;
+      for v_occurrence in
+        select * from private.tasks t
+        where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is null
+          and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date)
+        order by t.id
+        for update
+      loop
+        select * into v_existing from private.task_reminders r where r.task_id = v_occurrence.id for update;
+        if v_existing.task_id is null then
+          continue;
+        end if;
+        if v_occurrence.id <> v_task.id and v_existing.own then
+          v_kept := v_kept + 1;
+          continue;
+        end if;
+        delete from private.task_reminders r where r.task_id = v_occurrence.id;
+        v_removed := v_removed + 1;
+      end loop;
+      select count(*)::integer into v_completed from private.tasks t
+        where t.series_root_id = v_head.root_id and t.deleted_at is null and t.completed_at is not null
+          and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date);
+      v_impact := pg_catalog.jsonb_build_object(
+        'scope', p_scope, 'updated', v_removed, 'kept', v_kept, 'past', 0, 'completed', v_completed);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, coalesce(v_template.revision, 0);
+        return;
+    end;
+    perform private.audit_task('task_series.reminder_removed', v_head.owner_home_id, 'task_series',
+      v_head.root_id, pg_catalog.jsonb_build_object('scope', p_scope, 'removed', v_removed));
+    return query select 'deleted', v_impact, coalesce(v_revision, 0);
+  end
+  $$;
+
+-- Settles a reminder put on hold by a changed or removed due date: 'follow' moves it with the new due
+-- date (needs one, and a time still to come), 'remove' removes it. Outcomes: 'saved' (fire_at),
+-- 'deleted', 'not_needed' (it is not on hold), 'conflict', 'needs_due_date', 'in_past', 'not_found',
+-- 'not_permitted'.
+create function public.review_task_reminder(p_task_id uuid, p_choice text, p_expected_revision integer)
+returns table (outcome text, fire_at timestamptz, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_reminder private.task_reminders;
+    v_local timestamp;
+  begin
+    if p_task_id is null or p_choice is null or p_choice not in ('follow', 'remove')
+       or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::timestamptz, null::integer;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::timestamptz, null::integer;
+      return;
+    end if;
+    select * into v_reminder from private.task_reminders r where r.task_id = v_task.id for update;
+    if v_reminder.task_id is null or v_reminder.revision <> p_expected_revision then
+      return query select 'conflict', null::timestamptz, coalesce(v_reminder.revision, 0);
+      return;
+    end if;
+    if v_reminder.status <> 'needs_review' then
+      return query select 'not_needed', null::timestamptz, v_reminder.revision;
+      return;
+    end if;
+    if p_choice = 'remove' then
+      perform private.clear_task_reminder(v_task, v_user_id);
+      return query select 'deleted', null::timestamptz,
+        (select r.revision from private.task_reminders r where r.task_id = v_task.id);
+      return;
+    end if;
+    if v_task.due_date is null then
+      return query select 'needs_due_date', null::timestamptz, null::integer;
+      return;
+    end if;
+    v_local := private.reminder_local(v_task.due_date, v_reminder.days_before, v_reminder.time_of_day);
+    if (v_local at time zone v_reminder.time_zone) <= pg_catalog.now() then
+      return query select 'in_past', v_local at time zone v_reminder.time_zone, null::integer;
+      return;
+    end if;
+    v_reminder := private.put_task_reminder(v_task.id, 'relative', null, v_reminder.days_before,
+      v_reminder.time_of_day, v_reminder.time_zone, v_task.due_date, v_reminder.own, v_user_id);
+    return query select 'saved', v_reminder.fire_at, v_reminder.revision;
+  end
+  $$;
+
+-- Reminders: delivery (service role, the task-reminder job) ------------------------------------------
+
+-- Delivers a reminder at its time, re-checking everything now (spec: revalidate recipient
+-- eligibility, task version, schedule and settings at delivery). Nothing happens for an older
+-- revision, a reminder no longer scheduled (sent, on hold, removed) or one whose time has not come.
+-- A completed or deleted task, or one with nobody to remind, records 'not_sent'. Recipients: the
+-- Personal space's owner; a Home task's current assignees, or with none the member who set it.
+-- Each gets one notification per revision (the S14 dedupe key), so a repeated or concurrent
+-- delivery notifies once; the row lock makes the second delivery wait and find it sent.
+-- Outcomes: 'notified', 'not_sent', 'stale', 'not_due'.
+create function public.deliver_task_reminder(p_task_id uuid, p_revision integer) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_reminder private.task_reminders;
+    v_task private.tasks;
+    v_recipients uuid[];
+    v_user uuid;
+  begin
+    if p_task_id is null or p_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id for update;
+    select * into v_reminder from private.task_reminders r where r.task_id = p_task_id for update;
+    if v_reminder.task_id is null or v_reminder.revision <> p_revision or v_reminder.status <> 'scheduled' then
+      return 'stale';
+    end if;
+    if v_reminder.fire_at > pg_catalog.now() + interval '1 minute' then
+      return 'not_due';
+    end if;
+    if v_task.deleted_at is not null or v_task.completed_at is not null then
+      update private.task_reminders r set status = 'not_sent', delivered_at = pg_catalog.now()
+        where r.task_id = p_task_id;
+      return 'not_sent';
+    end if;
+    if v_task.owner_home_id is null then
+      v_recipients := array[v_task.owner_user_id];
+    else
+      select coalesce(array_agg(a.user_id order by a.user_id), '{}') into v_recipients
+        from private.task_assignees a where a.task_id = p_task_id;
+      if cardinality(v_recipients) = 0 and v_reminder.set_by is not null
+         and private.is_home_member(v_task.owner_home_id, v_reminder.set_by) then
+        v_recipients := array[v_reminder.set_by];
+      end if;
+    end if;
+    if cardinality(v_recipients) = 0 then
+      update private.task_reminders r set status = 'not_sent', delivered_at = pg_catalog.now()
+        where r.task_id = p_task_id;
+      return 'not_sent';
+    end if;
+    foreach v_user in array v_recipients loop
+      perform private.notify_user(
+        v_user, v_task.owner_home_id, 'reminders', 'task.reminder',
+        pg_catalog.jsonb_build_object('taskId', v_task.id, 'dueDate', v_task.due_date),
+        'task-reminder:' || v_task.id::text || ':' || v_reminder.revision::text,
+        true);
+    end loop;
+    update private.task_reminders r set status = 'sent', delivered_at = pg_catalog.now()
+      where r.task_id = p_task_id;
+    return 'notified';
+  end
+  $$;
+
+-- Templates ---------------------------------------------------------------------------------------------
+
+create function private.task_template_name_taken(
+  p_home_id uuid, p_user_id uuid, p_name text, p_except uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.task_templates t
+    where ((p_home_id is null and t.owner_user_id = p_user_id) or t.owner_home_id = p_home_id)
+      and t.id is distinct from p_except
+      and private.task_name_key(t.name) = private.task_name_key(p_name)
+  );
+  $$;
+
+create function private.valid_template_fields(
+  p_name text, p_title text, p_description text, p_priority text, p_subtasks text[]
+) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(
+    p_name is not null and private.is_visible_name(p_name, private.task_limit('template_name'))
+    and private.valid_task_fields(p_title, p_description, null, null, p_priority)
+    and private.valid_subtask_titles(p_subtasks),
+    false);
+  $$;
+
+-- Loads a template for a change, locked. Null when missing or not in a context the caller can see.
+create function private.lock_task_template(p_id uuid, p_user_id uuid) returns private.task_templates
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_template private.task_templates;
+  begin
+    select * into v_template from private.task_templates t where t.id = p_id for update;
+    if not found or not private.in_task_context(v_template.owner_user_id, v_template.owner_home_id, p_user_id) then
+      return null;
+    end if;
+    return v_template;
+  end
+  $$;
+
+-- The labels of a template still valid in its context, in its order.
+create function private.template_valid_labels(p_template private.task_templates) returns uuid[]
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(array_agg(x order by o), '{}') from unnest(p_template.label_ids) with ordinality as u (x, o)
+  where exists (
+    select 1 from private.task_labels l
+    where l.id = x and l.owner_user_id is not distinct from p_template.owner_user_id
+      and l.owner_home_id is not distinct from p_template.owner_home_id
+  );
+  $$;
+
+-- The context's templates by name: every current member sees a Home's; the Personal space's owner
+-- theirs. 42501 for a Home the caller is not in.
+create function public.list_task_templates(p_home_id uuid default null)
+returns table (
+  id uuid, name text, title text, priority text, label_count integer, subtask_count integer, revision integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    return query
+      select t.id, t.name, t.title, t.priority,
+        cardinality(private.template_valid_labels(t))::integer, cardinality(t.subtasks)::integer, t.revision
+      from private.task_templates t
+      where (p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id
+      order by private.task_name_key(t.name), t.id;
+  end
+  $$;
+
+-- One template with its still-valid labels and how many it lost (deleted labels are left out and
+-- disclosed), or null when missing or not the caller's to see.
+create function public.get_task_template(p_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_template private.task_templates;
+    v_labels uuid[];
+  begin
+    select * into v_template from private.task_templates t where t.id = p_id;
+    if not found or not private.in_task_context(v_template.owner_user_id, v_template.owner_home_id, v_user_id) then
+      return null;
+    end if;
+    v_labels := private.template_valid_labels(v_template);
+    return pg_catalog.jsonb_build_object(
+      'id', v_template.id, 'homeId', v_template.owner_home_id, 'name', v_template.name,
+      'title', v_template.title, 'description', v_template.description, 'priority', v_template.priority,
+      'labelIds', pg_catalog.to_jsonb(v_labels),
+      'omittedLabels', cardinality(v_template.label_ids) - cardinality(v_labels),
+      'subtasks', pg_catalog.to_jsonb(v_template.subtasks), 'revision', v_template.revision,
+      'canManage', private.can_manage_tasks(v_template.owner_user_id, v_template.owner_home_id, v_user_id));
+  end
+  $$;
+
+-- Creates a template (task managers: the Personal space's owner; in a Home the Owner and
+-- manageHomeTasks). p_id comes from the client, so a retry answers 'exists'. Outcomes: 'created',
+-- 'exists', 'id_taken', 'duplicate_name', 'limit_reached', 'invalid_label', 'not_permitted'. 22023
+-- for invalid fields.
+create function public.create_task_template(
+  p_id uuid, p_name text, p_title text, p_description text default null, p_priority text default null,
+  p_label_ids uuid[] default '{}', p_subtasks text[] default '{}', p_home_id uuid default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_existing private.task_templates;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_id is null or p_label_ids is null
+       or not private.valid_template_fields(p_name, p_title, p_description, p_priority, p_subtasks) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_existing from private.task_templates t where t.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id
+         and private.is_context(v_existing.owner_user_id, v_existing.owner_home_id, p_home_id, v_user_id) then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_owner_user, p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if not private.valid_task_labels(p_label_ids, v_owner_user, p_home_id) then
+      return query select 'invalid_label', null::integer;
+      return;
+    end if;
+    perform private.lock_task_context('task_template', p_home_id, v_user_id);
+    if private.task_template_name_taken(p_home_id, v_user_id, p_name, null) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    if (select count(*) from private.task_templates t
+        where (p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id)
+       >= private.task_limit('templates') then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.task_templates (
+      id, owner_user_id, owner_home_id, name, title, description, priority, label_ids, subtasks,
+      created_by, updated_by
+    ) values (
+      p_id, v_owner_user, p_home_id, p_name, p_title, p_description, p_priority,
+      (select coalesce(array_agg(distinct x), '{}') from unnest(p_label_ids) as x), p_subtasks,
+      v_user_id, v_user_id
+    )
+    on conflict (id) do nothing;
+    if not found then
+      return query select 'id_taken', null::integer;
+      return;
+    end if;
+    perform private.audit_task('task_template.created', p_home_id, 'task_template', p_id);
+    return query select 'created', 1;
+  end
+  $$;
+
+-- Saves a template's content if nobody changed it since p_expected_revision. Tasks made from it are
+-- never touched. Outcomes: 'saved', 'conflict', 'duplicate_name', 'invalid_label', 'not_found',
+-- 'not_permitted'. 22023 for invalid fields.
+create function public.update_task_template(
+  p_id uuid, p_expected_revision integer, p_name text, p_title text, p_description text default null,
+  p_priority text default null, p_label_ids uuid[] default '{}', p_subtasks text[] default '{}'
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_template private.task_templates;
+  begin
+    if p_id is null or p_expected_revision is null or p_label_ids is null
+       or not private.valid_template_fields(p_name, p_title, p_description, p_priority, p_subtasks) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The context lock before the row lock, as every name check (S18).
+    select * into v_template from private.task_templates t where t.id = p_id;
+    if not found or not private.in_task_context(v_template.owner_user_id, v_template.owner_home_id, v_user_id) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    perform private.lock_task_context('task_template', v_template.owner_home_id, v_template.owner_user_id);
+    v_template := private.lock_task_template(p_id, v_user_id);
+    if v_template.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_template.owner_user_id, v_template.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_template.revision <> p_expected_revision then
+      return query select 'conflict', v_template.revision;
+      return;
+    end if;
+    if not private.valid_task_labels(p_label_ids, v_template.owner_user_id, v_template.owner_home_id) then
+      return query select 'invalid_label', null::integer;
+      return;
+    end if;
+    if private.task_template_name_taken(v_template.owner_home_id, v_template.owner_user_id, p_name, p_id) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    update private.task_templates t
+      set name = p_name, title = p_title, description = p_description, priority = p_priority,
+        label_ids = (select coalesce(array_agg(distinct x), '{}') from unnest(p_label_ids) as x),
+        subtasks = p_subtasks, revision = t.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where t.id = p_id
+      returning * into v_template;
+    perform private.audit_task('task_template.updated', v_template.owner_home_id, 'task_template', p_id);
+    return query select 'saved', v_template.revision;
+  end
+  $$;
+
+-- Deletes a template (after the person confirmed). Tasks made from it stay. Outcomes: 'deleted',
+-- 'conflict', 'not_found', 'not_permitted'.
+create function public.delete_task_template(p_id uuid, p_expected_revision integer)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_template private.task_templates;
+  begin
+    if p_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_template := private.lock_task_template(p_id, v_user_id);
+    if v_template.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_tasks(v_template.owner_user_id, v_template.owner_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_template.revision <> p_expected_revision then
+      return query select 'conflict', v_template.revision;
+      return;
+    end if;
+    delete from private.task_templates t where t.id = p_id;
+    perform private.audit_task('task_template.deleted', v_template.owner_home_id, 'task_template', p_id);
+    return query select 'deleted', null::integer;
+  end
+  $$;
+
+-- Creates a task from the reviewed preview of a template: the task and its whole checklist (every
+-- item open) in one transaction, so a retry or a double submit returns 'exists' and never a second
+-- task or half a checklist. The preview's fields are what the person confirmed; the template's
+-- revision must still be p_expected_template_revision ('template_changed' otherwise, with the
+-- current one), and the list, labels and rights are checked again (create_task). Nothing else of
+-- the template's source is copied. Outcomes: 'created', 'exists', 'id_taken', 'template_changed',
+-- 'not_found' (the template), 'list_unavailable', 'invalid_label', 'not_permitted'.
+create function public.create_task_from_template(
+  p_task_id uuid, p_template_id uuid, p_expected_template_revision integer, p_list_id uuid,
+  p_title text, p_description text default null, p_priority text default null,
+  p_label_ids uuid[] default '{}', p_subtasks text[] default '{}',
+  p_start_date date default null, p_due_date date default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_template private.task_templates;
+    v_existing private.tasks;
+    v_result record;
+  begin
+    if p_task_id is null or p_template_id is null or p_expected_template_revision is null
+       or p_list_id is null or p_label_ids is null or not private.valid_subtask_titles(p_subtasks) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_template from private.task_templates t where t.id = p_template_id for share;
+    if not found or not private.in_task_context(v_template.owner_user_id, v_template.owner_home_id, v_user_id) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    -- A retry of a create that went through answers 'exists', even if the template changed since.
+    select * into v_existing from private.tasks t where t.id = p_task_id;
+    if found then
+      if v_existing.created_by = v_user_id
+         and private.is_context(v_existing.owner_user_id, v_existing.owner_home_id,
+           v_template.owner_home_id, v_user_id) then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if v_template.revision <> p_expected_template_revision then
+      return query select 'template_changed', v_template.revision;
+      return;
+    end if;
+    select * into v_result from public.create_task(
+      p_task_id, p_list_id, p_title, p_description, p_start_date, p_due_date, p_priority,
+      p_label_ids, '{}', v_template.owner_home_id) as c;
+    if v_result.outcome <> 'created' then
+      return query select v_result.outcome, v_result.revision;
+      return;
+    end if;
+    insert into private.subtasks (id, task_id, title, position, created_by)
+      select gen_random_uuid(), p_task_id, x, o::integer, v_user_id
+      from unnest(p_subtasks) with ordinality as u (x, o);
+    perform private.audit_task('task.created_from_template', v_template.owner_home_id, 'task', p_task_id,
+      pg_catalog.jsonb_build_object('subtasks', cardinality(p_subtasks)));
+    return query select 'created', v_result.revision;
+  end
+  $$;
+
+-- Bulk actions --------------------------------------------------------------------------------------------
+
+-- Applies one basic action to the selected tasks of one context (spec "Confirmed basic bulk task
+-- actions"): 'complete', 'priority' (p_priority; null is Unspecified), 'labels' (p_label_mode 'add',
+-- 'remove' or 'replace' with p_label_ids) or 'move' (to p_list_id, an active list of the same
+-- context). Each task is handled in its own sub-transaction with the per-task rules of the single
+-- action (S18 edit rule, list usable, labels of the context), in id order. Its result:
+--   'changed' ('will_change' in a dry run), 'unchanged' (already in that state: no second
+--   completion, no new revision; this makes a retry safe), 'conflict' (its revision is not the one in
+--   p_expected_revisions: changed since the preview, nothing overwritten), 'not_found' (missing,
+--   deleted, another context or not visible), 'not_permitted', 'list_unavailable', 'invalid_label',
+--   'too_many_labels', 'failed'.
+-- An occurrence of a recurring series changes alone (and is marked changed on its own, S19); the
+-- series is never changed. p_expected_revisions maps task ids to revisions; required unless
+-- p_dry_run. Also answers each task's unfinished subtasks, whether it repeats and whether it has
+-- several assignees (the preview's warnings). At most 100 tasks; 22023 for invalid input.
+create function public.bulk_update_tasks(
+  p_task_ids uuid[], p_action text, p_expected_revisions jsonb, p_dry_run boolean,
+  p_home_id uuid default null, p_priority text default null, p_label_mode text default null,
+  p_label_ids uuid[] default null, p_list_id uuid default null
+) returns table (
+  task_id uuid, outcome text, revision integer, open_subtasks integer, recurring boolean, shared boolean
+)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_ids uuid[];
+    v_id uuid;
+    v_task private.tasks;
+    v_outcome text;
+    v_expected integer;
+    v_current uuid[];
+    v_target uuid[];
+    v_labels_ok boolean := true;
+    v_list_ok boolean := true;
+    v_results jsonb := '[]'::jsonb;
+    v_changed integer := 0;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    select coalesce(array_agg(distinct x order by x), '{}') into v_ids from unnest(p_task_ids) as x where x is not null;
+    if p_task_ids is null or cardinality(v_ids) = 0 or cardinality(v_ids) > private.task_limit('bulk')
+       or p_action is null or p_action not in ('complete', 'priority', 'labels', 'move')
+       or p_dry_run is null
+       or (not p_dry_run and (p_expected_revisions is null or jsonb_typeof(p_expected_revisions) <> 'object'))
+       or (p_expected_revisions is not null and jsonb_typeof(p_expected_revisions) <> 'object')
+       or (p_action = 'priority' and p_priority is not null and p_priority not in ('low', 'normal', 'high', 'urgent'))
+       or (p_action = 'labels' and (p_label_mode is null or p_label_mode not in ('add', 'remove', 'replace')
+         or p_label_ids is null or cardinality(p_label_ids) > private.task_limit('labels_per_task')))
+       or (p_action = 'move' and p_list_id is null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_action = 'labels' then
+      v_labels_ok := private.valid_task_labels(p_label_ids, v_owner_user, p_home_id);
+    end if;
+    if p_action = 'move' then
+      v_list_ok := private.usable_task_list(p_list_id, v_owner_user, p_home_id);
+    end if;
+
+    foreach v_id in array v_ids loop
+      v_outcome := null;
+      begin
+        select * into v_task from private.tasks t where t.id = v_id for update;
+        if not found or v_task.deleted_at is not null
+           or not private.is_context(v_task.owner_user_id, v_task.owner_home_id, p_home_id, v_user_id) then
+          v_outcome := 'not_found';
+          v_task := null;
+        elsif not private.can_edit_task(v_task, v_user_id) then
+          v_outcome := 'not_permitted';
+        elsif not v_labels_ok then
+          v_outcome := 'invalid_label';
+        elsif not v_list_ok then
+          v_outcome := 'list_unavailable';
+        end if;
+        if v_outcome is null then
+          if p_action = 'labels' then
+            select coalesce(array_agg(k.label_id order by k.label_id), '{}') into v_current
+              from private.task_label_links k where k.task_id = v_id;
+            select coalesce(array_agg(distinct x order by x), '{}') into v_target from unnest(
+              case p_label_mode
+                when 'add' then v_current || p_label_ids
+                when 'remove' then (select coalesce(array_agg(c), '{}') from unnest(v_current) as c
+                  where not (c = any (p_label_ids)))
+                else p_label_ids
+              end) as x;
+          end if;
+          if (p_action = 'complete' and v_task.completed_at is not null)
+             or (p_action = 'priority' and v_task.priority is not distinct from p_priority)
+             or (p_action = 'labels' and v_target = v_current)
+             or (p_action = 'move' and v_task.list_id = p_list_id) then
+            v_outcome := 'unchanged';
+          elsif p_action = 'labels' and cardinality(v_target) > private.task_limit('labels_per_task') then
+            v_outcome := 'too_many_labels';
+          else
+            v_expected := case when p_expected_revisions ? v_id::text
+              then (p_expected_revisions ->> v_id::text)::integer end;
+            if (not p_dry_run and v_expected is null)
+               or (v_expected is not null and v_expected <> v_task.revision) then
+              v_outcome := 'conflict';
+            elsif p_dry_run then
+              v_outcome := 'will_change';
+            else
+              case p_action
+                when 'complete' then
+                  update private.tasks t
+                    set completed_at = pg_catalog.now(), completed_by = v_user_id
+                    where t.id = v_id
+                    returning * into v_task;
+                  perform private.audit_task('task.completed', v_task.owner_home_id, 'task', v_id);
+                when 'priority' then
+                  update private.tasks t
+                    set priority = p_priority, detached = t.series_root_id is not null,
+                      revision = t.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+                    where t.id = v_id
+                    returning * into v_task;
+                when 'labels' then
+                  perform private.replace_task_labels(v_id, v_target);
+                  update private.tasks t
+                    set detached = t.series_root_id is not null,
+                      revision = t.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+                    where t.id = v_id
+                    returning * into v_task;
+                when 'move' then
+                  update private.tasks t
+                    set list_id = p_list_id, detached = t.series_root_id is not null,
+                      revision = t.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+                    where t.id = v_id
+                    returning * into v_task;
+              end case;
+              v_outcome := 'changed';
+              v_changed := v_changed + 1;
+            end if;
+          end if;
+        end if;
+      exception when others then
+        -- One task's unexpected failure never undoes the others (spec: partial success is reported).
+        raise warning 'bulk_update_tasks: task failed (sqlstate %)', sqlstate;
+        v_outcome := 'failed';
+      end;
+      v_results := v_results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'task_id', v_id, 'outcome', v_outcome,
+        'revision', case when v_outcome in ('not_found', 'failed') then null else v_task.revision end,
+        'open_subtasks', case when v_outcome in ('not_found', 'failed') then null else
+          (select count(*)::integer from private.subtasks s where s.task_id = v_id and s.completed_at is null) end,
+        'recurring', case when v_outcome in ('not_found', 'failed') then null else v_task.series_root_id is not null end,
+        'shared', case when v_outcome in ('not_found', 'failed') then null else
+          (select count(*) > 1 from private.task_assignees a where a.task_id = v_id) end));
+    end loop;
+    if not p_dry_run and v_changed > 0 then
+      perform private.audit_task('task.bulk_' || p_action, p_home_id, 'home', p_home_id,
+        pg_catalog.jsonb_build_object('changed', v_changed, 'selected', cardinality(v_ids)));
+    end if;
+    return query
+      select r.task_id, r.outcome, r.revision, r.open_subtasks, r.recurring, r.shared
+      from pg_catalog.jsonb_to_recordset(v_results) as r (
+        task_id uuid, outcome text, revision integer, open_subtasks integer, recurring boolean, shared boolean);
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.get_notification_settings()',
+    'public.set_notification_preference(text, text, boolean, uuid)',
+    'public.reset_notification_preference(text, text, uuid)',
+    'public.advance_task_series(uuid, date)',
+    'public.get_task_reminder(uuid, text)',
+    'public.task_reminder_titles(uuid[])',
+    'public.set_task_reminder(uuid, text, text, integer, timestamp, integer, time, text, integer, boolean)',
+    'public.remove_task_reminder(uuid, text, integer, integer, boolean)',
+    'public.review_task_reminder(uuid, text, integer)',
+    'public.list_task_templates(uuid)',
+    'public.get_task_template(uuid)',
+    'public.create_task_template(uuid, text, text, text, text, uuid[], text[], uuid)',
+    'public.update_task_template(uuid, integer, text, text, text, text, uuid[], text[])',
+    'public.delete_task_template(uuid, integer)',
+    'public.create_task_from_template(uuid, uuid, integer, uuid, text, text, text, uuid[], text[], date, date)',
+    'public.bulk_update_tasks(uuid[], text, jsonb, boolean, uuid, text, text, uuid[], uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- The jobs' functions: the service role only.
+  foreach v_function in array array[
+    'public.deliver_task_reminder(uuid, integer)',
+    'public.advance_reminder_series(integer)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  foreach v_function in array array[
+    'private.task_limit(text)',
+    'private.notification_category_essential(text)',
+    'private.notification_category_optional(text)',
+    'private.valid_subtask_titles(text[])',
+    'private.valid_time_zone(text)',
+    'private.zoned_dst_case(timestamp, text)',
+    'private.reminder_local(date, integer, time)',
+    'private.reminder_zone(uuid, text)',
+    'private.put_task_reminder(uuid, text, timestamp, integer, time, text, date, boolean, uuid)',
+    'private.clear_task_reminder(private.tasks, uuid)',
+    'private.copy_series_reminder()',
+    'private.hold_reminder_on_due_change()',
+    'private.drop_series_reminder()',
+    'private.series_reminder_lead(uuid)',
+    'private.advance_series(private.task_series, date)',
+    'private.task_template_name_taken(uuid, uuid, text, uuid)',
+    'private.valid_template_fields(text, text, text, text, text[])',
+    'private.lock_task_template(uuid, uuid)',
+    'private.template_valid_labels(private.task_templates)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql
+-- ============================================================================
+-- S19c: task attachments, the task calendar view and task widgets (brief plans/steps/S19c-brief.md;
+-- ADR 0025; spec "Confirmed task document and image attachments", "Confirmed deletion and recovery
+-- of parent items with attachments", "Confirmed optional task calendar views", "Confirmed
+-- configurable task dashboard widgets").
+--
+-- Widgets read through list_tasks, which gains three timing filters (due today, due in the next 7
+-- days, no due date). The calendar reads a window of at most 42 days through list_task_calendar:
+-- tasks on their due dates (and start dates), plus the planned dates of active recurring series that
+-- have no occurrence yet.
+--
+-- Attachments reuse the S15 upload pipeline with a new purpose, 'task_attachment'. A task's files
+-- live in the task's pool (the person's for a Personal task, the Home's for a Home task). An upload
+-- is opened for one task (create_task_attachment_intent), the server verifies and stores the bytes
+-- and records the facts (finalize_upload, unchanged), then attach_task_file links the file to the
+-- task with the person's own session, re-checking their rights at that moment. A ready file nobody
+-- attached is retired by the existing expiry job.
+--
+-- private.task_attachments links a file to a task. Recurring series keep attachments on the chain
+-- (private.task_series_attachments, like the S19b reminder template); every new occurrence gets a
+-- link to each, marked as from the series. One file can therefore be linked from many occurrences;
+-- it is stored and counted once.
+--
+-- Removing an attachment is a trash entry (item type task_attachment, or task_series_attachment for
+-- a series-wide removal). Deleting a task takes the files no other active task uses into the trash
+-- with it. Rows are deleted only when an entry is purged (or their task is); a trigger then releases
+-- a file that no row references any more. Visibility follows the task: whoever may see the task may
+-- see and download its attachments (authorize_file_read), its editors add and remove them.
+
+-- Audit subject, limits ------------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment'
+  ));
+
+-- apps/web/src/tasks/schema.ts uses the same numbers.
+create or replace function private.task_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'lists' then 100              -- non-deleted lists per context
+    when 'labels' then 100             -- labels per context
+    when 'labels_per_task' then 20
+    when 'assignees_per_task' then 20
+    when 'subtasks' then 100           -- subtasks per task
+    when 'page' then 50                -- tasks one listing returns
+    when 'max_offset' then 10000
+    when 'comments_page' then 100
+    when 'list_name' then 60
+    when 'label_name' then 40
+    when 'title' then 200              -- task and subtask titles
+    when 'description' then 5000
+    when 'comment' then 2000
+    when 'series' then 200             -- active series per context (S19)
+    when 'series_interval' then 99     -- "every N" days, weeks, months or years
+    when 'series_count' then 999       -- "ends after N occurrences"
+    when 'start_offset' then 365       -- days a start date may lie before the due date
+    when 'series_per_advance' then 50  -- series one advance call looks at
+    when 'series_catch_up' then 100    -- occurrences one advance call creates per series
+    when 'history_page' then 50
+    when 'reminder_days' then 30       -- "N days before the due date" (S19b)
+    when 'templates' then 100          -- templates per context
+    when 'template_name' then 60
+    when 'bulk' then 100               -- tasks one bulk action changes
+    when 'attachments' then 10         -- attachments per task, uploads in progress included (S19c)
+    when 'attachment_name' then 200    -- an attachment's display name
+    when 'calendar_days' then 42       -- days one calendar read covers (six weeks)
+    when 'calendar_entries' then 500   -- entries one calendar read returns
+  end;
+  $$;
+
+-- Widgets: list_tasks timing filters -------------------------------------------------------------------
+
+-- The S19 listing with three more timing filters for widgets and the calendar's "no due date" link:
+--   'due_today' (open, due today), 'due_week' (open, due today or in the next 6 days), 'undated'
+--   (no due date; the status filter still applies). Everything else as in S19.
+create or replace function public.list_tasks(
+  p_home_id uuid default null, p_list_id uuid default null, p_today date default null,
+  p_status text default 'open', p_when text default 'any', p_hide_future boolean default false,
+  p_priorities text[] default null, p_label_ids uuid[] default null,
+  p_assignee text default 'any', p_assignee_member uuid default null,
+  p_sort text default 'due', p_limit integer default 50, p_offset integer default 0
+) returns table (
+  id uuid, list_id uuid, list_name text, title text, start_date date, due_date date,
+  priority text, completed_at timestamptz, needs_reassignment boolean, overdue boolean,
+  upcoming boolean, subtasks_done integer, subtasks_total integer, comment_count integer,
+  label_ids uuid[], assignee_member_ids uuid[], assigned_to_me boolean, can_complete boolean,
+  revision integer, total_count integer, recurring boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_member_user uuid;
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_status is null or p_status not in ('open', 'completed', 'all')
+       or p_when is null
+       or p_when not in ('any', 'upcoming', 'active', 'overdue', 'due_today', 'due_week', 'undated')
+       or p_assignee is null or p_assignee not in ('any', 'me', 'unassigned', 'needs_reassignment', 'member')
+       or (p_assignee = 'member') <> (p_assignee_member is not null)
+       or p_sort is null or p_sort not in ('due', 'priority_desc', 'priority_asc', 'created')
+       or p_limit is null or p_limit not between 1 and private.task_limit('page')
+       or p_offset is null or p_offset not between 0 and private.task_limit('max_offset')
+       or (p_priorities is not null and not (p_priorities <@ array['low', 'normal', 'high', 'urgent', 'unset']))
+       or coalesce(cardinality(p_label_ids), 0) > private.task_limit('labels') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, p_today);
+    if p_assignee = 'member' then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_assignee_member;
+      -- A member who is not (or no longer) in this Home is assigned to nothing.
+      v_member_user := coalesce(v_member_user, '00000000-0000-0000-0000-000000000000');
+    end if;
+    return query
+      with base as (
+        select t.*, l.name as l_name, t as t_row
+        from private.tasks t
+        join private.task_lists l on l.id = t.list_id
+        where ((p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id)
+          and t.deleted_at is null and l.deleted_at is null
+          and (case when p_list_id is null then l.archived_at is null else l.id = p_list_id end)
+          and (p_status = 'all' or (p_status = 'open') = (t.completed_at is null))
+          and (p_when = 'any'
+            or (p_when = 'undated' and t.due_date is null)
+            or (p_when <> 'undated' and t.completed_at is null and case p_when
+              when 'upcoming' then t.start_date > v_today
+              when 'active' then (t.start_date is null or t.start_date <= v_today)
+                and not coalesce(t.due_date < v_today, false)
+              when 'overdue' then t.due_date < v_today
+              when 'due_today' then t.due_date = v_today
+              when 'due_week' then t.due_date between v_today and v_today + 6
+            end))
+          and (not coalesce(p_hide_future, false) or p_when = 'upcoming' or t.completed_at is not null
+            or not coalesce(t.start_date > v_today, false))
+          and (p_priorities is null or coalesce(t.priority, 'unset') = any (p_priorities))
+          and (coalesce(cardinality(p_label_ids), 0) = 0 or exists (
+            select 1 from private.task_label_links k where k.task_id = t.id and k.label_id = any (p_label_ids)))
+          and (case p_assignee
+            when 'any' then true
+            when 'me' then private.is_task_assignee(t.id, v_user_id)
+            when 'unassigned' then not exists (select 1 from private.task_assignees a where a.task_id = t.id)
+            when 'needs_reassignment' then t.needs_reassignment
+            when 'member' then private.is_task_assignee(t.id, v_member_user)
+          end)
+      ), page as (
+        select b.*, count(*) over ()::integer as total
+        from base b
+        order by
+          case when p_sort = 'priority_desc' then private.task_priority_rank(b.priority) end desc,
+          case when p_sort = 'priority_asc' then private.task_priority_rank(b.priority) end asc,
+          case when p_sort = 'created' then b.created_at end desc,
+          b.due_date asc nulls last, b.created_at asc, b.id asc
+        limit p_limit offset p_offset
+      )
+      select p.id, p.list_id, p.l_name, p.title, p.start_date, p.due_date, p.priority, p.completed_at,
+        p.needs_reassignment,
+        p.completed_at is null and coalesce(p.due_date < v_today, false),
+        p.completed_at is null and coalesce(p.start_date > v_today, false),
+        (select count(*)::integer from private.subtasks s where s.task_id = p.id and s.completed_at is not null),
+        (select count(*)::integer from private.subtasks s where s.task_id = p.id),
+        (select count(*)::integer from private.task_comments c where c.task_id = p.id),
+        coalesce((select array_agg(k.label_id order by k.label_id) from private.task_label_links k
+          where k.task_id = p.id), '{}'),
+        -- Oldest membership first, as in get_task, so every view lists assignees alike.
+        coalesce((select array_agg(m.id order by m.created_at, m.id) from private.task_assignees a
+          join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+          where a.task_id = p.id), '{}'),
+        private.is_task_assignee(p.id, v_user_id),
+        private.can_edit_task(p.t_row, v_user_id),
+        p.revision, p.total, p.series_root_id is not null
+      from page p
+      order by
+        case when p_sort = 'priority_desc' then private.task_priority_rank(p.priority) end desc,
+        case when p_sort = 'priority_asc' then private.task_priority_rank(p.priority) end asc,
+        case when p_sort = 'created' then p.created_at end desc,
+        p.due_date asc nulls last, p.created_at asc, p.id asc;
+  end
+  $$;
+
+-- The calendar ----------------------------------------------------------------------------------------
+
+-- The context's tasks between p_from and p_to (at most 42 days), for the week and month views:
+--   * kind 'task', role 'due': a task on its due date (open, completed, overdue, recurring);
+--   * kind 'task', role 'start': the same task on its start date, when that falls in the window and
+--     differs from the due date (a marker, never a duration);
+--   * kind 'planned': a date of an active recurring series that has no occurrence yet (not paused,
+--     not ended, its list usable). task_id is the chain's latest occurrence, to open, or null.
+-- Filters as in list_tasks: list (null: every active list), status, priorities, labels (any of),
+-- assignee. Planned dates count as open and use the series template's priority, labels and
+-- assignees. At most 500 entries, by date; 'truncated' says more exist. 'undated' counts the tasks
+-- the filters match that have no due date (the view links to them). 42501 for a Home the caller is
+-- not in; 22023 for invalid input.
+create function public.list_task_calendar(
+  p_from date, p_to date, p_home_id uuid default null, p_today date default null,
+  p_list_id uuid default null, p_status text default 'all', p_priorities text[] default null,
+  p_label_ids uuid[] default null, p_assignee text default 'any', p_assignee_member uuid default null
+) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_member_user uuid;
+    v_entries jsonb;
+    v_count integer;
+    v_undated integer;
+    v_limit integer := private.task_limit('calendar_entries');
+  begin
+    perform private.require_task_context(p_home_id, v_user_id);
+    if p_from is null or p_to is null or p_to < p_from
+       or p_to - p_from + 1 > private.task_limit('calendar_days')
+       or p_status is null or p_status not in ('open', 'completed', 'all')
+       or p_assignee is null or p_assignee not in ('any', 'me', 'unassigned', 'needs_reassignment', 'member')
+       or (p_assignee = 'member') <> (p_assignee_member is not null)
+       or (p_priorities is not null and not (p_priorities <@ array['low', 'normal', 'high', 'urgent', 'unset']))
+       or coalesce(cardinality(p_label_ids), 0) > private.task_limit('labels') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, p_today);
+    if p_assignee = 'member' then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_assignee_member;
+      v_member_user := coalesce(v_member_user, '00000000-0000-0000-0000-000000000000');
+    end if;
+
+    with tasks as (
+      select t.*, l.name as l_name, t as t_row
+      from private.tasks t
+      join private.task_lists l on l.id = t.list_id
+      where ((p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id)
+        and t.deleted_at is null and l.deleted_at is null
+        and (case when p_list_id is null then l.archived_at is null else l.id = p_list_id end)
+        and (p_status = 'all' or (p_status = 'open') = (t.completed_at is null))
+        and (p_priorities is null or coalesce(t.priority, 'unset') = any (p_priorities))
+        and (coalesce(cardinality(p_label_ids), 0) = 0 or exists (
+          select 1 from private.task_label_links k where k.task_id = t.id and k.label_id = any (p_label_ids)))
+        and (case p_assignee
+          when 'any' then true
+          when 'me' then private.is_task_assignee(t.id, v_user_id)
+          when 'unassigned' then not exists (select 1 from private.task_assignees a where a.task_id = t.id)
+          when 'needs_reassignment' then t.needs_reassignment
+          when 'member' then private.is_task_assignee(t.id, v_member_user)
+        end)
+    ), placed as (
+      select t.id as task_id, t.due_date as entry_date, 'due' as role, t.* from tasks t
+        where t.due_date between p_from and p_to
+      union all
+      select t.id, t.start_date, 'start', t.* from tasks t
+        where t.start_date between p_from and p_to and t.start_date is distinct from t.due_date
+    ), heads as (
+      select s.*, l.name as l_name, s as s_row
+      from private.task_series s
+      join private.task_lists l on l.id = s.list_id
+      where ((p_home_id is null and s.owner_user_id = v_user_id) or s.owner_home_id = p_home_id)
+        and s.superseded_at is null and s.deleted_at is null and s.paused_at is null
+        and s.next_date is not null and s.next_date <= p_to
+        and l.deleted_at is null and l.archived_at is null
+        and (p_list_id is null or l.id = p_list_id)
+        and p_status <> 'completed'
+        and (p_priorities is null or coalesce(s.priority, 'unset') = any (p_priorities))
+        and (coalesce(cardinality(p_label_ids), 0) = 0 or exists (
+          select 1 from private.task_series_labels k where k.series_id = s.id and k.label_id = any (p_label_ids)))
+        and (case p_assignee
+          when 'any' then true
+          when 'me' then exists (select 1 from private.task_series_assignees a
+            where a.series_id = s.id and a.user_id = v_user_id)
+          when 'unassigned' then not exists (select 1 from private.task_series_assignees a where a.series_id = s.id)
+          when 'needs_reassignment' then s.needs_reassignment
+          when 'member' then exists (select 1 from private.task_series_assignees a
+            where a.series_id = s.id and a.user_id = v_member_user)
+        end)
+    ), planned as (
+      select h.id as series_id, h.root_id, h.list_id, h.l_name, h.title, h.priority, d as entry_date,
+        h.needs_reassignment
+      from heads h,
+        lateral unnest(private.series_dates(h.s_row, greatest(p_from, h.next_date), private.task_limit('calendar_days'))) as d
+      where d <= p_to
+        -- A date the chain already has an occurrence for (kept from an earlier part) is not planned.
+        and not exists (select 1 from private.tasks o
+          where o.series_root_id = h.root_id and o.occurrence_date = d)
+    ), entries as (
+      select p.entry_date, 0 as kind_order, p.role, pg_catalog.jsonb_build_object(
+          'kind', 'task',
+          'role', p.role,
+          'date', p.entry_date,
+          'taskId', p.task_id,
+          'listId', p.list_id,
+          'listName', p.l_name,
+          'title', p.title,
+          'startDate', p.start_date,
+          'dueDate', p.due_date,
+          'priority', p.priority,
+          'completed', p.completed_at is not null,
+          'overdue', p.completed_at is null and coalesce(p.due_date < v_today, false),
+          'recurring', p.series_root_id is not null,
+          'needsReassignment', p.needs_reassignment,
+          'subtasksDone', (select count(*)::integer from private.subtasks s
+            where s.task_id = p.task_id and s.completed_at is not null),
+          'subtasksTotal', (select count(*)::integer from private.subtasks s where s.task_id = p.task_id),
+          'labelIds', coalesce((select pg_catalog.jsonb_agg(k.label_id order by k.label_id)
+            from private.task_label_links k where k.task_id = p.task_id), '[]'::jsonb),
+          'assigneeIds', coalesce((select pg_catalog.jsonb_agg(m.id order by m.created_at, m.id)
+            from private.task_assignees a
+            join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+            where a.task_id = p.task_id), '[]'::jsonb),
+          'canComplete', private.can_edit_task(p.t_row, v_user_id),
+          'revision', p.revision
+        ) as entry, p.title as sort_title, p.task_id as sort_id
+      from placed p
+      union all
+      select p.entry_date, 1, 'due', pg_catalog.jsonb_build_object(
+          'kind', 'planned',
+          'role', 'due',
+          'date', p.entry_date,
+          'taskId', (select o.id from private.tasks o
+            where o.series_root_id = p.root_id and o.deleted_at is null
+            order by o.occurrence_date desc limit 1),
+          'listId', p.list_id,
+          'listName', p.l_name,
+          'title', p.title,
+          'priority', p.priority,
+          'recurring', true,
+          'needsReassignment', p.needs_reassignment,
+          'labelIds', coalesce((select pg_catalog.jsonb_agg(k.label_id order by k.label_id)
+            from private.task_series_labels k where k.series_id = p.series_id), '[]'::jsonb),
+          'assigneeIds', coalesce((select pg_catalog.jsonb_agg(m.id order by m.created_at, m.id)
+            from private.task_series_assignees a
+            join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+            where a.series_id = p.series_id), '[]'::jsonb)
+        ), p.title, p.series_id
+      from planned p
+    ), ranked as (
+      select e.entry, count(*) over () as total,
+        row_number() over (order by e.entry_date, e.kind_order, e.role, e.sort_title, e.sort_id) as n
+      from entries e
+    )
+    select coalesce(pg_catalog.jsonb_agg(r.entry order by r.n) filter (where r.n <= v_limit), '[]'::jsonb),
+      coalesce(max(r.total), 0)::integer
+      into v_entries, v_count
+    from ranked r;
+
+    select count(*)::integer into v_undated
+    from private.tasks t
+    join private.task_lists l on l.id = t.list_id
+    where ((p_home_id is null and t.owner_user_id = v_user_id) or t.owner_home_id = p_home_id)
+      and t.deleted_at is null and l.deleted_at is null and t.due_date is null
+      and (case when p_list_id is null then l.archived_at is null else l.id = p_list_id end)
+      and (p_status = 'all' or (p_status = 'open') = (t.completed_at is null))
+      and (p_priorities is null or coalesce(t.priority, 'unset') = any (p_priorities))
+      and (coalesce(cardinality(p_label_ids), 0) = 0 or exists (
+        select 1 from private.task_label_links k where k.task_id = t.id and k.label_id = any (p_label_ids)))
+      and (case p_assignee
+        when 'any' then true
+        when 'me' then private.is_task_assignee(t.id, v_user_id)
+        when 'unassigned' then not exists (select 1 from private.task_assignees a where a.task_id = t.id)
+        when 'needs_reassignment' then t.needs_reassignment
+        when 'member' then private.is_task_assignee(t.id, v_member_user)
+      end);
+
+    return pg_catalog.jsonb_build_object(
+      'today', v_today,
+      'entries', v_entries,
+      'truncated', v_count > v_limit,
+      'undated', v_undated
+    );
+  end
+  $$;
+
+-- Attachments: storage policy --------------------------------------------------------------------------
+
+alter table private.stored_files drop constraint stored_files_purpose_check;
+alter table private.stored_files add constraint stored_files_purpose_check
+  check (purpose in ('avatar', 'task_attachment'));
+
+-- The types a task attachment may have (brief S19c, pending the owner's choice of formats): images,
+-- PDF, plain text and CSV, and the Office and OpenDocument formats. The server checks every file's
+-- signature; images are re-encoded in their own format without metadata, other files are kept as
+-- they are. apps/web/src/tasks/attachment-policy.ts has the same list.
+create function private.task_attachment_type(p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_type in (
+    'image/jpeg', 'image/png', 'image/webp',
+    'application/pdf', 'text/plain', 'text/csv',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation'
+  ), false);
+  $$;
+
+create or replace function private.upload_max_bytes(p_purpose text) returns bigint
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then 5242880::bigint
+    when 'task_attachment' then 10485760::bigint  -- 10 MB (brief S19c)
+  end;
+  $$;
+
+create or replace function private.upload_type_allowed(p_purpose text, p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then p_type in ('image/jpeg', 'image/png', 'image/webp')
+    when 'task_attachment' then private.task_attachment_type(p_type)
+    else false
+  end;
+  $$;
+
+-- Attachments are stored in the type they were declared as (images re-encoded in the same format).
+create or replace function private.stored_type_allowed(p_purpose text, p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then p_type = 'image/webp'
+    when 'task_attachment' then private.task_attachment_type(p_type)
+    else false
+  end;
+  $$;
+
+-- The server may also give up an upload whose bytes are not the file they claim to be.
+create or replace function public.abandon_my_upload(p_file_id uuid, p_reason text) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_file private.stored_files;
+  begin
+    if p_reason is null or p_reason not in ('mismatch', 'invalid_image', 'invalid_file') then
+      raise exception 'invalid reason' using errcode = '22023';
+    end if;
+    update private.stored_files f set status = 'failed', claimed_until = null
+      where f.id = p_file_id and f.created_by = v_user_id and f.status = 'pending'
+      returning * into v_file;
+    if not found then
+      return false;
+    end if;
+    perform private.queue_object_deletion(v_file.upload_key, 'failed');
+    perform private.queue_object_deletion(v_file.object_key, 'failed');
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.abandoned', pg_catalog.jsonb_build_object('reason', p_reason)
+    );
+    return true;
+  end
+  $$;
+
+-- Attachments: tables -------------------------------------------------------------------------------
+
+-- An upload in progress for one task: which task and the name it will show. Gone once attached.
+create table private.task_attachment_uploads (
+  file_id uuid primary key references private.stored_files (id) on delete cascade,
+  task_id uuid not null references private.tasks (id) on delete cascade,
+  display_name text not null
+    constraint task_attachment_uploads_name_check check (private.is_visible_name(display_name, 200)),
+  created_at timestamptz not null default now()
+);
+
+create index task_attachment_uploads_task_idx on private.task_attachment_uploads (task_id);
+
+-- A recurring chain's attachments: every new occurrence gets a link to each active one.
+create table private.task_series_attachments (
+  id uuid primary key default gen_random_uuid(),
+  root_id uuid not null,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  file_id uuid not null references private.stored_files (id) on delete cascade,
+  display_name text not null
+    constraint task_series_attachments_name_check check (private.is_visible_name(display_name, 200)),
+  added_by uuid references auth.users (id) on delete set null,
+  added_at timestamptz not null default now(),
+  -- In the trash (a series-wide removal); the row goes when that entry is purged.
+  removed_at timestamptz,
+  removed_by uuid references auth.users (id) on delete set null,
+  constraint task_series_attachments_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+
+create index task_series_attachments_root_idx on private.task_series_attachments (root_id);
+create index task_series_attachments_file_idx on private.task_series_attachments (file_id);
+create unique index task_series_attachments_active_key on private.task_series_attachments (root_id, file_id)
+  where removed_at is null;
+
+-- A file attached to a task. from_series: it came from the chain's attachments (and keeps saying so
+-- on completed occurrences, even after the series attachment itself is gone).
+create table private.task_attachments (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references private.tasks (id) on delete cascade,
+  file_id uuid not null references private.stored_files (id) on delete cascade,
+  series_attachment_id uuid references private.task_series_attachments (id) on delete set null,
+  from_series boolean not null default false,
+  display_name text not null
+    constraint task_attachments_name_check check (private.is_visible_name(display_name, 200)),
+  added_by uuid references auth.users (id) on delete set null,
+  added_at timestamptz not null default now(),
+  -- In the trash: removed on its own (an entry of type task_attachment) or with a series-wide removal
+  -- (removed_with_series, restored with that entry).
+  removed_at timestamptz,
+  removed_by uuid references auth.users (id) on delete set null,
+  removed_with_series boolean not null default false,
+  constraint task_attachments_series_check check (series_attachment_id is null or from_series)
+);
+
+create index task_attachments_task_idx on private.task_attachments (task_id);
+create index task_attachments_file_idx on private.task_attachments (file_id);
+create index task_attachments_series_idx on private.task_attachments (series_attachment_id)
+  where series_attachment_id is not null;
+-- A file is attached to a task at most once at a time.
+create unique index task_attachments_active_key on private.task_attachments (task_id, file_id)
+  where removed_at is null;
+
+alter table private.task_attachment_uploads enable row level security;
+alter table private.task_series_attachments enable row level security;
+alter table private.task_attachments enable row level security;
+revoke all on table private.task_attachment_uploads, private.task_series_attachments,
+  private.task_attachments
+  from public, anon, authenticated, service_role;
+
+-- Attachments: helpers ------------------------------------------------------------------------------
+
+-- Whether an active task or an active chain uses the file now (it is not in the trash, nor only
+-- referenced from the trash). A task that is being deleted is already marked deleted, so it does not
+-- count. Sample rows (S16) count too, so the trash never releases a file either still uses.
+create function private.file_in_active_use(p_file_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+      select 1 from private.task_attachments a
+      join private.tasks t on t.id = a.task_id
+      where a.file_id = p_file_id and a.removed_at is null and t.deleted_at is null
+    )
+    or exists (
+      select 1 from private.task_series_attachments s
+      where s.file_id = p_file_id and s.removed_at is null
+        and exists (select 1 from private.task_series h
+          where h.root_id = s.root_id and h.superseded_at is null and h.deleted_at is null)
+    )
+    or exists (
+      select 1 from private.trash_samples s where s.file_id = p_file_id and s.deleted_at is null
+    );
+  $$;
+
+-- Whether any row still refers to the file (active, in the trash, or on a task in the trash).
+create function private.task_file_referenced(p_file_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from private.task_attachments a where a.file_id = p_file_id)
+    or exists (select 1 from private.task_series_attachments s where s.file_id = p_file_id)
+    or exists (select 1 from private.task_attachment_uploads u where u.file_id = p_file_id);
+  $$;
+
+-- Releases a task file nothing refers to any more: its space is freed and its object queued for
+-- removal at once (a ready file is retired first). Rows are deleted only when their trash entry or
+-- their task is purged, so this runs at the end of the recovery window, never before.
+create function private.release_task_file(p_file_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_file_id is null or private.task_file_referenced(p_file_id)
+       or exists (select 1 from private.trash_samples s where s.file_id = p_file_id) then
+      return;
+    end if;
+    perform private.retire_file(p_file_id);
+    perform private.purge_file_now(p_file_id);
+  end
+  $$;
+
+create function private.release_task_file_on_delete() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform private.release_task_file(old.file_id);
+    return null;
+  end
+  $$;
+
+create trigger task_attachments_release_file
+  after delete on private.task_attachments
+  for each row execute function private.release_task_file_on_delete();
+create trigger task_series_attachments_release_file
+  after delete on private.task_series_attachments
+  for each row execute function private.release_task_file_on_delete();
+
+-- A chain's attachments go when the last part of the chain does (purging an entire-series removal).
+create function private.drop_series_attachments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if not exists (select 1 from private.task_series s where s.root_id = old.root_id) then
+      delete from private.task_series_attachments a where a.root_id = old.root_id;
+    end if;
+    return null;
+  end
+  $$;
+
+create trigger task_series_drop_attachments
+  after delete on private.task_series
+  for each row execute function private.drop_series_attachments();
+
+-- Active attachments of a task.
+-- An occurrence with a file of its own (attached on its own, still there or in the trash) counts as
+-- changed on its own, like a comment: a schedule change keeps it instead of deleting it (S19 deletes
+-- untouched occurrences that no longer fit, which would purge the file without a trash entry).
+create or replace function private.occurrence_touched(p_task private.tasks) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_task.detached
+    or exists (select 1 from private.task_comments c where c.task_id = p_task.id)
+    or exists (select 1 from private.subtasks s where s.task_id = p_task.id and s.completed_at is not null)
+    or exists (select 1 from private.task_attachments a where a.task_id = p_task.id and not a.from_series);
+  $$;
+
+create function private.task_attachment_count(p_task_id uuid) returns integer
+  language sql stable security definer set search_path = '' as $$
+  select count(*)::integer from private.task_attachments a
+    where a.task_id = p_task_id and a.removed_at is null;
+  $$;
+
+-- A new occurrence starts with its chain's attachments (S19 creates occurrences in
+-- private.create_occurrence; this trigger keeps that function unchanged).
+create function private.copy_series_attachments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    insert into private.task_attachments (
+      task_id, file_id, series_attachment_id, from_series, display_name, added_by, added_at
+    )
+    select new.id, s.file_id, s.id, true, s.display_name, s.added_by, pg_catalog.now()
+    from private.task_series_attachments s
+    join private.stored_files f on f.id = s.file_id and f.status = 'ready'
+    where s.root_id = new.series_root_id and s.removed_at is null
+    order by s.added_at, s.id
+    limit private.task_limit('attachments')
+    on conflict do nothing;
+    return null;
+  end
+  $$;
+
+create trigger tasks_copy_series_attachments
+  after insert on private.tasks
+  for each row when (new.series_root_id is not null)
+  execute function private.copy_series_attachments();
+
+-- Attachments: uploading ----------------------------------------------------------------------------
+
+-- Opens an upload of one file for a task the caller may edit. The file goes to the task's pool: the
+-- person's own for a Personal task, the Home's for a Home task. Same rate limits, request-id retries
+-- and capacity check under the pool lock as S15's create_upload_intent; the task allows at most 10
+-- attachments, uploads in progress included (checked under the task's lock, so two at once cannot
+-- both take the last place). Outcomes: 'ok' (with the file id, upload key and expiry), 'not_found',
+-- 'not_permitted', 'limit_reached', 'storage_full', 'rate_limited', 'conflict' (the request id was
+-- used for a different upload). Invalid type, size or name: 22023.
+create function public.create_task_attachment_intent(
+  p_task_id uuid, p_content_type text, p_size bigint, p_name text, p_request_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+    v_prefix text;
+  begin
+    if p_task_id is null or p_request_id is null or p_size is null or p_size <= 0
+       or p_size > private.upload_max_bytes('task_attachment')
+       or not private.upload_type_allowed('task_attachment', p_content_type)
+       or p_name is null or not private.is_visible_name(p_name, private.task_limit('attachment_name')) then
+      raise exception 'invalid upload' using errcode = '22023';
+    end if;
+    -- Task first, then the pool: the same order as deleting a task (which then moves files).
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    v_pool := private.lock_storage_pool(v_task.owner_user_id, v_task.owner_home_id);
+
+    select * into v_existing from private.stored_files f
+      where f.created_by = v_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = 'task_attachment' and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.expires_at > pg_catalog.now() and exists (
+           select 1 from private.task_attachment_uploads u
+           where u.file_id = v_existing.id and u.task_id = v_task.id) then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if private.task_attachment_count(v_task.id) + (
+         select count(*)::integer from private.task_attachment_uploads u
+         join private.stored_files f on f.id = u.file_id
+         where u.task_id = v_task.id
+           and (f.status = 'ready' or (f.status = 'pending' and f.expires_at > pg_catalog.now()))
+       ) >= private.task_limit('attachments') then
+      return query select 'limit_reached'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    if (select count(*) from private.stored_files f
+        where f.created_by = v_user_id and f.created_at > pg_catalog.now() - interval '1 hour')
+         >= private.storage_limit('intents_per_hour')
+       or (select count(*) from private.stored_files f
+        where f.created_by = v_user_id and f.status = 'pending' and f.expires_at > pg_catalog.now())
+         >= private.storage_limit('pending_per_account') then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    v_prefix := case when v_task.owner_home_id is not null then 'h' else 'u' end;
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, 'task_attachment', v_user_id, p_request_id, private.new_object_key(v_prefix),
+      private.new_object_key(v_prefix), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+    insert into private.task_attachment_uploads (file_id, task_id, display_name)
+      values (v_file.id, v_task.id, p_name);
+
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', 'task_attachment', 'size', p_size)
+    );
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+-- What adding to following or all occurrences would change, for the scope dialog and the result.
+-- Rows: the open occurrences in scope (from p_from, or all), each with its fate.
+create function private.series_attachment_targets(
+  p_root_id uuid, p_scope text, p_from date, p_task_id uuid, p_file_id uuid
+) returns table (task_id uuid, fate text)
+  language sql stable security definer set search_path = '' as $$
+  select t.id, case
+      when t.completed_at is not null then 'completed'
+      when t.id <> p_task_id and t.detached then 'kept'
+      when exists (select 1 from private.task_attachments a
+        where a.task_id = t.id and a.file_id = p_file_id and a.removed_at is null) then 'unchanged'
+      when private.task_attachment_count(t.id) >= private.task_limit('attachments') then 'full'
+      else 'added'
+    end
+  from private.tasks t
+  where t.series_root_id = p_root_id and t.deleted_at is null
+    and (p_scope = 'series' or t.occurrence_date >= p_from);
+  $$;
+
+-- The impact of a scope for the dialog, before anything is uploaded or removed: how many open
+-- occurrences change, are kept (changed on their own), are completed (never touched) or are full.
+-- p_attachment_id: the attachment to remove (null: adding). Outcomes: 'preview', 'not_found',
+-- 'not_permitted', 'not_recurring', 'scope_unavailable'.
+create function public.task_attachment_scope_impact(
+  p_task_id uuid, p_scope text, p_attachment_id uuid default null
+) returns table (outcome text, impact jsonb)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+    v_link private.task_attachments;
+    v_impact jsonb;
+  begin
+    if p_task_id is null or p_scope is null or p_scope not in ('following', 'series') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return query select 'not_found', null::jsonb;
+      return;
+    end if;
+    if v_task.series_root_id is null then
+      return query select 'not_recurring', null::jsonb;
+      return;
+    end if;
+    select * into v_head from private.task_series s
+      where s.root_id = v_task.series_root_id and s.superseded_at is null and s.deleted_at is null;
+    if not found then
+      return query select 'not_recurring', null::jsonb;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id) then
+      return query select 'not_permitted', null::jsonb;
+      return;
+    end if;
+    if p_attachment_id is null then
+      select pg_catalog.jsonb_build_object('scope', p_scope,
+          'changed', count(*) filter (where x.fate = 'added'),
+          'kept', count(*) filter (where x.fate = 'kept'),
+          'full', count(*) filter (where x.fate = 'full'),
+          'completed', count(*) filter (where x.fate = 'completed'))
+        into v_impact
+        from private.series_attachment_targets(v_head.root_id, p_scope, v_task.occurrence_date,
+          v_task.id, null) x;
+    else
+      select * into v_link from private.task_attachments a
+        where a.id = p_attachment_id and a.task_id = v_task.id and a.removed_at is null;
+      if not found then
+        return query select 'not_found', null::jsonb;
+        return;
+      end if;
+      if v_link.series_attachment_id is null or not exists (
+        select 1 from private.task_series_attachments s
+        where s.id = v_link.series_attachment_id and s.removed_at is null
+      ) then
+        return query select 'scope_unavailable', null::jsonb;
+        return;
+      end if;
+      select pg_catalog.jsonb_build_object('scope', p_scope,
+          'changed', count(*) filter (where t.completed_at is null and (t.id = v_task.id or not t.detached)),
+          'kept', count(*) filter (where t.completed_at is null and t.id <> v_task.id and t.detached),
+          'full', 0,
+          'completed', count(*) filter (where t.completed_at is not null))
+        into v_impact
+        from private.task_attachments a
+        join private.tasks t on t.id = a.task_id
+        where a.series_attachment_id = v_link.series_attachment_id and a.removed_at is null
+          and t.deleted_at is null
+          and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date);
+    end if;
+    return query select 'preview', v_impact;
+  end
+  $$;
+
+-- Attaches one of the caller's finished uploads to the task it was opened for, re-checking that the
+-- task still exists and that the caller may still edit it (membership, assignment and roles may
+-- have changed since the intent). Scopes on an occurrence: 'this' (only this task), 'following' or
+-- 'series' (the chain's attachments, so every new occurrence gets it, plus the open occurrences from
+-- this one on, or all, that were not changed on their own; completed ones are never touched; the
+-- series right). A retry answers 'attached' again without a second link. Outcomes: 'attached' (with
+-- the attachment id and, for the series scopes, the impact), 'not_found' (no such finished upload of
+-- the caller, or the task is gone), 'not_permitted', 'limit_reached' (the task, or for the series
+-- scopes the chain, has 10), 'not_recurring', 'scope_unavailable' (a series scope from a completed
+-- occurrence).
+create function public.attach_task_file(p_file_id uuid, p_scope text default 'this')
+returns table (outcome text, attachment_id uuid, impact jsonb)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_upload private.task_attachment_uploads;
+    v_file private.stored_files;
+    v_task private.tasks;
+    v_head private.task_series;
+    v_link private.task_attachments;
+    v_series_attachment private.task_series_attachments;
+    v_target record;
+    v_impact jsonb;
+    v_added integer := 0;
+    v_kept integer := 0;
+    v_full integer := 0;
+    v_completed integer := 0;
+  begin
+    if p_file_id is null or p_scope is null or p_scope not in ('this', 'following', 'series') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_file from private.stored_files f
+      where f.id = p_file_id and f.created_by = v_user_id and f.purpose = 'task_attachment';
+    if not found then
+      return query select 'not_found', null::uuid, null::jsonb;
+      return;
+    end if;
+    select * into v_upload from private.task_attachment_uploads u where u.file_id = p_file_id;
+    if not found then
+      -- Already attached (a retry): the link it made.
+      select * into v_link from private.task_attachments a
+        where a.file_id = p_file_id and a.added_by = v_user_id and a.removed_at is null
+          and not a.from_series
+        order by a.added_at limit 1;
+      if not found then
+        select * into v_link from private.task_attachments a
+          where a.file_id = p_file_id and a.added_by = v_user_id and a.removed_at is null
+          order by a.added_at limit 1;
+      end if;
+      if v_link.id is not null and exists (
+        select 1 from private.tasks t where t.id = v_link.task_id and t.deleted_at is null
+          and private.in_task_context(t.owner_user_id, t.owner_home_id, v_user_id)
+      ) then
+        return query select 'attached', v_link.id, null::jsonb;
+      else
+        return query select 'not_found', null::uuid, null::jsonb;
+      end if;
+      return;
+    end if;
+    if p_scope <> 'this' then
+      -- The series head before the occurrence, like every series-wide change (S19 review M1).
+      perform private.lock_series_head(
+        (select t.series_root_id from private.tasks t where t.id = v_upload.task_id));
+    end if;
+    v_task := private.lock_task(v_upload.task_id, v_user_id);
+    -- The upload row again, under the task's lock: a concurrent attach of the same file waits here
+    -- and then finds it gone.
+    select * into v_upload from private.task_attachment_uploads u where u.file_id = p_file_id for update;
+    if not found then
+      return query select o.outcome, o.attachment_id, o.impact
+        from public.attach_task_file(p_file_id, p_scope) o;
+      return;
+    end if;
+    if v_task.id is null then
+      return query select 'not_found', null::uuid, null::jsonb;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::uuid, null::jsonb;
+      return;
+    end if;
+    select * into v_file from private.stored_files f where f.id = p_file_id;
+    if v_file.status <> 'ready' then
+      return query select 'not_found', null::uuid, null::jsonb;
+      return;
+    end if;
+    if private.task_attachment_count(v_task.id) >= private.task_limit('attachments') then
+      return query select 'limit_reached', null::uuid, null::jsonb;
+      return;
+    end if;
+
+    if p_scope = 'this' then
+      insert into private.task_attachments (task_id, file_id, display_name, added_by)
+        values (v_task.id, p_file_id, v_upload.display_name, v_user_id)
+        returning * into v_link;
+    else
+      if v_task.series_root_id is null then
+        return query select 'not_recurring', null::uuid, null::jsonb;
+        return;
+      end if;
+      v_head := private.lock_series_head(v_task.series_root_id);
+      if v_head.id is null then
+        return query select 'not_recurring', null::uuid, null::jsonb;
+        return;
+      end if;
+      if not private.can_edit_series(v_head, v_user_id) then
+        return query select 'not_permitted', null::uuid, null::jsonb;
+        return;
+      end if;
+      -- A completed occurrence is never changed by a series change, so it cannot be the one a
+      -- series-wide file is added from (it would not get the file itself).
+      if v_task.completed_at is not null then
+        return query select 'scope_unavailable', null::uuid, null::jsonb;
+        return;
+      end if;
+      -- The chain holds at most as many attachments as a task (checked under the head lock).
+      if (select count(*) from private.task_series_attachments s
+          where s.root_id = v_head.root_id and s.removed_at is null)
+         >= private.task_limit('attachments') then
+        return query select 'limit_reached', null::uuid, null::jsonb;
+        return;
+      end if;
+      insert into private.task_series_attachments (
+        root_id, owner_user_id, owner_home_id, file_id, display_name, added_by
+      ) values (
+        v_head.root_id, v_head.owner_user_id, v_head.owner_home_id, p_file_id,
+        v_upload.display_name, v_user_id
+      ) returning * into v_series_attachment;
+      for v_target in
+        select x.task_id, x.fate from private.series_attachment_targets(
+          v_head.root_id, p_scope, v_task.occurrence_date, v_task.id, p_file_id) x
+        order by x.task_id
+      loop
+        case v_target.fate
+          when 'added' then
+            perform 1 from private.tasks t where t.id = v_target.task_id for update;
+            -- Again under the target's lock: another upload may have taken its last place, and
+            -- uploads still in progress for another occurrence count too (this upload's own task
+            -- was checked above, where its place was reserved by the intent).
+            if v_target.task_id <> v_task.id
+               and private.task_attachment_count(v_target.task_id)
+                 + (select count(*) from private.task_attachment_uploads u
+                    where u.task_id = v_target.task_id)
+               >= private.task_limit('attachments') then
+              v_full := v_full + 1;
+              continue;
+            end if;
+            insert into private.task_attachments (
+              task_id, file_id, series_attachment_id, from_series, display_name, added_by
+            ) values (
+              v_target.task_id, p_file_id, v_series_attachment.id, true, v_upload.display_name, v_user_id
+            ) returning * into v_link;
+            v_added := v_added + 1;
+          when 'kept' then v_kept := v_kept + 1;
+          when 'full' then v_full := v_full + 1;
+          when 'completed' then v_completed := v_completed + 1;
+          else null;
+        end case;
+      end loop;
+      select * into v_link from private.task_attachments a
+        where a.task_id = v_task.id and a.file_id = p_file_id and a.removed_at is null;
+      v_impact := pg_catalog.jsonb_build_object('scope', p_scope, 'changed', v_added, 'kept', v_kept,
+        'full', v_full, 'completed', v_completed);
+    end if;
+    delete from private.task_attachment_uploads u where u.file_id = p_file_id;
+    perform private.audit_task('task.attachment_added', v_task.owner_home_id, 'task_attachment',
+      v_link.id, pg_catalog.jsonb_build_object('scope', p_scope));
+    return query select 'attached', v_link.id, v_impact;
+  end
+  $$;
+
+-- Attachments: reading ------------------------------------------------------------------------------
+
+-- A task's attachments for someone who may see the task, oldest first: name, verified type and
+-- size, whether it came from the series (and is still a series attachment), who added it, and
+-- whether the caller may remove it. The task-level answers say whether the caller may add files and
+-- change series attachments. Null when the task is missing, deleted or not theirs to see.
+create function public.list_task_attachments(p_task_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_head private.task_series;
+    v_can_edit boolean;
+  begin
+    if p_task_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_task from private.tasks t where t.id = p_task_id;
+    if not found or v_task.deleted_at is not null
+       or not private.in_task_context(v_task.owner_user_id, v_task.owner_home_id, v_user_id) then
+      return null;
+    end if;
+    v_can_edit := private.can_edit_task(v_task, v_user_id);
+    if v_task.series_root_id is not null then
+      select * into v_head from private.task_series s
+        where s.root_id = v_task.series_root_id and s.superseded_at is null and s.deleted_at is null;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'canAdd', v_can_edit,
+      -- Series-wide changes start from an open occurrence (a completed one is never changed).
+      'canChangeSeries', v_head.id is not null and v_task.completed_at is null
+        and private.can_edit_series(v_head, v_user_id),
+      'limit', private.task_limit('attachments'),
+      'attachments', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'id', a.id,
+            'fileId', a.file_id,
+            'name', a.display_name,
+            'contentType', f.content_type,
+            'size', f.size_bytes,
+            'fromSeries', a.from_series,
+            'seriesActive', a.series_attachment_id is not null and exists (
+              select 1 from private.task_series_attachments s
+              where s.id = a.series_attachment_id and s.removed_at is null),
+            'addedAt', a.added_at,
+            'addedBy', pg_catalog.jsonb_build_object(
+              'me', coalesce(a.added_by = v_user_id, false),
+              'member', case when v_task.owner_home_id is not null
+                then private.member_ref(v_task.owner_home_id, a.added_by) end),
+            'canRemove', v_can_edit
+          ) order by a.added_at, a.id)
+        from private.task_attachments a
+        join private.stored_files f on f.id = a.file_id and f.status = 'ready'
+        where a.task_id = v_task.id and a.removed_at is null
+      ), '[]'::jsonb)
+    );
+  end
+  $$;
+
+-- The object behind a file the caller may see now, or no row (the same answer for every reason).
+-- S15 avatars as before. Task attachments (S19c): while the file is attached to a task (not in the
+-- trash) that the caller may see now: its Personal space's owner, or a current member of its Home.
+-- display_name is the attachment's name (null for avatars), for the download's file name.
+drop function public.authorize_file_read(uuid);
+create function public.authorize_file_read(p_file_id uuid)
+returns table (object_key text, content_type text, size_bytes bigint, sha256 text, display_name text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select f.object_key, f.content_type, f.size_bytes, f.sha256, null::text
+      from private.stored_files f
+      where f.id = p_file_id and f.status = 'ready' and f.purpose = 'avatar'
+        and (
+          f.created_by = v_user_id
+          or exists (
+            select 1
+            from public.home_memberships owner_m
+            join public.home_memberships viewer_m
+              on viewer_m.home_id = owner_m.home_id and viewer_m.user_id = v_user_id
+            left join public.home_member_profiles hp
+              on hp.home_id = owner_m.home_id and hp.user_id = owner_m.user_id
+            left join public.user_preferences up on up.user_id = owner_m.user_id
+            where owner_m.user_id = f.created_by
+              and coalesce(hp.avatar_file_id, up.avatar_file_id) = f.id
+          )
+        )
+      union all
+      select f.object_key, f.content_type, f.size_bytes, f.sha256, x.display_name
+      from private.stored_files f,
+        lateral (
+          select a.display_name from private.task_attachments a
+          join private.tasks t on t.id = a.task_id
+          where a.file_id = f.id and a.removed_at is null and t.deleted_at is null
+            and private.in_task_context(t.owner_user_id, t.owner_home_id, v_user_id)
+          order by a.added_at, a.id
+          limit 1
+        ) x
+      where f.id = p_file_id and f.status = 'ready' and f.purpose = 'task_attachment';
+  end
+  $$;
+
+-- Attachments: removing ------------------------------------------------------------------------------
+
+-- Removes an attachment into the trash of the task's context (7 days). 'this': from this task only
+-- (an entry of type task_attachment). 'following' / 'series' on an attachment that came from the
+-- series: the chain's attachment goes (new occurrences no longer get it), and so do its links on
+-- the open occurrences from this one on, or all, that were not changed on their own (this one
+-- always); completed occurrences keep theirs. One entry (task_series_attachment) brings it all back.
+-- The file goes into the file trash too when no active task uses it any more (still counted until
+-- purged). Rights: the task's editors; the series right for the series scopes. p_dry_run: the impact
+-- only. Outcomes: 'preview', 'removed' (with the trash entry and, for series scopes, the impact),
+-- 'not_found' (also when someone removed it first), 'not_permitted', 'scope_unavailable'.
+create function public.remove_task_attachment(
+  p_attachment_id uuid, p_scope text default 'this', p_dry_run boolean default false
+) returns table (outcome text, entry_id uuid, impact jsonb)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_link private.task_attachments;
+    v_task private.tasks;
+    v_head private.task_series;
+    v_series_attachment private.task_series_attachments;
+    v_entry uuid;
+    v_changed integer := 0;
+    v_kept integer := 0;
+    v_completed integer := 0;
+    v_impact jsonb;
+  begin
+    if p_attachment_id is null or p_scope is null or p_scope not in ('this', 'following', 'series')
+       or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_link from private.task_attachments a where a.id = p_attachment_id;
+    if not found then
+      return query select 'not_found', null::uuid, null::jsonb;
+      return;
+    end if;
+    if p_scope <> 'this' then
+      perform private.lock_series_head(
+        (select t.series_root_id from private.tasks t where t.id = v_link.task_id));
+    end if;
+    v_task := private.lock_task(v_link.task_id, v_user_id);
+    select * into v_link from private.task_attachments a where a.id = p_attachment_id for update;
+    if v_task.id is null or v_link.removed_at is not null then
+      return query select 'not_found', null::uuid, null::jsonb;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::uuid, null::jsonb;
+      return;
+    end if;
+
+    if p_scope = 'this' then
+      if p_dry_run then
+        return query select 'preview', null::uuid, null::jsonb;
+        return;
+      end if;
+      update private.tasks t set updated_at = pg_catalog.now() where t.id = v_task.id;
+      update private.task_attachments a set removed_at = pg_catalog.now(), removed_by = v_user_id
+        where a.id = v_link.id;
+      v_entry := private.trash_move(v_user_id, 'tasks', 'task_attachment', v_link.id,
+        v_task.owner_user_id, v_task.owner_home_id, v_link.display_name,
+        case when private.file_in_active_use(v_link.file_id) then '{}'::uuid[]
+          else array[v_link.file_id] end);
+      perform private.audit_task('task.attachment_removed', v_task.owner_home_id, 'task_attachment',
+        v_link.id, pg_catalog.jsonb_build_object('scope', 'this'));
+      return query select 'removed', v_entry, null::jsonb;
+      return;
+    end if;
+
+    if v_link.series_attachment_id is null then
+      return query select 'scope_unavailable', null::uuid, null::jsonb;
+      return;
+    end if;
+    select * into v_series_attachment from private.task_series_attachments s
+      where s.id = v_link.series_attachment_id for update;
+    v_head := private.lock_series_head(v_task.series_root_id);
+    if v_series_attachment.removed_at is not null or v_head.id is null then
+      return query select 'scope_unavailable', null::uuid, null::jsonb;
+      return;
+    end if;
+    if not private.can_edit_series(v_head, v_user_id) then
+      return query select 'not_permitted', null::uuid, null::jsonb;
+      return;
+    end if;
+    select count(*) filter (where t.completed_at is null and (t.id = v_task.id or not t.detached)),
+        count(*) filter (where t.completed_at is null and t.id <> v_task.id and t.detached),
+        count(*) filter (where t.completed_at is not null)
+      into v_changed, v_kept, v_completed
+      from private.task_attachments a
+      join private.tasks t on t.id = a.task_id
+      where a.series_attachment_id = v_series_attachment.id and a.removed_at is null
+        and t.deleted_at is null
+        and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date);
+    v_impact := pg_catalog.jsonb_build_object('scope', p_scope, 'changed', v_changed, 'kept', v_kept,
+      'full', 0, 'completed', v_completed);
+    if p_dry_run then
+      return query select 'preview', null::uuid, v_impact;
+      return;
+    end if;
+    update private.task_series_attachments s set removed_at = pg_catalog.now(), removed_by = v_user_id
+      where s.id = v_series_attachment.id;
+    update private.task_attachments a
+      set removed_at = pg_catalog.now(), removed_by = v_user_id, removed_with_series = true
+      from private.tasks t
+      where t.id = a.task_id and a.series_attachment_id = v_series_attachment.id
+        and a.removed_at is null and t.deleted_at is null and t.completed_at is null
+        and (t.id = v_task.id or not t.detached)
+        and (p_scope = 'series' or t.occurrence_date >= v_task.occurrence_date);
+    v_entry := private.trash_move(v_user_id, 'tasks', 'task_series_attachment', v_series_attachment.id,
+      v_task.owner_user_id, v_task.owner_home_id, v_series_attachment.display_name,
+      case when private.file_in_active_use(v_series_attachment.file_id) then '{}'::uuid[]
+        else array[v_series_attachment.file_id] end);
+    perform private.audit_task('task_series.attachment_removed', v_task.owner_home_id, 'task_series',
+      v_head.root_id, pg_catalog.jsonb_build_object('scope', p_scope, 'changed', v_changed));
+    return query select 'removed', v_entry, v_impact;
+  end
+  $$;
+
+-- Deleting a task (S18) now takes along the files no other active task uses. The rest unchanged.
+create or replace function public.delete_task(p_task_id uuid)
+returns table (outcome text, entry_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_files uuid[];
+  begin
+    if p_task_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found', null::uuid;
+      return;
+    end if;
+    if not private.can_delete_task(v_task, v_user_id) then
+      return query select 'not_permitted', null::uuid;
+      return;
+    end if;
+    update private.tasks t set deleted_at = pg_catalog.now() where t.id = v_task.id;
+    -- Marked deleted first, so this task no longer counts as using its files.
+    select coalesce(array_agg(distinct a.file_id), '{}') into v_files
+      from private.task_attachments a
+      where a.task_id = v_task.id and a.removed_at is null
+        and not private.file_in_active_use(a.file_id);
+    return query select 'deleted',
+      private.trash_move(v_user_id, 'tasks', 'task', v_task.id, v_task.owner_user_id,
+        v_task.owner_home_id, v_task.title, v_files);
+  end
+  $$;
+
+-- Retires a finished attachment upload nobody attached (the browser stopped after finalize, or the
+-- attach was refused): otherwise it would count forever without being visible anywhere.
+create function private.retire_unattached_upload(p_file_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    delete from private.task_attachment_uploads u where u.file_id = p_file_id;
+    if not exists (select 1 from private.task_attachments a where a.file_id = p_file_id)
+       and not exists (select 1 from private.task_series_attachments s where s.file_id = p_file_id) then
+      perform private.retire_file(p_file_id);
+    end if;
+  end
+  $$;
+
+-- storage-upload-expire (S15) also retires a finished task attachment that was never attached, and
+-- forgets the upload of one that failed or expired.
+create or replace function public.expire_upload(p_file_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+  begin
+    select * into v_file from private.stored_files f where f.id = p_file_id;
+    if not found then
+      return 'missing';
+    end if;
+    -- Pool first, then the file: the same lock order as every other writer.
+    perform 1 from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'pending' and v_file.expires_at <= pg_catalog.now() then
+      update private.stored_files f set status = 'failed' where f.id = v_file.id
+        returning * into v_file;
+    end if;
+    if v_file.status = 'failed' then
+      perform private.queue_object_deletion(v_file.upload_key, 'expired');
+      perform private.queue_object_deletion(v_file.object_key, 'expired');
+      delete from private.task_attachment_uploads u where u.file_id = v_file.id;
+    elsif v_file.status <> 'pending' then
+      perform private.queue_object_deletion(v_file.upload_key, 'processed');
+    end if;
+    -- A finished avatar that was never chosen (the browser stopped after finalize) would count
+    -- forever without being visible anywhere: it is retired like a replaced one (M2).
+    if v_file.status = 'ready' and v_file.purpose = 'avatar' then
+      perform private.retire_avatar_if_unused(v_file.created_by, v_file.id);
+      select * into v_file from private.stored_files f where f.id = p_file_id;
+    end if;
+    -- The same for a task attachment that was finalized but never attached.
+    if v_file.status = 'ready' and v_file.purpose = 'task_attachment'
+       and exists (select 1 from private.task_attachment_uploads u where u.file_id = v_file.id) then
+      perform private.retire_unattached_upload(v_file.id);
+      select * into v_file from private.stored_files f where f.id = p_file_id;
+    end if;
+    return v_file.status;
+  end
+  $$;
+
+-- Trash: attachments --------------------------------------------------------------------------------
+
+alter table private.trash_entries drop constraint trash_entries_item_type_check;
+alter table private.trash_entries add constraint trash_entries_item_type_check
+  check (item_type in (
+    'sample', 'dashboard_template', 'task', 'task_list', 'task_series_removal',
+    'task_attachment', 'task_series_attachment'
+  ));
+
+-- The four dispatch functions again, with the cases for attachments (S19 cases unchanged). Their
+-- conflicts: the task (or for a series attachment, the series) is gone or in the trash
+-- ('task_unavailable', 'series_unavailable': restore that first), or the task already has the
+-- maximum number of attachments ('attachment_limit'). Neither has a resolution: the person frees a
+-- place or restores the task, then tries again.
+create or replace function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_sample private.trash_samples;
+    v_task private.tasks;
+    v_removal private.task_series_removals;
+    v_head private.task_series;
+    v_link private.task_attachments;
+    v_series_attachment private.task_series_attachments;
+  begin
+    case p_entry.item_type
+      when 'sample' then
+        select * into v_sample from private.trash_samples s where s.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if v_sample.parent_id is not null and exists (
+          select 1 from private.trash_samples p
+          where p.id = v_sample.parent_id and p.deleted_at is not null
+        ) then
+          return 'parent_unavailable';
+        end if;
+        if v_sample.slot is not null and exists (
+          select 1 from private.trash_samples o
+          where o.id <> v_sample.id and o.deleted_at is null and o.slot = v_sample.slot
+            and o.owner_user_id is not distinct from v_sample.owner_user_id
+            and o.owner_home_id is not distinct from v_sample.owner_home_id
+        ) then
+          return 'slot_taken';
+        end if;
+        return null;
+      when 'dashboard_template' then
+        if not exists (
+          select 1 from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+      when 'task' then
+        select * into v_task from private.tasks t where t.id = p_entry.subject_id;
+        if not found or v_task.deleted_at is null then
+          return 'item_missing';
+        end if;
+        if v_task.list_id is null or not exists (
+          select 1 from private.task_lists l
+          where l.id = v_task.list_id and l.deleted_at is null and l.archived_at is null
+        ) then
+          return 'list_unavailable';
+        end if;
+        return null;
+      when 'task_list' then
+        if not exists (
+          select 1 from private.task_lists l where l.id = p_entry.subject_id and l.deleted_at is not null
+        ) then
+          return 'item_missing';
+        end if;
+        return null;
+      when 'task_series_removal' then
+        select * into v_removal from private.task_series_removals r where r.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if not v_removal.tasks_only then
+          select * into v_head from private.task_series s where s.id = v_removal.head_id;
+        end if;
+        if exists (
+          select 1 from private.tasks t
+          where t.id = any (v_removal.task_ids) and t.deleted_at is not null
+            and (t.list_id is null or not exists (
+              select 1 from private.task_lists l
+              where l.id = t.list_id and l.deleted_at is null and l.archived_at is null))
+        ) or (v_head.id is not null and (v_head.list_id is null or not exists (
+          select 1 from private.task_lists l
+          where l.id = v_head.list_id and l.deleted_at is null and l.archived_at is null))) then
+          return 'list_unavailable';
+        end if;
+        if not v_removal.tasks_only
+           and (v_head.id is null or v_head.revision <> v_removal.head_revision
+             or v_head.superseded_at is not null) then
+          return 'series_changed';
+        end if;
+        return null;
+      when 'task_attachment' then
+        select * into v_link from private.task_attachments a where a.id = p_entry.subject_id;
+        if not found or v_link.removed_at is null or v_link.removed_with_series then
+          return 'item_missing';
+        end if;
+        select * into v_task from private.tasks t where t.id = v_link.task_id;
+        if not found or v_task.deleted_at is not null then
+          return 'task_unavailable';
+        end if;
+        if not exists (
+          select 1 from private.task_attachments a
+          where a.task_id = v_link.task_id and a.file_id = v_link.file_id and a.removed_at is null
+        ) and private.task_attachment_count(v_link.task_id) >= private.task_limit('attachments') then
+          return 'attachment_limit';
+        end if;
+        return null;
+      when 'task_series_attachment' then
+        select * into v_series_attachment from private.task_series_attachments s
+          where s.id = p_entry.subject_id;
+        if not found or v_series_attachment.removed_at is null then
+          return 'item_missing';
+        end if;
+        if not exists (
+          select 1 from private.task_series s
+          where s.root_id = v_series_attachment.root_id and s.superseded_at is null
+            and s.deleted_at is null
+        ) then
+          return 'series_unavailable';
+        end if;
+        return null;
+    end case;
+    return null;
+  end
+  $$;
+
+create or replace function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+    v_lost integer := 0;
+    v_lost_ids uuid[] := '{}';
+    v_ref uuid;
+    v_task private.tasks;
+    v_removal private.task_series_removals;
+    v_head private.task_series;
+    v_link private.task_attachments;
+    v_series_attachment private.task_series_attachments;
+  begin
+    -- The series head and the task before any storage pool (restore_file locks pools): the order of
+    -- the upload, delete and remove paths, so a restore never deadlocks with them.
+    case p_entry.item_type
+      when 'task' then
+        perform 1 from private.tasks t where t.id = p_entry.subject_id for update;
+      when 'task_attachment' then
+        perform 1 from private.tasks t
+          where t.id = (select a.task_id from private.task_attachments a where a.id = p_entry.subject_id)
+          for update;
+      when 'task_series_attachment' then
+        perform private.lock_series_head(
+          (select s.root_id from private.task_series_attachments s where s.id = p_entry.subject_id));
+      else
+        null;
+    end case;
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      if not private.restore_file(v_file_id) then
+        v_lost := v_lost + 1;
+        v_lost_ids := v_lost_ids || v_file_id;
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        select s.file_id into v_ref from private.trash_samples s where s.id = p_entry.subject_id;
+        if v_ref is not null and not (v_ref = any (v_lost_ids)) and not private.restore_file(v_ref) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_ref;
+        end if;
+        update private.trash_samples s
+          set deleted_at = null,
+            file_id = case when s.file_id = any (v_lost_ids) then null else s.file_id end
+          where s.id = p_entry.subject_id;
+      when 'dashboard_template' then
+        update private.dashboard_templates t set deleted_at = null, updated_at = pg_catalog.now()
+          where t.id = p_entry.subject_id;
+      when 'task' then
+        select * into v_task from private.tasks t where t.id = p_entry.subject_id for update;
+        if v_task.list_id is null
+           or not private.usable_task_list(v_task.list_id, v_task.owner_user_id, v_task.owner_home_id) then
+          raise exception 'task list unavailable' using errcode = '23505';
+        end if;
+        update private.tasks t set deleted_at = null where t.id = v_task.id;
+        -- Its attachments come back with it. A file that went to the trash with another task (the
+        -- last one deleted takes it along) is brought back too; one that is gone is dropped from
+        -- the task, and reported, so no attachment points at nothing.
+        for v_link in
+          select * from private.task_attachments a
+          where a.task_id = v_task.id and a.removed_at is null order by a.id
+        loop
+          if not (v_link.file_id = any (v_lost_ids)) and private.restore_file(v_link.file_id) then
+            continue;
+          end if;
+          if not (v_link.file_id = any (v_lost_ids)) then
+            v_lost := v_lost + 1;
+            v_lost_ids := v_lost_ids || v_link.file_id;
+          end if;
+          delete from private.task_attachments a where a.id = v_link.id;
+        end loop;
+      when 'task_list' then
+        update private.task_lists l set deleted_at = null, updated_at = pg_catalog.now()
+          where l.id = p_entry.subject_id;
+      when 'task_series_removal' then
+        select * into v_removal from private.task_series_removals r where r.id = p_entry.subject_id;
+        for v_task in
+          select * from private.tasks t
+          where t.id = any (v_removal.task_ids) and t.deleted_at is not null
+          order by t.id for update
+        loop
+          if v_task.list_id is null
+             or not private.usable_task_list(v_task.list_id, v_task.owner_user_id, v_task.owner_home_id) then
+            raise exception 'task list unavailable' using errcode = '23505';
+          end if;
+          update private.tasks t set deleted_at = null where t.id = v_task.id;
+        end loop;
+        if not v_removal.tasks_only then
+          select * into v_head from private.task_series s where s.id = v_removal.head_id for update;
+          if v_head.id is null or v_head.revision <> v_removal.head_revision
+             or not private.usable_task_list(v_head.list_id, v_head.owner_user_id, v_head.owner_home_id) then
+            raise exception 'series changed' using errcode = '23505';
+          end if;
+          if v_removal.mode = 'series' then
+            update private.task_series s set deleted_at = null
+              where s.root_id = v_removal.root_id and s.deleted_at is not null;
+          end if;
+          update private.task_series s
+            set until_date = v_removal.previous_until_date, revision = s.revision + 1,
+              updated_at = pg_catalog.now()
+            where s.id = v_head.id
+            returning * into v_head;
+          update private.task_series s
+            set next_date = private.series_next(v_head, private.task_today(v_head.owner_home_id, null))
+            where s.id = v_head.id
+            returning * into v_head;
+        end if;
+      when 'task_attachment' then
+        -- The task is locked and checked again (deleted since the conflict check: a conflict).
+        select * into v_link from private.task_attachments a where a.id = p_entry.subject_id for update;
+        select * into v_task from private.tasks t where t.id = v_link.task_id for update;
+        if v_task.id is null or v_task.deleted_at is not null then
+          raise exception 'task unavailable' using errcode = '23505';
+        end if;
+        if not (v_link.file_id = any (v_lost_ids)) and not private.restore_file(v_link.file_id) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_link.file_id;
+        end if;
+        if v_link.file_id = any (v_lost_ids) or exists (
+          select 1 from private.task_attachments a
+          where a.task_id = v_link.task_id and a.file_id = v_link.file_id and a.removed_at is null
+        ) then
+          -- Gone, or the same file is attached again meanwhile: nothing to bring back.
+          delete from private.task_attachments a where a.id = v_link.id;
+        else
+          if private.task_attachment_count(v_link.task_id) >= private.task_limit('attachments') then
+            raise exception 'attachment limit' using errcode = '23505';
+          end if;
+          update private.task_attachments a set removed_at = null, removed_by = null
+            where a.id = v_link.id;
+        end if;
+      when 'task_series_attachment' then
+        -- The chain's attachment comes back, and so do its links removed with it on occurrences that
+        -- are still open and active and have room (completed ones stay as they were).
+        select * into v_series_attachment from private.task_series_attachments s
+          where s.id = p_entry.subject_id for update;
+        if not exists (
+          select 1 from private.task_series s
+          where s.root_id = v_series_attachment.root_id and s.superseded_at is null
+            and s.deleted_at is null
+        ) then
+          raise exception 'series unavailable' using errcode = '23505';
+        end if;
+        if not (v_series_attachment.file_id = any (v_lost_ids))
+           and not private.restore_file(v_series_attachment.file_id) then
+          v_lost := v_lost + 1;
+          v_lost_ids := v_lost_ids || v_series_attachment.file_id;
+        end if;
+        if v_series_attachment.file_id = any (v_lost_ids) then
+          delete from private.task_attachments a
+            where a.series_attachment_id = v_series_attachment.id and a.removed_with_series;
+          delete from private.task_series_attachments s where s.id = v_series_attachment.id;
+        else
+          if exists (
+            select 1 from private.task_series_attachments s
+            where s.root_id = v_series_attachment.root_id and s.file_id = v_series_attachment.file_id
+              and s.removed_at is null
+          ) then
+            raise exception 'already a series attachment' using errcode = '23505';
+          end if;
+          update private.task_series_attachments s set removed_at = null, removed_by = null
+            where s.id = v_series_attachment.id;
+          for v_link in
+            select a.* from private.task_attachments a
+            join private.tasks t on t.id = a.task_id
+            where a.series_attachment_id = v_series_attachment.id and a.removed_with_series
+              and t.deleted_at is null and t.completed_at is null
+            order by a.task_id for update of a
+          loop
+            if exists (
+              select 1 from private.task_attachments o
+              where o.task_id = v_link.task_id and o.file_id = v_link.file_id and o.removed_at is null
+            ) or private.task_attachment_count(v_link.task_id) >= private.task_limit('attachments') then
+              continue;
+            end if;
+            update private.task_attachments a
+              set removed_at = null, removed_by = null, removed_with_series = false
+              where a.id = v_link.id;
+          end loop;
+        end if;
+    end case;
+    return v_lost;
+  end
+  $$;
+
+create or replace function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+  begin
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id
+      order by ef.file_id
+    loop
+      -- Never release a file another active item still uses. Task files are released when their
+      -- last row goes (private.release_task_file, below), so a file another entry can still bring
+      -- back is kept until then.
+      if not private.file_in_active_use(v_file_id) and not private.task_file_referenced(v_file_id) then
+        perform private.purge_file_now(v_file_id);
+      end if;
+    end loop;
+    case p_entry.item_type
+      when 'sample' then
+        delete from private.trash_samples s where s.id = p_entry.subject_id and s.deleted_at is not null;
+      when 'dashboard_template' then
+        delete from private.dashboard_templates t
+          where t.id = p_entry.subject_id and t.deleted_at is not null;
+      when 'task' then
+        -- Subtasks, comments, label links, assignees and attachment links go with it (on delete
+        -- cascade); a file no row refers to any more is then released.
+        delete from private.tasks t where t.id = p_entry.subject_id and t.deleted_at is not null;
+      when 'task_list' then
+        delete from private.task_lists l where l.id = p_entry.subject_id and l.deleted_at is not null;
+      when 'task_series_removal' then
+        delete from private.tasks t
+          using private.task_series_removals r
+          where r.id = p_entry.subject_id and t.id = any (r.task_ids) and t.deleted_at is not null;
+        if exists (
+          select 1 from private.task_series_removals r
+          join private.task_series s on s.root_id = r.root_id
+          where r.id = p_entry.subject_id and r.mode = 'series' and s.deleted_at is not null
+        ) then
+          update private.tasks t
+            set series_id = null, series_root_id = null, occurrence_date = null
+            from private.task_series_removals r
+            where r.id = p_entry.subject_id and t.series_root_id = r.root_id;
+          delete from private.task_series s
+            using private.task_series_removals r
+            where r.id = p_entry.subject_id and s.root_id = r.root_id;
+        end if;
+        delete from private.task_series_removals r where r.id = p_entry.subject_id;
+      when 'task_attachment' then
+        delete from private.task_attachments a
+          where a.id = p_entry.subject_id and a.removed_at is not null;
+      when 'task_series_attachment' then
+        -- Its links removed with it go too; links on completed occurrences stay (as from the series).
+        delete from private.task_attachments a
+          where a.series_attachment_id = p_entry.subject_id and a.removed_with_series
+            and a.removed_at is not null;
+        delete from private.task_series_attachments s
+          where s.id = p_entry.subject_id and s.removed_at is not null;
+    end case;
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.list_tasks(uuid, uuid, date, text, text, boolean, text[], uuid[], text, uuid, text, integer, integer)',
+    'public.list_task_calendar(date, date, uuid, date, uuid, text, text[], uuid[], text, uuid)',
+    'public.abandon_my_upload(uuid, text)',
+    'public.create_task_attachment_intent(uuid, text, bigint, text, uuid)',
+    'public.task_attachment_scope_impact(uuid, text, uuid)',
+    'public.attach_task_file(uuid, text)',
+    'public.list_task_attachments(uuid)',
+    'public.authorize_file_read(uuid)',
+    'public.remove_task_attachment(uuid, text, boolean)',
+    'public.delete_task(uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  foreach v_function in array array['public.expire_upload(uuid)'] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  foreach v_function in array array[
+    'private.task_limit(text)',
+    'private.task_attachment_type(text)',
+    'private.upload_max_bytes(text)',
+    'private.upload_type_allowed(text, text)',
+    'private.stored_type_allowed(text, text)',
+    'private.file_in_active_use(uuid)',
+    'private.task_file_referenced(uuid)',
+    'private.release_task_file(uuid)',
+    'private.release_task_file_on_delete()',
+    'private.drop_series_attachments()',
+    'private.task_attachment_count(uuid)',
+    'private.copy_series_attachments()',
+    'private.series_attachment_targets(uuid, text, date, uuid, uuid)',
+    'private.retire_unattached_upload(uuid)',
+    'private.trash_conflict(private.trash_entries)',
+    'private.trash_item_restore(private.trash_entries)',
+    'private.trash_item_purge(private.trash_entries)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261030090000_chores.sql
+-- ============================================================================
+-- S20: chores core (brief plans/steps/S20-brief.md; ADR 0026; spec "Confirmed fixed and rotating
+-- recurring chore assignments", "Confirmed missed rotating chore behavior", "Confirmed skipping
+-- recurring chore occurrences", "Confirmed completion of another member's chore", "Confirmed
+-- optional per-occurrence chore completion notes", "Confirmed optional recurring chore checklists",
+-- "Confirmed optional chore estimated duration", "Confirmed custom Home chore categories",
+-- "Confirmed no chore difficulty levels", "Confirmed recurring chore pauses and Home vacation
+-- periods" (the individual pause), "Confirmed recurring task and chore editing scope" and "deletion
+-- scope", "Confirmed member departure and removal: content ownership" (reassignment rule)).
+--
+-- Chores belong to one Home. A chore (private.chores) is the stable identity: title, instructions
+-- and category. A recurring chore has schedule parts (private.chore_schedules) like the S19 task
+-- series parts: the rule (the S19 schedule functions, unchanged), the assignment (nobody, fixed
+-- members, or a rotation order), the checklist template and the estimated duration. A change to
+-- "this and following" ends the current part the day before and starts a new head part. Every
+-- occurrence (private.chore_occurrences) keeps its original scheduled date (unique per chore, deleted
+-- rows included, so retries, races and splits never create a date twice), its own assignees, its
+-- own copy of the checklist with its own progress, and on completion or skip a snapshot of the
+-- chore's title and category name. A one-off chore has exactly one occurrence and no part.
+--
+-- Rotation: a part numbers the dates of its rule from where its rotation starts (rotation_from):
+-- turn 0, 1, 2, ... Every date of the rule counts, even one suppressed by a pause, so a skip, a miss
+-- or a pause never shifts the order; turn n goes to the place n modulo the order's length
+-- (packages/domain/src/chores/rotation.ts previews the same; shared vectors test both). A departed
+-- participant's place stays in the order, empty, so the order does not shift: occurrences that fall
+-- on it are created unassigned and flagged for reassignment.
+--
+-- Who may do what (default picked in the brief; the per-module matrix is open in the spec).
+-- packages/domain/src/permissions/chores.ts makes the same decisions: every current member sees the
+-- Home's chores, checklists, notes and history, ticks steps and completes any open occurrence,
+-- naming the actual contributor (any current member); chore managers (the Owner, Administrators
+-- granted the new delegable capability manageHomeChores) create, edit (every scope), pause and
+-- delete chores, skip and reopen occurrences and manage categories.
+--
+-- Like tasks, nothing is exposed as a table: people use security-definer functions that recheck
+-- the confirmed caller and their current membership on every call. A Home the caller does not
+-- belong to answers 42501 "not permitted" exactly like one that does not exist; a chore, occurrence,
+-- step or category they may not see answers 'not_found' exactly like a missing one. People are named
+-- by membership id (public.home_directory), never by account id; a departed member reads as null.
+--
+-- Approval (spec "Confirmed optional approval of chore completions", "self-approval", "rejected
+-- chore completion rework and resubmission", "correction and reversal", "chore-approval reviewer
+-- notifications"): a chore manager turns approval on per chore (prospective). Completing such a
+-- chore records a submission (private.chore_submissions: submitter, contributor, reported time,
+-- note, the checklist as it stood) and the occurrence is Pending approval until a reviewer (the
+-- Owner, Administrators granted the delegable approveHomeChores; ordinary completion rights never
+-- review) approves it (it is completed with the submission's details; the reviewer may be the
+-- contributor) or rejects it with a reason (it is open again and Needs rework; the submission stays;
+-- the next completion is a new attempt). Reviewers are notified in-app (email opt-in), grouped per
+-- Home while their queue is not empty. Chore managers correct a completion's contributor, time and
+-- note; every submission, decision, reopen and correction is an append-only event. Points (S23)
+-- reconcile on these events later; nothing here awards points.
+--
+-- Concurrency: every change to a chore or its occurrences locks the chore row first, so changes to
+-- one chore queue and never deadlock. Edits name the revision they started from and a stale one
+-- answers 'conflict'. Completion and skip are set-to-state under that lock: of two people completing
+-- at once one is recorded and the other is told it is already done. Creates take a client id, so a
+-- retry returns the same row.
+
+-- Audit subjects, the new capability, trash types -----------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template'
+  ));
+
+-- packages/domain delegableCapabilities lists the same names.
+create or replace function private.is_delegable_capability(p_capability text) returns boolean
+  language sql immutable security definer set search_path = '' as $$
+  select p_capability in (
+    'manageHomeSettings', 'manageInvitations', 'removeMembers', 'manageHomeDashboard',
+    'manageHomeTasks', 'manageHomeChores', 'approveHomeChores'
+  );
+  $$;
+
+alter table private.trash_entries drop constraint trash_entries_module_check;
+alter table private.trash_entries add constraint trash_entries_module_check
+  check (module in ('sample', 'dashboard', 'tasks', 'chores'));
+
+alter table private.trash_entries drop constraint trash_entries_item_type_check;
+alter table private.trash_entries add constraint trash_entries_item_type_check
+  check (item_type in (
+    'sample', 'dashboard_template', 'task', 'task_list', 'task_series_removal',
+    'task_attachment', 'task_series_attachment', 'chore', 'chore_occurrence', 'chore_removal'
+  ));
+
+-- Notifications: the optional category 'approvals' (reviewers; in-app on, email opt-in) ------------
+
+create or replace function private.notification_category_essential(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_category
+    when 'security' then true when 'storage' then true
+    when 'invitations' then false when 'reminders' then false when 'approvals' then false
+  end;
+  $$;
+
+alter table public.notifications drop constraint notifications_category_check;
+alter table public.notifications add constraint notifications_category_check
+  check (category in ('security', 'invitations', 'storage', 'reminders', 'approvals'));
+
+alter table public.notification_preferences drop constraint notification_preferences_category_check;
+alter table public.notification_preferences add constraint notification_preferences_category_check
+  check (category in ('invitations', 'reminders', 'approvals'));
+
+-- packages/domain optionalNotificationCategories lists the same.
+create or replace function private.notification_category_optional(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_category in ('invitations', 'reminders', 'approvals'), false);
+  $$;
+
+create or replace function public.get_notification_settings()
+returns table (home_id uuid, category text, channel text, enabled boolean, overridden boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select s.home_id, c.category, ch.channel,
+        private.effective_notification_channel(v_user_id, s.home_id, c.category, ch.channel),
+        exists (
+          select 1 from public.notification_preferences p
+          where p.user_id = v_user_id and p.home_id is not distinct from s.home_id
+            and p.category = c.category and p.channel = ch.channel
+        )
+      from (
+        select null::uuid as home_id
+        union all
+        select m.home_id from public.home_memberships m where m.user_id = v_user_id
+      ) s
+      cross join (values ('invitations'), ('reminders'), ('approvals')) c (category)
+      cross join (values ('in_app'), ('email')) ch (channel)
+      order by s.home_id nulls first, c.category, ch.channel;
+  end
+  $$;
+
+-- Limits and text rules ----------------------------------------------------------------------------
+
+-- apps/web/src/chores/schema.ts uses the same numbers.
+create function private.chore_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'chores' then 500             -- active (not deleted, not ended) chores per Home
+    when 'categories' then 50          -- categories per Home
+    when 'category_name' then 40
+    when 'title' then 200
+    when 'instructions' then 2000
+    when 'steps' then 30               -- checklist steps per chore or occurrence
+    when 'step_label' then 120
+    when 'members' then 20             -- fixed assignees, or places in a rotation
+    when 'minutes' then 1440           -- the longest estimated duration (24 hours)
+    when 'note' then 500               -- completion note
+    when 'reason' then 500             -- skip reason, rejection reason, correction reason
+    when 'page' then 100               -- occurrences one overview read returns
+    when 'history_page' then 50
+    when 'max_offset' then 10000
+    when 'horizon' then 7              -- days ahead the overview shows
+    when 'parts_per_advance' then 50
+    when 'catch_up' then 100           -- occurrences one advance creates per part
+    when 'preview_dates' then 5
+    when 'approvals_page' then 100     -- pending submissions one review queue read returns
+  end;
+  $$;
+
+-- Notes and reasons: surrounding whitespace removed and every run of whitespace (line breaks
+-- included) read as one space; empty is no text (null).
+create function private.chore_short_text(p_text text) returns text
+  language sql immutable set search_path = '' as $$
+  select nullif(pg_catalog.btrim(pg_catalog.regexp_replace(p_text, '\s+', ' ', 'g')), '');
+  $$;
+
+-- Tables -------------------------------------------------------------------------------------------
+
+create table private.chore_categories (
+  id uuid primary key,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  name text not null constraint chore_categories_name_check check (private.is_visible_name(name, 40)),
+  color text not null constraint chore_categories_color_check
+    check (color is not null and private.is_task_label_color(color)),
+  position integer not null default 0,
+  archived_at timestamptz,
+  revision integer not null default 1 constraint chore_categories_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint chore_categories_id_home_key unique (id, home_id)
+);
+
+create index chore_categories_home_idx on private.chore_categories (home_id, position);
+
+create table private.chores (
+  id uuid primary key,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  kind text not null constraint chores_kind_check check (kind in ('one_off', 'recurring')),
+  title text not null constraint chores_title_check check (private.is_visible_name(title, 200)),
+  instructions text constraint chores_instructions_check
+    check (instructions is null or private.is_plain_text(instructions, 2000)),
+  category_id uuid,
+  -- Completions wait for a reviewer's approval (off unless a chore manager turns it on; a change
+  -- applies to completions submitted after it).
+  requires_approval boolean not null default false,
+  -- The whole series was deleted (open occurrences in the trash); its history stays.
+  ended_at timestamptz,
+  ended_by uuid references auth.users (id) on delete set null,
+  revision integer not null default 1 constraint chores_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint chores_id_home_key unique (id, home_id),
+  -- Only a category of the chore's own Home; deleting the category leaves the chore uncategorized.
+  constraint chores_category_fkey foreign key (category_id, home_id)
+    references private.chore_categories (id, home_id) on delete set null (category_id)
+);
+
+create index chores_home_idx on private.chores (home_id) where deleted_at is null;
+create index chores_category_idx on private.chores (category_id) where category_id is not null;
+
+-- One part of a recurring chore's schedule. Only the head (superseded_at null) creates occurrences.
+-- next_date is the next date to create (null: none); last_date the latest created so far.
+create table private.chore_schedules (
+  id uuid primary key,
+  chore_id uuid not null,
+  home_id uuid not null,
+  previous_id uuid,
+  frequency text not null constraint chore_schedules_frequency_check
+    check (frequency in ('daily', 'weekly', 'monthly', 'yearly')),
+  interval_count integer not null constraint chore_schedules_interval_check check (interval_count between 1 and 99),
+  weekdays smallint[] constraint chore_schedules_weekdays_check check (
+    (frequency = 'weekly') = (weekdays is not null)
+    and (weekdays is null or (cardinality(weekdays) between 1 and 7 and weekdays <@ '{1,2,3,4,5,6,7}'))
+  ),
+  starts_on date not null,
+  -- After a split that kept the schedule: the first date this part may create. Null: starts_on.
+  active_from date,
+  ends_on date,
+  max_count integer constraint chore_schedules_count_check check (max_count between 1 and 999),
+  until_date date,
+  next_date date,
+  last_date date,
+  -- A pause from paused_from to paused_until (inclusive), or indefinitely (paused_until null).
+  paused_from date,
+  paused_until date,
+  paused_by uuid references auth.users (id) on delete set null,
+  superseded_at timestamptz,
+  assignment text not null constraint chore_schedules_assignment_check
+    check (assignment in ('none', 'fixed', 'rotating')),
+  -- Where the rotation's turns are counted from (rotating only).
+  rotation_from date,
+  estimated_minutes integer constraint chore_schedules_minutes_check check (estimated_minutes between 1 and 1440),
+  needs_reassignment boolean not null default false,
+  revision integer not null default 1 constraint chore_schedules_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint chore_schedules_id_home_key unique (id, home_id),
+  constraint chore_schedules_chore_fkey foreign key (chore_id, home_id)
+    references private.chores (id, home_id) on delete cascade,
+  constraint chore_schedules_ends_check check (ends_on is null or ends_on >= starts_on),
+  constraint chore_schedules_until_check check (until_date is null or until_date >= starts_on - 1),
+  constraint chore_schedules_pause_check check (
+    (paused_from is null and paused_until is null) or (paused_from is not null
+      and (paused_until is null or paused_until >= paused_from))),
+  constraint chore_schedules_rotation_check check ((assignment = 'rotating') = (rotation_from is not null))
+);
+
+create index chore_schedules_chore_idx on private.chore_schedules (chore_id);
+create unique index chore_schedules_one_head on private.chore_schedules (chore_id)
+  where superseded_at is null;
+create index chore_schedules_home_head_idx on private.chore_schedules (home_id, last_date)
+  where superseded_at is null;
+
+-- A part's assignees (fixed) or rotation order (rotating), by position. A departed member's place
+-- stays with user_id null (spec: future assignments to them are cleared; the order does not shift).
+create table private.chore_schedule_members (
+  schedule_id uuid not null,
+  home_id uuid not null,
+  position integer not null constraint chore_schedule_members_position_check check (position between 0 and 19),
+  user_id uuid,
+  primary key (schedule_id, position),
+  foreign key (schedule_id, home_id) references private.chore_schedules (id, home_id) on delete cascade,
+  foreign key (home_id, user_id) references public.home_memberships (home_id, user_id)
+    on delete set null (user_id)
+);
+
+create unique index chore_schedule_members_user_key on private.chore_schedule_members (schedule_id, user_id)
+  where user_id is not null;
+create index chore_schedule_members_member_idx on private.chore_schedule_members (home_id, user_id);
+
+-- The checklist each new occurrence of the part starts with.
+create table private.chore_schedule_steps (
+  schedule_id uuid not null references private.chore_schedules (id) on delete cascade,
+  position integer not null,
+  label text not null constraint chore_schedule_steps_label_check check (private.is_visible_name(label, 120)),
+  mandatory boolean not null default false,
+  primary key (schedule_id, position)
+);
+
+create table private.chore_occurrences (
+  id uuid primary key,
+  chore_id uuid not null,
+  home_id uuid not null,
+  schedule_id uuid references private.chore_schedules (id) on delete set null,
+  scheduled_date date not null,
+  due_date date not null,
+  estimated_minutes integer constraint chore_occurrences_minutes_check check (estimated_minutes between 1 and 1440),
+  -- pending_approval: a submission waits for a reviewer (private.chore_submissions).
+  status text not null default 'open'
+    constraint chore_occurrences_status_check
+    check (status in ('open', 'pending_approval', 'completed', 'skipped')),
+  -- Open again after a reviewer rejected its last submission (Needs rework).
+  in_rework boolean not null default false,
+  -- Changed on its own ("this occurrence"): later series changes leave it as it is.
+  detached boolean not null default false,
+  needs_reassignment boolean not null default false,
+  completed_at timestamptz,
+  -- Who recorded the completion, and who actually did the work (spec: kept apart).
+  completed_by uuid references auth.users (id) on delete set null,
+  contributor_id uuid references auth.users (id) on delete set null,
+  note text constraint chore_occurrences_note_check check (note is null or private.is_plain_text(note, 500)),
+  skipped_at timestamptz,
+  skipped_by uuid references auth.users (id) on delete set null,
+  skip_reason text constraint chore_occurrences_reason_check
+    check (skip_reason is null or private.is_plain_text(skip_reason, 500)),
+  -- What the chore was called, and its category, when the occurrence was closed (history is never
+  -- rewritten by a rename).
+  closed_title text,
+  closed_category text,
+  -- Approved by a reviewer (the completion came through a submission).
+  approved_at timestamptz,
+  approved_by uuid references auth.users (id) on delete set null,
+  reopened_at timestamptz,
+  reopened_by uuid references auth.users (id) on delete set null,
+  revision integer not null default 1 constraint chore_occurrences_revision_check check (revision >= 1),
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint chore_occurrences_id_home_key unique (id, home_id),
+  constraint chore_occurrences_chore_fkey foreign key (chore_id, home_id)
+    references private.chores (id, home_id) on delete cascade,
+  -- One occurrence per chore and date, whatever retries, races or splits do (deleted rows count, so
+  -- a date in the trash is not created again).
+  constraint chore_occurrences_date_key unique (chore_id, scheduled_date),
+  constraint chore_occurrences_state_check check (
+    (status = 'completed') = (completed_at is not null)
+    and (status = 'skipped') = (skipped_at is not null)
+    and (status = 'completed' or (note is null and contributor_id is null and completed_by is null))
+    and (status = 'skipped' or skip_reason is null)
+    and (status = 'completed' or (approved_at is null and approved_by is null))
+    and (status = 'open' or not in_rework))
+);
+
+create index chore_occurrences_home_open_idx on private.chore_occurrences (home_id, due_date)
+  where status = 'open' and deleted_at is null;
+create index chore_occurrences_home_pending_idx on private.chore_occurrences (home_id)
+  where status = 'pending_approval' and deleted_at is null;
+create index chore_occurrences_chore_idx on private.chore_occurrences (chore_id, scheduled_date desc);
+create index chore_occurrences_schedule_idx on private.chore_occurrences (schedule_id)
+  where schedule_id is not null;
+
+-- An occurrence's assignees; current members by construction (the row ends with the membership).
+create table private.chore_occurrence_assignees (
+  occurrence_id uuid not null,
+  home_id uuid not null,
+  user_id uuid not null,
+  primary key (occurrence_id, user_id),
+  foreign key (occurrence_id, home_id) references private.chore_occurrences (id, home_id) on delete cascade,
+  foreign key (home_id, user_id) references public.home_memberships (home_id, user_id) on delete cascade
+);
+
+create index chore_occurrence_assignees_member_idx on private.chore_occurrence_assignees (home_id, user_id);
+
+-- An occurrence's own checklist and progress.
+create table private.chore_occurrence_steps (
+  id uuid primary key,
+  occurrence_id uuid not null references private.chore_occurrences (id) on delete cascade,
+  position integer not null,
+  label text not null constraint chore_occurrence_steps_label_check check (private.is_visible_name(label, 120)),
+  mandatory boolean not null default false,
+  checked_at timestamptz,
+  checked_by uuid references auth.users (id) on delete set null,
+  constraint chore_occurrence_steps_position_key unique (occurrence_id, position) deferrable initially deferred
+);
+
+-- Every attempt to complete an occurrence of a chore that requires approval, numbered per
+-- occurrence. Never changed after its decision: a rejected attempt stays with its reason, and the
+-- next completion is a new attempt. At most one pending per occurrence.
+create table private.chore_submissions (
+  id uuid primary key,
+  -- Order of arrival across the Home (submitted_at ties within a transaction).
+  seq bigint generated always as identity,
+  occurrence_id uuid not null,
+  home_id uuid not null,
+  attempt integer not null constraint chore_submissions_attempt_check check (attempt >= 1),
+  submitted_by uuid references auth.users (id) on delete set null,
+  contributor_id uuid references auth.users (id) on delete set null,
+  -- The reported completion time (the late-points policy of S23 uses this, not the review time).
+  submitted_at timestamptz not null default now(),
+  note text constraint chore_submissions_note_check check (note is null or private.is_plain_text(note, 500)),
+  -- The checklist as it stood: [{label, mandatory, checked}].
+  steps jsonb not null default '[]'::jsonb,
+  status text not null default 'pending' constraint chore_submissions_status_check
+    check (status in ('pending', 'approved', 'rejected', 'withdrawn')),
+  decided_at timestamptz,
+  decided_by uuid references auth.users (id) on delete set null,
+  reason text constraint chore_submissions_reason_check
+    check (reason is null or private.is_plain_text(reason, 500)),
+  foreign key (occurrence_id, home_id) references private.chore_occurrences (id, home_id) on delete cascade,
+  constraint chore_submissions_attempt_key unique (occurrence_id, attempt),
+  constraint chore_submissions_decision_check check (
+    (status = 'pending') = (decided_at is null)
+    and (status = 'rejected') = (reason is not null))
+);
+
+create unique index chore_submissions_one_pending on private.chore_submissions (occurrence_id)
+  where status = 'pending';
+create index chore_submissions_home_pending_idx on private.chore_submissions (home_id, seq)
+  where status = 'pending';
+
+-- Every completion, submission, decision, skip, reopen and correction of an occurrence, in order
+-- (append-only), so nothing that was recorded is lost: who completed it, for whom, the note, the
+-- skip or rejection reason, and a correction's values before and after.
+create table private.chore_occurrence_events (
+  id bigint generated always as identity primary key,
+  occurrence_id uuid not null references private.chore_occurrences (id) on delete cascade,
+  kind text not null constraint chore_occurrence_events_kind_check
+    check (kind in ('completed', 'skipped', 'reopened', 'submitted', 'approved', 'rejected',
+      'withdrawn', 'corrected')),
+  actor_id uuid references auth.users (id) on delete set null,
+  contributor_id uuid references auth.users (id) on delete set null,
+  note text,
+  reason text,
+  submission_id uuid references private.chore_submissions (id) on delete set null,
+  -- A correction: the completion time before and after, the contributor and note before.
+  completed_at timestamptz,
+  previous_completed_at timestamptz,
+  previous_contributor_id uuid references auth.users (id) on delete set null,
+  previous_note text,
+  created_at timestamptz not null default now()
+);
+
+create index chore_occurrence_events_occurrence_idx on private.chore_occurrence_events (occurrence_id, id);
+
+-- What deleting following or all occurrences took away, so the trash can bring it back.
+create table private.chore_removals (
+  id uuid primary key default gen_random_uuid(),
+  chore_id uuid not null,
+  home_id uuid not null,
+  head_id uuid not null,
+  mode text not null constraint chore_removals_mode_check check (mode in ('following', 'series')),
+  from_date date,
+  occurrence_ids uuid[] not null,
+  -- The head's revision right after the removal: a different one later means the schedule changed.
+  head_revision integer not null,
+  previous_until_date date,
+  -- Set by the restore resolution 'restore_occurrences_only'.
+  occurrences_only boolean not null default false,
+  created_at timestamptz not null default now(),
+  foreign key (chore_id, home_id) references private.chores (id, home_id) on delete cascade
+);
+
+alter table private.chore_categories enable row level security;
+alter table private.chores enable row level security;
+alter table private.chore_schedules enable row level security;
+alter table private.chore_schedule_members enable row level security;
+alter table private.chore_schedule_steps enable row level security;
+alter table private.chore_occurrences enable row level security;
+alter table private.chore_occurrence_assignees enable row level security;
+alter table private.chore_occurrence_steps enable row level security;
+alter table private.chore_removals enable row level security;
+alter table private.chore_occurrence_events enable row level security;
+alter table private.chore_submissions enable row level security;
+revoke all on table private.chore_categories, private.chores, private.chore_schedules,
+  private.chore_schedule_members, private.chore_schedule_steps, private.chore_occurrences,
+  private.chore_occurrence_assignees, private.chore_occurrence_steps, private.chore_removals,
+  private.chore_occurrence_events, private.chore_submissions
+  from public, anon, authenticated;
+
+comment on table private.chores is 'S20: Home chores. Not exposed through the API.';
+comment on table private.chore_occurrences is 'S20: chore occurrences. Not exposed through the API.';
+
+-- Member departure (spec "Confirmed task reassignment rule": also outstanding chores) ---------------
+
+-- Before a membership ends, the open occurrences the person was assigned to, and the schedule parts
+-- they are in, are flagged for reassignment (new occurrences on their place then carry the flag);
+-- their assignments end through the foreign keys. Completed and skipped records keep attribution.
+create function private.flag_departed_chore_assignments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    update private.chore_occurrences o set needs_reassignment = true
+      where o.home_id = old.home_id and o.status = 'open' and not o.needs_reassignment
+        and exists (
+          select 1 from private.chore_occurrence_assignees a
+          where a.occurrence_id = o.id and a.user_id = old.user_id
+        );
+    update private.chore_schedules s set needs_reassignment = true
+      where s.home_id = old.home_id and s.superseded_at is null and not s.needs_reassignment
+        and exists (
+          select 1 from private.chore_schedule_members m
+          where m.schedule_id = s.id and m.user_id = old.user_id
+        );
+    return old;
+  end
+  $$;
+
+create trigger home_memberships_flag_chore_assignments
+  before delete on public.home_memberships
+  for each row execute function private.flag_departed_chore_assignments();
+
+-- Permission helpers (packages/domain decideChoreAction mirrors these) -----------------------------
+
+-- Chore managers: the Owner, and Administrators granted manageHomeChores (home.chores.manage).
+create function private.can_manage_chores(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and private.has_home_capability(p_home_id, p_user_id, 'manageHomeChores');
+  $$;
+
+-- Chore reviewers: the Owner, and Administrators granted approveHomeChores (home.chores.review).
+-- Ordinary completion rights never review; a reviewer may approve their own completion.
+create function private.can_review_chores(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and private.has_home_capability(p_home_id, p_user_id, 'approveHomeChores');
+  $$;
+
+-- Tells the Home's current reviewers, except the submitter, that a completion waits for them
+-- (spec "Confirmed chore-approval reviewer notifications"): in-app, and by email only for those who
+-- opted in. Grouped: one notice per reviewer while the Home's queue is not empty (the key is the
+-- oldest pending submission), so a retry or a second submission adds nothing; once the queue was
+-- emptied, the next submission notifies again. The notice names no chore or person.
+create function private.notify_chore_reviewers(p_home_id uuid, p_submitter uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_oldest uuid;
+    v_user uuid;
+  begin
+    select s.id into v_oldest from private.chore_submissions s
+      where s.home_id = p_home_id and s.status = 'pending'
+      order by s.seq limit 1;
+    if v_oldest is null then
+      return;
+    end if;
+    for v_user in
+      select m.user_id from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id is distinct from p_submitter
+        and private.can_review_chores(p_home_id, m.user_id)
+      order by m.user_id
+    loop
+      perform private.notify_user(
+        v_user, p_home_id, 'approvals', 'chore.approval_requested',
+        pg_catalog.jsonb_build_object('homeId', p_home_id),
+        'chore-approvals:' || v_oldest::text, true);
+    end loop;
+  end
+  $$;
+
+-- 42501 "not permitted" for a Home the caller does not belong to (or that does not exist).
+create function private.require_chore_home(p_home_id uuid, p_user_id uuid) returns void
+  language plpgsql stable security definer set search_path = '' as $$
+  begin
+    if p_home_id is null or not private.is_home_member(p_home_id, p_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+  end
+  $$;
+
+-- Serializes name checks and limits within one Home, so two creates cannot both pass.
+create function private.lock_chore_home(p_kind text, p_home_id uuid) returns void
+  language sql volatile security definer set search_path = '' as $$
+  select pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('chores:' || p_kind || ':' || p_home_id::text, 0));
+  $$;
+
+-- A chore for a change by p_user_id, locked: the first lock every change to a chore and its
+-- occurrences takes. Null when missing, deleted, or not in a Home they belong to.
+create function private.lock_chore(p_chore_id uuid, p_user_id uuid) returns private.chores
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_chore private.chores;
+  begin
+    select * into v_chore from private.chores c where c.id = p_chore_id for update;
+    if not found or v_chore.deleted_at is not null
+       or not private.is_home_member(v_chore.home_id, p_user_id) then
+      return null;
+    end if;
+    return v_chore;
+  end
+  $$;
+
+-- An occurrence for a change, locked after its chore. Null when either is missing, deleted or not
+-- the caller's to see.
+create function private.lock_chore_occurrence(p_occurrence_id uuid, p_user_id uuid)
+returns private.chore_occurrences
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_occurrence private.chore_occurrences;
+  begin
+    if private.lock_chore(
+      (select o.chore_id from private.chore_occurrences o where o.id = p_occurrence_id), p_user_id
+    ) is null then
+      return null;
+    end if;
+    select * into v_occurrence from private.chore_occurrences o where o.id = p_occurrence_id for update;
+    if not found or v_occurrence.deleted_at is not null then
+      return null;
+    end if;
+    return v_occurrence;
+  end
+  $$;
+
+-- The head part of a chore (locked: callers hold the chore's lock already).
+create function private.chore_head(p_chore_id uuid) returns private.chore_schedules
+  language sql stable security definer set search_path = '' as $$
+  select * from private.chore_schedules s where s.chore_id = p_chore_id and s.superseded_at is null;
+  $$;
+
+create function private.audit_chore(
+  p_action text, p_home_id uuid, p_subject_type text, p_subject_id uuid, p_details jsonb default '{}'::jsonb
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  -- Ids and counts only: never titles, instructions, notes, reasons or names.
+  select private.audit(p_action, p_home_id, p_subject_type, p_subject_id, p_details);
+  $$;
+
+-- Schedule arithmetic (the S19 rule functions, private.series_first_on_or_after and friends) -------
+
+-- The next date of a part on or after p_from within its end, or null (pauses aside).
+create function private.chore_part_next(p_part private.chore_schedules, p_from date) returns date
+  language sql immutable set search_path = '' as $$
+  select case when p_part.until_date is null or d <= p_part.until_date then d end
+  from (select private.series_first_on_or_after(p_part.frequency, p_part.interval_count,
+    p_part.weekdays, p_part.starts_on,
+    greatest(p_from, coalesce(p_part.active_from, p_part.starts_on))) as d) x;
+  $$;
+
+create function private.chore_part_has_date(p_part private.chore_schedules, p_date date) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(private.chore_part_next(p_part, p_date) = p_date, false);
+  $$;
+
+-- Whether a date falls inside the part's pause (inclusive; open-ended when paused_until is null).
+create function private.chore_paused_on(p_part private.chore_schedules, p_date date) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_part.paused_from is not null and p_date >= p_part.paused_from
+    and (p_part.paused_until is null or p_date <= p_part.paused_until), false);
+  $$;
+
+-- The turn of a date in a rotation: how many dates of the pattern lie on or after p_rotation_from
+-- and before p_date (packages/domain rotationTurn; tests/db/rls/chore-rotation-vectors.test.ts).
+create function private.chore_turn(
+  p_frequency text, p_interval integer, p_weekdays smallint[], p_starts_on date,
+  p_rotation_from date, p_date date
+) returns integer
+  language plpgsql immutable set search_path = '' as $$
+  declare
+    v_first date := private.series_first_on_or_after(p_frequency, p_interval, p_weekdays, p_starts_on,
+      p_rotation_from);
+    v_next date;
+    v_turn integer := 0;
+  begin
+    if v_first is null or p_date is null or p_date <= v_first then
+      return 0;
+    end if;
+    if p_frequency = 'daily' then
+      return ((p_date - v_first) + p_interval - 1) / p_interval;
+    end if;
+    v_next := v_first;
+    while v_next < p_date loop
+      v_turn := v_turn + 1;
+      v_next := private.series_first_on_or_after(p_frequency, p_interval, p_weekdays, p_starts_on,
+        v_next + 1);
+    end loop;
+    return v_turn;
+  end
+  $$;
+
+-- Who a part assigns an occurrence on p_date to, and whether it must be flagged for reassignment:
+-- fixed: its members (flagged while a departed member's place is unfilled); rotating: the member
+-- whose turn it is (none and flagged when that place is empty); none: nobody.
+create function private.chore_part_assignees(p_part private.chore_schedules, p_date date)
+returns table (user_ids uuid[], flagged boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_places integer;
+    v_user uuid;
+  begin
+    if p_part.assignment = 'fixed' then
+      return query select
+        coalesce((select array_agg(m.user_id order by m.position) from private.chore_schedule_members m
+          where m.schedule_id = p_part.id and m.user_id is not null), '{}'::uuid[]),
+        p_part.needs_reassignment;
+      return;
+    end if;
+    if p_part.assignment = 'rotating' then
+      select count(*)::integer into v_places from private.chore_schedule_members m
+        where m.schedule_id = p_part.id;
+      if v_places > 0 then
+        select m.user_id into v_user from private.chore_schedule_members m
+          where m.schedule_id = p_part.id
+            and m.position = private.chore_turn(p_part.frequency, p_part.interval_count,
+              p_part.weekdays, p_part.starts_on, p_part.rotation_from, p_date) % v_places;
+      end if;
+      return query select case when v_user is null then '{}'::uuid[] else array[v_user] end,
+        v_user is null;
+      return;
+    end if;
+    return query select '{}'::uuid[], false;
+  end
+  $$;
+
+-- Up to p_limit dates of a part on or after p_from that are not paused, with their assignees as
+-- membership ids (null for an empty place), for previews.
+create function private.chore_part_preview(p_part private.chore_schedules, p_from date, p_limit integer)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_result jsonb := '[]'::jsonb;
+    v_next date := private.chore_part_next(p_part, p_from);
+    v_users uuid[];
+    v_guard integer := 0;
+  begin
+    while v_next is not null and pg_catalog.jsonb_array_length(v_result) < p_limit and v_guard < 1000 loop
+      v_guard := v_guard + 1;
+      if private.chore_paused_on(p_part, v_next) then
+        exit when p_part.paused_until is null;
+        v_next := private.chore_part_next(p_part, p_part.paused_until + 1);
+        continue;
+      end if;
+      select a.user_ids into v_users from private.chore_part_assignees(p_part, v_next) a;
+      v_result := v_result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'date', v_next,
+        'assignees', coalesce((select pg_catalog.jsonb_agg(private.member_ref(p_part.home_id, u) order by o)
+          from unnest(v_users) with ordinality as x (u, o)), '[]'::jsonb)));
+      v_next := private.chore_part_next(p_part, v_next + 1);
+    end loop;
+    return v_result;
+  end
+  $$;
+
+-- Input checks ---------------------------------------------------------------------------------------
+
+-- Membership ids of the Home as account ids, in the given order; null when any is not a current
+-- member, appears twice, or there are more than the limit.
+create function private.chore_member_users(p_home_id uuid, p_member_ids uuid[]) returns uuid[]
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when cardinality(coalesce(p_member_ids, '{}')) > private.chore_limit('members') then null
+    when (select count(distinct x) from unnest(coalesce(p_member_ids, '{}')) as x)
+      <> cardinality(coalesce(p_member_ids, '{}')) then null
+    when (select count(*) from public.home_memberships m
+          where m.home_id = p_home_id and m.id = any (coalesce(p_member_ids, '{}')))
+      <> cardinality(coalesce(p_member_ids, '{}')) then null
+    else coalesce((select array_agg(m.user_id order by x.o)
+      from unnest(coalesce(p_member_ids, '{}')) with ordinality as x (id, o)
+      join public.home_memberships m on m.home_id = p_home_id and m.id = x.id), '{}'::uuid[])
+  end;
+  $$;
+
+-- An assignment from the API: {"mode": "none" | "fixed" | "rotating", "members": [membership ids,
+-- in order]}. none: no members; fixed: 1–20; rotating (recurring only): 2–20. 22023 when it is
+-- malformed; users null when a member is not a current member of the Home (invalid_assignee).
+create function private.chore_assignment(p_home_id uuid, p_assignment jsonb, p_recurring boolean)
+returns table (mode text, users uuid[])
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_mode text;
+    v_ids uuid[];
+  begin
+    if p_assignment is null or pg_catalog.jsonb_typeof(p_assignment) <> 'object'
+       or pg_catalog.jsonb_typeof(p_assignment -> 'mode') <> 'string'
+       or pg_catalog.jsonb_typeof(p_assignment -> 'members') <> 'array' then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_mode := p_assignment ->> 'mode';
+    begin
+      select coalesce(array_agg(x::uuid order by o), '{}') into v_ids
+        from pg_catalog.jsonb_array_elements_text(p_assignment -> 'members') with ordinality as e (x, o);
+    exception when invalid_text_representation then
+      raise exception 'invalid request' using errcode = '22023';
+    end;
+    if v_mode not in ('none', 'fixed', 'rotating')
+       or (v_mode = 'none' and cardinality(v_ids) <> 0)
+       or (v_mode = 'fixed' and cardinality(v_ids) not between 1 and private.chore_limit('members'))
+       or (v_mode = 'rotating' and (not p_recurring
+         or cardinality(v_ids) not between 2 and private.chore_limit('members'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    return query select v_mode, private.chore_member_users(p_home_id, v_ids);
+  end
+  $$;
+
+-- A checklist from the API: an array of {"label": text, "mandatory": boolean} (and for an
+-- occurrence's own checklist, "id": an existing step to keep). At most 30 steps, no two labels that
+-- read alike (spec: "duplicate/confusing entries"), no id twice. 22023 otherwise.
+create function private.chore_steps(p_steps jsonb)
+returns table (step_position integer, label text, mandatory boolean, step_id uuid)
+  language plpgsql immutable set search_path = '' as $$
+  begin
+    if p_steps is null or pg_catalog.jsonb_typeof(p_steps) <> 'array'
+       or pg_catalog.jsonb_array_length(p_steps) > private.chore_limit('steps')
+       or exists (
+         select 1 from pg_catalog.jsonb_array_elements(p_steps) as e (s)
+         where pg_catalog.jsonb_typeof(e.s) <> 'object'
+           or pg_catalog.jsonb_typeof(e.s -> 'label') <> 'string'
+           or not private.is_visible_name(e.s ->> 'label', private.chore_limit('step_label'))
+           or pg_catalog.jsonb_typeof(e.s -> 'mandatory') <> 'boolean'
+           or (e.s ? 'id' and pg_catalog.jsonb_typeof(e.s -> 'id') not in ('string', 'null'))
+           or (pg_catalog.jsonb_typeof(e.s -> 'id') = 'string' and not (e.s ->> 'id')
+             ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+       )
+       or (select count(distinct private.task_name_key(e.s ->> 'label'))
+           from pg_catalog.jsonb_array_elements(p_steps) as e (s)) <> pg_catalog.jsonb_array_length(p_steps)
+       or (select count(e.s ->> 'id') - count(distinct e.s ->> 'id')
+           from pg_catalog.jsonb_array_elements(p_steps) as e (s)) <> 0 then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    return query select (o - 1)::integer, e.s ->> 'label', (e.s ->> 'mandatory')::boolean,
+        (e.s ->> 'id')::uuid
+      from pg_catalog.jsonb_array_elements(p_steps) with ordinality as e (s, o)
+      order by o;
+  end
+  $$;
+
+-- Whether the chore-level fields are well formed.
+create function private.valid_chore_fields(p_title text, p_instructions text, p_minutes integer)
+returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(
+    p_title is not null and private.is_visible_name(p_title, private.chore_limit('title'))
+    and (p_instructions is null or private.is_plain_text(p_instructions, private.chore_limit('instructions')))
+    and (p_minutes is null or p_minutes between 1 and private.chore_limit('minutes')),
+    false);
+  $$;
+
+-- Whether a category id names a category of the Home that is not archived (null: uncategorized).
+create function private.usable_chore_category(p_home_id uuid, p_category_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_category_id is null or exists (
+    select 1 from private.chore_categories c
+    where c.id = p_category_id and c.home_id = p_home_id and c.archived_at is null
+  );
+  $$;
+
+-- Occurrences ----------------------------------------------------------------------------------------
+
+-- Writes an occurrence's assignees (replacing what was there).
+create function private.set_occurrence_assignees(p_occurrence_id uuid, p_home_id uuid, p_users uuid[])
+returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    delete from private.chore_occurrence_assignees a where a.occurrence_id = p_occurrence_id;
+    insert into private.chore_occurrence_assignees (occurrence_id, home_id, user_id)
+      select p_occurrence_id, p_home_id, u from unnest(coalesce(p_users, '{}')) as u
+      on conflict do nothing;
+  end
+  $$;
+
+-- Gives an occurrence a fresh, unchecked copy of a part's checklist (replacing its own).
+create function private.copy_part_steps(p_occurrence_id uuid, p_part_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    delete from private.chore_occurrence_steps s where s.occurrence_id = p_occurrence_id;
+    insert into private.chore_occurrence_steps (id, occurrence_id, position, label, mandatory)
+      select gen_random_uuid(), p_occurrence_id, s.position, s.label, s.mandatory
+      from private.chore_schedule_steps s where s.schedule_id = p_part_id;
+  end
+  $$;
+
+-- Whether an open occurrence has progress a series change must not undo: changed on its own, or a
+-- ticked step.
+create function private.chore_occurrence_touched(p_occurrence private.chore_occurrences) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_occurrence.detached or exists (
+    select 1 from private.chore_occurrence_steps s
+    where s.occurrence_id = p_occurrence.id and s.checked_at is not null
+  );
+  $$;
+
+create function private.chore_has_progress(p_occurrence_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.chore_occurrence_steps s
+    where s.occurrence_id = p_occurrence_id and s.checked_at is not null
+  );
+  $$;
+
+-- Creates the part's occurrence for one date, unless the chore already has one for that date (a
+-- retry, a race, a split, or one in the trash).
+create function private.create_chore_occurrence(p_part private.chore_schedules, p_date date) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_id uuid := gen_random_uuid();
+    v_users uuid[];
+    v_flagged boolean;
+  begin
+    select a.user_ids, a.flagged into v_users, v_flagged from private.chore_part_assignees(p_part, p_date) a;
+    insert into private.chore_occurrences (
+      id, chore_id, home_id, schedule_id, scheduled_date, due_date, estimated_minutes,
+      needs_reassignment, updated_by
+    ) values (
+      v_id, p_part.chore_id, p_part.home_id, p_part.id, p_date, p_date, p_part.estimated_minutes,
+      v_flagged, p_part.created_by
+    )
+    on conflict (chore_id, scheduled_date) do nothing;
+    if not found then
+      return null;
+    end if;
+    perform private.set_occurrence_assignees(v_id, p_part.home_id, v_users);
+    perform private.copy_part_steps(v_id, p_part.id);
+    return v_id;
+  end
+  $$;
+
+-- Brings a head part up to date (its chore locked by the caller): every occurrence up to p_today
+-- plus one upcoming, at most catch_up per call. A missed date stays an open, overdue occurrence; a
+-- paused date is passed over (never created later). Returns how many it created.
+create function private.advance_chore_part(p_part private.chore_schedules, p_today date) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_next date := p_part.next_date;
+    v_last date := p_part.last_date;
+    v_created integer := 0;
+    v_steps integer := 0;
+  begin
+    if p_part.id is null or p_part.superseded_at is not null or v_next is null then
+      return 0;
+    end if;
+    while v_next is not null and v_created < private.chore_limit('catch_up') and v_steps < 1000
+      and (v_next <= p_today or v_last is null or v_last <= p_today) loop
+      v_steps := v_steps + 1;
+      if private.chore_paused_on(p_part, v_next) then
+        exit when p_part.paused_until is null;
+        v_next := private.chore_part_next(p_part, p_part.paused_until + 1);
+        continue;
+      end if;
+      perform private.create_chore_occurrence(p_part, v_next);
+      v_created := v_created + 1;
+      v_last := greatest(v_last, v_next);
+      v_next := private.chore_part_next(p_part, v_next + 1);
+    end loop;
+    if v_next is distinct from p_part.next_date or v_last is distinct from p_part.last_date then
+      update private.chore_schedules s set next_date = v_next, last_date = v_last where s.id = p_part.id;
+    end if;
+    return v_created;
+  end
+  $$;
+
+-- Creates the occurrences due in the Home (up to today plus one upcoming per recurring chore).
+-- Chore pages call it before they read, so occurrences appear without a background job. Looks at
+-- most parts_per_advance chores per call, those furthest behind first. Returns how many it created.
+create function public.advance_chores(p_home_id uuid) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_chore_id uuid;
+    v_chore private.chores;
+    v_part private.chore_schedules;
+    v_created integer := 0;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    -- Locked one chore at a time, chore before part (the order every change uses), so two page loads
+    -- queue instead of creating anything twice.
+    for v_chore_id in
+      select s.chore_id from private.chore_schedules s
+      join private.chores c on c.id = s.chore_id
+      where s.home_id = p_home_id and s.superseded_at is null and s.next_date is not null
+        and (s.last_date is null or s.last_date <= v_today)
+        and c.deleted_at is null and c.ended_at is null
+      order by s.last_date nulls first, s.id
+      limit private.chore_limit('parts_per_advance')
+    loop
+      select * into v_chore from private.chores c where c.id = v_chore_id for update;
+      if v_chore.deleted_at is null and v_chore.ended_at is null then
+        v_part := private.chore_head(v_chore.id);
+        v_created := v_created + private.advance_chore_part(v_part, v_today);
+      end if;
+    end loop;
+    return v_created;
+  end
+  $$;
+
+-- The caller's Home -------------------------------------------------------------------------------
+
+-- What the caller may do with the Home's chores, and its "today". 42501 for a Home they are not in.
+create function public.get_chore_context(p_home_id uuid)
+returns table (can_manage boolean, can_review boolean, pending_count integer, today date)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_review boolean;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_review := private.can_review_chores(p_home_id, v_user_id);
+    -- How many submissions wait: for reviewers only (others see pending state on each occurrence).
+    return query select private.can_manage_chores(p_home_id, v_user_id), v_review,
+      case when v_review then (select count(*)::integer from private.chore_occurrences o
+        join private.chores c on c.id = o.chore_id
+        where o.home_id = p_home_id and o.status = 'pending_approval' and o.deleted_at is null
+          and c.deleted_at is null) else 0 end,
+      private.task_today(p_home_id, null);
+  end
+  $$;
+
+-- Categories (spec "Confirmed custom Home chore categories") ---------------------------------------
+
+-- The Home's categories in their order, with how many active chores use each (the impact count
+-- before deleting: every member sees every chore, so the count reveals nothing hidden). Archived
+-- (retired) ones only when asked.
+create function public.list_chore_categories(p_home_id uuid, p_include_archived boolean default false)
+returns table (id uuid, name text, color text, "position" integer, archived boolean, revision integer,
+  chore_count integer)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    return query
+      select c.id, c.name, c.color, c.position, c.archived_at is not null, c.revision,
+        (select count(*)::integer from private.chores h
+          where h.category_id = c.id and h.deleted_at is null and h.ended_at is null)
+      from private.chore_categories c
+      where c.home_id = p_home_id and (coalesce(p_include_archived, false) or c.archived_at is null)
+      order by c.position, c.created_at, c.id;
+  end
+  $$;
+
+create function private.chore_category_name_taken(p_home_id uuid, p_name text, p_except uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.chore_categories c
+    where c.home_id = p_home_id and c.id is distinct from p_except
+      and private.task_name_key(c.name) = private.task_name_key(p_name)
+  );
+  $$;
+
+-- Creates a category (chore managers). Outcomes: 'created', 'exists' (a retry of the caller's own
+-- create), 'id_taken', 'duplicate_name', 'limit_reached', 'not_permitted'. 22023 for an invalid
+-- name or colour.
+create function public.create_chore_category(p_id uuid, p_home_id uuid, p_name text, p_color text)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.chore_categories;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null or p_name is null or p_color is null
+       or not private.is_visible_name(p_name, private.chore_limit('category_name'))
+       or not private.is_task_label_color(p_color) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_existing from private.chore_categories c where c.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id and v_existing.home_id = p_home_id then
+        return query select 'exists', v_existing.revision;
+      else
+        return query select 'id_taken', null::integer;
+      end if;
+      return;
+    end if;
+    if not private.can_manage_chores(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    perform private.lock_chore_home('categories', p_home_id);
+    if private.chore_category_name_taken(p_home_id, p_name, null) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    if (select count(*) from private.chore_categories c where c.home_id = p_home_id)
+       >= private.chore_limit('categories') then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.chore_categories (id, home_id, name, color, position, created_by, updated_by)
+      values (p_id, p_home_id, p_name, p_color,
+        coalesce((select max(c.position) + 1 from private.chore_categories c where c.home_id = p_home_id), 0),
+        v_user_id, v_user_id)
+      on conflict (id) do nothing;
+    if not found then
+      return query select case when c.created_by = v_user_id then 'exists' else 'id_taken' end,
+        case when c.created_by = v_user_id then c.revision end
+        from private.chore_categories c where c.id = p_id;
+      return;
+    end if;
+    perform private.audit_chore('chore_category.created', p_home_id, 'chore_category', p_id);
+    return query select 'created', 1;
+  end
+  $$;
+
+-- Renames, recolours, archives (retires) or unarchives a category (chore managers). Chores show the
+-- change at once; their schedules, checklists, assignments and closed records do not change.
+-- Outcomes: 'saved', 'conflict' (with the current revision), 'duplicate_name', 'not_found',
+-- 'not_permitted'.
+create function public.update_chore_category(
+  p_id uuid, p_expected_revision integer, p_name text, p_color text, p_archived boolean
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_category private.chore_categories;
+  begin
+    if p_id is null or p_expected_revision is null or p_archived is null or p_name is null
+       or p_color is null or not private.is_visible_name(p_name, private.chore_limit('category_name'))
+       or not private.is_task_label_color(p_color) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_category from private.chore_categories c where c.id = p_id;
+    if not found or not private.is_home_member(v_category.home_id, v_user_id) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    perform private.lock_chore_home('categories', v_category.home_id);
+    select * into v_category from private.chore_categories c where c.id = p_id for update;
+    if not found then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_category.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_category.revision <> p_expected_revision then
+      return query select 'conflict', v_category.revision;
+      return;
+    end if;
+    if private.chore_category_name_taken(v_category.home_id, p_name, v_category.id) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    update private.chore_categories c
+      set name = p_name, color = p_color,
+        archived_at = case when p_archived then coalesce(c.archived_at, pg_catalog.now()) end,
+        revision = c.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where c.id = v_category.id
+      returning * into v_category;
+    perform private.audit_chore('chore_category.updated', v_category.home_id, 'chore_category',
+      v_category.id, pg_catalog.jsonb_build_object('archived', p_archived));
+    return query select 'saved', v_category.revision;
+  end
+  $$;
+
+-- Puts the Home's categories in the given order (chore managers); categories not named keep their
+-- place after the named ones. Outcomes: 'saved', 'not_permitted'.
+create function public.reorder_chore_categories(p_home_id uuid, p_ids uuid[]) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_ids is null or cardinality(p_ids) not between 1 and private.chore_limit('categories') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.can_manage_chores(p_home_id, v_user_id) then
+      return 'not_permitted';
+    end if;
+    perform private.lock_chore_home('categories', p_home_id);
+    update private.chore_categories c
+      set position = coalesce(o.ord, cardinality(p_ids) + c.position)::integer,
+        updated_at = pg_catalog.now()
+      from private.chore_categories c2
+      left join (select x.id, x.ord from unnest(p_ids) with ordinality as x (id, ord)) o on o.id = c2.id
+      where c.id = c2.id and c.home_id = p_home_id;
+    return 'saved';
+  end
+  $$;
+
+-- Deletes a category (chore managers) after the impact review: its chores become uncategorized, and
+-- nothing else about them changes; closed occurrences keep the name they were closed under.
+-- p_dry_run answers the count only. Outcomes: 'preview' and 'deleted' (with how many chores it was
+-- on), 'conflict', 'not_found', 'not_permitted'.
+create function public.delete_chore_category(p_id uuid, p_expected_revision integer, p_dry_run boolean)
+returns table (outcome text, chore_count integer, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_category private.chore_categories;
+    v_count integer;
+  begin
+    if p_id is null or p_expected_revision is null or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_category from private.chore_categories c where c.id = p_id;
+    if not found or not private.is_home_member(v_category.home_id, v_user_id) then
+      return query select 'not_found', null::integer, null::integer;
+      return;
+    end if;
+    perform private.lock_chore_home('categories', v_category.home_id);
+    select * into v_category from private.chore_categories c where c.id = p_id for update;
+    if not found then
+      return query select 'not_found', null::integer, null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_category.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer, null::integer;
+      return;
+    end if;
+    if v_category.revision <> p_expected_revision then
+      return query select 'conflict', null::integer, v_category.revision;
+      return;
+    end if;
+    select count(*)::integer into v_count from private.chores h
+      where h.category_id = v_category.id and h.deleted_at is null;
+    if p_dry_run then
+      return query select 'preview', v_count, v_category.revision;
+      return;
+    end if;
+    -- The foreign key leaves the chores uncategorized (on delete set null).
+    delete from private.chore_categories c where c.id = v_category.id;
+    perform private.audit_chore('chore_category.deleted', v_category.home_id, 'chore_category',
+      v_category.id, pg_catalog.jsonb_build_object('chores', v_count));
+    return query select 'deleted', v_count, null::integer;
+  end
+  $$;
+
+-- Creating and editing a chore ------------------------------------------------------------------------
+
+-- Writes a part's assignment (members by position) and checklist template.
+create function private.set_part_template(
+  p_part_id uuid, p_home_id uuid, p_users uuid[], p_steps jsonb
+) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_users is not null then
+      delete from private.chore_schedule_members m where m.schedule_id = p_part_id;
+      insert into private.chore_schedule_members (schedule_id, home_id, position, user_id)
+        select p_part_id, p_home_id, (o - 1)::integer, u from unnest(p_users) with ordinality as x (u, o);
+    end if;
+    if p_steps is not null then
+      delete from private.chore_schedule_steps s where s.schedule_id = p_part_id;
+      insert into private.chore_schedule_steps (schedule_id, position, label, mandatory)
+        select p_part_id, s.step_position, s.label, s.mandatory from private.chore_steps(p_steps) s;
+    end if;
+  end
+  $$;
+
+-- Creates a chore (chore managers): one-off (p_due_date, no rule) or recurring (the rule, from
+-- p_starts_on, never creating dates before today: no back-fill; a rotation starts with the first
+-- member at the first date created). p_assignment as
+-- private.chore_assignment; rotation only for recurring chores. p_steps the checklist
+-- (private.chore_steps, without ids). p_id is the chore id from the client, so a retry returns the
+-- same chore. p_requires_approval: completions wait for a reviewer. Outcomes: 'created', 'exists', 'id_taken', 'not_permitted', 'limit_reached',
+-- 'invalid_category', 'invalid_assignee', 'ended' (the rule allows no date from today).
+-- occurrence_id is the first occurrence (to open it). 22023 for invalid fields.
+create function public.create_chore(
+  p_id uuid, p_home_id uuid, p_title text, p_assignment jsonb, p_steps jsonb default '[]'::jsonb,
+  p_instructions text default null, p_category_id uuid default null, p_minutes integer default null,
+  p_due_date date default null,
+  p_frequency text default null, p_interval integer default null, p_starts_on date default null,
+  p_weekdays smallint[] default null, p_ends_on date default null, p_max_count integer default null,
+  p_requires_approval boolean default false
+) returns table (outcome text, occurrence_id uuid, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_recurring boolean := p_frequency is not null;
+    v_existing private.chores;
+    v_mode text;
+    v_users uuid[];
+    v_today date;
+    v_part private.chore_schedules;
+    v_occurrence uuid;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null or p_requires_approval is null
+       or not private.valid_chore_fields(p_title, p_instructions, p_minutes)
+       or (v_recurring and (p_due_date is not null or not private.valid_series_rule(
+         p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count)))
+       or (not v_recurring and (p_due_date is null
+         or p_due_date not between date '2000-01-01' and date '2199-12-31'
+         or p_interval is not null or p_starts_on is not null or p_weekdays is not null
+         or p_ends_on is not null or p_max_count is not null)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform 1 from private.chore_steps(coalesce(p_steps, '[]'::jsonb)) s where s.step_id is not null;
+    if found then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select a.mode, a.users into v_mode, v_users from private.chore_assignment(p_home_id, p_assignment, v_recurring) a;
+    v_today := private.task_today(p_home_id, null);
+    select * into v_existing from private.chores c where c.id = p_id;
+    if found then
+      if v_existing.created_by = v_user_id and v_existing.home_id = p_home_id then
+        return query select 'exists',
+          (select o.id from private.chore_occurrences o where o.chore_id = v_existing.id
+            and o.deleted_at is null order by o.scheduled_date limit 1),
+          v_existing.revision;
+      else
+        return query select 'id_taken', null::uuid, null::integer;
+      end if;
+      return;
+    end if;
+    if not private.can_manage_chores(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::uuid, null::integer;
+      return;
+    end if;
+    if not private.usable_chore_category(p_home_id, p_category_id) then
+      return query select 'invalid_category', null::uuid, null::integer;
+      return;
+    end if;
+    if v_users is null then
+      return query select 'invalid_assignee', null::uuid, null::integer;
+      return;
+    end if;
+    -- The per-Home limit, counted under the Home lock so two creates cannot both pass.
+    perform private.lock_chore_home('chores', p_home_id);
+    if (select count(*) from private.chores c
+        where c.home_id = p_home_id and c.deleted_at is null and c.ended_at is null)
+       >= private.chore_limit('chores') then
+      return query select 'limit_reached', null::uuid, null::integer;
+      return;
+    end if;
+    insert into private.chores (
+      id, home_id, kind, title, instructions, category_id, requires_approval, created_by, updated_by
+    ) values (p_id, p_home_id, case when v_recurring then 'recurring' else 'one_off' end, p_title,
+        p_instructions, p_category_id, p_requires_approval, v_user_id, v_user_id)
+      on conflict (id) do nothing;
+    if not found then
+      return query select case when c.created_by = v_user_id then 'exists' else 'id_taken' end,
+        null::uuid, case when c.created_by = v_user_id then c.revision end
+        from private.chores c where c.id = p_id;
+      return;
+    end if;
+
+    if not v_recurring then
+      v_occurrence := gen_random_uuid();
+      insert into private.chore_occurrences (
+        id, chore_id, home_id, scheduled_date, due_date, estimated_minutes, updated_by
+      ) values (v_occurrence, p_id, p_home_id, p_due_date, p_due_date, p_minutes, v_user_id);
+      perform private.set_occurrence_assignees(v_occurrence, p_home_id, v_users);
+      insert into private.chore_occurrence_steps (id, occurrence_id, position, label, mandatory)
+        select gen_random_uuid(), v_occurrence, s.step_position, s.label, s.mandatory
+        from private.chore_steps(coalesce(p_steps, '[]'::jsonb)) s;
+    else
+      insert into private.chore_schedules (
+        id, chore_id, home_id, frequency, interval_count, weekdays, starts_on, ends_on, max_count,
+        until_date, assignment, rotation_from, estimated_minutes, created_by, updated_by
+      ) values (
+        gen_random_uuid(), p_id, p_home_id, p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on,
+        p_max_count,
+        private.series_until(p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count),
+        v_mode, case when v_mode = 'rotating' then greatest(p_starts_on, v_today) end, p_minutes,
+        v_user_id, v_user_id
+      ) returning * into v_part;
+      v_part.next_date := private.chore_part_next(v_part, greatest(v_today, p_starts_on));
+      if v_part.next_date is null then
+        -- Every date of the rule is in the past: nothing would ever be created.
+        delete from private.chores c where c.id = p_id;
+        return query select 'ended', null::uuid, null::integer;
+        return;
+      end if;
+      update private.chore_schedules s set next_date = v_part.next_date where s.id = v_part.id;
+      perform private.set_part_template(v_part.id, p_home_id, v_users, coalesce(p_steps, '[]'::jsonb));
+      perform private.advance_chore_part(v_part, v_today);
+      select o.id into v_occurrence from private.chore_occurrences o
+        where o.chore_id = p_id order by o.scheduled_date limit 1;
+    end if;
+    perform private.audit_chore('chore.created', p_home_id, 'chore', p_id,
+      pg_catalog.jsonb_build_object('kind', case when v_recurring then 'recurring' else 'one_off' end,
+        'assignment', v_mode, 'members', cardinality(v_users), 'approval', p_requires_approval));
+    return query select 'created', v_occurrence, 1;
+  end
+  $$;
+
+-- Changes a chore's own fields (chore managers): title, instructions, category and whether
+-- completions need approval (p_requires_approval; null keeps it). Open occurrences show them at
+-- once; completed and skipped ones keep the title and category they were closed under. Approval
+-- applies to completions submitted after the change: a submission already waiting stays pending
+-- for a reviewer, and nothing finalized changes. An archived category may stay, not be newly chosen. Outcomes: 'saved', 'conflict' (with the
+-- current revision), 'invalid_category', 'not_found', 'not_permitted'.
+create function public.update_chore(
+  p_chore_id uuid, p_expected_revision integer, p_title text, p_instructions text default null,
+  p_category_id uuid default null, p_requires_approval boolean default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_chore private.chores;
+    v_approval_before boolean;
+  begin
+    if p_chore_id is null or p_expected_revision is null
+       or not private.valid_chore_fields(p_title, p_instructions, null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_chore := private.lock_chore(p_chore_id, v_user_id);
+    if v_chore.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_chore.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_chore.revision <> p_expected_revision then
+      return query select 'conflict', v_chore.revision;
+      return;
+    end if;
+    if p_category_id is distinct from v_chore.category_id
+       and not private.usable_chore_category(v_chore.home_id, p_category_id) then
+      return query select 'invalid_category', null::integer;
+      return;
+    end if;
+    v_approval_before := v_chore.requires_approval;
+    update private.chores c
+      set title = p_title, instructions = p_instructions, category_id = p_category_id,
+        requires_approval = coalesce(p_requires_approval, c.requires_approval),
+        revision = c.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where c.id = v_chore.id
+      returning * into v_chore;
+    perform private.audit_chore('chore.updated', v_chore.home_id, 'chore', v_chore.id,
+      case when v_chore.requires_approval <> v_approval_before
+        then pg_catalog.jsonb_build_object('approval', v_chore.requires_approval)
+        else '{}'::jsonb end);
+    return query select 'saved', v_chore.revision;
+  end
+  $$;
+
+-- Working on an occurrence ------------------------------------------------------------------------------
+
+-- Ticks or unticks one step of an open occurrence (every current member; set-to-state, so a retry
+-- or two people ticking at once change nothing twice). Outcomes: 'saved' (with the occurrence's
+-- progress), 'occurrence_closed' (completed or skipped: its checklist is part of the record),
+-- 'not_found'.
+create function public.set_chore_step(p_step_id uuid, p_checked boolean)
+returns table (outcome text, checked boolean, done integer, total integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_step private.chore_occurrence_steps;
+    v_occurrence private.chore_occurrences;
+  begin
+    if p_step_id is null or p_checked is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(
+      (select s.occurrence_id from private.chore_occurrence_steps s where s.id = p_step_id), v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::boolean, null::integer, null::integer;
+      return;
+    end if;
+    if v_occurrence.status <> 'open' then
+      return query select 'occurrence_closed', null::boolean, null::integer, null::integer;
+      return;
+    end if;
+    select * into v_step from private.chore_occurrence_steps s where s.id = p_step_id for update;
+    if (v_step.checked_at is not null) <> p_checked then
+      update private.chore_occurrence_steps s
+        set checked_at = case when p_checked then pg_catalog.now() end,
+          checked_by = case when p_checked then v_user_id end
+        where s.id = v_step.id;
+    end if;
+    return query select 'saved', p_checked,
+      (select count(*)::integer from private.chore_occurrence_steps s
+        where s.occurrence_id = v_occurrence.id and s.checked_at is not null),
+      (select count(*)::integer from private.chore_occurrence_steps s where s.occurrence_id = v_occurrence.id);
+  end
+  $$;
+
+-- Completes an open occurrence (every current member, including someone else's: spec "Confirmed
+-- completion of another member's chore"). p_contributor is the membership id of who actually did
+-- the work (any current member; the interface asks explicitly when it is not the caller's own
+-- chore); the caller is recorded separately as the one who completed it. Every mandatory step must
+-- be ticked. p_note: an optional short plain-text note (whitespace runs read as one space, at most
+-- 500 characters), kept with this occurrence only. Assignees and the rotation never change.
+-- A chore that requires approval is not completed: the attempt is recorded as a submission, the
+-- occurrence is Pending approval and the reviewers are notified ('submitted'). From Needs rework
+-- this is the resubmission (a new attempt).
+-- Outcomes: 'completed', 'submitted', 'already_completed' (someone was first; with who),
+-- 'already_submitted' (a submission waits; with who), 'already_skipped', 'steps_incomplete' (with
+-- how many mandatory steps are open), 'invalid_contributor', 'not_found'.
+create function public.complete_chore_occurrence(
+  p_occurrence_id uuid, p_contributor uuid, p_note text default null
+) returns table (
+  outcome text, completed_at timestamptz, completed_by_me boolean, completed_by_member uuid,
+  contributor_me boolean, contributor_member uuid, open_mandatory integer, revision integer
+)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_note text := private.chore_short_text(p_note);
+    v_occurrence private.chore_occurrences;
+    v_submission private.chore_submissions;
+    v_contributor uuid;
+    v_open integer;
+  begin
+    if p_occurrence_id is null or p_contributor is null
+       or (v_note is not null and not private.is_plain_text(v_note, private.chore_limit('note'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::timestamptz, false, null::uuid, false, null::uuid,
+        null::integer, null::integer;
+      return;
+    end if;
+    if v_occurrence.status = 'pending_approval' then
+      select * into v_submission from private.chore_submissions s
+        where s.occurrence_id = v_occurrence.id and s.status = 'pending';
+      return query select 'already_submitted', v_submission.submitted_at,
+        coalesce(v_submission.submitted_by = v_user_id, false),
+        private.member_ref(v_occurrence.home_id, v_submission.submitted_by),
+        coalesce(v_submission.contributor_id = v_user_id, false),
+        private.member_ref(v_occurrence.home_id, v_submission.contributor_id), null::integer,
+        v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.status <> 'open' then
+      return query select
+        case v_occurrence.status when 'completed' then 'already_completed' else 'already_skipped' end,
+        v_occurrence.completed_at, coalesce(v_occurrence.completed_by = v_user_id, false),
+        private.member_ref(v_occurrence.home_id, v_occurrence.completed_by),
+        coalesce(v_occurrence.contributor_id = v_user_id, false),
+        private.member_ref(v_occurrence.home_id, v_occurrence.contributor_id), null::integer,
+        v_occurrence.revision;
+      return;
+    end if;
+    select m.user_id into v_contributor from public.home_memberships m
+      where m.home_id = v_occurrence.home_id and m.id = p_contributor;
+    if v_contributor is null then
+      return query select 'invalid_contributor', null::timestamptz, false, null::uuid, false, null::uuid,
+        null::integer, null::integer;
+      return;
+    end if;
+    select count(*)::integer into v_open from private.chore_occurrence_steps s
+      where s.occurrence_id = v_occurrence.id and s.mandatory and s.checked_at is null;
+    if v_open > 0 then
+      return query select 'steps_incomplete', null::timestamptz, false, null::uuid, false, null::uuid,
+        v_open, v_occurrence.revision;
+      return;
+    end if;
+
+    if (select c.requires_approval from private.chores c where c.id = v_occurrence.chore_id) then
+      insert into private.chore_submissions (
+        id, occurrence_id, home_id, attempt, submitted_by, contributor_id, note, steps
+      ) values (
+        gen_random_uuid(), v_occurrence.id, v_occurrence.home_id,
+        coalesce((select max(s.attempt) from private.chore_submissions s
+          where s.occurrence_id = v_occurrence.id), 0) + 1,
+        v_user_id, v_contributor, v_note,
+        coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'label', s.label, 'mandatory', s.mandatory, 'checked', s.checked_at is not null)
+            order by s.position)
+          from private.chore_occurrence_steps s where s.occurrence_id = v_occurrence.id), '[]'::jsonb)
+      ) returning * into v_submission;
+      update private.chore_occurrences o
+        set status = 'pending_approval', in_rework = false, revision = o.revision + 1,
+          updated_by = v_user_id, updated_at = pg_catalog.now()
+        where o.id = v_occurrence.id
+        returning * into v_occurrence;
+      insert into private.chore_occurrence_events (
+        occurrence_id, kind, actor_id, contributor_id, note, submission_id
+      ) values (v_occurrence.id, 'submitted', v_user_id, v_contributor, v_note, v_submission.id);
+      perform private.audit_chore('chore_occurrence.submitted', v_occurrence.home_id, 'chore_occurrence',
+        v_occurrence.id, pg_catalog.jsonb_build_object('attempt', v_submission.attempt,
+          'forOther', v_contributor <> v_user_id, 'note', v_note is not null));
+      perform private.notify_chore_reviewers(v_occurrence.home_id, v_user_id);
+      return query select 'submitted', v_submission.submitted_at, true,
+        private.member_ref(v_occurrence.home_id, v_user_id), v_contributor = v_user_id,
+        p_contributor, 0, v_occurrence.revision;
+      return;
+    end if;
+
+    update private.chore_occurrences o
+      set status = 'completed', in_rework = false, completed_at = pg_catalog.now(),
+        completed_by = v_user_id, contributor_id = v_contributor, note = v_note,
+        closed_title = c.title,
+        closed_category = (select g.name from private.chore_categories g where g.id = c.category_id),
+        revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      from private.chores c
+      where o.id = v_occurrence.id and c.id = o.chore_id
+      returning o.* into v_occurrence;
+    insert into private.chore_occurrence_events (occurrence_id, kind, actor_id, contributor_id, note)
+      values (v_occurrence.id, 'completed', v_user_id, v_contributor, v_note);
+    perform private.audit_chore('chore_occurrence.completed', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object('forOther', v_contributor <> v_user_id,
+        'note', v_note is not null));
+    return query select 'completed', v_occurrence.completed_at, true,
+      private.member_ref(v_occurrence.home_id, v_user_id), v_contributor = v_user_id,
+      p_contributor, 0, v_occurrence.revision;
+  end
+  $$;
+
+-- Approves or rejects the pending submission of an occurrence (chore reviewers; spec "Confirmed
+-- optional approval", "self-approval", "rejected chore completion rework"). p_expected_revision is
+-- the occurrence's revision the reviewer saw, so a decision on something that changed is refused.
+-- Approve: the occurrence is completed with the submission's submitter, contributor, reported time
+-- and note, and the reviewer recorded as approver (the reviewer may be the contributor or the
+-- submitter: self-approval is permitted by the permission itself). The contributor must still be
+-- a current member. Reject: p_reason is required (1-500 characters after whitespace
+-- normalization); the occurrence is open again, Needs rework, with its assignees and checklist as
+-- they are; the submission stays with the reason. Outcomes: 'approved', 'rejected', 'not_pending'
+-- (with the current status: already decided, withdrawn, or never submitted), 'conflict' (with the
+-- current revision), 'contributor_unavailable', 'not_found', 'not_permitted'.
+create function public.review_chore_submission(
+  p_occurrence_id uuid, p_expected_revision integer, p_decision text, p_reason text default null
+) returns table (outcome text, status text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_occurrence private.chore_occurrences;
+    v_submission private.chore_submissions;
+  begin
+    if p_occurrence_id is null or p_expected_revision is null or p_decision is null
+       or p_decision not in ('approve', 'reject')
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.chore_limit('reason')))
+       or (p_decision = 'reject' and v_reason is null)
+       or (p_decision = 'approve' and p_reason is not null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::text, null::integer;
+      return;
+    end if;
+    if not private.can_review_chores(v_occurrence.home_id, v_user_id) then
+      return query select 'not_permitted', null::text, null::integer;
+      return;
+    end if;
+    if v_occurrence.status <> 'pending_approval' then
+      return query select 'not_pending', v_occurrence.status, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.revision <> p_expected_revision then
+      return query select 'conflict', v_occurrence.status, v_occurrence.revision;
+      return;
+    end if;
+    select * into v_submission from private.chore_submissions s
+      where s.occurrence_id = v_occurrence.id and s.status = 'pending' for update;
+
+    if p_decision = 'approve' then
+      if v_submission.contributor_id is null
+         or not private.is_home_member(v_occurrence.home_id, v_submission.contributor_id) then
+        return query select 'contributor_unavailable', v_occurrence.status, v_occurrence.revision;
+        return;
+      end if;
+      update private.chore_submissions s
+        set status = 'approved', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where s.id = v_submission.id;
+      update private.chore_occurrences o
+        set status = 'completed', completed_at = v_submission.submitted_at,
+          completed_by = v_submission.submitted_by, contributor_id = v_submission.contributor_id,
+          note = v_submission.note, approved_at = pg_catalog.now(), approved_by = v_user_id,
+          closed_title = c.title,
+          closed_category = (select g.name from private.chore_categories g where g.id = c.category_id),
+          revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+        from private.chores c
+        where o.id = v_occurrence.id and c.id = o.chore_id
+        returning o.* into v_occurrence;
+      insert into private.chore_occurrence_events (
+        occurrence_id, kind, actor_id, contributor_id, submission_id
+      ) values (v_occurrence.id, 'approved', v_user_id, v_submission.contributor_id, v_submission.id);
+      perform private.audit_chore('chore_occurrence.approved', v_occurrence.home_id, 'chore_occurrence',
+        v_occurrence.id, pg_catalog.jsonb_build_object('attempt', v_submission.attempt,
+          'selfApproved', v_user_id in (v_submission.contributor_id, v_submission.submitted_by)));
+      return query select 'approved', v_occurrence.status, v_occurrence.revision;
+      return;
+    end if;
+
+    update private.chore_submissions s
+      set status = 'rejected', decided_at = pg_catalog.now(), decided_by = v_user_id, reason = v_reason
+      where s.id = v_submission.id;
+    update private.chore_occurrences o
+      set status = 'open', in_rework = true, revision = o.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where o.id = v_occurrence.id
+      returning * into v_occurrence;
+    insert into private.chore_occurrence_events (
+      occurrence_id, kind, actor_id, contributor_id, reason, submission_id
+    ) values (v_occurrence.id, 'rejected', v_user_id, v_submission.contributor_id, v_reason, v_submission.id);
+    perform private.audit_chore('chore_occurrence.rejected', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object('attempt', v_submission.attempt));
+    return query select 'rejected', v_occurrence.status, v_occurrence.revision;
+  end
+  $$;
+
+-- Corrects a completed occurrence's record (chore managers; spec "Confirmed correction and reversal
+-- of completed chores"): who actually did it (p_contributor, a current member's membership id; null
+-- keeps it, also a former member's), when (p_completed_at; null keeps it; never in the future), and
+-- the note (p_set_note with p_note, null clearing it). The values before are kept in the event, so
+-- the original record is never lost; p_reason is optional. Points (S23) reconcile on the event.
+-- Outcomes: 'corrected', 'unchanged', 'not_completed', 'conflict' (with the current revision),
+-- 'invalid_contributor', 'not_found', 'not_permitted'.
+create function public.correct_chore_completion(
+  p_occurrence_id uuid, p_expected_revision integer, p_contributor uuid default null,
+  p_completed_at timestamptz default null, p_set_note boolean default false, p_note text default null,
+  p_reason text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_note text := private.chore_short_text(p_note);
+    v_reason text := private.chore_short_text(p_reason);
+    v_occurrence private.chore_occurrences;
+    v_before private.chore_occurrences;
+    v_contributor uuid;
+  begin
+    if p_occurrence_id is null or p_expected_revision is null or p_set_note is null
+       or (v_note is not null and not private.is_plain_text(v_note, private.chore_limit('note')))
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.chore_limit('reason')))
+       or (not p_set_note and p_note is not null)
+       or p_completed_at > pg_catalog.now() + interval '5 minutes'
+       or p_completed_at < timestamptz '2000-01-01 00:00:00+00' then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_occurrence.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_occurrence.status <> 'completed' then
+      return query select 'not_completed', v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.revision <> p_expected_revision then
+      return query select 'conflict', v_occurrence.revision;
+      return;
+    end if;
+    v_contributor := v_occurrence.contributor_id;
+    if p_contributor is not null then
+      select m.user_id into v_contributor from public.home_memberships m
+        where m.home_id = v_occurrence.home_id and m.id = p_contributor;
+      if v_contributor is null then
+        return query select 'invalid_contributor', null::integer;
+        return;
+      end if;
+    end if;
+    v_before := v_occurrence;
+    if v_contributor is not distinct from v_before.contributor_id
+       and coalesce(p_completed_at, v_before.completed_at) = v_before.completed_at
+       and (not p_set_note or v_note is not distinct from v_before.note) then
+      return query select 'unchanged', v_occurrence.revision;
+      return;
+    end if;
+    update private.chore_occurrences o
+      set contributor_id = v_contributor,
+        completed_at = least(coalesce(p_completed_at, o.completed_at), pg_catalog.now()),
+        note = case when p_set_note then v_note else o.note end,
+        revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where o.id = v_occurrence.id
+      returning * into v_occurrence;
+    insert into private.chore_occurrence_events (
+      occurrence_id, kind, actor_id, contributor_id, note, reason, completed_at,
+      previous_completed_at, previous_contributor_id, previous_note
+    ) values (
+      v_occurrence.id, 'corrected', v_user_id, v_occurrence.contributor_id, v_occurrence.note, v_reason,
+      v_occurrence.completed_at, v_before.completed_at, v_before.contributor_id, v_before.note
+    );
+    perform private.audit_chore('chore_occurrence.corrected', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object(
+        'contributor', v_occurrence.contributor_id is distinct from v_before.contributor_id,
+        'time', v_occurrence.completed_at <> v_before.completed_at,
+        'note', v_occurrence.note is distinct from v_before.note));
+    return query select 'corrected', v_occurrence.revision;
+  end
+  $$;
+
+-- Skips an open occurrence (chore managers; spec "Confirmed skipping recurring chore occurrences"):
+-- it closes as Skipped, never completed, with an optional reason; the schedule and the rotation do
+-- not change. Needs rework ends with it. A submission that waits for a reviewer is not skipped
+-- ('pending_approval': it is decided or withdrawn first). Outcomes: 'skipped', 'already_skipped',
+-- 'already_completed', 'pending_approval', 'not_found', 'not_permitted'.
+create function public.skip_chore_occurrence(p_occurrence_id uuid, p_reason text default null)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_occurrence private.chore_occurrences;
+  begin
+    if p_occurrence_id is null
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.chore_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_occurrence.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_occurrence.status <> 'open' then
+      return query select case v_occurrence.status when 'skipped' then 'already_skipped'
+        when 'pending_approval' then 'pending_approval' else 'already_completed' end,
+        v_occurrence.revision;
+      return;
+    end if;
+    update private.chore_occurrences o
+      set status = 'skipped', in_rework = false, skipped_at = pg_catalog.now(), skipped_by = v_user_id,
+        skip_reason = v_reason, closed_title = c.title,
+        closed_category = (select g.name from private.chore_categories g where g.id = c.category_id),
+        revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      from private.chores c
+      where o.id = v_occurrence.id and c.id = o.chore_id
+      returning o.* into v_occurrence;
+    insert into private.chore_occurrence_events (occurrence_id, kind, actor_id, reason)
+      values (v_occurrence.id, 'skipped', v_user_id, v_reason);
+    perform private.audit_chore('chore_occurrence.skipped', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object('reason', v_reason is not null));
+    return query select 'skipped', v_occurrence.revision;
+  end
+  $$;
+
+-- Reopens a completed or skipped occurrence (chore managers; spec "Confirmed correction and
+-- reversal": undo): it is outstanding (or overdue) again with its assignees and checklist progress
+-- as they were; the schedule and the rotation do not change. What was recorded stays in its events
+-- (an approved completion's submission stays approved there). A pending submission is withdrawn
+-- the same way (kept as 'withdrawn'). Outcomes: 'reopened', 'already_open', 'not_found',
+-- 'not_permitted'.
+create function public.reopen_chore_occurrence(p_occurrence_id uuid)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_was text;
+  begin
+    if p_occurrence_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_occurrence.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_occurrence.status = 'open' then
+      return query select 'already_open', v_occurrence.revision;
+      return;
+    end if;
+    v_was := v_occurrence.status;
+    if v_was = 'pending_approval' then
+      update private.chore_submissions s
+        set status = 'withdrawn', decided_at = pg_catalog.now(), decided_by = v_user_id
+        where s.occurrence_id = v_occurrence.id and s.status = 'pending';
+    end if;
+    update private.chore_occurrences o
+      set status = 'open', in_rework = false, completed_at = null, completed_by = null,
+        contributor_id = null, note = null, approved_at = null, approved_by = null,
+        skipped_at = null, skipped_by = null, skip_reason = null, closed_title = null,
+        closed_category = null, reopened_at = pg_catalog.now(), reopened_by = v_user_id,
+        revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where o.id = v_occurrence.id
+      returning * into v_occurrence;
+    insert into private.chore_occurrence_events (occurrence_id, kind, actor_id)
+      values (v_occurrence.id, case when v_was = 'pending_approval' then 'withdrawn' else 'reopened' end,
+        v_user_id);
+    perform private.audit_chore('chore_occurrence.reopened', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object('was', v_was));
+    return query select 'reopened', v_occurrence.revision;
+  end
+  $$;
+
+-- Changing one occurrence ("this occurrence") ------------------------------------------------------
+
+-- Changes one open occurrence only (chore managers): due date, assignees, estimated duration and its
+-- own checklist; a recurring one becomes individually changed, so later series changes leave it as
+-- it is. Each part is optional (null keeps it; p_set_minutes with p_minutes null clears the
+-- estimate). p_steps lists the occurrence's checklist as it should be: a step with an "id" of this
+-- occurrence is kept with its progress (label and mandatory flag may change), one without is new,
+-- one left out is removed. Removing a ticked step needs p_confirm_checklist (spec: "explicitly
+-- resolve removed or newly mandatory steps before saving"); the preview names them.
+-- p_dry_run: the same checks, changing nothing. Outcomes: 'preview' and 'saved' (with impact:
+-- removed, removedChecked, added, newlyMandatory), 'needs_confirmation' (with impact), 'conflict'
+-- (with the current revision), 'occurrence_closed', 'invalid_assignee', 'not_found',
+-- 'not_permitted'.
+create function public.update_chore_occurrence(
+  p_occurrence_id uuid, p_expected_revision integer, p_dry_run boolean,
+  p_due_date date default null, p_assignee_ids uuid[] default null,
+  p_set_minutes boolean default false, p_minutes integer default null,
+  p_steps jsonb default null, p_confirm_checklist boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_users uuid[];
+    v_impact jsonb;
+    v_removed integer := 0;
+    v_removed_checked integer := 0;
+    v_added integer := 0;
+    v_newly_mandatory integer := 0;
+  begin
+    if p_occurrence_id is null or p_expected_revision is null or p_dry_run is null
+       or p_set_minutes is null or p_confirm_checklist is null
+       or (p_due_date is not null and p_due_date not between date '2000-01-01' and date '2199-12-31')
+       or (p_set_minutes and p_minutes is not null and p_minutes not between 1 and private.chore_limit('minutes'))
+       or not (p_due_date is not null or p_assignee_ids is not null or p_set_minutes or p_steps is not null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_steps is not null then
+      perform 1 from private.chore_steps(p_steps);
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_occurrence.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_occurrence.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.status <> 'open' then
+      return query select 'occurrence_closed', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if p_assignee_ids is not null then
+      v_users := private.chore_member_users(v_occurrence.home_id, p_assignee_ids);
+      if v_users is null then
+        return query select 'invalid_assignee', null::jsonb, null::integer;
+        return;
+      end if;
+    end if;
+    if p_steps is not null then
+      -- Ids must be steps of this occurrence.
+      if exists (
+        select 1 from private.chore_steps(p_steps) n
+        where n.step_id is not null and not exists (
+          select 1 from private.chore_occurrence_steps s
+          where s.id = n.step_id and s.occurrence_id = v_occurrence.id)
+      ) then
+        raise exception 'invalid request' using errcode = '22023';
+      end if;
+      select count(*)::integer, count(*) filter (where s.checked_at is not null)::integer
+        into v_removed, v_removed_checked
+        from private.chore_occurrence_steps s
+        where s.occurrence_id = v_occurrence.id
+          and s.id not in (select n.step_id from private.chore_steps(p_steps) n where n.step_id is not null);
+      select count(*) filter (where n.step_id is null)::integer,
+          count(*) filter (where n.mandatory and (n.step_id is null or exists (
+            select 1 from private.chore_occurrence_steps s
+            where s.id = n.step_id and not s.mandatory and s.checked_at is null)))::integer
+        into v_added, v_newly_mandatory
+        from private.chore_steps(p_steps) n;
+    end if;
+    v_impact := pg_catalog.jsonb_build_object('removed', v_removed, 'removedChecked', v_removed_checked,
+      'added', v_added, 'newlyMandatory', v_newly_mandatory);
+    if p_dry_run then
+      return query select 'preview', v_impact, v_occurrence.revision;
+      return;
+    end if;
+    if v_removed_checked > 0 and not p_confirm_checklist then
+      return query select 'needs_confirmation', v_impact, v_occurrence.revision;
+      return;
+    end if;
+    if p_steps is not null then
+      delete from private.chore_occurrence_steps s
+        where s.occurrence_id = v_occurrence.id
+          and s.id not in (select n.step_id from private.chore_steps(p_steps) n where n.step_id is not null);
+      update private.chore_occurrence_steps s
+        set position = n.step_position, label = n.label, mandatory = n.mandatory
+        from private.chore_steps(p_steps) n
+        where n.step_id = s.id and s.occurrence_id = v_occurrence.id;
+      insert into private.chore_occurrence_steps (id, occurrence_id, position, label, mandatory)
+        select gen_random_uuid(), v_occurrence.id, n.step_position, n.label, n.mandatory
+        from private.chore_steps(p_steps) n where n.step_id is null;
+    end if;
+    if v_users is not null then
+      perform private.set_occurrence_assignees(v_occurrence.id, v_occurrence.home_id, v_users);
+    end if;
+    update private.chore_occurrences o
+      set due_date = coalesce(p_due_date, o.due_date),
+        estimated_minutes = case when p_set_minutes then p_minutes else o.estimated_minutes end,
+        needs_reassignment = case when v_users is not null then false else o.needs_reassignment end,
+        detached = o.schedule_id is not null or o.detached,
+        revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where o.id = v_occurrence.id
+      returning * into v_occurrence;
+    perform private.audit_chore('chore_occurrence.updated', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object('due', p_due_date is not null,
+        'assignees', v_users is not null, 'steps', p_steps is not null));
+    return query select 'saved', v_impact, v_occurrence.revision;
+  end
+  $$;
+
+-- Changing following or all occurrences ------------------------------------------------------------
+
+-- A change to a recurring chore's following or all occurrences (spec "Confirmed recurring task and
+-- chore editing scope"; chore managers). One occurrence is changed with update_chore_occurrence.
+--
+--   p_scope 'following': this open occurrence of the head part and later ones. The head ends the
+--     day before and a new head starts here with the change; open later occurrences move to it.
+--     With no earlier occurrence it is the same as 'series'.
+--   p_scope 'series': the head and every open occurrence of the chore.
+--   Parts, each optional: the assignment (p_assignment, as create_chore), the checklist template
+--   (p_steps, without ids), the estimated duration (p_set_minutes, p_minutes), the schedule
+--   (p_set_schedule and the rule).
+--
+-- Never changed: completed and skipped occurrences; open ones changed individually (kept; this
+-- occurrence itself is always changed). An open occurrence with ticked steps keeps its checklist
+-- (stepsKept), so no progress is lost. Overdue open occurrences other than this one keep their
+-- assignees (overdueKept: missed work stays with its member). A new or changed rotation starts at
+-- the first occurrence it affects (this one for 'following', today for 'series'); a schedule change
+-- that keeps the rotation keeps its order, starting with whoever's turn was next. A schedule change
+-- removes upcoming open occurrences that are no longer on it unless touched (kept), and creates from
+-- today on (no back-fill).
+--
+-- p_dry_run: the same work, rolled back, so the preview cannot disagree with the change. Outcomes:
+-- 'preview' and 'saved' (with impact: scope, updated, kept, removed, completed, overdueKept,
+-- stepsKept, selectedRemoved, next: the next dates with their assignees), 'conflict' (either
+-- revision is stale; revision: the schedule's current one), 'not_found', 'not_recurring',
+-- 'not_permitted', 'scope_unavailable', 'invalid_assignee', 'ended'. occurrence_id: this occurrence,
+-- or when the schedule change removed it the chore's next open one.
+create function public.update_chore_series(
+  p_occurrence_id uuid, p_scope text, p_expected_revision integer,
+  p_expected_schedule_revision integer, p_dry_run boolean,
+  p_assignment jsonb default null, p_steps jsonb default null,
+  p_set_minutes boolean default false, p_minutes integer default null,
+  p_set_schedule boolean default false, p_frequency text default null, p_interval integer default null,
+  p_weekdays smallint[] default null, p_starts_on date default null, p_ends_on date default null,
+  p_max_count integer default null
+) returns table (outcome text, impact jsonb, revision integer, occurrence_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_selected private.chore_occurrences;
+    v_head private.chore_schedules;
+    v_target private.chore_schedules;
+    v_scope text := p_scope;
+    v_today date;
+    v_mode text;
+    v_users uuid[];
+    v_boundary date;
+    v_first date;
+    v_turn integer;
+    v_places integer;
+    v_redeal boolean;
+    v_updated integer := 0;
+    v_kept integer := 0;
+    v_removed integer := 0;
+    v_completed integer := 0;
+    v_overdue_kept integer := 0;
+    v_steps_kept integer := 0;
+    v_selected_removed boolean := false;
+    v_changed boolean;
+    v_assignees uuid[];
+    v_flagged boolean;
+    v_impact jsonb;
+    v_next uuid;
+  begin
+    if p_occurrence_id is null or p_scope is null or p_scope not in ('following', 'series')
+       or p_expected_revision is null or p_expected_schedule_revision is null or p_dry_run is null
+       or p_set_minutes is null or p_set_schedule is null
+       or (p_set_minutes and p_minutes is not null and p_minutes not between 1 and private.chore_limit('minutes'))
+       or (p_set_schedule and not private.valid_series_rule(
+         p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count))
+       or not (p_assignment is not null or p_steps is not null or p_set_minutes or p_set_schedule) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_steps is not null then
+      perform 1 from private.chore_steps(p_steps) s where s.step_id is not null;
+      if found then
+        raise exception 'invalid request' using errcode = '22023';
+      end if;
+    end if;
+    v_selected := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_selected.id is null then
+      return query select 'not_found', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    select * into v_head from private.chore_schedules s
+      where s.chore_id = v_selected.chore_id and s.superseded_at is null for update;
+    if v_head.id is null then
+      return query select 'not_recurring', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if not private.can_manage_chores(v_selected.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if v_selected.revision <> p_expected_revision or v_head.revision <> p_expected_schedule_revision then
+      return query select 'conflict', null::jsonb, v_head.revision, null::uuid;
+      return;
+    end if;
+    if v_selected.status <> 'open'
+       or (p_scope = 'following' and v_selected.schedule_id is distinct from v_head.id) then
+      return query select 'scope_unavailable', null::jsonb, null::integer, null::uuid;
+      return;
+    end if;
+    if p_assignment is not null then
+      select a.mode, a.users into v_mode, v_users
+        from private.chore_assignment(v_head.home_id, p_assignment, true) a;
+      if v_users is null then
+        return query select 'invalid_assignee', null::jsonb, null::integer, null::uuid;
+        return;
+      end if;
+    end if;
+    v_today := private.task_today(v_head.home_id, null);
+    v_boundary := v_selected.scheduled_date;
+    if v_scope = 'following' and not exists (
+      select 1 from private.chore_occurrences o
+      where o.chore_id = v_head.chore_id and o.deleted_at is null and o.scheduled_date < v_boundary
+    ) then
+      v_scope := 'series';
+    end if;
+    -- Where a new or carried-over rotation starts counting.
+    v_first := case when v_scope = 'following' then v_boundary else v_today end;
+
+    begin
+      if v_scope = 'following' then
+        -- The old head ends the day before (never before its own start: S19 review H2), first, so
+        -- the chore never has two heads; the new head takes the old head's values as loaded.
+        update private.chore_schedules s
+          set superseded_at = pg_catalog.now(), next_date = null,
+            until_date = greatest(least(coalesce(s.until_date, v_boundary - 1), v_boundary - 1),
+              s.starts_on - 1),
+            updated_by = v_user_id, updated_at = pg_catalog.now()
+          where s.id = v_head.id;
+        insert into private.chore_schedules (
+          id, chore_id, home_id, previous_id, frequency, interval_count, weekdays, starts_on,
+          active_from, ends_on, max_count, until_date, next_date, last_date, paused_from,
+          paused_until, paused_by, assignment, rotation_from, estimated_minutes, needs_reassignment,
+          revision, created_by, created_at, updated_by
+        )
+        select gen_random_uuid(), h.chore_id, h.home_id, h.id, h.frequency, h.interval_count,
+          h.weekdays, h.starts_on, greatest(v_boundary, coalesce(h.active_from, h.starts_on)),
+          h.ends_on, h.max_count, v_head.until_date, v_head.next_date, h.last_date, h.paused_from,
+          h.paused_until, h.paused_by, h.assignment, h.rotation_from, h.estimated_minutes,
+          h.needs_reassignment, h.revision + 1, h.created_by, h.created_at, v_user_id
+        from private.chore_schedules h where h.id = v_head.id
+        returning * into v_target;
+        insert into private.chore_schedule_members (schedule_id, home_id, position, user_id)
+          select v_target.id, m.home_id, m.position, m.user_id
+          from private.chore_schedule_members m where m.schedule_id = v_head.id;
+        insert into private.chore_schedule_steps (schedule_id, position, label, mandatory)
+          select v_target.id, s.position, s.label, s.mandatory
+          from private.chore_schedule_steps s where s.schedule_id = v_head.id;
+        update private.chore_occurrences o set schedule_id = v_target.id
+          where o.schedule_id = v_head.id and o.scheduled_date >= v_boundary
+            and o.deleted_at is null and o.status = 'open';
+      else
+        v_target := v_head;
+        v_target.revision := v_head.revision + 1;
+      end if;
+
+      -- The rotation: a schedule change that keeps the rotation starts the same order at whoever's
+      -- turn was next under the old rule; a new assignment starts as given.
+      v_redeal := p_assignment is not null;
+      if p_assignment is null and p_set_schedule and v_target.assignment = 'rotating' then
+        select count(*)::integer into v_places from private.chore_schedule_members m
+          where m.schedule_id = v_target.id;
+        v_turn := private.chore_turn(v_target.frequency, v_target.interval_count, v_target.weekdays,
+          v_target.starts_on, v_target.rotation_from, v_first) % greatest(v_places, 1);
+        -- The same order (empty places included), turned so that place v_turn comes first.
+        select array_agg(m.user_id order by (m.position - v_turn + v_places) % v_places) into v_users
+          from private.chore_schedule_members m where m.schedule_id = v_target.id;
+        v_target.rotation_from := v_first;
+        v_redeal := true;
+      end if;
+      if p_assignment is not null then
+        v_target.assignment := v_mode;
+        v_target.rotation_from := case when v_mode = 'rotating' then v_first end;
+        v_target.needs_reassignment := false;
+      end if;
+      if p_set_minutes then
+        v_target.estimated_minutes := p_minutes;
+      end if;
+      if p_set_schedule then
+        v_target.frequency := p_frequency;
+        v_target.interval_count := p_interval;
+        v_target.weekdays := p_weekdays;
+        v_target.starts_on := p_starts_on;
+        v_target.active_from := case when v_scope = 'following' then v_boundary end;
+        v_target.ends_on := p_ends_on;
+        v_target.max_count := p_max_count;
+        v_target.until_date := private.series_until(
+          p_frequency, p_interval, p_weekdays, p_starts_on, p_ends_on, p_max_count);
+      end if;
+      update private.chore_schedules s
+        set frequency = v_target.frequency, interval_count = v_target.interval_count,
+          weekdays = v_target.weekdays, starts_on = v_target.starts_on,
+          active_from = v_target.active_from, ends_on = v_target.ends_on,
+          max_count = v_target.max_count, until_date = v_target.until_date,
+          next_date = case when p_set_schedule then null else s.next_date end,
+          assignment = v_target.assignment, rotation_from = v_target.rotation_from,
+          estimated_minutes = v_target.estimated_minutes,
+          needs_reassignment = v_target.needs_reassignment, revision = v_target.revision,
+          updated_by = v_user_id, updated_at = pg_catalog.now()
+        where s.id = v_target.id
+        returning * into v_target;
+      perform private.set_part_template(v_target.id, v_target.home_id, v_users, p_steps);
+
+      -- The open occurrences in scope, locked in id order.
+      for v_occurrence in
+        select * from private.chore_occurrences o
+        where o.chore_id = v_head.chore_id and o.deleted_at is null and o.status = 'open'
+          and (v_scope = 'series' or o.schedule_id = v_target.id)
+        order by o.id
+        for update
+      loop
+        if v_occurrence.id <> v_selected.id and v_occurrence.detached then
+          v_kept := v_kept + 1;
+          continue;
+        end if;
+        if p_set_schedule and v_occurrence.scheduled_date > v_today
+           and not private.chore_part_has_date(v_target, v_occurrence.scheduled_date) then
+          if private.chore_occurrence_touched(v_occurrence) then
+            update private.chore_occurrences o set detached = true where o.id = v_occurrence.id;
+            v_kept := v_kept + 1;
+          else
+            delete from private.chore_occurrences o where o.id = v_occurrence.id;
+            v_removed := v_removed + 1;
+            v_selected_removed := v_selected_removed or v_occurrence.id = v_selected.id;
+          end if;
+          continue;
+        end if;
+        v_changed := p_set_minutes;
+        if p_steps is not null then
+          if private.chore_has_progress(v_occurrence.id) then
+            v_steps_kept := v_steps_kept + 1;
+          else
+            perform private.copy_part_steps(v_occurrence.id, v_target.id);
+            v_changed := true;
+          end if;
+        end if;
+        if v_redeal then
+          if v_occurrence.due_date < v_today and v_occurrence.id <> v_selected.id then
+            v_overdue_kept := v_overdue_kept + 1;
+          else
+            select a.user_ids, a.flagged into v_assignees, v_flagged
+              from private.chore_part_assignees(v_target, v_occurrence.scheduled_date) a;
+            perform private.set_occurrence_assignees(v_occurrence.id, v_occurrence.home_id, v_assignees);
+            update private.chore_occurrences o set needs_reassignment = v_flagged where o.id = v_occurrence.id;
+            v_changed := true;
+          end if;
+        end if;
+        if v_changed then
+          update private.chore_occurrences o
+            set estimated_minutes = case when p_set_minutes then p_minutes else o.estimated_minutes end,
+              revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+            where o.id = v_occurrence.id;
+          v_updated := v_updated + 1;
+        end if;
+      end loop;
+      select count(*)::integer into v_completed from private.chore_occurrences o
+        where o.chore_id = v_head.chore_id and o.deleted_at is null and o.status <> 'open'
+          and (v_scope = 'series' or o.scheduled_date >= v_boundary);
+
+      if p_set_schedule then
+        -- Creation restarts from today (no back-fill), after whatever the chore still has.
+        v_target.next_date := private.chore_part_next(v_target, v_today);
+        if v_target.next_date is null then
+          raise exception 'schedule ended' using errcode = 'MD002';
+        end if;
+        select max(o.scheduled_date) into v_target.last_date from private.chore_occurrences o
+          where o.chore_id = v_head.chore_id;
+        update private.chore_schedules s set next_date = v_target.next_date, last_date = v_target.last_date
+          where s.id = v_target.id
+          returning * into v_target;
+      end if;
+      perform private.advance_chore_part(v_target, v_today);
+      select * into v_target from private.chore_schedules s where s.id = v_target.id;
+
+      v_impact := pg_catalog.jsonb_build_object(
+        'scope', v_scope,
+        'updated', v_updated,
+        'kept', v_kept,
+        'removed', v_removed,
+        'completed', v_completed,
+        'overdueKept', v_overdue_kept,
+        'stepsKept', v_steps_kept,
+        'selectedRemoved', v_selected_removed,
+        'next', private.chore_part_preview(v_target, v_today, private.chore_limit('preview_dates')));
+      if v_selected_removed then
+        select o.id into v_next from private.chore_occurrences o
+          where o.chore_id = v_head.chore_id and o.deleted_at is null and o.status = 'open'
+            and o.scheduled_date >= v_today
+          order by o.scheduled_date limit 1;
+      else
+        v_next := v_selected.id;
+      end if;
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        -- Everything above is rolled back; the impact stays.
+        return query select 'preview', v_impact, v_head.revision, v_selected.id;
+        return;
+      when sqlstate 'MD002' then
+        return query select 'ended', null::jsonb, null::integer, null::uuid;
+        return;
+    end;
+    perform private.audit_chore('chore.series_updated', v_head.home_id, 'chore', v_head.chore_id,
+      pg_catalog.jsonb_build_object('scope', v_scope, 'updated', v_updated, 'kept', v_kept,
+        'removed', v_removed, 'schedule', p_set_schedule, 'assignment', p_assignment is not null));
+    return query select 'saved', v_impact, v_target.revision, v_next;
+  end
+  $$;
+
+-- Pausing a recurring chore (spec "Confirmed recurring chore pauses and Home vacation periods":
+-- the individual pause) --------------------------------------------------------------------------------
+
+-- Pauses a recurring chore from today until p_until (inclusive) or indefinitely (p_until null), or
+-- resumes it (chore managers). No occurrence is created for a date in the pause, and none is created
+-- later for it (no back-fill); untouched open occurrences from today inside the pause are removed,
+-- touched ones (individually changed or with ticked steps) are kept. Resuming, or the end date
+-- passing, continues from today. Overdue occurrences are never changed. p_dry_run: the same work,
+-- rolled back. Outcomes: 'preview' and 'saved' (with impact: removed, kept, next), 'conflict' (with
+-- the current revision), 'not_found', 'not_recurring', 'not_permitted'.
+create function public.set_chore_paused(
+  p_chore_id uuid, p_expected_schedule_revision integer, p_paused boolean, p_until date default null,
+  p_dry_run boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_chore private.chores;
+    v_head private.chore_schedules;
+    v_today date;
+    v_occurrence private.chore_occurrences;
+    v_removed integer := 0;
+    v_kept integer := 0;
+    v_impact jsonb;
+  begin
+    if p_chore_id is null or p_expected_schedule_revision is null or p_paused is null or p_dry_run is null
+       or (not p_paused and p_until is not null)
+       or (p_until is not null and p_until > date '2199-12-31') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_chore := private.lock_chore(p_chore_id, v_user_id);
+    if v_chore.id is null then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    select * into v_head from private.chore_schedules s
+      where s.chore_id = v_chore.id and s.superseded_at is null for update;
+    if v_head.id is null or v_chore.ended_at is not null then
+      return query select 'not_recurring', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_chore.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_head.revision <> p_expected_schedule_revision then
+      return query select 'conflict', null::jsonb, v_head.revision;
+      return;
+    end if;
+    v_today := private.task_today(v_chore.home_id, null);
+    if p_until is not null and p_until < v_today then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    begin
+      if p_paused then
+        update private.chore_schedules s
+          set paused_from = case when s.paused_from is not null and s.paused_from <= v_today
+              and (s.paused_until is null or s.paused_until >= v_today) then s.paused_from else v_today end,
+            paused_until = p_until, paused_by = v_user_id,
+            revision = s.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+          where s.id = v_head.id
+          returning * into v_head;
+        for v_occurrence in
+          select * from private.chore_occurrences o
+          where o.chore_id = v_chore.id and o.deleted_at is null and o.status = 'open'
+            and o.scheduled_date >= v_today
+          order by o.id for update
+        loop
+          continue when not private.chore_paused_on(v_head, v_occurrence.scheduled_date);
+          if private.chore_occurrence_touched(v_occurrence) then
+            v_kept := v_kept + 1;
+          else
+            delete from private.chore_occurrences o where o.id = v_occurrence.id;
+            v_removed := v_removed + 1;
+          end if;
+        end loop;
+      else
+        update private.chore_schedules s
+          set paused_from = null, paused_until = null, paused_by = null,
+            revision = s.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+          where s.id = v_head.id
+          returning * into v_head;
+      end if;
+      -- Creation continues from today (or after the pause), never for a date already passed.
+      update private.chore_schedules s
+        set next_date = private.chore_part_next(v_head, greatest(v_today,
+            coalesce(case when p_paused and p_until is not null then p_until + 1 end, v_today))),
+          last_date = (select max(o.scheduled_date) from private.chore_occurrences o where o.chore_id = v_chore.id)
+        where s.id = v_head.id
+        returning * into v_head;
+      perform private.advance_chore_part(v_head, v_today);
+      select * into v_head from private.chore_schedules s where s.id = v_head.id;
+      v_impact := pg_catalog.jsonb_build_object('removed', v_removed, 'kept', v_kept,
+        'next', private.chore_part_preview(v_head, v_today, private.chore_limit('preview_dates')));
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, p_expected_schedule_revision;
+        return;
+    end;
+    perform private.audit_chore(case when p_paused then 'chore.paused' else 'chore.resumed' end,
+      v_chore.home_id, 'chore', v_chore.id,
+      pg_catalog.jsonb_build_object('until', p_until is not null, 'removed', v_removed));
+    return query select 'saved', v_impact, v_head.revision;
+  end
+  $$;
+
+-- Deleting -------------------------------------------------------------------------------------------
+
+-- Deletes occurrences of a chore (chore managers; spec "Confirmed recurring task and chore deletion
+-- scope"). Completed and skipped occurrences always stay (history).
+--   'occurrence': a one-off chore goes to the trash whole (item type chore); one open occurrence of a
+--     recurring chore goes to the trash alone (chore_occurrence).
+--   'following': from an open occurrence of the head part; the schedule ends the day before, and
+--     this and later open occurrences go to the trash together (chore_removal).
+--   'series': the chore ends and every open occurrence goes to the trash together; its history stays
+--     and the chore is listed as ended. A recurring chore with no history yet goes to the trash whole.
+-- With no earlier occurrence, 'following' is 'series'. p_dry_run returns the impact only.
+-- Outcomes: 'preview', 'deleted' (with the entry), 'conflict' (with the current revision),
+-- 'not_found', 'not_permitted', 'scope_unavailable'. impact: scope, removed, kept (history).
+create function public.delete_chore_occurrences(
+  p_occurrence_id uuid, p_scope text, p_expected_revision integer, p_dry_run boolean
+) returns table (outcome text, impact jsonb, entry_id uuid, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_selected private.chore_occurrences;
+    v_chore private.chores;
+    v_head private.chore_schedules;
+    v_scope text := p_scope;
+    v_ids uuid[];
+    v_history integer;
+    v_impact jsonb;
+    v_entry uuid;
+    v_removal uuid;
+  begin
+    if p_occurrence_id is null or p_scope is null or p_scope not in ('occurrence', 'following', 'series')
+       or p_expected_revision is null or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_selected := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_selected.id is null then
+      return query select 'not_found', null::jsonb, null::uuid, null::integer;
+      return;
+    end if;
+    select * into v_chore from private.chores c where c.id = v_selected.chore_id;
+    if not private.can_manage_chores(v_chore.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::uuid, null::integer;
+      return;
+    end if;
+    if v_selected.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, null::uuid, v_selected.revision;
+      return;
+    end if;
+    select * into v_head from private.chore_schedules s
+      where s.chore_id = v_chore.id and s.superseded_at is null for update;
+
+    if v_chore.kind = 'one_off' then
+      if v_scope <> 'occurrence' then
+        return query select 'scope_unavailable', null::jsonb, null::uuid, null::integer;
+        return;
+      end if;
+      v_impact := pg_catalog.jsonb_build_object('scope', 'chore', 'removed', 1, 'kept', 0);
+      if p_dry_run then
+        return query select 'preview', v_impact, null::uuid, v_selected.revision;
+        return;
+      end if;
+      update private.chores c set deleted_at = pg_catalog.now(), updated_by = v_user_id where c.id = v_chore.id;
+      v_entry := private.trash_move(v_user_id, 'chores', 'chore', v_chore.id, null, v_chore.home_id,
+        v_chore.title);
+      perform private.audit_chore('chore.deleted', v_chore.home_id, 'chore', v_chore.id);
+      return query select 'deleted', v_impact, v_entry, null::integer;
+      return;
+    end if;
+
+    if v_selected.status <> 'open' or v_chore.ended_at is not null
+       or (v_scope = 'following' and v_selected.schedule_id is distinct from v_head.id) then
+      return query select 'scope_unavailable', null::jsonb, null::uuid, null::integer;
+      return;
+    end if;
+    if v_scope = 'following' and not exists (
+      select 1 from private.chore_occurrences o
+      where o.chore_id = v_chore.id and o.deleted_at is null and o.scheduled_date < v_selected.scheduled_date
+    ) then
+      v_scope := 'series';
+    end if;
+
+    if v_scope = 'occurrence' then
+      v_impact := pg_catalog.jsonb_build_object('scope', 'occurrence', 'removed', 1, 'kept', 0);
+      if p_dry_run then
+        return query select 'preview', v_impact, null::uuid, v_selected.revision;
+        return;
+      end if;
+      update private.chore_occurrences o set deleted_at = pg_catalog.now(), updated_by = v_user_id
+        where o.id = v_selected.id;
+      v_entry := private.trash_move(v_user_id, 'chores', 'chore_occurrence', v_selected.id, null,
+        v_chore.home_id, v_chore.title);
+      perform private.audit_chore('chore_occurrence.deleted', v_chore.home_id, 'chore_occurrence', v_selected.id);
+      return query select 'deleted', v_impact, v_entry, null::integer;
+      return;
+    end if;
+
+    select coalesce(array_agg(o.id order by o.scheduled_date), '{}') into v_ids
+      from private.chore_occurrences o
+      where o.chore_id = v_chore.id and o.deleted_at is null and o.status = 'open'
+        and (v_scope = 'series' or o.scheduled_date >= v_selected.scheduled_date);
+    select count(*)::integer into v_history from private.chore_occurrences o
+      where o.chore_id = v_chore.id and o.deleted_at is null and o.status <> 'open';
+    v_impact := pg_catalog.jsonb_build_object('scope', v_scope, 'removed', cardinality(v_ids),
+      'kept', v_history);
+    if p_dry_run then
+      return query select 'preview', v_impact, null::uuid, v_selected.revision;
+      return;
+    end if;
+
+    if v_scope = 'series' and v_history = 0 then
+      -- Nothing to keep: the whole chore goes to the trash (and comes back whole).
+      update private.chores c set deleted_at = pg_catalog.now(), updated_by = v_user_id where c.id = v_chore.id;
+      v_entry := private.trash_move(v_user_id, 'chores', 'chore', v_chore.id, null, v_chore.home_id,
+        v_chore.title);
+      perform private.audit_chore('chore.deleted', v_chore.home_id, 'chore', v_chore.id);
+      return query select 'deleted', v_impact || '{"scope": "chore"}'::jsonb, v_entry, null::integer;
+      return;
+    end if;
+
+    update private.chore_occurrences o set deleted_at = pg_catalog.now(), updated_by = v_user_id
+      where o.id = any (v_ids);
+    insert into private.chore_removals (
+      chore_id, home_id, head_id, mode, from_date, occurrence_ids, head_revision, previous_until_date
+    ) values (
+      v_chore.id, v_chore.home_id, v_head.id, v_scope,
+      case when v_scope = 'following' then v_selected.scheduled_date end, v_ids, v_head.revision + 1,
+      v_head.until_date
+    ) returning id into v_removal;
+    update private.chore_schedules s
+      set until_date = case when v_scope = 'following'
+          then greatest(least(coalesce(s.until_date, v_selected.scheduled_date - 1),
+            v_selected.scheduled_date - 1), s.starts_on - 1)
+          else s.until_date end,
+        next_date = null,
+        revision = s.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where s.id = v_head.id;
+    if v_scope = 'series' then
+      update private.chores c
+        set ended_at = pg_catalog.now(), ended_by = v_user_id, revision = c.revision + 1,
+          updated_by = v_user_id, updated_at = pg_catalog.now()
+        where c.id = v_chore.id;
+    end if;
+    v_entry := private.trash_move(v_user_id, 'chores', 'chore_removal', v_removal, null, v_chore.home_id,
+      v_chore.title);
+    perform private.audit_chore('chore.occurrences_deleted', v_chore.home_id, 'chore', v_chore.id,
+      pg_catalog.jsonb_build_object('scope', v_scope, 'removed', cardinality(v_ids)));
+    return query select 'deleted', v_impact, v_entry, null::integer;
+  end
+  $$;
+
+-- Reading ------------------------------------------------------------------------------------------
+
+-- A person as a chore answer names them: {"me": ..., "member": membership id or null (departed)}.
+create function private.chore_person(p_home_id uuid, p_user_id uuid, p_viewer uuid) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select case when p_user_id is null then null else pg_catalog.jsonb_build_object(
+    'me', p_user_id = p_viewer, 'member', private.member_ref(p_home_id, p_user_id)) end;
+  $$;
+
+-- One occurrence with its chore, checklist, record, attempts and (recurring) schedule, or null when
+-- it is missing, deleted, or not the caller's to see (every current member of its Home sees it,
+-- including pending and rejected attempts with their notes and reasons: the same members see the
+-- completion notes; default picked in the brief).
+create function public.get_chore_occurrence(p_occurrence_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_chore private.chores;
+    v_head private.chore_schedules;
+    v_category private.chore_categories;
+    v_today date;
+    v_manage boolean;
+    v_review boolean;
+    v_schedule jsonb;
+  begin
+    if p_occurrence_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_occurrence from private.chore_occurrences o
+      where o.id = p_occurrence_id and o.deleted_at is null;
+    if not found or not private.is_home_member(v_occurrence.home_id, v_user_id) then
+      return null;
+    end if;
+    select * into v_chore from private.chores c where c.id = v_occurrence.chore_id and c.deleted_at is null;
+    if not found then
+      return null;
+    end if;
+    select * into v_category from private.chore_categories g where g.id = v_chore.category_id;
+    v_today := private.task_today(v_chore.home_id, null);
+    v_manage := private.can_manage_chores(v_chore.home_id, v_user_id);
+    v_review := private.can_review_chores(v_chore.home_id, v_user_id);
+    if v_chore.kind = 'recurring' then
+      v_head := private.chore_head(v_chore.id);
+      v_schedule := pg_catalog.jsonb_build_object(
+        'revision', v_head.revision,
+        'frequency', v_head.frequency,
+        'interval', v_head.interval_count,
+        'weekdays', v_head.weekdays,
+        'startsOn', v_head.starts_on,
+        'endsOn', v_head.ends_on,
+        'count', v_head.max_count,
+        'assignment', v_head.assignment,
+        'rotationFrom', v_head.rotation_from,
+        'members', coalesce((select pg_catalog.jsonb_agg(private.member_ref(v_head.home_id, m.user_id)
+            order by m.position)
+          from private.chore_schedule_members m where m.schedule_id = v_head.id), '[]'::jsonb),
+        'minutes', v_head.estimated_minutes,
+        'steps', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'label', s.label, 'mandatory', s.mandatory) order by s.position)
+          from private.chore_schedule_steps s where s.schedule_id = v_head.id), '[]'::jsonb),
+        'paused', case when v_head.paused_from is not null
+            and (v_head.paused_until is null or v_head.paused_until >= v_today)
+          then pg_catalog.jsonb_build_object('from', v_head.paused_from, 'until', v_head.paused_until) end,
+        'ended', v_chore.ended_at is not null,
+        'finished', v_head.next_date is null and v_chore.ended_at is null,
+        'inHead', v_occurrence.schedule_id is not distinct from v_head.id,
+        'needsReassignment', v_head.needs_reassignment,
+        'next', case when v_chore.ended_at is null
+          then private.chore_part_preview(v_head, v_today, private.chore_limit('preview_dates'))
+          else '[]'::jsonb end);
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'id', v_occurrence.id,
+      'homeId', v_occurrence.home_id,
+      'chore', pg_catalog.jsonb_build_object(
+        'id', v_chore.id,
+        'kind', v_chore.kind,
+        'title', v_chore.title,
+        'instructions', v_chore.instructions,
+        'category', case when v_category.id is not null then pg_catalog.jsonb_build_object(
+          'id', v_category.id, 'name', v_category.name, 'color', v_category.color,
+          'archived', v_category.archived_at is not null) end,
+        'requiresApproval', v_chore.requires_approval,
+        'revision', v_chore.revision),
+      'scheduledDate', v_occurrence.scheduled_date,
+      'dueDate', v_occurrence.due_date,
+      'today', v_today,
+      'status', v_occurrence.status,
+      'overdue', v_occurrence.status = 'open' and v_occurrence.due_date < v_today,
+      'inRework', v_occurrence.in_rework,
+      'minutes', v_occurrence.estimated_minutes,
+      'detached', v_occurrence.detached,
+      'needsReassignment', v_occurrence.needs_reassignment,
+      'revision', v_occurrence.revision,
+      'assignees', coalesce((select pg_catalog.jsonb_agg(private.member_ref(a.home_id, a.user_id)
+          order by a.user_id)
+        from private.chore_occurrence_assignees a where a.occurrence_id = v_occurrence.id), '[]'::jsonb),
+      'assignedToMe', exists (select 1 from private.chore_occurrence_assignees a
+        where a.occurrence_id = v_occurrence.id and a.user_id = v_user_id),
+      'steps', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', s.id, 'label', s.label, 'mandatory', s.mandatory, 'checked', s.checked_at is not null)
+          order by s.position)
+        from private.chore_occurrence_steps s where s.occurrence_id = v_occurrence.id), '[]'::jsonb),
+      'completion', case when v_occurrence.status = 'completed' then pg_catalog.jsonb_build_object(
+        'at', v_occurrence.completed_at,
+        'by', private.chore_person(v_occurrence.home_id, v_occurrence.completed_by, v_user_id),
+        'contributor', private.chore_person(v_occurrence.home_id, v_occurrence.contributor_id, v_user_id),
+        'note', v_occurrence.note,
+        'approvedAt', v_occurrence.approved_at,
+        'approvedBy', private.chore_person(v_occurrence.home_id, v_occurrence.approved_by, v_user_id)) end,
+      'skip', case when v_occurrence.status = 'skipped' then pg_catalog.jsonb_build_object(
+        'at', v_occurrence.skipped_at,
+        'by', private.chore_person(v_occurrence.home_id, v_occurrence.skipped_by, v_user_id),
+        'reason', v_occurrence.skip_reason) end,
+      'closedTitle', v_occurrence.closed_title,
+      'closedCategory', v_occurrence.closed_category,
+      'submissions', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', b.id, 'attempt', b.attempt, 'status', b.status, 'at', b.submitted_at,
+          'by', private.chore_person(v_occurrence.home_id, b.submitted_by, v_user_id),
+          'contributor', private.chore_person(v_occurrence.home_id, b.contributor_id, v_user_id),
+          'note', b.note, 'steps', b.steps, 'decidedAt', b.decided_at,
+          'decidedBy', private.chore_person(v_occurrence.home_id, b.decided_by, v_user_id),
+          'reason', b.reason,
+          'selfApproved', b.status = 'approved' and b.decided_by in (b.contributor_id, b.submitted_by))
+          order by b.attempt desc)
+        from private.chore_submissions b where b.occurrence_id = v_occurrence.id), '[]'::jsonb),
+      'events', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'kind', e.kind, 'at', e.created_at,
+          'by', private.chore_person(v_occurrence.home_id, e.actor_id, v_user_id),
+          'contributor', private.chore_person(v_occurrence.home_id, e.contributor_id, v_user_id),
+          'note', e.note, 'reason', e.reason,
+          'completedAt', e.completed_at, 'previousCompletedAt', e.previous_completed_at,
+          'previousContributor', private.chore_person(v_occurrence.home_id, e.previous_contributor_id,
+            v_user_id),
+          'previousNote', e.previous_note) order by e.id)
+        from private.chore_occurrence_events e where e.occurrence_id = v_occurrence.id), '[]'::jsonb),
+      'schedule', v_schedule,
+      'can', pg_catalog.jsonb_build_object(
+        'complete', v_occurrence.status = 'open',
+        'review', v_review and v_occurrence.status = 'pending_approval',
+        'correct', v_manage and v_occurrence.status = 'completed',
+        'manage', v_manage));
+  end
+  $$;
+
+-- The Home's current open occurrences: overdue, due today and due in the next days (horizon), and
+-- any flagged for reassignment, plus every one waiting for approval, earliest due first. Filters: p_assignee 'any', 'me', 'member'
+-- (p_member: a membership id), 'unassigned'; p_category 'any', 'none' (uncategorized) or 'one'
+-- (p_category_id). 42501 for a Home the caller is not in.
+create function public.list_chore_occurrences(
+  p_home_id uuid, p_assignee text default 'any', p_member uuid default null,
+  p_category text default 'any', p_category_id uuid default null,
+  p_limit integer default 100, p_offset integer default 0
+) returns table (
+  id uuid, chore_id uuid, title text, kind text, category_id uuid, category_name text,
+  category_color text, scheduled_date date, due_date date, overdue boolean, due_today boolean,
+  needs_reassignment boolean, assignee_member_ids uuid[], assigned_to_me boolean, steps_done integer,
+  steps_total integer, mandatory_open integer, minutes integer, status text, in_rework boolean,
+  requires_approval boolean, revision integer, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_member_user uuid;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_assignee is null or p_assignee not in ('any', 'me', 'member', 'unassigned')
+       or (p_assignee = 'member') <> (p_member is not null)
+       or p_category is null or p_category not in ('any', 'none', 'one')
+       or (p_category = 'one') <> (p_category_id is not null)
+       or p_limit is null or p_limit not between 1 and private.chore_limit('page')
+       or p_offset is null or p_offset not between 0 and private.chore_limit('max_offset') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, null);
+    if p_assignee = 'member' then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_member;
+    end if;
+    return query
+      with matching as (
+        select o.*, c.title as chore_title, c.kind as chore_kind, c.category_id as chore_category,
+          c.requires_approval as chore_approval
+        from private.chore_occurrences o
+        join private.chores c on c.id = o.chore_id
+        where o.home_id = p_home_id and o.status in ('open', 'pending_approval') and o.deleted_at is null
+          and c.deleted_at is null
+          and (o.due_date <= v_today + private.chore_limit('horizon') or o.needs_reassignment
+            or o.status = 'pending_approval')
+          and case p_assignee
+            when 'me' then exists (select 1 from private.chore_occurrence_assignees a
+              where a.occurrence_id = o.id and a.user_id = v_user_id)
+            when 'member' then v_member_user is not null and exists (
+              select 1 from private.chore_occurrence_assignees a
+              where a.occurrence_id = o.id and a.user_id = v_member_user)
+            when 'unassigned' then not exists (select 1 from private.chore_occurrence_assignees a
+              where a.occurrence_id = o.id)
+            else true end
+          and case p_category
+            when 'none' then c.category_id is null
+            when 'one' then c.category_id = p_category_id
+            else true end
+      )
+      select m.id, m.chore_id, m.chore_title, m.chore_kind, g.id, g.name, g.color, m.scheduled_date,
+        m.due_date, m.status = 'open' and m.due_date < v_today, m.due_date = v_today,
+        m.needs_reassignment,
+        coalesce((select array_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id)
+          from private.chore_occurrence_assignees a where a.occurrence_id = m.id), '{}'::uuid[]),
+        exists (select 1 from private.chore_occurrence_assignees a
+          where a.occurrence_id = m.id and a.user_id = v_user_id),
+        (select count(*)::integer from private.chore_occurrence_steps s
+          where s.occurrence_id = m.id and s.checked_at is not null),
+        (select count(*)::integer from private.chore_occurrence_steps s where s.occurrence_id = m.id),
+        (select count(*)::integer from private.chore_occurrence_steps s
+          where s.occurrence_id = m.id and s.mandatory and s.checked_at is null),
+        m.estimated_minutes, m.status, m.in_rework, m.chore_approval, m.revision,
+        (count(*) over ())::integer
+      from matching m
+      left join private.chore_categories g on g.id = m.chore_category
+      order by m.due_date, m.chore_title, m.id
+      limit p_limit offset p_offset;
+  end
+  $$;
+
+-- One page of a chore's history (spec "Confirmed searchable Home-wide chore completion history":
+-- the individual history), newest scheduled date first: completed, skipped, pending approval, needs
+-- rework and missed (open and overdue) occurrences and today's; future open ones never. Filter
+-- 'all', 'completed', 'skipped', 'missed', 'pending_approval', 'rework'. Every current member of the chore's Home reads it, including an ended chore's. 22023
+-- for a chore that is missing, deleted or not theirs to see (the caller answers not-found).
+create function public.list_chore_history(
+  p_chore_id uuid, p_filter text default 'all', p_offset integer default 0, p_limit integer default 50
+) returns table (
+  id uuid, scheduled_date date, due_date date, status text, title text, category text,
+  completed_at timestamptz, completed_by_me boolean, completed_by_member uuid,
+  contributor_me boolean, contributor_member uuid, note text,
+  skipped_at timestamptz, skipped_by_me boolean, skipped_by_member uuid, skip_reason text,
+  approved_at timestamptz, approved_by_me boolean, approved_by_member uuid, attempts integer,
+  total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_chore private.chores;
+    v_today date;
+  begin
+    if p_chore_id is null or p_filter is null
+       or p_filter not in ('all', 'completed', 'skipped', 'missed', 'pending_approval', 'rework')
+       or p_offset is null or p_offset not between 0 and private.chore_limit('max_offset')
+       or p_limit is null or p_limit not between 1 and private.chore_limit('history_page') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_chore from private.chores c where c.id = p_chore_id and c.deleted_at is null;
+    if not found or not private.is_home_member(v_chore.home_id, v_user_id) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(v_chore.home_id, null);
+    return query
+      with rows as (
+        select o.*,
+          case
+            when o.status <> 'open' then o.status
+            when o.in_rework then 'rework'
+            when o.due_date < v_today then 'missed'
+            when o.due_date = v_today then 'due_today'
+            else 'open'
+          end as shown
+        from private.chore_occurrences o
+        where o.chore_id = v_chore.id and o.deleted_at is null
+          and (o.status <> 'open' or o.in_rework or o.scheduled_date <= v_today)
+      )
+      select r.id, r.scheduled_date, r.due_date, r.shown,
+        coalesce(r.closed_title, v_chore.title),
+        case when r.status = 'open' then (select g.name from private.chore_categories g
+          where g.id = v_chore.category_id) else r.closed_category end,
+        r.completed_at, coalesce(r.completed_by = v_user_id, false),
+        private.member_ref(r.home_id, r.completed_by),
+        coalesce(r.contributor_id = v_user_id, false), private.member_ref(r.home_id, r.contributor_id),
+        r.note, r.skipped_at, coalesce(r.skipped_by = v_user_id, false),
+        private.member_ref(r.home_id, r.skipped_by), r.skip_reason,
+        r.approved_at, coalesce(r.approved_by = v_user_id, false),
+        private.member_ref(r.home_id, r.approved_by),
+        (select count(*)::integer from private.chore_submissions b where b.occurrence_id = r.id),
+        (count(*) over ())::integer
+      from rows r
+      where p_filter = 'all' or r.shown = p_filter
+      order by r.scheduled_date desc, r.id
+      limit p_limit offset p_offset;
+  end
+  $$;
+
+-- The Home's review queue (chore reviewers; spec "Confirmed optional approval": "show pending items
+-- and review actions to authorized reviewers"): every occurrence waiting for approval, oldest
+-- submission first, with its pending attempt. Someone who is not a reviewer gets no rows (their
+-- page says so; context.can_review). 42501 for a Home the caller is not in.
+create function public.list_chore_approvals(p_home_id uuid, p_limit integer default 100)
+returns table (
+  occurrence_id uuid, chore_id uuid, title text, category_name text, category_color text,
+  scheduled_date date, due_date date, late boolean, assignee_member_ids uuid[],
+  submission_id uuid, attempt integer, submitted_at timestamptz, submitted_by_me boolean,
+  submitted_by_member uuid, contributor_me boolean, contributor_member uuid,
+  contributor_current boolean, note text, steps_done integer, steps_total integer,
+  revision integer, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_zone text;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_limit is null or p_limit not between 1 and private.chore_limit('approvals_page') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.can_review_chores(p_home_id, v_user_id) then
+      return;
+    end if;
+    select h.timezone into v_zone from public.homes h where h.id = p_home_id;
+    return query
+      select o.id, c.id, c.title, g.name, g.color, o.scheduled_date, o.due_date,
+        -- Reported after the due day, in the Home's timezone.
+        (b.submitted_at at time zone coalesce(v_zone, 'UTC'))::date > o.due_date,
+        coalesce((select array_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id)
+          from private.chore_occurrence_assignees a where a.occurrence_id = o.id), '{}'::uuid[]),
+        b.id, b.attempt, b.submitted_at, coalesce(b.submitted_by = v_user_id, false),
+        private.member_ref(o.home_id, b.submitted_by), coalesce(b.contributor_id = v_user_id, false),
+        private.member_ref(o.home_id, b.contributor_id),
+        b.contributor_id is not null and private.is_home_member(o.home_id, b.contributor_id),
+        b.note,
+        (select count(*)::integer from pg_catalog.jsonb_array_elements(b.steps) x
+          where (x ->> 'checked')::boolean),
+        pg_catalog.jsonb_array_length(b.steps),
+        o.revision, (count(*) over ())::integer
+      from private.chore_occurrences o
+      join private.chores c on c.id = o.chore_id
+      join private.chore_submissions b on b.occurrence_id = o.id and b.status = 'pending'
+      left join private.chore_categories g on g.id = c.category_id
+      where o.home_id = p_home_id and o.status = 'pending_approval' and o.deleted_at is null
+        and c.deleted_at is null
+      order by b.seq
+      limit p_limit;
+  end
+  $$;
+
+-- The Home's chores for managing them: active ones (p_ended false) or ended ones, by title, with
+-- their state and the occurrence to open (the next open one, or the latest).
+create function public.list_chores(p_home_id uuid, p_ended boolean default false)
+returns table (
+  id uuid, title text, kind text, category_id uuid, category_name text, category_color text,
+  assignment text, paused boolean, finished boolean, open_count integer, next_due date,
+  occurrence_id uuid, revision integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    return query
+      select c.id, c.title, c.kind, g.id, g.name, g.color,
+        coalesce(s.assignment, case when exists (select 1 from private.chore_occurrence_assignees a
+          join private.chore_occurrences o on o.id = a.occurrence_id where o.chore_id = c.id)
+          then 'fixed' else 'none' end),
+        coalesce(s.paused_from is not null and (s.paused_until is null or s.paused_until >= v_today), false),
+        coalesce(c.kind = 'recurring' and s.next_date is null and c.ended_at is null, false),
+        (select count(*)::integer from private.chore_occurrences o
+          where o.chore_id = c.id and o.deleted_at is null and o.status = 'open'),
+        (select min(o.due_date) from private.chore_occurrences o
+          where o.chore_id = c.id and o.deleted_at is null and o.status = 'open'),
+        coalesce(
+          (select o.id from private.chore_occurrences o where o.chore_id = c.id and o.deleted_at is null
+            and o.status = 'open' order by o.due_date, o.scheduled_date limit 1),
+          (select o.id from private.chore_occurrences o where o.chore_id = c.id and o.deleted_at is null
+            order by o.scheduled_date desc limit 1)),
+        c.revision
+      from private.chores c
+      left join private.chore_schedules s on s.chore_id = c.id and s.superseded_at is null
+      left join private.chore_categories g on g.id = c.category_id
+      where c.home_id = p_home_id and c.deleted_at is null
+        and (c.ended_at is not null) = coalesce(p_ended, false)
+      order by private.task_name_key(c.title), c.id;
+  end
+  $$;
+
+-- Trash ------------------------------------------------------------------------------------------------
+
+-- The dispatch functions as they stood before chores keep handling every other item type; the new
+-- ones handle the chores module and hand the rest on. So this migration does not repeat the task
+-- cases, and a later module can wrap these the same way.
+alter function private.trash_conflict(private.trash_entries) rename to trash_conflict_before_chores;
+alter function private.trash_conflict_options(text) rename to trash_conflict_options_before_chores;
+alter function private.trash_resolve(private.trash_entries, text) rename to trash_resolve_before_chores;
+alter function private.trash_item_restore(private.trash_entries) rename to trash_item_restore_before_chores;
+alter function private.trash_item_purge(private.trash_entries) rename to trash_item_purge_before_chores;
+
+-- Conflicts for chores: the chore is in the trash or gone ('chore_unavailable': restore it first);
+-- a removal's schedule changed since (edited, split, paused, deleted again: 'schedule_changed',
+-- resolved by bringing back only the occurrences); the Home has the most active chores
+-- ('chore_limit').
+create function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_chore private.chores;
+    v_occurrence private.chore_occurrences;
+    v_removal private.chore_removals;
+    v_head private.chore_schedules;
+  begin
+    if p_entry.module <> 'chores' then
+      return private.trash_conflict_before_chores(p_entry);
+    end if;
+    case p_entry.item_type
+      when 'chore' then
+        select * into v_chore from private.chores c where c.id = p_entry.subject_id;
+        if not found or v_chore.deleted_at is null then
+          return 'item_missing';
+        end if;
+        if v_chore.ended_at is null and (select count(*) from private.chores c
+            where c.home_id = v_chore.home_id and c.deleted_at is null and c.ended_at is null)
+           >= private.chore_limit('chores') then
+          return 'chore_limit';
+        end if;
+        return null;
+      when 'chore_occurrence' then
+        select * into v_occurrence from private.chore_occurrences o where o.id = p_entry.subject_id;
+        if not found or v_occurrence.deleted_at is null then
+          return 'item_missing';
+        end if;
+        if not exists (select 1 from private.chores c where c.id = v_occurrence.chore_id and c.deleted_at is null) then
+          return 'chore_unavailable';
+        end if;
+        return null;
+      when 'chore_removal' then
+        select * into v_removal from private.chore_removals r where r.id = p_entry.subject_id;
+        if not found then
+          return 'item_missing';
+        end if;
+        if not exists (select 1 from private.chores c where c.id = v_removal.chore_id and c.deleted_at is null) then
+          return 'chore_unavailable';
+        end if;
+        if not v_removal.occurrences_only then
+          v_head := private.chore_head(v_removal.chore_id);
+          if v_head.id is distinct from v_removal.head_id or v_head.revision <> v_removal.head_revision then
+            return 'schedule_changed';
+          end if;
+        end if;
+        return null;
+    end case;
+    return null;
+  end
+  $$;
+
+create function private.trash_conflict_options(p_kind text) returns text[]
+  language sql immutable set search_path = '' as $$
+  select case p_kind
+    -- Bring back the deleted occurrences and leave the schedule as it is now.
+    when 'schedule_changed' then array['restore_occurrences_only']
+    when 'chore_unavailable' then array[]::text[]
+    when 'chore_limit' then array[]::text[]
+    else private.trash_conflict_options_before_chores(p_kind)
+  end;
+  $$;
+
+create function private.trash_resolve(p_entry private.trash_entries, p_resolution text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_entry.module <> 'chores' then
+      perform private.trash_resolve_before_chores(p_entry, p_resolution);
+      return;
+    end if;
+    if p_entry.item_type = 'chore_removal' and p_resolution = 'restore_occurrences_only' then
+      update private.chore_removals r set occurrences_only = true where r.id = p_entry.subject_id;
+    end if;
+  end
+  $$;
+
+-- Restoring never back-fills: a schedule that comes back continues from today. A chore that changed
+-- or went away between the conflict check and here raises unique_violation, which the caller turns
+-- into a fresh conflict.
+create function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_chore private.chores;
+    v_occurrence private.chore_occurrences;
+    v_removal private.chore_removals;
+    v_head private.chore_schedules;
+    v_today date;
+  begin
+    if p_entry.module <> 'chores' then
+      return private.trash_item_restore_before_chores(p_entry);
+    end if;
+    case p_entry.item_type
+      when 'chore' then
+        select * into v_chore from private.chores c where c.id = p_entry.subject_id for update;
+        if v_chore.id is null or v_chore.deleted_at is null then
+          raise exception 'chore unavailable' using errcode = '23505';
+        end if;
+        update private.chores c set deleted_at = null, updated_at = pg_catalog.now() where c.id = v_chore.id;
+        v_head := private.chore_head(v_chore.id);
+        if v_head.id is not null and v_head.next_date is not null then
+          v_today := private.task_today(v_chore.home_id, null);
+          update private.chore_schedules s
+            set next_date = private.chore_part_next(v_head, greatest(v_head.next_date, v_today))
+            where s.id = v_head.id;
+        end if;
+      when 'chore_occurrence' then
+        select * into v_occurrence from private.chore_occurrences o where o.id = p_entry.subject_id;
+        select * into v_chore from private.chores c where c.id = v_occurrence.chore_id for update;
+        if v_chore.id is null or v_chore.deleted_at is not null then
+          raise exception 'chore unavailable' using errcode = '23505';
+        end if;
+        update private.chore_occurrences o set deleted_at = null where o.id = v_occurrence.id;
+      when 'chore_removal' then
+        select * into v_removal from private.chore_removals r where r.id = p_entry.subject_id;
+        select * into v_chore from private.chores c where c.id = v_removal.chore_id for update;
+        if v_chore.id is null or v_chore.deleted_at is not null then
+          raise exception 'chore unavailable' using errcode = '23505';
+        end if;
+        update private.chore_occurrences o set deleted_at = null
+          where o.id = any (v_removal.occurrence_ids) and o.deleted_at is not null;
+        if not v_removal.occurrences_only then
+          select * into v_head from private.chore_schedules s
+            where s.chore_id = v_chore.id and s.superseded_at is null for update;
+          if v_head.id is distinct from v_removal.head_id or v_head.revision <> v_removal.head_revision then
+            raise exception 'schedule changed' using errcode = '23505';
+          end if;
+          v_today := private.task_today(v_chore.home_id, null);
+          update private.chore_schedules s
+            set until_date = v_removal.previous_until_date, revision = s.revision + 1,
+              updated_at = pg_catalog.now()
+            where s.id = v_head.id
+            returning * into v_head;
+          update private.chore_schedules s
+            set next_date = private.chore_part_next(v_head, greatest(v_today,
+              coalesce(v_head.last_date + 1, v_today)))
+            where s.id = v_head.id;
+          if v_removal.mode = 'series' then
+            update private.chores c set ended_at = null, ended_by = null, revision = c.revision + 1,
+              updated_at = pg_catalog.now()
+              where c.id = v_chore.id;
+          end if;
+        end if;
+    end case;
+    return 0;
+  end
+  $$;
+
+create function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_entry.module <> 'chores' then
+      perform private.trash_item_purge_before_chores(p_entry);
+      return;
+    end if;
+    case p_entry.item_type
+      when 'chore' then
+        -- Its schedule, occurrences, checklists and assignees go with it (on delete cascade).
+        delete from private.chores c where c.id = p_entry.subject_id and c.deleted_at is not null;
+      when 'chore_occurrence' then
+        delete from private.chore_occurrences o where o.id = p_entry.subject_id and o.deleted_at is not null;
+      when 'chore_removal' then
+        delete from private.chore_occurrences o
+          using private.chore_removals r
+          where r.id = p_entry.subject_id and o.id = any (r.occurrence_ids) and o.deleted_at is not null;
+        delete from private.chore_removals r where r.id = p_entry.subject_id;
+    end case;
+  end
+  $$;
+
+-- Grants ------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  -- The chore API: signed-in people only (every function rechecks the confirmed caller).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'get_chore_context', 'list_chore_categories', 'create_chore_category', 'update_chore_category',
+      'reorder_chore_categories', 'delete_chore_category', 'create_chore', 'update_chore',
+      'advance_chores', 'set_chore_step', 'complete_chore_occurrence', 'skip_chore_occurrence',
+      'reopen_chore_occurrence', 'update_chore_occurrence', 'update_chore_series', 'set_chore_paused',
+      'delete_chore_occurrences', 'get_chore_occurrence', 'list_chore_occurrences',
+      'list_chore_history', 'list_chores', 'review_chore_submission', 'correct_chore_completion',
+      'list_chore_approvals'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and (
+      p.proname like '%chore%'
+      or p.proname in ('set_part_template', 'set_occurrence_assignees', 'copy_part_steps',
+        'is_delegable_capability', 'trash_conflict', 'trash_conflict_options', 'trash_resolve',
+        'trash_item_restore', 'trash_item_purge')
+    )
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261031090000_chore_templates_history_bulk.sql
+-- ============================================================================
+-- S20: chore templates, the Home-wide chore history, bulk occurrence actions and the chore widgets'
+-- reads (brief plans/steps/S20-brief.md; ADR 0026; spec "Confirmed reusable chore templates",
+-- "Confirmed searchable Home-wide chore completion history", "Confirmed limited bulk chore
+-- occurrence management", "Confirmed configurable chore dashboard widgets"). Builds on
+-- 20261030090000_chores.sql; like it, nothing is exposed as a table.
+--
+-- Templates belong to one Home and are managed and used by its chore managers (default picked: the
+-- same people who create chores). They hold a title, instructions, a category, an estimate and a
+-- checklist; never assignees, schedules, approval or history. A chore made from one is an
+-- independent copy (the interface copies the fields into the new-chore form), so editing or retiring
+-- a template never changes a chore. Suggested reward points come with points in S23.
+--
+-- The Home-wide history reads every occurrence of the Home that its members may see (all of them:
+-- every member sees every chore), with search and filters. Bulk actions change selected open
+-- occurrences one at a time through the same functions as a single change, each under its chore's
+-- lock with its own revision, so a stale or closed one is reported and the rest still apply.
+
+-- Templates --------------------------------------------------------------------------------------------
+
+create table private.chore_templates (
+  id uuid primary key,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  title text not null constraint chore_templates_title_check check (private.is_visible_name(title, 200)),
+  instructions text constraint chore_templates_instructions_check
+    check (instructions is null or private.is_plain_text(instructions, 2000)),
+  category_id uuid,
+  estimated_minutes integer constraint chore_templates_minutes_check
+    check (estimated_minutes between 1 and 1440),
+  -- [{label, mandatory}], as private.chore_steps reads it.
+  steps jsonb not null default '[]'::jsonb,
+  retired_at timestamptz,
+  revision integer not null default 1 constraint chore_templates_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint chore_templates_category_fkey foreign key (category_id, home_id)
+    references private.chore_categories (id, home_id) on delete set null (category_id)
+);
+
+create index chore_templates_home_idx on private.chore_templates (home_id);
+
+alter table private.chore_templates enable row level security;
+revoke all on table private.chore_templates from public, anon, authenticated;
+comment on table private.chore_templates is 'S20: Home chore templates. Not exposed through the API.';
+
+-- 100 templates per Home (apps/web/src/chores/schema.ts uses the same number).
+create function private.chore_template_limit() returns integer
+  language sql immutable set search_path = '' as $$ select 100; $$;
+
+create function private.chore_template_name_taken(p_home_id uuid, p_title text, p_except uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from private.chore_templates t
+    where t.home_id = p_home_id and t.id is distinct from p_except
+      and private.task_name_key(t.title) = private.task_name_key(p_title)
+  );
+  $$;
+
+-- The checklist as a template stores it (labels and flags only), or 22023 when malformed.
+create function private.chore_template_steps(p_steps jsonb) returns jsonb
+  language sql immutable set search_path = '' as $$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'label', s.label, 'mandatory', s.mandatory) order by s.step_position), '[]'::jsonb)
+  from private.chore_steps(coalesce(p_steps, '[]'::jsonb)) s;
+  $$;
+
+-- The Home's templates for chore managers, by title (retired ones only when asked); nothing for
+-- anyone else, so their titles stay hidden. 42501 for a Home the caller is not in.
+create function public.list_chore_templates(p_home_id uuid, p_include_retired boolean default false)
+returns table (
+  id uuid, title text, instructions text, category_id uuid, category_name text, category_color text,
+  category_archived boolean, minutes integer, steps jsonb, retired boolean, revision integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if not private.can_manage_chores(p_home_id, v_user_id) then
+      return;
+    end if;
+    return query
+      select t.id, t.title, t.instructions, g.id, g.name, g.color, g.archived_at is not null,
+        t.estimated_minutes, t.steps, t.retired_at is not null, t.revision
+      from private.chore_templates t
+      left join private.chore_categories g on g.id = t.category_id
+      where t.home_id = p_home_id and (coalesce(p_include_retired, false) or t.retired_at is null)
+      order by private.task_name_key(t.title), t.id;
+  end
+  $$;
+
+-- Creates a template (chore managers). p_id comes from the client, so a retry returns 'exists'.
+-- Outcomes: 'created', 'exists', 'id_taken', 'not_permitted', 'duplicate_name', 'limit_reached',
+-- 'invalid_category'. 22023 for invalid fields.
+create function public.create_chore_template(
+  p_id uuid, p_home_id uuid, p_title text, p_instructions text default null,
+  p_category_id uuid default null, p_minutes integer default null, p_steps jsonb default '[]'::jsonb
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_steps jsonb;
+    v_existing private.chore_templates;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null or not private.valid_chore_fields(p_title, p_instructions, p_minutes) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform 1 from private.chore_steps(coalesce(p_steps, '[]'::jsonb)) s where s.step_id is not null;
+    if found then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_steps := private.chore_template_steps(p_steps);
+    select * into v_existing from private.chore_templates t where t.id = p_id;
+    if found then
+      return query select case when v_existing.created_by = v_user_id and v_existing.home_id = p_home_id
+        then 'exists' else 'id_taken' end,
+        case when v_existing.created_by = v_user_id then v_existing.revision end;
+      return;
+    end if;
+    if not private.can_manage_chores(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if not private.usable_chore_category(p_home_id, p_category_id) then
+      return query select 'invalid_category', null::integer;
+      return;
+    end if;
+    perform private.lock_chore_home('templates', p_home_id);
+    if private.chore_template_name_taken(p_home_id, p_title, null) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    if (select count(*) from private.chore_templates t where t.home_id = p_home_id)
+       >= private.chore_template_limit() then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.chore_templates (
+      id, home_id, title, instructions, category_id, estimated_minutes, steps, created_by, updated_by
+    ) values (
+      p_id, p_home_id, p_title, p_instructions, p_category_id, p_minutes, v_steps, v_user_id, v_user_id
+    ) on conflict (id) do nothing;
+    if not found then
+      return query select 'id_taken', null::integer;
+      return;
+    end if;
+    perform private.audit_chore('chore_template.created', p_home_id, 'chore_template', p_id);
+    return query select 'created', 1;
+  end
+  $$;
+
+-- Changes a template's fields, or retires or reinstates it (chore managers). Chores made from it
+-- never change. An archived category may stay, not be newly chosen. p_retired null keeps it.
+-- Outcomes: 'saved', 'conflict' (with the current revision), 'not_found', 'not_permitted',
+-- 'duplicate_name', 'invalid_category'.
+create function public.update_chore_template(
+  p_id uuid, p_expected_revision integer, p_title text, p_instructions text default null,
+  p_category_id uuid default null, p_minutes integer default null, p_steps jsonb default '[]'::jsonb,
+  p_retired boolean default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_steps jsonb;
+    v_template private.chore_templates;
+  begin
+    if p_id is null or p_expected_revision is null
+       or not private.valid_chore_fields(p_title, p_instructions, p_minutes) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform 1 from private.chore_steps(coalesce(p_steps, '[]'::jsonb)) s where s.step_id is not null;
+    if found then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_steps := private.chore_template_steps(p_steps);
+    select * into v_template from private.chore_templates t where t.id = p_id for update;
+    if not found or not private.is_home_member(v_template.home_id, v_user_id) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_template.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_template.revision <> p_expected_revision then
+      return query select 'conflict', v_template.revision;
+      return;
+    end if;
+    if p_category_id is distinct from v_template.category_id
+       and not private.usable_chore_category(v_template.home_id, p_category_id) then
+      return query select 'invalid_category', null::integer;
+      return;
+    end if;
+    perform private.lock_chore_home('templates', v_template.home_id);
+    if private.chore_template_name_taken(v_template.home_id, p_title, v_template.id) then
+      return query select 'duplicate_name', null::integer;
+      return;
+    end if;
+    update private.chore_templates t
+      set title = p_title, instructions = p_instructions, category_id = p_category_id,
+        estimated_minutes = p_minutes, steps = v_steps,
+        retired_at = case when p_retired is null then t.retired_at
+          when p_retired then coalesce(t.retired_at, pg_catalog.now()) end,
+        revision = t.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where t.id = v_template.id
+      returning * into v_template;
+    perform private.audit_chore('chore_template.updated', v_template.home_id, 'chore_template',
+      v_template.id, pg_catalog.jsonb_build_object('retired', v_template.retired_at is not null));
+    return query select 'saved', v_template.revision;
+  end
+  $$;
+
+-- The Home-wide history --------------------------------------------------------------------------------
+
+-- One page of the Home's chore history (spec "Confirmed searchable Home-wide chore completion
+-- history"), strictly this Home, every member of it. Each row is one occurrence with its chore,
+-- dates, assignees, outcome (open, due today, missed, needs rework, pending approval, completed,
+-- skipped) and record. Filters combine:
+--   p_search      the chore's title (as the occurrence was closed under, or now), the completion
+--                 note or the skip reason, case-insensitive (at most 100 characters);
+--   p_member      a membership id: assigned to them, or done by them;
+--   p_chore_id    one chore;
+--   p_from, p_to  a date range, on the scheduled date (p_basis 'scheduled', the default) or the
+--                 completion date in the Home's timezone ('completed': completed ones only);
+--   p_state       'all', 'open' (not yet due), 'due_today', 'missed', 'rework', 'pending_approval',
+--                 'completed', 'skipped';
+--   p_approval    'any', 'pending', 'approved', 'rejected' (had a rejected attempt), 'none'
+--                 (never submitted for approval).
+-- Newest first: by scheduled date, or by completion time on the completed basis. 42501 for a Home
+-- the caller is not in.
+create function public.list_home_chore_history(
+  p_home_id uuid, p_search text default null, p_member uuid default null, p_chore_id uuid default null,
+  p_from date default null, p_to date default null, p_basis text default 'scheduled',
+  p_state text default 'all', p_approval text default 'any',
+  p_offset integer default 0, p_limit integer default 50
+) returns table (
+  id uuid, chore_id uuid, scheduled_date date, due_date date, status text, title text,
+  category text, category_color text, assignee_member_ids uuid[],
+  completed_at timestamptz, completed_by_me boolean, completed_by_member uuid,
+  contributor_me boolean, contributor_member uuid, note text,
+  skipped_at timestamptz, skipped_by_me boolean, skipped_by_member uuid, skip_reason text,
+  approved_at timestamptz, approved_by_me boolean, approved_by_member uuid,
+  attempts integer, rejected integer, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_zone text;
+    v_member_user uuid;
+    v_pattern text;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if (p_search is not null and pg_catalog.char_length(p_search) > 100)
+       or p_basis is null or p_basis not in ('scheduled', 'completed')
+       or p_state is null or p_state not in ('all', 'open', 'due_today', 'missed', 'rework',
+         'pending_approval', 'completed', 'skipped')
+       or p_approval is null or p_approval not in ('any', 'pending', 'approved', 'rejected', 'none')
+       or (p_from is not null and p_to is not null and p_to < p_from)
+       or p_offset is null or p_offset not between 0 and private.chore_limit('max_offset')
+       or p_limit is null or p_limit not between 1 and private.chore_limit('history_page') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, null);
+    select h.timezone into v_zone from public.homes h where h.id = p_home_id;
+    if p_member is not null then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_member;
+    end if;
+    -- The search as a literal substring: LIKE's own characters escaped.
+    v_pattern := case when private.chore_short_text(p_search) is not null then
+      '%' || pg_catalog.replace(pg_catalog.replace(pg_catalog.replace(
+        private.chore_short_text(p_search), '\', '\\'), '%', '\%'), '_', '\_') || '%' end;
+    return query
+      with rows as (
+        select o.*, c.title as chore_title, c.category_id as chore_category,
+          case
+            when o.status <> 'open' then o.status
+            when o.in_rework then 'rework'
+            when o.due_date < v_today then 'missed'
+            when o.due_date = v_today then 'due_today'
+            else 'open'
+          end as shown,
+          (select count(*)::integer from private.chore_submissions b where b.occurrence_id = o.id)
+            as attempt_count,
+          (select count(*)::integer from private.chore_submissions b
+            where b.occurrence_id = o.id and b.status = 'rejected') as rejected_count
+        from private.chore_occurrences o
+        join private.chores c on c.id = o.chore_id
+        where o.home_id = p_home_id and o.deleted_at is null and c.deleted_at is null
+          and (p_chore_id is null or o.chore_id = p_chore_id)
+          and (p_member is null or (v_member_user is not null and (
+            o.contributor_id = v_member_user
+            or exists (select 1 from private.chore_occurrence_assignees a
+              where a.occurrence_id = o.id and a.user_id = v_member_user))))
+          and (v_pattern is null
+            or coalesce(o.closed_title, c.title) ilike v_pattern
+            or o.note ilike v_pattern or o.skip_reason ilike v_pattern)
+          and case p_basis
+            when 'completed' then o.status = 'completed'
+              and (p_from is null or (o.completed_at at time zone v_zone)::date >= p_from)
+              and (p_to is null or (o.completed_at at time zone v_zone)::date <= p_to)
+            else (p_from is null or o.scheduled_date >= p_from)
+              and (p_to is null or o.scheduled_date <= p_to)
+            end
+      )
+      select r.id, r.chore_id, r.scheduled_date, r.due_date, r.shown,
+        coalesce(r.closed_title, r.chore_title),
+        case when r.status in ('open', 'pending_approval') then g.name else r.closed_category end,
+        case when r.status in ('open', 'pending_approval') then g.color end,
+        coalesce((select array_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id)
+          from private.chore_occurrence_assignees a where a.occurrence_id = r.id), '{}'::uuid[]),
+        r.completed_at, coalesce(r.completed_by = v_user_id, false),
+        private.member_ref(r.home_id, r.completed_by),
+        coalesce(r.contributor_id = v_user_id, false), private.member_ref(r.home_id, r.contributor_id),
+        r.note, r.skipped_at, coalesce(r.skipped_by = v_user_id, false),
+        private.member_ref(r.home_id, r.skipped_by), r.skip_reason,
+        r.approved_at, coalesce(r.approved_by = v_user_id, false),
+        private.member_ref(r.home_id, r.approved_by),
+        r.attempt_count, r.rejected_count,
+        (count(*) over ())::integer
+      from rows r
+      left join private.chore_categories g on g.id = r.chore_category
+      where (p_state = 'all' or r.shown = p_state)
+        and case p_approval
+          when 'pending' then r.status = 'pending_approval'
+          when 'approved' then r.approved_at is not null
+          when 'rejected' then r.rejected_count > 0
+          when 'none' then r.attempt_count = 0
+          else true end
+      order by case when p_basis = 'completed' then r.completed_at end desc nulls last,
+        r.scheduled_date desc, r.id
+      limit p_limit offset p_offset;
+  end
+  $$;
+
+-- Bulk occurrence actions --------------------------------------------------------------------------------
+
+-- Applies one action to selected occurrences of one Home (chore managers; spec "Confirmed limited
+-- bulk chore occurrence management"): 'reassign' to one current member (p_member, a membership id),
+-- 'skip' with an optional reason, or 'due_date' (p_due_date). p_items: [{id, revision}], 1-100
+-- distinct occurrences, each with the revision the manager saw. Every occurrence goes through the
+-- same function as a single change (update_chore_occurrence: it becomes individually changed, so
+-- the series and the rotation never change; skip_chore_occurrence), under its own chore's lock, so
+-- one that is missing, of another Home, stale, completed, skipped or pending approval is reported
+-- with its reason and the others still apply. p_dry_run: the per-occurrence preview, changing
+-- nothing. Audited once with the number applied (each change is also audited as a single one). A retry is harmless: an applied change has a new revision and reports 'conflict' (or the
+-- state it reached). Returns one row per item, in the order given: outcome ('preview', 'saved',
+-- 'skipped', or 'not_found', 'conflict', 'occurrence_closed', 'pending_approval', 'invalid_assignee',
+-- 'failed'), title, due date and assignees before and after, and the revision now.
+create function public.bulk_chore_occurrences(
+  p_home_id uuid, p_action text, p_items jsonb, p_dry_run boolean,
+  p_member uuid default null, p_due_date date default null, p_reason text default null
+) returns table (
+  occurrence_id uuid, outcome text, title text, due_before date, due_after date,
+  assignees_before uuid[], assignees_after uuid[], revision integer
+)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_item record;
+    v_occurrence private.chore_occurrences;
+    v_title text;
+    v_before uuid[];
+    v_after uuid[];
+    v_outcome text;
+    v_revision integer;
+    v_due date;
+    v_applied integer := 0;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_action is null or p_action not in ('reassign', 'skip', 'due_date') or p_dry_run is null
+       or p_items is null or pg_catalog.jsonb_typeof(p_items) <> 'array'
+       or pg_catalog.jsonb_array_length(p_items) not between 1 and 100
+       or exists (select 1 from pg_catalog.jsonb_array_elements(p_items) e (i)
+         where pg_catalog.jsonb_typeof(e.i -> 'id') <> 'string'
+           or (e.i ->> 'id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+           or pg_catalog.jsonb_typeof(e.i -> 'revision') <> 'number'
+           or (e.i ->> 'revision') !~ '^[1-9][0-9]{0,8}$')
+       or (select count(distinct e.i ->> 'id') from pg_catalog.jsonb_array_elements(p_items) e (i))
+         <> pg_catalog.jsonb_array_length(p_items)
+       or (p_action = 'reassign') <> (p_member is not null)
+       or (p_action = 'due_date') <> (p_due_date is not null)
+       or (p_action <> 'skip' and p_reason is not null)
+       or (p_due_date is not null and p_due_date not between date '2000-01-01' and date '2199-12-31')
+       or (private.chore_short_text(p_reason) is not null
+         and not private.is_plain_text(private.chore_short_text(p_reason), private.chore_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.can_manage_chores(p_home_id, v_user_id) then
+      return query select (e.i ->> 'id')::uuid, 'not_permitted', null::text, null::date, null::date,
+          null::uuid[], null::uuid[], null::integer
+        from pg_catalog.jsonb_array_elements(p_items) with ordinality e (i, o) order by e.o;
+      return;
+    end if;
+
+    for v_item in
+      select (e.i ->> 'id')::uuid as id, (e.i ->> 'revision')::integer as expected
+      from pg_catalog.jsonb_array_elements(p_items) with ordinality e (i, o) order by e.o
+    loop
+      v_title := null; v_before := null; v_after := null; v_due := null; v_revision := null;
+      begin
+        v_occurrence := private.lock_chore_occurrence(v_item.id, v_user_id);
+        if v_occurrence.id is null or v_occurrence.home_id <> p_home_id then
+          v_outcome := 'not_found';
+        else
+          select c.title into v_title from private.chores c where c.id = v_occurrence.chore_id;
+          select coalesce(array_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id),
+              '{}'::uuid[]) into v_before
+            from private.chore_occurrence_assignees a where a.occurrence_id = v_occurrence.id;
+          v_due := v_occurrence.due_date;
+          if p_action = 'skip' then
+            if v_occurrence.revision <> v_item.expected then
+              v_outcome := 'conflict';
+            elsif v_occurrence.status = 'pending_approval' then
+              v_outcome := 'pending_approval';
+            elsif v_occurrence.status <> 'open' then
+              v_outcome := 'occurrence_closed';
+            elsif p_dry_run then
+              v_outcome := 'preview';
+            else
+              select s.outcome into v_outcome
+                from public.skip_chore_occurrence(v_occurrence.id, p_reason) s;
+            end if;
+          elsif v_occurrence.status = 'pending_approval' and v_occurrence.revision = v_item.expected then
+            v_outcome := 'pending_approval';
+          else
+            select u.outcome into v_outcome
+              from public.update_chore_occurrence(v_occurrence.id, v_item.expected, p_dry_run,
+                p_due_date => case when p_action = 'due_date' then p_due_date end,
+                p_assignee_ids => case when p_action = 'reassign' then array[p_member] end) u;
+          end if;
+        end if;
+      exception when others then
+        -- One occurrence's failure never undoes the others (it is reported).
+        v_outcome := 'failed';
+      end;
+      if v_outcome in ('preview', 'saved', 'skipped') then
+        v_after := case when p_action = 'reassign' then array[p_member] else v_before end;
+      end if;
+      if v_outcome in ('saved', 'skipped') then
+        v_applied := v_applied + 1;
+      end if;
+      select o.revision into v_revision from private.chore_occurrences o where o.id = v_item.id
+        and o.home_id = p_home_id;
+      return query select v_item.id, v_outcome, v_title, v_due,
+        case when v_outcome in ('preview', 'saved') and p_action = 'due_date' then p_due_date
+          when v_outcome in ('preview', 'saved', 'skipped') then v_due end,
+        v_before, v_after, v_revision;
+    end loop;
+    if v_applied > 0 then
+      perform private.audit_chore('chore_occurrence.bulk', p_home_id, 'home', p_home_id,
+        pg_catalog.jsonb_build_object('action', p_action, 'count', v_applied,
+          'requested', pg_catalog.jsonb_array_length(p_items)));
+    end if;
+  end
+  $$;
+
+-- The chore widgets ----------------------------------------------------------------------------------------
+
+-- What a My Chores or All Home Chores widget shows (spec "Confirmed configurable chore dashboard
+-- widgets"), for one Home: p_view 'mine' (assigned to the viewer) or 'all' (p_member narrows it to
+-- one member, a membership id; 'unassigned' with p_unassigned). p_state: 'outstanding' (open,
+-- overdue, needs rework and pending approval), 'overdue', 'pending_approval', 'rework', 'completed'
+-- (completed in the date range, newest first). p_from/p_to: due dates (completion dates in the
+-- Home's timezone for 'completed'); null is open-ended. Outstanding rows come earliest due first.
+-- 42501 for a Home the caller is not in.
+create function public.list_chore_widget(
+  p_home_id uuid, p_view text, p_state text, p_from date default null, p_to date default null,
+  p_member uuid default null, p_unassigned boolean default false, p_limit integer default 10
+) returns table (
+  id uuid, chore_id uuid, title text, category_name text, category_color text, due_date date,
+  status text, overdue boolean, in_rework boolean, requires_approval boolean,
+  assignee_member_ids uuid[], assigned_to_me boolean, mandatory_open integer,
+  completed_at timestamptz, contributor_me boolean, contributor_member uuid,
+  revision integer, total_count integer
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_zone text;
+    v_member_user uuid;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_view is null or p_view not in ('mine', 'all')
+       or p_state is null or p_state not in ('outstanding', 'overdue', 'pending_approval', 'rework', 'completed')
+       or (p_from is not null and p_to is not null and p_to < p_from)
+       or p_unassigned is null or (p_unassigned and (p_member is not null or p_view = 'mine'))
+       or (p_member is not null and p_view = 'mine')
+       or p_limit is null or p_limit not between 1 and 20 then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, null);
+    select h.timezone into v_zone from public.homes h where h.id = p_home_id;
+    v_member_user := case when p_view = 'mine' then v_user_id end;
+    if p_member is not null then
+      select m.user_id into v_member_user from public.home_memberships m
+        where m.home_id = p_home_id and m.id = p_member;
+    end if;
+    return query
+      with matching as (
+        select o.*, c.title as chore_title, c.category_id as chore_category,
+          c.requires_approval as chore_approval
+        from private.chore_occurrences o
+        join private.chores c on c.id = o.chore_id
+        where o.home_id = p_home_id and o.deleted_at is null and c.deleted_at is null
+          and case p_state
+            when 'outstanding' then o.status in ('open', 'pending_approval')
+              and (o.due_date <= v_today + private.chore_limit('horizon') or o.status = 'pending_approval')
+            when 'overdue' then o.status = 'open' and o.due_date < v_today
+            when 'pending_approval' then o.status = 'pending_approval'
+            when 'rework' then o.status = 'open' and o.in_rework
+            else o.status = 'completed' end
+          and case when p_state = 'completed' then
+              (p_from is null or (o.completed_at at time zone v_zone)::date >= p_from)
+              and (p_to is null or (o.completed_at at time zone v_zone)::date <= p_to)
+            else (p_from is null or o.due_date >= p_from) and (p_to is null or o.due_date <= p_to) end
+          and case
+            when p_unassigned then not exists (select 1 from private.chore_occurrence_assignees a
+              where a.occurrence_id = o.id)
+            when p_view = 'mine' or p_member is not null then v_member_user is not null and exists (
+              select 1 from private.chore_occurrence_assignees a
+              where a.occurrence_id = o.id and a.user_id = v_member_user)
+            else true end
+      )
+      select m.id, m.chore_id, m.chore_title, g.name, g.color, m.due_date, m.status,
+        m.status = 'open' and m.due_date < v_today, m.in_rework, m.chore_approval,
+        coalesce((select array_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id)
+          from private.chore_occurrence_assignees a where a.occurrence_id = m.id), '{}'::uuid[]),
+        exists (select 1 from private.chore_occurrence_assignees a
+          where a.occurrence_id = m.id and a.user_id = v_user_id),
+        (select count(*)::integer from private.chore_occurrence_steps s
+          where s.occurrence_id = m.id and s.mandatory and s.checked_at is null),
+        m.completed_at, coalesce(m.contributor_id = v_user_id, false),
+        private.member_ref(m.home_id, m.contributor_id),
+        m.revision, (count(*) over ())::integer
+      from matching m
+      left join private.chore_categories g on g.id = m.chore_category
+      order by case when p_state = 'completed' then m.completed_at end desc nulls last,
+        m.due_date, m.chore_title, m.id
+      limit p_limit;
+  end
+  $$;
+
+-- Grants -------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'list_chore_templates', 'create_chore_template', 'update_chore_template',
+      'list_home_chore_history', 'bulk_chore_occurrences', 'list_chore_widget'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname like 'chore_template%'
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+```
+
+## Destructive reset: remove these migrations from the database
+
+Use this only when intentionally resetting the dedicated `madeora-production` project to a pre-Madeora-migrations state. It drops Madeora tables, functions, the `private` schema, associated policies/triggers, and matching migration-history rows if present. It **deletes all application database data**. It does not delete Supabase Auth users, provider settings, or objects in Cloudflare R2. Back up anything needed and empty the R2 bucket separately if a complete data purge is intended.
+
+Never use this as a release rollback. Production schema changes are forward-only; repair them with a new migration.
+
+```sql
+-- DESTRUCTIVE RESET for the dedicated Madeora Supabase project only.
+-- Removes Madeora database objects and recorded versions for the migrations listed below.
+-- This deletes application data. It does not delete R2 objects, Supabase Auth users,
+-- provider settings, or unrelated Supabase services. Back up first; never use as rollback.
+begin;
+
+-- Remove Auth triggers before dropping their helper functions.
+drop trigger if exists madeora_guard_identity_insert on auth.identities;
+drop trigger if exists madeora_guard_identity_delete on auth.identities;
+drop trigger if exists madeora_check_identity_link_flow on auth.identities;
+
+-- Drop Madeora public RPCs by exact routine name, including all overloads.
+do $reset$
+declare
+  routine record;
+begin
+  for routine in
+    select p.oid::regprocedure as signature
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = any (array['abandon_my_upload', 'accept_ownership_recovery', 'add_subtask', 'add_task_comment', 'advance_chores', 'advance_reminder_series', 'advance_task_series', 'appeal_ownership_recovery', 'attach_task_file', 'authorize_file_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'bulk_chore_occurrences', 'bulk_update_tasks', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'change_home_member_role', 'claim_job_outbox', 'claim_my_upload', 'complete_chore_occurrence', 'complete_job_outbox', 'complete_storage_object_deletion', 'correct_chore_completion', 'count_pending_join_requests', 'create_chore', 'create_chore_category', 'create_chore_template', 'create_dashboard_template', 'create_home', 'create_home_invitation', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_upload_intent', 'decide_join_request', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_recovery_ready', 'deliver_task_reminder', 'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_upload', 'finish_job_execution', 'get_chore_context', 'get_chore_occurrence', 'get_dashboard', 'get_invitation_email', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_templates', 'list_chore_widget', 'list_chores', 'list_dashboard_templates', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests', 'list_my_join_requests', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'mark_notifications_read', 'move_task', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage', 'object_to_ownership_recovery', 'preview_home_invitation', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'release_job_outbox', 'release_my_upload', 'remove_home_member', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_subtask', 'renew_home_invitation', 'reopen_chore_occurrence', 'reorder_chore_categories', 'reorder_subtasks', 'reorder_task_lists', 'request_ownership_recovery', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'respond_to_ownership_transfer', 'restore_trash_entries', 'review_chore_submission', 'review_task_reminder', 'revoke_home_invitation', 'save_dashboard', 'set_administrator_capabilities', 'set_chore_paused', 'set_chore_step', 'set_my_avatar', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'share_dashboard_template', 'skip_chore_occurrence', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_ownership_transfer', 'storage_stats', 'task_attachment_scope_impact', 'task_reminder_titles', 'trash_stats', 'undo_dashboard_change', 'unshare_dashboard_template', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_template', 'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'withdraw_join_request', 'withdraw_ownership_recovery'])
+  loop
+    execute format('drop function if exists %s cascade', routine.signature);
+  end loop;
+end
+$reset$;
+
+-- Drop the Madeora public tables; CASCADE removes their policies, indexes and table triggers.
+drop table if exists public.home_member_profiles cascade;
+drop table if exists public.home_memberships cascade;
+drop table if exists public.homes cascade;
+drop table if exists public.notification_preferences cascade;
+drop table if exists public.notification_quiet_hours cascade;
+drop table if exists public.notifications cascade;
+drop table if exists public.user_preferences cascade;
+
+-- The private schema was introduced by Madeora's first migration and contains only Madeora objects.
+drop schema if exists private cascade;
+
+-- Dashboard SQL Editor runs are not normally recorded by the Supabase CLI. If this project
+-- does have a migration history table, remove only the exact Madeora versions listed here.
+do $reset$
+begin
+  if to_regclass('supabase_migrations.schema_migrations') is not null then
+    execute
+      'delete from supabase_migrations.schema_migrations where version = any ($1)'
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000']::text[];
+  end if;
+end
+$reset$;
+
+commit;
+```
+
+## Refreshing this file
+
+When a migration is added, changed or removed in `supabase/migrations/`, update this document in the same change: refresh the individual file list, rebuild the consolidated SQL in chronological order, and update the reset version list. Keep the source files as the authoritative standalone migrations.
