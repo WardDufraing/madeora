@@ -78,14 +78,14 @@ Follow [file storage setup](file-storage.md) to create the R2 bucket and a bucke
 
 Configure these values directly in Vercel Production and Trigger.dev Production:
 
-| Variable | Value |
-| --- | --- |
-| `STORAGE_DRIVER` | `s3` |
-| `STORAGE_S3_ENDPOINT` | `https://<Cloudflare-account-id>.r2.cloudflarestorage.com` |
-| `STORAGE_S3_REGION` | `auto` |
-| `STORAGE_S3_BUCKET` | production bucket name |
-| `STORAGE_S3_ACCESS_KEY_ID` | production bucket-scoped access key ID |
-| `STORAGE_S3_SECRET_ACCESS_KEY` | production bucket-scoped secret |
+| Variable                       | Value                                                      |
+| ------------------------------ | ---------------------------------------------------------- |
+| `STORAGE_DRIVER`               | `s3`                                                       |
+| `STORAGE_S3_ENDPOINT`          | `https://<Cloudflare-account-id>.r2.cloudflarestorage.com` |
+| `STORAGE_S3_REGION`            | `auto`                                                     |
+| `STORAGE_S3_BUCKET`            | production bucket name                                     |
+| `STORAGE_S3_ACCESS_KEY_ID`     | production bucket-scoped access key ID                     |
+| `STORAGE_S3_SECRET_ACCESS_KEY` | production bucket-scoped secret                            |
 
 Never use a public bucket. The app authorizes upload/download through signed requests. Follow the repository storage guide for CORS, lifecycle, alerts, budget and smoke tests. R2 usage can be billed to the payment method attached to Cloudflare, so keep the configured usage alert and review the cost register.
 
@@ -93,16 +93,16 @@ Never use a public bucket. The app authorizes upload/download through signed req
 
 Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and configure its **Production** environment with:
 
-| Variable | Value |
-| --- | --- |
-| `APP_ENV` | `production` |
-| `SUPABASE_URL` | production Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | production Supabase secret key (`sb_secret_…`) |
-| `EMAIL_TRANSPORT` | `resend` |
-| `EMAIL_FROM` | `Madeora <no-reply@mail.madeora.studio>` |
-| `RESEND_API_KEY` | production app sending key from Resend |
-| `APP_URL` | `https://www.madeora.studio` |
-| `STORAGE_DRIVER`, `STORAGE_S3_*` | same production R2 values from step 7 |
+| Variable                         | Value                                          |
+| -------------------------------- | ---------------------------------------------- |
+| `APP_ENV`                        | `production`                                   |
+| `SUPABASE_URL`                   | production Supabase project URL                |
+| `SUPABASE_SERVICE_ROLE_KEY`      | production Supabase secret key (`sb_secret_…`) |
+| `EMAIL_TRANSPORT`                | `resend`                                       |
+| `EMAIL_FROM`                     | `Madeora <no-reply@mail.madeora.studio>`       |
+| `RESEND_API_KEY`                 | production app sending key from Resend         |
+| `APP_URL`                        | `https://www.madeora.studio`                   |
+| `STORAGE_DRIVER`, `STORAGE_S3_*` | same production R2 values from step 7          |
 
 Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
 
@@ -110,17 +110,17 @@ Deploy the jobs from `packages/jobs` at the same commit as the production app. C
 
 In Vercel project `madeora` → **Settings → Environment Variables**, ensure variables are scoped to **Production only** unless specified otherwise. Production must never inherit Preview credentials.
 
-| Variable | Value / scope |
-| --- | --- |
-| `ENABLE_EXPERIMENTAL_COREPACK` | `1`; Production and Preview |
-| `APP_ENV` | `production` |
-| `NEXT_PUBLIC_APP_URL` | `https://www.madeora.studio` |
-| `NEXT_PUBLIC_SUPABASE_URL` | production Supabase URL ending in `.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | production `sb_publishable_…` key |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | production Turnstile Site Key |
-| `EMAIL_TRANSPORT` | `resend` after Trigger.dev email delivery is configured; otherwise `off` |
-| `STORAGE_DRIVER`, `STORAGE_S3_*` | production R2 settings after R2 setup; otherwise `off` |
-| `SUPABASE_SERVICE_ROLE_KEY` | production Supabase secret key; server-only, required for the storage upload finalization path when storage is enabled |
+| Variable                               | Value / scope                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `ENABLE_EXPERIMENTAL_COREPACK`         | `1`; Production and Preview                                                                                            |
+| `APP_ENV`                              | `production`                                                                                                           |
+| `NEXT_PUBLIC_APP_URL`                  | `https://www.madeora.studio`                                                                                           |
+| `NEXT_PUBLIC_SUPABASE_URL`             | production Supabase URL ending in `.supabase.co`                                                                       |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | production `sb_publishable_…` key                                                                                      |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | production Turnstile Site Key                                                                                          |
+| `EMAIL_TRANSPORT`                      | `resend` after Trigger.dev email delivery is configured; otherwise `off`                                               |
+| `STORAGE_DRIVER`, `STORAGE_S3_*`       | production R2 settings after R2 setup; otherwise `off`                                                                 |
+| `SUPABASE_SERVICE_ROLE_KEY`            | production Supabase secret key; server-only, required for the storage upload finalization path when storage is enabled |
 
 Do not set `EMAIL_FROM`, `RESEND_API_KEY`, Trigger.dev tokens, database passwords, Turnstile secret keys, or Google OAuth client secrets in Vercel. Do not expose the Supabase secret key using a `NEXT_PUBLIC_` name.
 
