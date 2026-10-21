@@ -49,6 +49,9 @@ async function addOneOff(page: Page, title: string): Promise<void> {
 }
 
 /** Without Realtime (local fallback stack) another member's change shows after reading again. */
+// Realtime delivery over the CI stack's first connections can take longer than the default wait.
+const LIVE = { timeout: 20_000 };
+
 async function catchUp(page: Page): Promise<void> {
   if (!realtimeAvailable) await page.reload();
 }
@@ -93,7 +96,7 @@ test("the pool: live claims, one winner, Undo, release and a handover", async ({
   await expect(page.getByText("You claimed Water the plants.").first()).toBeVisible();
   await expect(poolRow(page, "Water the plants")).toHaveCount(0);
   await catchUp(bea.page);
-  await expect(poolRow(bea.page, "Water the plants")).toHaveCount(0);
+  await expect(poolRow(bea.page, "Water the plants")).toHaveCount(0, LIVE);
 
   // Undo puts it back, for both of them.
   await page.getByRole("button", { name: "Undo" }).click();
@@ -102,7 +105,7 @@ test("the pool: live claims, one winner, Undo, release and a handover", async ({
   ).toBeVisible();
   await expect(poolRow(page, "Water the plants")).toHaveCount(1);
   await catchUp(bea.page);
-  await expect(poolRow(bea.page, "Water the plants")).toHaveCount(1);
+  await expect(poolRow(bea.page, "Water the plants")).toHaveCount(1, LIVE);
 
   // Both claim "Sweep the hall" at the same moment: exactly one wins, the other is told who has it.
   const claim = (target: Page) =>
@@ -134,7 +137,7 @@ test("the pool: live claims, one winner, Undo, release and a handover", async ({
     "Unassigned: you can claim it.",
   );
   await catchUp(page);
-  await expect(poolRow(page, "Water the plants")).toHaveCount(1);
+  await expect(poolRow(page, "Water the plants")).toHaveCount(1, LIVE);
 
   // She claims it again from its page and asks Ward to take it over; Ward accepts.
   await bea.page.getByTestId("chore-claim").click();
