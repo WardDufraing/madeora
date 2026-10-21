@@ -15,11 +15,14 @@ import type {
   TaskDetail,
   TaskLabel,
   TaskListSummary,
+  TaskCalendar,
   TaskPage,
   TaskRow,
 } from "./api";
 import { logTasks } from "./log";
 import {
+  type CalendarQuery,
+  dateOnlySchema,
   isLabelColor,
   type OccurrenceFilter,
   TASK_LIMITS,
@@ -195,6 +198,77 @@ export async function listTasks(
       })),
     },
   };
+}
+
+const calendarPriority = z.enum(taskPriorities).nullable().catch(null);
+const calendarBase = {
+  date: dateOnlySchema,
+  listId: z.uuid(),
+  listName: z.string(),
+  title: z.string(),
+  priority: calendarPriority,
+  needsReassignment: z.boolean(),
+  labelIds: z.array(z.uuid()),
+  assigneeIds: z.array(z.uuid()),
+};
+const calendarSchema = z.object({
+  today: dateOnlySchema,
+  truncated: z.boolean(),
+  undated: z.number().int().min(0),
+  entries: z.array(
+    z.discriminatedUnion("kind", [
+      z.object({
+        ...calendarBase,
+        kind: z.literal("task"),
+        role: z.enum(["due", "start"]),
+        taskId: z.uuid(),
+        startDate: dateOnlySchema.nullable(),
+        dueDate: dateOnlySchema.nullable(),
+        completed: z.boolean(),
+        overdue: z.boolean(),
+        recurring: z.boolean(),
+        subtasksDone: z.number().int(),
+        subtasksTotal: z.number().int(),
+        canComplete: z.boolean(),
+        revision: z.number().int(),
+      }),
+      z.object({
+        ...calendarBase,
+        kind: z.literal("planned"),
+        role: z.literal("due"),
+        taskId: z.uuid().nullable(),
+        recurring: z.literal(true),
+      }),
+    ]),
+  ),
+});
+
+/** The context's task calendar from `from` to `to` (at most 42 days, S19c). */
+export async function listTaskCalendar(
+  homeId: string | null,
+  range: { readonly from: string; readonly to: string },
+  query: Pick<CalendarQuery, "list" | "status" | "priority" | "label" | "assignee" | "member">,
+): Promise<Read<TaskCalendar>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("list_task_calendar", {
+    ...homeArg(homeId),
+    p_from: range.from,
+    p_to: range.to,
+    p_today: await personalToday(),
+    ...(query.list ? { p_list_id: query.list } : {}),
+    p_status: query.status,
+    ...(query.priority.length > 0 ? { p_priorities: query.priority } : {}),
+    ...(query.label.length > 0 ? { p_label_ids: query.label } : {}),
+    p_assignee: query.assignee === "member" && !query.member ? "any" : query.assignee,
+    ...(query.assignee === "member" && query.member ? { p_assignee_member: query.member } : {}),
+  });
+  if (error) return failed("tasks.calendar_failed", error);
+  const parsed = calendarSchema.safeParse(data);
+  if (!parsed.success) {
+    logTasks("tasks.calendar_unexpected", undefined);
+    return { status: "unavailable" };
+  }
+  return { status: "ok", value: parsed.data };
 }
 
 const person = z.object({ me: z.boolean(), member: z.uuid().nullable() });

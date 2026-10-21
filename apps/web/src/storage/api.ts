@@ -43,6 +43,10 @@ export type StorageErrorCode =
   | "mismatch"
   | "invalid-image"
   | "expired"
+  | "invalid-file"
+  | "limit-reached"
+  | "not-permitted"
+  | "scope-unavailable"
   | "failed";
 
 export interface StorageErrorResponse {
@@ -57,8 +61,21 @@ export interface UploadIntentResponse {
   readonly expiresAt: string;
 }
 
+/** What a series-wide attachment change did to the open occurrences (S19c). */
+export interface AttachmentImpact {
+  readonly changed: number;
+  /** Changed on their own, so left as they are. */
+  readonly kept: number;
+  /** Already at the attachment limit. */
+  readonly full: number;
+  /** Completed occurrences are never touched. */
+  readonly completed: number;
+}
+
 export interface FinalizeResponse {
   readonly file: { readonly id: string };
+  /** A task attachment: the link to its task, and for a series scope what it changed. */
+  readonly attachment?: { readonly id: string; readonly impact: AttachmentImpact | null };
 }
 
 export interface AvatarResponse {

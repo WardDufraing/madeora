@@ -17,10 +17,13 @@ import {
   listTaskOccurrences,
 } from "@/tasks/data";
 import { personName, memberNames, tasksPath, type MemberOption } from "@/tasks/format";
+import { getStorage } from "@/storage/server";
+import { listTaskAttachments } from "@/tasks/attachment-data";
 import { getTaskReminder } from "@/tasks/reminder-data";
 import { isoDate } from "@/preferences/regional";
 
 import { TaskAssignees } from "./task-assignees";
+import { TaskAttachments } from "./task-attachments";
 import { TaskComments } from "./task-comments";
 import { TaskCompletion, TaskDelete, TaskMove } from "./task-actions";
 import { TaskContent } from "./task-content";
@@ -41,6 +44,7 @@ export interface TaskDetailPageProps {
  * basic activity (who created it and when, the last update). Everything is read with the viewer's
  * session; a task they cannot see, or one in another context than the address, is not found.
  * S19: an occurrence of a recurring series also shows the series (Repeats) and its history.
+ * S19c: its attachments.
  */
 export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageProps) {
   // S19: due occurrences of the context's series exist before the task is read.
@@ -56,17 +60,19 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
   }
   if (task.value.homeId !== homeId) notFound();
   const detail = task.value;
-  const [lists, labels, members, comments, history, reminder, context] = await Promise.all([
-    listTaskLists(homeId, false),
-    listTaskLabels(homeId),
-    homeId ? listTaskMembers(homeId) : Promise.resolve({ status: "ok", value: [] } as const),
-    listTaskComments(detail.id, 0),
-    detail.series
-      ? listTaskOccurrences(detail.id, "all", 0)
-      : Promise.resolve({ status: "ok", value: null } as const),
-    getTaskReminder(detail.id),
-    getTaskContext(homeId),
-  ]);
+  const [lists, labels, members, comments, history, reminder, context, attachments] =
+    await Promise.all([
+      listTaskLists(homeId, false),
+      listTaskLabels(homeId),
+      homeId ? listTaskMembers(homeId) : Promise.resolve({ status: "ok", value: [] } as const),
+      listTaskComments(detail.id, 0),
+      detail.series
+        ? listTaskOccurrences(detail.id, "all", 0)
+        : Promise.resolve({ status: "ok", value: null } as const),
+      getTaskReminder(detail.id),
+      getTaskContext(homeId),
+      listTaskAttachments(detail.id),
+    ]);
   if (
     lists.status !== "ok" ||
     labels.status !== "ok" ||
@@ -74,7 +80,8 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
     comments.status !== "ok" ||
     history.status !== "ok" ||
     reminder.status !== "ok" ||
-    context.status !== "ok"
+    context.status !== "ok" ||
+    attachments.status !== "ok"
   ) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -144,6 +151,14 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
           <TaskAssignees task={detail} members={memberOptions} dateFormat={formats.dateFormat} />
         ) : null}
         <TaskSubtasks task={detail} />
+        <TaskAttachments
+          taskId={detail.id}
+          view={attachments.value}
+          recurring={series !== null}
+          followingAllowed={(series?.inHead ?? false) && detail.completedAt === null}
+          storageAvailable={getStorage() !== null}
+          members={memberOptions}
+        />
         <TaskComments
           userId={userId}
           taskId={detail.id}

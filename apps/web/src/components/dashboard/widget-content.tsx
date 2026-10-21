@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { messageKeyFor } from "@/components/notifications/notification-list";
 import { MemberAvatar } from "@/components/members/member-avatar";
+import { CompactTaskList } from "@/components/tasks/compact-task-list";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import type { DashboardLayout, DashboardWidget } from "@/dashboard/layout";
 import type { WidgetEntry } from "@/dashboard/view-types";
@@ -15,6 +16,9 @@ import { getHomeDirectory } from "@/members/directory";
 import { listNotifications } from "@/notifications/server";
 import { formatDate, formatWeekday, isoDate } from "@/preferences/regional";
 import type { MyHome } from "@/homes/types";
+import { taskQueryString } from "@/tasks/filters";
+import { tasksPath } from "@/tasks/format";
+import { loadTaskWidget } from "@/tasks/widget-data";
 
 /**
  * The widgets' content (S17), rendered on the server with the viewer's own session for each widget
@@ -241,6 +245,138 @@ async function HomeMembersBody({
   );
 }
 
+const priorityKey = {
+  low: "priorityLow",
+  normal: "priorityNormal",
+  high: "priorityHigh",
+  urgent: "priorityUrgent",
+  unset: "priorityUnset",
+} as const;
+const whenKey = {
+  any: "whenAny",
+  overdue: "whenOverdue",
+  due_today: "whenDueToday",
+  due_week: "whenDueWeek",
+  upcoming: "whenUpcoming",
+  undated: "whenUndated",
+} as const;
+
+/**
+ * A tasks widget (S19c): one list or All Tasks of its context with its own filters, the tasks'
+ * essentials and the completion box where the viewer may complete them. The list and the active
+ * filters are always named; a list, label or member that no longer exists is said, never replaced.
+ */
+async function TasksBody({
+  homeId,
+  config,
+  formats,
+}: {
+  readonly homeId: string | null;
+  readonly config: WidgetConfigs["tasks"];
+  readonly formats: DateTimeFormats;
+}) {
+  const [tWidget, tTasks, data] = await Promise.all([
+    getTranslations("TaskWidgets"),
+    getTranslations("Tasks"),
+    loadTaskWidget(homeId, config),
+  ]);
+  if (data.status === "unavailable") {
+    return <ErrorState title={tWidget("failedTitle")} description={tWidget("failed")} />;
+  }
+  const base = tasksPath(homeId);
+  if (data.status === "list-unavailable") {
+    return (
+      <EmptyState
+        title={tWidget("listUnavailableTitle")}
+        description={tWidget("listUnavailable")}
+        action={
+          <Link href={base} className={linkClass}>
+            {tWidget("openTasks")}
+          </Link>
+        }
+      />
+    );
+  }
+  const labelNames = new Map(data.options.labels.map((label) => [label.id, label.name]));
+  const memberName = data.options.members.find((member) => member.id === config.memberId)?.name;
+  const filters: string[] = [];
+  if (config.status !== "open") {
+    filters.push(
+      config.status === "completed" ? tTasks("statusFilterCompleted") : tTasks("statusFilterAll"),
+    );
+  }
+  if (config.when !== "any") filters.push(tTasks(whenKey[config.when]));
+  if (config.priorities.length > 0) {
+    filters.push(
+      tWidget("filterPriority", {
+        priorities: config.priorities.map((value) => tTasks(priorityKey[value])).join(", "),
+      }),
+    );
+  }
+  const shownLabels = data.query.label.flatMap((id) => {
+    const name = labelNames.get(id);
+    return name ? [isolate(name)] : [];
+  });
+  if (shownLabels.length > 0)
+    filters.push(tWidget("filterLabels", { labels: shownLabels.join(", ") }));
+  if (homeId && config.assignee !== "any") {
+    filters.push(
+      config.assignee === "me"
+        ? tWidget("filterAssignedToMe")
+        : config.assignee === "unassigned"
+          ? tWidget("filterUnassigned")
+          : tWidget("filterAssignedTo", {
+              person: memberName ? isolate(memberName) : tTasks("personFormer"),
+            }),
+    );
+  }
+  const { page } = data;
+  const allHref = `${base}?${taskQueryString(data.query)}`;
+  return (
+    <div className="flex flex-col gap-3" data-testid="task-widget">
+      <p className="text-helper text-fg-muted" data-testid="task-widget-scope">
+        {data.list ? tWidget("scopeList", { list: isolate(data.list.name) }) : tWidget("scopeAll")}
+        {filters.length > 0 ? ` · ${filters.join(" · ")}` : ` · ${tWidget("noFilters")}`}
+      </p>
+      {data.missingLabels > 0 ? (
+        <p className="text-helper text-warning">
+          {tWidget("labelsMissing", { count: data.missingLabels })}
+        </p>
+      ) : null}
+      {data.missingMember ? (
+        <p className="text-helper text-warning">{tWidget("memberMissing")}</p>
+      ) : null}
+      {page.tasks.length === 0 ? (
+        <EmptyState
+          title={data.filtered ? tWidget("emptyFilteredTitle") : tWidget("emptyTitle")}
+          description={data.filtered ? tWidget("emptyFiltered") : tWidget("empty")}
+        />
+      ) : (
+        <CompactTaskList
+          homeId={homeId}
+          rows={page.tasks}
+          labels={data.options.labels}
+          members={data.options.members}
+          dateFormat={formats.dateFormat}
+          showListName={data.list === null}
+          scope={`widget:${homeId ?? "personal"}`}
+          loadedAt={new Date().toISOString()}
+        />
+      )}
+      <p className="flex flex-wrap items-baseline justify-between gap-2">
+        <Link href={allHref} className={linkClass}>
+          {tWidget("openAll")}
+        </Link>
+        {page.total > page.tasks.length ? (
+          <span className="text-helper text-fg-muted">
+            {tWidget("showing", { shown: page.tasks.length, total: page.total })}
+          </span>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
 // readLayout and checkLayout already parsed every widget's settings with its type's schema; parsing
 // again here gives the typed settings, and falls back to the defaults rather than failing.
 function welcomeConfig(widget: DashboardWidget): WidgetConfigs["welcome"] {
@@ -258,6 +394,11 @@ function membersConfig(widget: DashboardWidget): WidgetConfigs["home-members"] {
   const parsed = config.safeParse(widget.config);
   return parsed.success ? parsed.data : config.parse({});
 }
+function tasksConfig(widget: DashboardWidget): WidgetConfigs["tasks"] {
+  const { config } = widgetRegistry.tasks;
+  const parsed = config.safeParse(widget.config);
+  return parsed.success ? parsed.data : config.parse({});
+}
 
 async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<WidgetEntry> {
   const t = await getTranslations("Dashboard");
@@ -266,6 +407,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "quick-actions": t("widgetQuickActions"),
     notifications: t("widgetNotifications"),
     "home-members": t("widgetHomeMembers"),
+    tasks: t("widgetTasks"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -319,6 +461,42 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: titles["home-members"], home: isolate(home.name) }),
         sourceName: home.name,
         body: <HomeMembersBody homeId={home.id} config={membersConfig(widget)} />,
+        unavailable: false,
+      };
+    }
+    case "tasks": {
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: t("widgetHomeTasks"),
+          sourceName: null,
+          body: (
+            <TasksBody
+              homeId={scope.home.id}
+              config={tasksConfig(widget)}
+              formats={scope.formats}
+            />
+          ),
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: t("widgetPersonalTasks"),
+          sourceName: null,
+          body: <TasksBody homeId={null} config={tasksConfig(widget)} formats={scope.formats} />,
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: t("widgetHomeTasks"), home: isolate(home.name) }),
+        sourceName: home.name,
+        body: <TasksBody homeId={home.id} config={tasksConfig(widget)} formats={scope.formats} />,
         unavailable: false,
       };
     }

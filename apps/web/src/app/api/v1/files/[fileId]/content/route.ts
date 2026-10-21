@@ -6,8 +6,10 @@ import { getStorage } from "@/storage/server";
 
 /** Long enough for the browser to follow the redirect, short enough that a copied link dies. */
 const DOWNLOAD_LINK_SECONDS = 60;
-// Only processed images are ever shown inline; anything else would be a download.
-const INLINE_TYPES = new Set(["image/webp"]);
+// Shown inline: images (avatars and attachment images are re-encoded by the server, S15/S19c) and
+// PDFs, which open in the browser from the storage domain, never Madeora's. Anything else is a
+// download under its attachment's name.
+const INLINE_TYPES = new Set(["image/webp", "image/jpeg", "image/png", "application/pdf"]);
 
 interface FileRouteContext {
   readonly params: Promise<{ readonly fileId: string }>;
@@ -24,7 +26,7 @@ function notFound(): Response {
  * 60-second GET-only link that fixes the type, the disposition and no caching. Every refusal is the
  * same 404, whether the file does not exist or is not the viewer's to see.
  */
-export async function GET(_request: Request, { params }: FileRouteContext): Promise<Response> {
+export async function GET(request: Request, { params }: FileRouteContext): Promise<Response> {
   const fileId = fileIdSchema.safeParse((await params).fileId);
   if (!fileId.success) return notFound();
   if (!(await getVerifiedIdentity())) {
@@ -49,7 +51,13 @@ export async function GET(_request: Request, { params }: FileRouteContext): Prom
   const location = storage.objects.presignGet(file.object_key, {
     expiresInSeconds: DOWNLOAD_LINK_SECONDS,
     contentType: file.content_type,
-    disposition: INLINE_TYPES.has(file.content_type) ? "inline" : "attachment",
+    // `?download=1` saves even an image or PDF (the attachment list's Download).
+    disposition:
+      INLINE_TYPES.has(file.content_type) &&
+      new URL(request.url).searchParams.get("download") !== "1"
+        ? "inline"
+        : "attachment",
+    ...(file.display_name ? { filename: file.display_name } : {}),
   });
   return new Response(null, {
     status: 302,

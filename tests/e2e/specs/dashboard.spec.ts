@@ -119,12 +119,13 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
   expect(stored?.widgets.map((w) => [w.type, w.hidden])).toEqual([
     ["quick-actions", true],
     ["notifications", false],
+    ["tasks", false],
     ["welcome", false],
   ]);
 
   // Remove everything: an honest empty dashboard.
   await customize(page);
-  for (const name of ["Notifications", "Welcome", "Quick actions"]) {
+  for (const name of ["Notifications", "Welcome", "Quick actions", "Personal tasks"]) {
     panel = await select(page, name);
     await panel.getByRole("button", { name: "Remove" }).click();
   }
@@ -135,7 +136,7 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
   await customize(page);
   await page.getByRole("button", { name: "Reset to starter layout" }).click();
   const dialog = page.getByRole("dialog", { name: "Reset to the starter layout?" });
-  await expect(dialog).toContainText("Welcome, Quick actions, Notifications");
+  await expect(dialog).toContainText("Welcome, Quick actions, Notifications, Tasks");
   await dialog.getByRole("button", { name: "Reset layout" }).click();
   await expect(page.getByText("The dashboard is back to the starter layout.")).toBeVisible();
   await expect(widget(page, "Welcome")).toBeVisible();

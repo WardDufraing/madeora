@@ -126,6 +126,80 @@ export interface TaskPage {
   readonly total: number;
 }
 
+/** One file attached to a task (S19c), for someone who may see the task. */
+export interface TaskAttachment {
+  readonly id: string;
+  readonly fileId: string;
+  readonly name: string;
+  readonly contentType: string;
+  readonly size: number;
+  /** It came from the series' attachments (and says so even after that one is gone). */
+  readonly fromSeries: boolean;
+  /** It is still one of the series' attachments, so following / entire removal applies. */
+  readonly seriesActive: boolean;
+  readonly addedAt: string;
+  readonly addedBy: TaskPerson;
+  readonly canRemove: boolean;
+}
+
+/** `GET /api/v1/tasks/:id/attachments`. */
+export interface TaskAttachmentView {
+  readonly canAdd: boolean;
+  readonly canChangeSeries: boolean;
+  readonly limit: number;
+  readonly attachments: readonly TaskAttachment[];
+}
+
+/** What a series-wide attachment change does to the open occurrences. */
+export interface AttachmentScopeImpact {
+  readonly scope: "following" | "series";
+  readonly changed: number;
+  readonly kept: number;
+  readonly full: number;
+  readonly completed: number;
+}
+
+/** `DELETE /api/v1/task-attachments/:id`: the preview, or the trash entry it made. */
+export interface AttachmentRemoveResponse {
+  readonly entryId: string | null;
+  readonly impact: AttachmentScopeImpact | null;
+}
+
+/**
+ * One calendar entry (S19c): a task on its due date (`role: "due"`) or on its start date (`"start"`,
+ * a marker, never a duration), or a planned date of a recurring series that has no task yet.
+ */
+export type CalendarEntry =
+  | ({ readonly kind: "task"; readonly role: "due" | "start"; readonly date: string } & Omit<
+      TaskRow,
+      "id" | "commentCount" | "assignedToMe" | "upcoming"
+    > & { readonly taskId: string })
+  | {
+      readonly kind: "planned";
+      readonly role: "due";
+      readonly date: string;
+      /** The series' latest task, to open, or null when there is none to open. */
+      readonly taskId: string | null;
+      readonly listId: string;
+      readonly listName: string;
+      readonly title: string;
+      readonly priority: TaskRow["priority"];
+      readonly recurring: true;
+      readonly needsReassignment: boolean;
+      readonly labelIds: readonly string[];
+      readonly assigneeIds: readonly string[];
+    };
+
+/** `GET /api/v1/tasks/calendar`: the window's entries, at most `TASK_LIMITS.calendarEntries`. */
+export interface TaskCalendar {
+  readonly today: string;
+  readonly entries: readonly CalendarEntry[];
+  /** More entries exist than were returned. */
+  readonly truncated: boolean;
+  /** Tasks the filters match that have no due date (not placed). */
+  readonly undated: number;
+}
+
 export interface Subtask {
   readonly id: string;
   readonly title: string;

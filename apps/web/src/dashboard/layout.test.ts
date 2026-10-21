@@ -58,11 +58,14 @@ describe("widget registry", () => {
       { type: "quick-actions", needsSource: false },
       { type: "notifications", needsSource: false },
       { type: "home-members", needsSource: true },
+      { type: "tasks", needsSource: false },
+      { type: "tasks", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
       "quick-actions",
       "home-members",
+      "tasks",
     ]);
   });
 
@@ -268,7 +271,7 @@ describe("editing", () => {
       widgets: layout.widgets.map((w) => (w.type === "welcome" ? { ...w, hidden: true } : w)),
     };
     const visible = visiblePlacements(hidden, "sm");
-    expect(visible).toHaveLength(2);
+    expect(visible).toHaveLength(3);
     expect(visible[0]).toMatchObject({ y: 0 });
   });
 
@@ -310,7 +313,7 @@ describe("keyboard move and resize", () => {
     const sm = personalStarterLayout.placements.sm;
     const moved = moveWidget(sm, notifications ?? "", "up", "sm");
     const order = [...moved].sort((a, b) => a.y - b.y).map((p) => p.id);
-    expect(order).toEqual([welcome, notifications, actions]);
+    expect(order.slice(0, 3)).toEqual([welcome, notifications, actions]);
   });
 
   it("resizes within the type's bounds and pushes others down", () => {

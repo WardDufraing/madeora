@@ -1,6 +1,6 @@
 # File storage
 
-How Madeora stores files (S15, ADR 0019), how to change storage allowances, and how to switch storage on for a hosted environment once the owner has chosen a provider. The first feature that stores files is the profile picture.
+How Madeora stores files (S15, ADR 0019), how to change storage allowances, and how to switch storage on for a hosted environment once the owner has chosen a provider. The first feature that stores files is the profile picture; task attachments (S19c, ADR 0025) are the second, in the task's pool (the person's for a Personal task, the Home's for a Home task).
 
 ## How it works
 
@@ -9,7 +9,7 @@ How Madeora stores files (S15, ADR 0019), how to change storage allowances, and 
 3. `POST /api/v1/files/{id}/finalize` reads the file back, checks its real size, type and signature, re-encodes it (pictures: a 512×512 WebP without metadata) and records it with `finalize_upload`, the web app's only privileged call.
 4. Pictures are shown through `GET /api/v1/files/{id}/content`, which asks the database on every view whether this viewer may see the file, then redirects to a 60-second link.
 
-Unfinished uploads expire after 15 minutes and their space is released. Replaced pictures stay recoverable and keep counting for 7 days, then a job deletes them.
+Task attachments are kept in their own format: pictures are re-encoded without metadata, other files are stored as uploaded after a signature check, and anyone who may see the task may view them (images and PDFs inline, everything else as a download). Unfinished uploads expire after 15 minutes and their space is released. Replaced pictures stay recoverable and keep counting for 7 days, then a job deletes them.
 
 ## Allowances
 

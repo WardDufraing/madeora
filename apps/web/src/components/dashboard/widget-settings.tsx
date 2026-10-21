@@ -5,7 +5,14 @@ import { useTranslations } from "next-intl";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/ui/select-field";
 import type { DashboardWidget } from "@/dashboard/layout";
-import { notificationCounts, parseConfig, defaultConfig } from "@/dashboard/widgets";
+import {
+  notificationCounts,
+  parseConfig,
+  defaultConfig,
+  widgetRegistry,
+} from "@/dashboard/widgets";
+
+import { TaskWidgetSettings } from "./task-widget-settings";
 
 /**
  * A widget's own settings in edit mode (S17). Each type's settings come from its registry schema;
@@ -13,9 +20,12 @@ import { notificationCounts, parseConfig, defaultConfig } from "@/dashboard/widg
  */
 export function WidgetSettings({
   widget,
+  contextHomeId,
   onChange,
 }: {
   readonly widget: DashboardWidget;
+  /** The Home the widget's data comes from, or null for the Personal space. */
+  readonly contextHomeId: string | null;
   readonly onChange: (config: Record<string, unknown>) => void;
 }) {
   const t = useTranslations("Dashboard");
@@ -61,5 +71,10 @@ export function WidgetSettings({
       );
     case "quick-actions":
       return <p className="text-helper text-fg-muted">{t("settingsNone")}</p>;
+    case "tasks": {
+      const parsed = widgetRegistry.tasks.config.safeParse(widget.config);
+      const tasks = parsed.success ? parsed.data : widgetRegistry.tasks.config.parse({});
+      return <TaskWidgetSettings config={tasks} homeId={contextHomeId} onChange={onChange} />;
+    }
   }
 }

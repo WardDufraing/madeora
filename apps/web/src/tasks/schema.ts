@@ -37,6 +37,11 @@ export const TASK_LIMITS = {
   templateName: 60,
   templates: 100,
   bulk: 100,
+  /** S19c: attachments per task; days one calendar read covers; entries it returns. */
+  attachments: 10,
+  attachmentName: 200,
+  calendarDays: 42,
+  calendarEntries: 500,
 } as const;
 
 export const taskPriorities = ["low", "normal", "high", "urgent"] as const;
@@ -57,7 +62,16 @@ const labelColorSchema = z.custom<LabelColor>(isLabelColor, "invalid");
 
 export const taskStatuses = ["open", "completed", "all"] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
-export const taskWhens = ["any", "upcoming", "active", "overdue"] as const;
+/** S19c adds due today, due in the next 7 days and no due date (widgets, calendar). */
+export const taskWhens = [
+  "any",
+  "upcoming",
+  "active",
+  "overdue",
+  "due_today",
+  "due_week",
+  "undated",
+] as const;
 export type TaskWhen = (typeof taskWhens)[number];
 export const taskSorts = ["due", "priority_desc", "priority_asc", "created"] as const;
 export type TaskSort = (typeof taskSorts)[number];
@@ -502,3 +516,23 @@ export const taskQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).max(TASK_LIMITS.maxOffset).default(0),
 });
 export type TaskQuery = z.output<typeof taskQuerySchema>;
+
+export const calendarViews = ["week", "month"] as const;
+export type CalendarView = (typeof calendarViews)[number];
+
+/**
+ * The task calendar's address (S19c): week or month around `date`, the selected `day`, and the
+ * list filters that apply to dates (list, status, priority, labels, assignee). Unknown values fail.
+ */
+export const calendarQuerySchema = z.object({
+  view: z.enum(calendarViews).default("month"),
+  date: dateOnlySchema.optional(),
+  day: dateOnlySchema.optional(),
+  list: id.optional(),
+  status: z.enum(taskStatuses).default("all"),
+  priority: many(z.enum(priorityFilters)),
+  label: many(id).pipe(z.array(id).max(TASK_LIMITS.labels)),
+  assignee: z.enum(assigneeFilters).default("any"),
+  member: id.optional(),
+});
+export type CalendarQuery = z.output<typeof calendarQuerySchema>;

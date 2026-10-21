@@ -6,7 +6,11 @@ import { addWidget, type DashboardLayout } from "@/dashboard/layout";
 import { homeStarterLayout, personalStarterLayout } from "@/dashboard/starter";
 import type { WidgetEntry } from "@/dashboard/view-types";
 import type { DateTimeFormats } from "@/invitations/format";
-import { renderWithIntl } from "@/test/intl";
+import type { TaskRow } from "@/tasks/api";
+import { defaultTaskQuery } from "@/tasks/filters";
+import type { TaskWidgetConfig, TaskWidgetData } from "@/tasks/widget-data";
+import { axeViolations } from "@/test/axe";
+import { renderWithQuery } from "@/test/intl";
 
 import { renderWidgets, type HomeScope, type PersonalScope } from "./widget-content";
 
@@ -15,11 +19,15 @@ interface State {
   notifications: { status: "ok"; value: unknown[] } | { status: "unavailable" };
   directory:
     { status: "ok"; members: unknown[] } | { status: "not-found" } | { status: "unavailable" };
+  tasks: TaskWidgetData | null;
+  taskCalls: { homeId: string | null; config: TaskWidgetConfig }[];
 }
 const state = vi.hoisted((): State => ({
   locale: "en",
   notifications: { status: "ok", value: [] },
   directory: { status: "ok", members: [] },
+  tasks: null,
+  taskCalls: [],
 }));
 
 vi.mock("next-intl/server", async () => {
@@ -44,6 +52,52 @@ vi.mock("@/notifications/server", () => ({
 vi.mock("@/members/directory", () => ({
   getHomeDirectory: () => Promise.resolve(state.directory),
 }));
+vi.mock("@/tasks/widget-data", () => ({
+  loadTaskWidget: (homeId: string | null, config: TaskWidgetConfig) => {
+    state.taskCalls.push({ homeId, config });
+    return Promise.resolve(state.tasks ?? emptyTasks());
+  },
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
+const noOptions = { lists: [], labels: [], members: [] };
+function emptyTasks(): TaskWidgetData {
+  return {
+    status: "ok",
+    page: { tasks: [], total: 0 },
+    list: null,
+    options: noOptions,
+    query: defaultTaskQuery,
+    missingLabels: 0,
+    missingMember: false,
+    filtered: false,
+  };
+}
+function taskRow(overrides: Partial<TaskRow> = {}): TaskRow {
+  return {
+    id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0300",
+    listId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0400",
+    listName: "Groceries",
+    title: "Buy milk",
+    startDate: null,
+    dueDate: "2027-01-01",
+    priority: "high",
+    completed: false,
+    needsReassignment: false,
+    overdue: false,
+    upcoming: false,
+    subtasksDone: 0,
+    subtasksTotal: 0,
+    commentCount: 0,
+    labelIds: [],
+    assigneeIds: [],
+    assignedToMe: false,
+    canComplete: true,
+    revision: 1,
+    recurring: false,
+    ...overrides,
+  };
+}
 
 const HOME_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
 const LEFT_HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0002";
@@ -88,9 +142,9 @@ async function resolve(node: ReactNode): Promise<ReactNode> {
   return node;
 }
 
-async function show(entries: readonly WidgetEntry[]): Promise<void> {
+async function show(entries: readonly WidgetEntry[]): Promise<HTMLElement> {
   const bodies = await Promise.all(entries.map((entry) => resolve(entry.body)));
-  renderWithIntl(
+  return renderWithQuery(
     <div>
       {entries.map((entry, index) => (
         <section key={entry.id} aria-label={entry.title}>
@@ -99,7 +153,7 @@ async function show(entries: readonly WidgetEntry[]): Promise<void> {
       ))}
     </div>,
     state.locale,
-  );
+  ).container;
 }
 
 function withHomeWidget(homeId: string): DashboardLayout {
@@ -116,6 +170,8 @@ beforeEach(() => {
   state.locale = "en";
   state.notifications = { status: "ok", value: [] };
   state.directory = { status: "ok", members: [] };
+  state.tasks = null;
+  state.taskCalls = [];
   vi.useFakeTimers({ toFake: ["Date"] });
   // 31 December 2026, 23:30 UTC: already 1 January 2027 in Brussels.
   vi.setSystemTime(new Date(Date.UTC(2026, 11, 31, 23, 30)));
@@ -272,5 +328,121 @@ describe("renderWidgets on a Home dashboard", () => {
         "Couldn't load this widget",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+const TASKS_WIDGET = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0201";
+function withTasksWidget(
+  layout: DashboardLayout,
+  config: Partial<TaskWidgetConfig> = {},
+  homeId?: string,
+): DashboardLayout {
+  return addWidget(
+    { ...layout, widgets: layout.widgets.filter((w) => w.type !== "tasks") },
+    {
+      id: TASKS_WIDGET,
+      type: "tasks",
+      hidden: false,
+      config,
+      ...(homeId ? { source: { homeId } } : {}),
+    },
+  );
+}
+
+describe("tasks widgets", () => {
+  it("shows personal tasks on the starter dashboard with a truthful empty state", async () => {
+    await show(await renderWidgets(personalStarterLayout, personalScope()));
+    const region = screen.getByRole("region", { name: "Personal tasks" });
+    expect(within(region).getByText("No open tasks")).toBeInTheDocument();
+    expect(within(region).getByText("All Tasks · No filters")).toBeInTheDocument();
+    expect(state.taskCalls[0]?.homeId).toBeNull();
+  });
+
+  it("lists tasks with a completion box, the list name for All Tasks, and an accessible link", async () => {
+    state.tasks = { ...emptyTasks(), page: { tasks: [taskRow()], total: 7 } } as TaskWidgetData;
+    const container = await show(await renderWidgets(personalStarterLayout, personalScope()));
+    const region = screen.getByRole("region", { name: "Personal tasks" });
+    expect(within(region).getByRole("checkbox", { name: /Buy milk/ })).not.toBeChecked();
+    expect(within(region).getByRole("link", { name: "Buy milk" })).toHaveAttribute(
+      "href",
+      "/tasks/6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0300",
+    );
+    expect(within(region).getByText(/Groceries/)).toBeInTheDocument();
+    expect(within(region).getByText("Showing 1 of 7")).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("shows no completion box for a task the viewer may not complete", async () => {
+    state.tasks = {
+      ...emptyTasks(),
+      page: { tasks: [taskRow({ canComplete: false })], total: 1 },
+    } as TaskWidgetData;
+    await show(await renderWidgets(personalStarterLayout, personalScope()));
+    const region = screen.getByRole("region", { name: "Personal tasks" });
+    expect(within(region).queryByRole("checkbox")).toBeNull();
+  });
+
+  it("says a chosen list is gone instead of showing another one", async () => {
+    state.tasks = { status: "list-unavailable", options: noOptions };
+    await show(await renderWidgets(personalStarterLayout, personalScope()));
+    const region = screen.getByRole("region", { name: "Personal tasks" });
+    expect(within(region).getByText("This list is no longer available")).toBeInTheDocument();
+    expect(within(region).queryByRole("checkbox")).toBeNull();
+  });
+
+  it("shows an error state when tasks cannot be read", async () => {
+    state.tasks = { status: "unavailable" };
+    await show(await renderWidgets(personalStarterLayout, personalScope()));
+    const region = screen.getByRole("region", { name: "Personal tasks" });
+    expect(within(region).getByText("Tasks could not be loaded")).toBeInTheDocument();
+  });
+
+  it("names its filters and missing labels or members", async () => {
+    state.tasks = {
+      ...emptyTasks(),
+      list: { id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0400", name: "Groceries" },
+      missingLabels: 2,
+      missingMember: true,
+      filtered: true,
+    } as TaskWidgetData;
+    const layout = withTasksWidget(homeStarterLayout, {
+      when: "due_today",
+      priorities: ["urgent"],
+      assignee: "member",
+    });
+    await show(await renderWidgets(layout, homeScope()));
+    const region = screen.getByRole("region", { name: "Home tasks" });
+    expect(within(region).getByTestId("task-widget-scope")).toHaveTextContent(
+      "List: ⁨Groceries⁩ · Due today · Priority: Urgent · Assigned to A former member",
+    );
+    expect(
+      within(region).getByText("2 chosen labels no longer exist and are left out."),
+    ).toBeInTheDocument();
+    expect(within(region).getByText(/no longer a member/)).toBeInTheDocument();
+    expect(within(region).getByText("No tasks match")).toBeInTheDocument();
+    expect(state.taskCalls[0]?.homeId).toBe(HOME_ID);
+  });
+
+  it("reads a Home-bound widget on the personal dashboard from that Home, labelled with it", async () => {
+    const entries = await renderWidgets(
+      withTasksWidget(personalStarterLayout, {}, HOME_ID),
+      personalScope(),
+    );
+    expect(entries.find((e) => e.id === TASKS_WIDGET)).toMatchObject({
+      title: "Home tasks · ⁨Thuis⁩",
+      sourceName: "Thuis",
+    });
+    await show(entries);
+    expect(state.taskCalls.map((call) => call.homeId)).toEqual([HOME_ID]);
+  });
+
+  it("never reads tasks of a Home the person left", async () => {
+    const entries = await renderWidgets(
+      withTasksWidget(personalStarterLayout, {}, LEFT_HOME),
+      personalScope(),
+    );
+    expect(entries.find((e) => e.id === TASKS_WIDGET)).toMatchObject({ unavailable: true });
+    await show(entries);
+    expect(state.taskCalls).toEqual([]);
   });
 });

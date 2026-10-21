@@ -92,7 +92,7 @@ describe("GET /api/v1/dashboard-templates", () => {
           kind: "personal",
           isMine: true,
           sharedHomeIds: [HOME_ID],
-          widgets: ["welcome", "quick-actions", "notifications"],
+          widgets: ["welcome", "quick-actions", "notifications", "tasks"],
         },
       ],
     });
@@ -137,7 +137,7 @@ describe("POST /api/v1/dashboard-templates", () => {
     expect(args?.p_name).toBe("Morning");
     expect(args?.p_kind).toBe("personal");
     const layout = args?.p_layout as { widgets: { source?: unknown }[] };
-    expect(layout.widgets).toHaveLength(3);
+    expect(layout.widgets).toHaveLength(4);
     expect(layout.widgets.some((w) => w.source)).toBe(false);
   });
 

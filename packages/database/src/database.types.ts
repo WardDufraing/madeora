@@ -324,10 +324,19 @@ export type Database = {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
       };
+      attach_task_file: {
+        Args: { p_file_id: string; p_scope?: string };
+        Returns: {
+          attachment_id: string;
+          impact: Json;
+          outcome: string;
+        }[];
+      };
       authorize_file_read: {
         Args: { p_file_id: string };
         Returns: {
           content_type: string;
+          display_name: string;
           object_key: string;
           sha256: string;
           size_bytes: number;
@@ -450,6 +459,21 @@ export type Database = {
         Returns: {
           outcome: string;
           revision: number;
+        }[];
+      };
+      create_task_attachment_intent: {
+        Args: {
+          p_content_type: string;
+          p_name: string;
+          p_request_id: string;
+          p_size: number;
+          p_task_id: string;
+        };
+        Returns: {
+          expires_at: string;
+          file_id: string;
+          outcome: string;
+          upload_key: string;
         }[];
       };
       create_task_from_template: {
@@ -826,6 +850,22 @@ export type Database = {
           state: string;
         }[];
       };
+      list_task_attachments: { Args: { p_task_id: string }; Returns: Json };
+      list_task_calendar: {
+        Args: {
+          p_assignee?: string;
+          p_assignee_member?: string;
+          p_from: string;
+          p_home_id?: string;
+          p_label_ids?: string[];
+          p_list_id?: string;
+          p_priorities?: string[];
+          p_status?: string;
+          p_to: string;
+          p_today?: string;
+        };
+        Returns: Json;
+      };
       list_task_comments: {
         Args: { p_limit?: number; p_offset?: number; p_task_id: string };
         Returns: {
@@ -1025,6 +1065,14 @@ export type Database = {
       remove_home_member: {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
+      };
+      remove_task_attachment: {
+        Args: { p_attachment_id: string; p_dry_run?: boolean; p_scope?: string };
+        Returns: {
+          entry_id: string;
+          impact: Json;
+          outcome: string;
+        }[];
       };
       remove_task_reminder: {
         Args: {
@@ -1278,6 +1326,13 @@ export type Database = {
           oldest_open_deletion_seconds: number;
           open_deletions: number;
           pending_uploads: number;
+        }[];
+      };
+      task_attachment_scope_impact: {
+        Args: { p_attachment_id?: string; p_scope: string; p_task_id: string };
+        Returns: {
+          impact: Json;
+          outcome: string;
         }[];
       };
       task_reminder_titles: {

@@ -23,6 +23,7 @@ function entriesFor(layout: DashboardLayout): WidgetEntry[] {
     "quick-actions": "Quick actions",
     notifications: "Notifications",
     "home-members": "Home members",
+    tasks: "Personal tasks",
   };
   return layout.widgets.map((widget) => ({
     id: widget.id,
@@ -149,7 +150,7 @@ describe("DashboardBoard edit mode", () => {
     renderBoard();
     await openEditor();
     const handles = screen.getAllByRole("button", { name: /^Arrange / });
-    expect(handles).toHaveLength(3);
+    expect(handles).toHaveLength(4);
     const link = screen.getByRole("link", { hidden: true, name: "Content of welcome" });
     expect(link.closest("[inert]")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
@@ -217,7 +218,7 @@ describe("DashboardBoard edit mode", () => {
     await user.click(
       within(screen.getByTestId("dashboard-selected")).getByRole("button", { name: "Remove" }),
     );
-    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(3);
     expect(screen.getByRole("status")).toHaveTextContent("Welcome removed.");
   });
 
@@ -226,7 +227,7 @@ describe("DashboardBoard edit mode", () => {
     const user = await openEditor();
     const catalogue = screen.getByTestId("dashboard-catalogue");
     expect(within(catalogue).getByText("Home members · ⁨Thuis⁩")).toBeInTheDocument();
-    await user.click(within(catalogue).getByRole("button", { name: "Add Home members" }));
+    await user.click(within(catalogue).getByRole("button", { name: "Add Home members · ⁨Thuis⁩" }));
     expect(
       screen.getByRole("button", { name: "Arrange Home members · ⁨Thuis⁩" }),
     ).toBeInTheDocument();
@@ -241,12 +242,22 @@ describe("DashboardBoard edit mode", () => {
     expect(added?.source).toEqual({ homeId: HOME_ID });
   });
 
+  it("offers tasks both from the Personal space and from a chosen Home", async () => {
+    renderBoard();
+    await openEditor();
+    const catalogue = screen.getByTestId("dashboard-catalogue");
+    expect(within(catalogue).getByRole("button", { name: "Add Personal tasks" })).toBeEnabled();
+    expect(within(catalogue).getByRole("button", { name: "Add Tasks · ⁨Thuis⁩" })).toBeEnabled();
+  });
+
   it("explains that Home widgets need a Home when the person has none", async () => {
     renderBoard({ sourceHomes: [] });
     await openEditor();
     const catalogue = screen.getByTestId("dashboard-catalogue");
-    expect(within(catalogue).getByText(/Join or create a Home/)).toBeInTheDocument();
+    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(2);
     expect(within(catalogue).getByRole("button", { name: "Add Home members" })).toBeDisabled();
+    expect(within(catalogue).getByRole("button", { name: "Add Tasks" })).toBeDisabled();
+    expect(within(catalogue).getByRole("button", { name: "Add Personal tasks" })).toBeEnabled();
   });
 
   it("offers only the widgets a Home dashboard may hold", async () => {
