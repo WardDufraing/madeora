@@ -24,6 +24,8 @@ const itemTypeKey = {
   task: "itemTypeTask",
   task_list: "itemTypeTaskList",
   task_series_removal: "itemTypeTaskSeriesRemoval",
+  task_attachment: "itemTypeTaskAttachment",
+  task_series_attachment: "itemTypeTaskSeriesAttachment",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

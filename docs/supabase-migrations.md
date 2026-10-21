@@ -8,19 +8,20 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 - **`madeora-production`:** just before you merge a release pull request (`production` ← `main`) whose commit list contains a migration. Apply it first, then merge: the code already in production ignores new tables, and the new code needs them.
 - Apply every file you have not applied yet, **oldest first** (the file names start with the date). Never apply a file twice. The table below says how to check whether a file is already in.
 
-| File                                                                   | Step | Already applied when the check query says              |
-| ---------------------------------------------------------------------- | ---- | ------------------------------------------------------ |
-| `supabase/migrations/20261013000000_private_schema.sql`                | S03  | `private_schema` is `true`                             |
-| `supabase/migrations/20261014120000_user_preferences.sql`              | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
-| `supabase/migrations/20261015090000_sign_in_methods.sql`               | S08  | `sign_in_methods_table` is not `NULL`                  |
-| `supabase/migrations/20261016090000_homes.sql`                         | S09  | `homes_table` is `homes` (not `NULL`)                  |
-| `supabase/migrations/20261017090000_home_invitations.sql`              | S10  | `invitations_table` is not `NULL`                      |
-| `supabase/migrations/20261018090000_member_profiles.sql`               | S11  | `member_profiles_table` is not `NULL`                  |
-| `supabase/migrations/20261019090000_roles_and_ownership.sql`           | S12  | `ownership_transfers_table` is not `NULL`              |
-| `supabase/migrations/20261020090000_ownership_recovery.sql`            | S12b | `ownership_recoveries_table` is not `NULL`             |
-| `supabase/migrations/20261026090000_tasks.sql`                         | S18  | `tasks_table` is not `NULL`                            |
-| `supabase/migrations/20261027090000_task_recurrence.sql`               | S19  | `task_series_table` is not `NULL`                      |
-| `supabase/migrations/20261028090000_task_reminders_templates_bulk.sql` | S19b | `task_templates_table` is not `NULL`                   |
+| File                                                                       | Step | Already applied when the check query says              |
+| -------------------------------------------------------------------------- | ---- | ------------------------------------------------------ |
+| `supabase/migrations/20261013000000_private_schema.sql`                    | S03  | `private_schema` is `true`                             |
+| `supabase/migrations/20261014120000_user_preferences.sql`                  | S07  | `preferences_table` is `user_preferences` (not `NULL`) |
+| `supabase/migrations/20261015090000_sign_in_methods.sql`                   | S08  | `sign_in_methods_table` is not `NULL`                  |
+| `supabase/migrations/20261016090000_homes.sql`                             | S09  | `homes_table` is `homes` (not `NULL`)                  |
+| `supabase/migrations/20261017090000_home_invitations.sql`                  | S10  | `invitations_table` is not `NULL`                      |
+| `supabase/migrations/20261018090000_member_profiles.sql`                   | S11  | `member_profiles_table` is not `NULL`                  |
+| `supabase/migrations/20261019090000_roles_and_ownership.sql`               | S12  | `ownership_transfers_table` is not `NULL`              |
+| `supabase/migrations/20261020090000_ownership_recovery.sql`                | S12b | `ownership_recoveries_table` is not `NULL`             |
+| `supabase/migrations/20261026090000_tasks.sql`                             | S18  | `tasks_table` is not `NULL`                            |
+| `supabase/migrations/20261027090000_task_recurrence.sql`                   | S19  | `task_series_table` is not `NULL`                      |
+| `supabase/migrations/20261028090000_task_reminders_templates_bulk.sql`     | S19b | `task_templates_table` is not `NULL`                   |
+| `supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql` | S19c | `task_attachments_table` is not `NULL`                 |
 
 Check query (read-only, safe to run any time):
 
@@ -36,7 +37,8 @@ select
   to_regclass('private.home_ownership_recoveries') as ownership_recoveries_table,
   to_regclass('private.tasks') as tasks_table,
   to_regclass('private.task_series') as task_series_table,
-  to_regclass('private.task_templates') as task_templates_table;
+  to_regclass('private.task_templates') as task_templates_table,
+  to_regclass('private.task_attachments') as task_attachments_table;
 ```
 
 ## Apply a migration
@@ -302,6 +304,26 @@ From S19b a task can have a reminder, tasks can be made from templates, and seve
    It must show `task_templates_table` **private.task_templates**, **false** for `members_can_read_reminders` and `members_can_deliver`, **true** for `members_can_bulk`, and `reminders` **0**.
 
 2. In the app open a task with a due date: its page has a **Reminder** section. Click **Set a reminder**: the form shows "It will remind around …". Under **Notifications** in Settings, a **Task reminders** group appears.
+
+## Check S19c (`20261029090000_task_attachments_calendar_widgets.sql`)
+
+From S19c files can be attached to tasks, tasks have a calendar view, and dashboards can show a tasks widget. Nothing changes for existing tasks or saved dashboards. Apply it only after S19b (`20261028090000_task_reminders_templates_bulk.sql`), because it extends its functions. Attachments need file storage switched on (`docs/file-storage.md`); without it the task page says uploads are not available.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.task_attachments') as task_attachments_table,
+     has_table_privilege('authenticated', 'private.task_attachments', 'select') as members_can_read_attachments,
+     has_function_privilege('authenticated', 'public.attach_task_file(uuid, text)', 'execute')
+       as members_can_attach,
+     private.task_limit('attachments') as attachment_limit,
+     (select count(*) from private.task_attachments) as attachments;
+   ```
+
+   It must show `task_attachments_table` **private.task_attachments**, **false** for `members_can_read_attachments`, **true** for `members_can_attach`, `attachment_limit` **10** and `attachments` **0**.
+
+2. In the app open **Tasks**: a **List / Calendar** switch is above the tasks, and **Calendar** shows the month. Open a task: its page has an **Attachments** section. On the dashboard, **Customize** offers **Personal tasks**.
 
 ## If a migration file changed after you applied it
 

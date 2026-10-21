@@ -14,6 +14,8 @@ export const trashItemTypes = [
   "task",
   "task_list",
   "task_series_removal",
+  "task_attachment",
+  "task_series_attachment",
 ] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 

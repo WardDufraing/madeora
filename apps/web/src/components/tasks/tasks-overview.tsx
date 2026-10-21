@@ -23,6 +23,7 @@ import { NewTask } from "./new-task";
 import { TaskFilters } from "./task-filters";
 import { TaskList } from "./task-list";
 import { TaskNotice } from "./task-notice";
+import { TaskViewSwitch } from "./task-view-switch";
 
 export interface TasksOverviewProps {
   readonly userId: string;
@@ -94,6 +95,7 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
           {tTemplates("libraryLink")}
         </Link>
       </p>
+      <TaskViewSwitch homeId={homeId} current="list" list={current?.id} />
       {notice === "deleted" ? (
         <TaskNotice>
           {t("deletedNotice")}{" "}

@@ -78,6 +78,37 @@ const notificationsConfig = z.strictObject({
 });
 const homeMembersConfig = z.strictObject({ showRoles: z.boolean().default(true) });
 
+/**
+ * The tasks widget (S19c; spec "Confirmed configurable task dashboard widgets"): one list or All
+ * Tasks of the widget's context (the Personal space, the Home, or the source Home), with the same
+ * filters as the full Tasks module. Ids of lists, labels and members are checked again when the
+ * widget renders; one that no longer exists shows an explicit state, never a substitute.
+ */
+export const taskWidgetCounts = [5, 10, 15] as const;
+export const taskWidgetStatuses = ["open", "completed", "all"] as const;
+export const taskWidgetWhens = [
+  "any",
+  "overdue",
+  "due_today",
+  "due_week",
+  "upcoming",
+  "undated",
+] as const;
+export const taskWidgetPriorities = ["low", "normal", "high", "urgent", "unset"] as const;
+export const taskWidgetAssignees = ["any", "me", "unassigned", "member"] as const;
+const tasksConfig = z.strictObject({
+  /** null: All Tasks. */
+  listId: z.uuid().nullable().default(null),
+  status: z.enum(taskWidgetStatuses).default("open"),
+  when: z.enum(taskWidgetWhens).default("any"),
+  priorities: z.array(z.enum(taskWidgetPriorities)).max(taskWidgetPriorities.length).default([]),
+  labelIds: z.array(z.uuid()).max(20).default([]),
+  /** Home widgets only; 'member' names memberId (a membership id). */
+  assignee: z.enum(taskWidgetAssignees).default("any"),
+  memberId: z.uuid().nullable().default(null),
+  count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
+});
+
 export const widgetRegistry = {
   welcome: {
     surfaces: ["personal", "home"],
@@ -115,6 +146,15 @@ export const widgetRegistry = {
     ),
     config: homeMembersConfig,
   },
+  tasks: {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: sizes(
+      { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
+      { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
+      { h: 5, minH: 3, maxH: 10 },
+    ),
+    config: tasksConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -127,6 +167,7 @@ export interface WidgetConfigs {
   readonly "quick-actions": WidgetConfig<"quick-actions">;
   readonly notifications: WidgetConfig<"notifications">;
   readonly "home-members": WidgetConfig<"home-members">;
+  readonly tasks: WidgetConfig<"tasks">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {
@@ -145,15 +186,18 @@ export function surfaceFor(
   return surfaces.includes("personal") ? "personal" : null;
 }
 
-/** The widgets that may be added to a dashboard, with whether each needs a source Home. */
+/**
+ * The widgets that may be added to a dashboard, with whether each needs a source Home. A type that
+ * works both with personal data and bound to a Home (tasks) is offered once for each.
+ */
 export function catalogueFor(
   dashboard: DashboardKind,
 ): readonly { readonly type: WidgetType; readonly needsSource: boolean }[] {
-  return widgetTypes.flatMap((type): { type: WidgetType; needsSource: boolean }[] => {
-    if (surfaceFor(type, dashboard, false)) return [{ type, needsSource: false }];
-    if (surfaceFor(type, dashboard, true)) return [{ type, needsSource: true }];
-    return [];
-  });
+  return widgetTypes.flatMap((type) =>
+    [false, true]
+      .filter((needsSource) => surfaceFor(type, dashboard, needsSource) !== null)
+      .map((needsSource) => ({ type, needsSource })),
+  );
 }
 
 /** A widget type's default settings. */

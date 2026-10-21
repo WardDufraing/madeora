@@ -72,6 +72,9 @@ export async function TaskFilters({
             { value: "upcoming", label: t("whenUpcoming") },
             { value: "active", label: t("whenActive") },
             { value: "overdue", label: t("whenOverdue") },
+            { value: "due_today", label: t("whenDueToday") },
+            { value: "due_week", label: t("whenDueWeek") },
+            { value: "undated", label: t("whenUndated") },
           ]}
         />
         {isHome ? (

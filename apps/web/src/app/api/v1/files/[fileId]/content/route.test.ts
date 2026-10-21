@@ -29,8 +29,8 @@ const FILE_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0f01";
 const OBJECT_KEY = `h/${"b".repeat(64)}`;
 const SIGNED = "https://store.example/bucket/h/bbb?X-Amz-Expires=60&X-Amz-Signature=sig";
 
-function get(fileId = FILE_ID) {
-  return GET(new Request(`https://madeora.example/api/v1/files/${fileId}/content`), {
+function get(fileId = FILE_ID, search = "") {
+  return GET(new Request(`https://madeora.example/api/v1/files/${fileId}/content${search}`), {
     params: Promise.resolve({ fileId }),
   });
 }
@@ -70,6 +70,45 @@ describe("GET /api/v1/files/{fileId}/content", () => {
     expect(state.presignGet).toHaveBeenCalledWith(
       OBJECT_KEY,
       expect.objectContaining({ disposition: "attachment" }),
+    );
+  });
+
+  it("names an attachment's download by its display name and shows a PDF inline", async () => {
+    state.rpc.mockResolvedValue({
+      data: [
+        { object_key: OBJECT_KEY, content_type: "application/pdf", display_name: "Lease.pdf" },
+      ],
+      error: null,
+    });
+    await get();
+    expect(state.presignGet).toHaveBeenCalledWith(OBJECT_KEY, {
+      expiresInSeconds: 60,
+      contentType: "application/pdf",
+      disposition: "inline",
+      filename: "Lease.pdf",
+    });
+    await get(FILE_ID, "?download=1");
+    expect(state.presignGet).toHaveBeenLastCalledWith(
+      OBJECT_KEY,
+      expect.objectContaining({ disposition: "attachment", filename: "Lease.pdf" }),
+    );
+  });
+
+  it("always downloads an Office file, under its name", async () => {
+    state.rpc.mockResolvedValue({
+      data: [
+        {
+          object_key: OBJECT_KEY,
+          content_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          display_name: "Plan.docx",
+        },
+      ],
+      error: null,
+    });
+    await get();
+    expect(state.presignGet).toHaveBeenCalledWith(
+      OBJECT_KEY,
+      expect.objectContaining({ disposition: "attachment", filename: "Plan.docx" }),
     );
   });
 

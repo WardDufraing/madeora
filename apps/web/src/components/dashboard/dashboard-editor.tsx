@@ -411,6 +411,9 @@ export function DashboardEditor({
           {selected ? (
             <SelectedWidget
               widget={selected}
+              contextHomeId={
+                target.kind === "home" ? target.homeId : (selected.source?.homeId ?? null)
+              }
               title={titleOf(selected)}
               placements={placements}
               breakpoint={breakpoint}
@@ -615,6 +618,7 @@ function EditorPanel({
 
 function SelectedWidget({
   widget,
+  contextHomeId,
   title,
   placements,
   breakpoint,
@@ -625,6 +629,8 @@ function SelectedWidget({
   onRemove,
 }: {
   readonly widget: DashboardWidget;
+  /** The Home whose data the widget shows (null: the Personal space). */
+  readonly contextHomeId: string | null;
   readonly title: string;
   readonly placements: readonly Placement[];
   readonly breakpoint: Breakpoint;
@@ -650,7 +656,7 @@ function SelectedWidget({
   return (
     <div className="flex flex-col gap-4" data-testid="dashboard-selected">
       <p className="text-body font-medium break-words">{title}</p>
-      <WidgetSettings widget={widget} onChange={onConfig} />
+      <WidgetSettings widget={widget} contextHomeId={contextHomeId} onChange={onConfig} />
       <div className="flex flex-col gap-2">
         <p className="text-helper text-fg-muted">{t("positionLabel")}</p>
         <div className="flex flex-wrap gap-2">
@@ -733,7 +739,7 @@ function AddWidgets({
         {catalogue.map(({ type, needsSource: bound }) => {
           const unavailable = bound && !chosenHome;
           return (
-            <li key={type} className="flex flex-col gap-1">
+            <li key={`${type}:${String(bound)}`} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 text-body font-medium">
                   {bound && chosenHome
@@ -741,7 +747,9 @@ function AddWidgets({
                         widget: labels.name(type),
                         home: isolate(chosenHome.name),
                       })
-                    : labels.name(type)}
+                    : kind === "personal" && !bound
+                      ? labels.personalName(type)
+                      : labels.name(type)}
                 </p>
                 <Button
                   size="sm"
@@ -750,7 +758,17 @@ function AddWidgets({
                   onClick={() => {
                     onAdd(type, bound && chosenHome ? chosenHome.id : null);
                   }}
-                  aria-label={t("addWidgetNamed", { widget: labels.name(type) })}
+                  aria-label={t("addWidgetNamed", {
+                    widget:
+                      bound && chosenHome
+                        ? t("widgetFromHome", {
+                            widget: labels.name(type),
+                            home: isolate(chosenHome.name),
+                          })
+                        : kind === "personal" && !bound
+                          ? labels.personalName(type)
+                          : labels.name(type),
+                  })}
                 >
                   {t("addWidget")}
                 </Button>

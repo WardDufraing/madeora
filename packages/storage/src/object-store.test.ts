@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { parseStorageEnv, storageConfigFromEnv } from "./config.ts";
-import { StorageUnavailableError, createObjectStore } from "./object-store.ts";
+import { StorageUnavailableError, contentDisposition, createObjectStore } from "./object-store.ts";
 
 const key = `u/${"c".repeat(64)}`;
 const config = {
@@ -61,6 +61,24 @@ describe("createObjectStore", () => {
     expect(url.searchParams.get("response-content-disposition")).toBe("inline");
     expect(url.searchParams.get("response-cache-control")).toBe("private, no-store");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("60");
+  });
+
+  it("names a download in an ASCII-only header, with the exact name as UTF-8", () => {
+    const { store } = storeWith(() => new Response(null));
+    const url = new URL(
+      store.presignGet(key, {
+        expiresInSeconds: 60,
+        contentType: "application/pdf",
+        disposition: "attachment",
+        filename: 'Plan "één"\r\n.pdf',
+      }),
+    );
+    const value = url.searchParams.get("response-content-disposition") ?? "";
+    expect(value).toBe(
+      "attachment; filename=\"Plan ___n___.pdf\"; filename*=UTF-8''Plan%20%22%C3%A9%C3%A9n%22%0D%0A.pdf",
+    );
+    expect(/^[\x20-\x7e]*$/.test(value)).toBe(true);
+    expect(contentDisposition("inline")).toBe("inline");
   });
 
   it("reads facts with HEAD and treats a missing object as null", async () => {

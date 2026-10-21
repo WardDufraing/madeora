@@ -61,6 +61,8 @@ const itemTypeKey = {
   task: "itemTypeTask",
   task_list: "itemTypeTaskList",
   task_series_removal: "itemTypeTaskSeriesRemoval",
+  task_attachment: "itemTypeTaskAttachment",
+  task_series_attachment: "itemTypeTaskSeriesAttachment",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -72,6 +74,12 @@ function conflictMessage(kind: string) {
       return "conflictListUnavailable";
     case "series_changed":
       return "conflictSeriesChanged";
+    case "task_unavailable":
+      return "conflictTaskUnavailable";
+    case "series_unavailable":
+      return "conflictSeriesUnavailable";
+    case "attachment_limit":
+      return "conflictAttachmentLimit";
     default:
       return "conflictOther";
   }

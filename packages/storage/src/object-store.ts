@@ -56,6 +56,8 @@ export interface ObjectStore {
       readonly expiresInSeconds: number;
       readonly contentType: string;
       readonly disposition: "inline" | "attachment";
+      /** The name the browser saves it under (RFC 6266; any characters, encoded here). */
+      readonly filename?: string;
     },
   ): string;
   head(key: string): Promise<ObjectFacts | null>;
@@ -168,11 +170,14 @@ export function createObjectStore(
       };
     },
 
-    presignGet(key, { expiresInSeconds, contentType, disposition }) {
+    presignGet(key, { expiresInSeconds, contentType, disposition, filename }) {
       const url = new URL(objectUrl(key));
       // Signed into the link, so the store serves exactly this type and disposition.
       url.searchParams.set("response-content-type", contentType);
-      url.searchParams.set("response-content-disposition", disposition);
+      url.searchParams.set(
+        "response-content-disposition",
+        contentDisposition(disposition, filename),
+      );
       url.searchParams.set("response-cache-control", "private, no-store");
       return presignUrl(credentials, {
         method: "GET",
@@ -228,4 +233,21 @@ export function createObjectStore(
       }
     },
   };
+}
+
+/**
+ * A Content-Disposition value (RFC 6266) that only holds ASCII: an ASCII fallback name with quotes,
+ * backslashes and control characters replaced, plus the exact name as UTF-8 in `filename*`.
+ */
+export function contentDisposition(
+  disposition: "inline" | "attachment",
+  filename?: string,
+): string {
+  if (filename === undefined || filename === "") return disposition;
+  const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }

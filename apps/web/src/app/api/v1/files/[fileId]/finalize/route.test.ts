@@ -18,6 +18,8 @@ interface State {
   finalize: Mock;
   storageOn: boolean;
   process: Mock;
+  check: Mock;
+  attach: { outcome: string; attachment_id: string | null; impact: unknown };
   claim: string;
 }
 const state = vi.hoisted((): State => ({
@@ -27,6 +29,8 @@ const state = vi.hoisted((): State => ({
   finalize: vi.fn(),
   storageOn: true,
   process: vi.fn(),
+  check: vi.fn(),
+  attach: { outcome: "attached", attachment_id: null, impact: null },
   claim: "claimed",
 }));
 
@@ -41,6 +45,7 @@ vi.mock("@/storage/server", () => ({
     state.storageOn ? { objects: state.objects, finalizer: { finalize: state.finalize } } : null,
 }));
 vi.mock("@/storage/avatar-image", () => ({ processAvatar: state.process }));
+vi.mock("@/tasks/attachment-file", () => ({ checkAttachment: state.check }));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
 }));
@@ -50,6 +55,7 @@ const UPLOAD_KEY = `u/${"a".repeat(64)}`;
 const OBJECT_KEY = `u/${"b".repeat(64)}`;
 const BYTES = new Uint8Array(2048);
 const PROCESSED = new Uint8Array([1, 2, 3]);
+const ATTACHMENT_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0a01";
 
 function upload(extra: Record<string, unknown> = {}) {
   return {
@@ -82,6 +88,7 @@ function withUpload(row: Record<string, unknown> | null) {
   state.rpc.mockImplementation((name) => {
     if (name === "get_my_upload") return Promise.resolve({ data: row ? [row] : [], error: null });
     if (name === "claim_my_upload") return Promise.resolve({ data: state.claim, error: null });
+    if (name === "attach_task_file") return Promise.resolve({ data: [state.attach], error: null });
     return Promise.resolve({ data: true, error: null });
   });
 }
@@ -104,6 +111,13 @@ beforeEach(() => {
     contentType: "image/webp",
     sha256: "c".repeat(64),
   });
+  state.check.mockReset().mockResolvedValue({
+    ok: true,
+    bytes: BYTES,
+    contentType: "application/pdf",
+    sha256: "d".repeat(64),
+  });
+  state.attach = { outcome: "attached", attachment_id: ATTACHMENT_ID, impact: null };
   withUpload(upload());
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -267,7 +281,7 @@ describe("POST /api/v1/files/{fileId}/finalize", () => {
     expect(response.status).toBe(200);
   });
 
-  it("takes no input: a body naming a user or key is refused", async () => {
+  it("takes no input but an attachment scope: a body naming a user or key is refused", async () => {
     expect((await finalize(FILE_ID, { userId: "user-b" })).status).toBe(400);
     // A body this long is over the 64-byte limit before it is even parsed.
     expect((await finalize(FILE_ID, { key: OBJECT_KEY })).status).toBe(413);
@@ -280,5 +294,112 @@ describe("POST /api/v1/files/{fileId}/finalize", () => {
     state.identity = { userId: "user-a" };
     state.storageOn = false;
     expect((await finalize()).status).toBe(503);
+  });
+});
+
+describe("POST /api/v1/files/{fileId}/finalize for a task attachment", () => {
+  const PDF = "application/pdf";
+  beforeEach(() => {
+    withUpload(upload({ purpose: "task_attachment", declared_type: PDF }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: PDF });
+  });
+
+  it("checks the file's own signature, keeps it, then attaches it with the person's session", async () => {
+    const response = await finalize(FILE_ID, { scope: "this" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      file: { id: FILE_ID },
+      attachment: { id: ATTACHMENT_ID, impact: null },
+    });
+    expect(state.check).toHaveBeenCalledWith(BYTES, PDF);
+    // Never the avatar pipeline, even for an image type both allow.
+    expect(state.process).not.toHaveBeenCalled();
+    expect(state.objects.put).toHaveBeenCalledWith(OBJECT_KEY, BYTES, PDF);
+    expect(state.finalize).toHaveBeenCalledWith("user-a", FILE_ID, {
+      contentType: PDF,
+      size: 2048,
+      sha256: "d".repeat(64),
+    });
+    expect(state.rpc).toHaveBeenCalledWith("attach_task_file", {
+      p_file_id: FILE_ID,
+      p_scope: "this",
+    });
+  });
+
+  it("uses the attachment check for an image attachment, not the avatar crop", async () => {
+    withUpload(upload({ purpose: "task_attachment", declared_type: "image/png" }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: "image/png" });
+    state.check.mockResolvedValue({
+      ok: true,
+      bytes: PROCESSED,
+      contentType: "image/png",
+      sha256: "e".repeat(64),
+    });
+    expect((await finalize()).status).toBe(200);
+    expect(state.process).not.toHaveBeenCalled();
+    expect(state.objects.put).toHaveBeenCalledWith(OBJECT_KEY, PROCESSED, "image/png");
+  });
+
+  it("passes a series scope and answers what it changed", async () => {
+    state.attach = {
+      outcome: "attached",
+      attachment_id: ATTACHMENT_ID,
+      impact: { scope: "following", changed: 3, kept: 1, full: 0, completed: 2 },
+    };
+    const response = await finalize(FILE_ID, { scope: "following" });
+    expect(await response.json()).toEqual({
+      file: { id: FILE_ID },
+      attachment: { id: ATTACHMENT_ID, impact: { changed: 3, kept: 1, full: 0, completed: 2 } },
+    });
+    expect(state.rpc).toHaveBeenCalledWith("attach_task_file", {
+      p_file_id: FILE_ID,
+      p_scope: "following",
+    });
+  });
+
+  it("abandons a file that is not what it claims, as invalid_file or mismatch", async () => {
+    state.check.mockResolvedValue({ ok: false, reason: "invalid-file" });
+    const response = await finalize();
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "invalid-file" });
+    expect(state.rpc).toHaveBeenCalledWith("abandon_my_upload", {
+      p_file_id: FILE_ID,
+      p_reason: "invalid_file",
+    });
+    expect(state.finalize).not.toHaveBeenCalled();
+    expect(state.rpc).not.toHaveBeenCalledWith("attach_task_file", expect.anything());
+  });
+
+  it.each([
+    ["not_permitted", 403, "not-permitted"],
+    ["limit_reached", 409, "limit-reached"],
+    ["not_recurring", 409, "scope-unavailable"],
+    ["not_found", 404, "not-found"],
+  ])(
+    "reports an attach refused with %s (the file stays unattached)",
+    async (outcome, status, error) => {
+      state.attach = { outcome, attachment_id: null, impact: null };
+      const response = await finalize();
+      expect(response.status).toBe(status);
+      expect(await response.json()).toEqual({ error });
+      // The verified file is kept for the expiry job to retire; nothing is deleted here.
+      expect(state.objects.delete).toHaveBeenCalledTimes(1);
+      expect(state.objects.delete).toHaveBeenCalledWith(UPLOAD_KEY);
+    },
+  );
+
+  it("attaches a file that is already finished again (a retry), without storage work", async () => {
+    withUpload(upload({ purpose: "task_attachment", declared_type: PDF, status: "ready" }));
+    const response = await finalize(FILE_ID, { scope: "this" });
+    expect(response.status).toBe(200);
+    expect(state.objects.head).not.toHaveBeenCalled();
+    expect(state.rpc).toHaveBeenCalledWith("attach_task_file", {
+      p_file_id: FILE_ID,
+      p_scope: "this",
+    });
+  });
+
+  it("refuses an unknown scope", async () => {
+    expect((await finalize(FILE_ID, { scope: "all" })).status).toBe(400);
   });
 });
