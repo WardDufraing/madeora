@@ -7,6 +7,9 @@ CLAUDE.md
 architecture.md
 docs/design/
 
+# The graphify skill, installed and pinned by .claude/hooks/graphify-setup.sh (owner, 2026-10-21).
+.claude/skills/graphify/
+
 # Generated files and build output.
 packages/design-tokens/tokens.css
 packages/design-tokens/tailwind.css
