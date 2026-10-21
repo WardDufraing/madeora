@@ -65,6 +65,23 @@ describe("buildNotificationEmail", () => {
     expect(personal.text).toContain(`https://app.madeora.test/tasks/${taskId}`);
   });
 
+  it("emails reviewers that chores wait, naming neither the chore nor a person", async () => {
+    const email = await buildNotificationEmail({
+      ...base,
+      kind: "chore.approval_requested",
+      params: { homeId },
+    });
+    expect(email.subject).toBe("Chores in \u2068De Boomgaard\u2069 are waiting for your review");
+    expect(email.text).toContain(`https://app.madeora.test/homes/${homeId}/chores/approvals`);
+    const nl = await buildNotificationEmail({
+      ...base,
+      locale: "nl",
+      kind: "chore.approval_requested",
+      params: { homeId },
+    });
+    expect(nl.subject).toBe("Klusjes in \u2068De Boomgaard\u2069 wachten op je beoordeling");
+  });
+
   it("keeps the owner's two recovery emails on their own template", async () => {
     const review = await buildNotificationEmail({
       ...base,

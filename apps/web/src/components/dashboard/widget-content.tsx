@@ -4,9 +4,19 @@ import type { HomePermissionProjection, HomeRole } from "@madeora/domain/permiss
 import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 
+import { ChoreReview } from "@/components/chores/chore-review";
+import { QuickComplete } from "@/components/chores/quick-complete";
 import { messageKeyFor } from "@/components/notifications/notification-list";
 import { MemberAvatar } from "@/components/members/member-avatar";
 import { CompactTaskList } from "@/components/tasks/compact-task-list";
+import { LabelChip } from "@/components/tasks/label-chip";
+import { choresPath } from "@/chores/format";
+import {
+  loadChoreApprovalsWidget,
+  loadChoreWidget,
+  type ChoreListConfig,
+  type ChoreWidgetKind,
+} from "@/chores/widget-data";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import type { DashboardLayout, DashboardWidget } from "@/dashboard/layout";
 import type { WidgetEntry } from "@/dashboard/view-types";
@@ -17,7 +27,7 @@ import { listNotifications } from "@/notifications/server";
 import { formatDate, formatWeekday, isoDate } from "@/preferences/regional";
 import type { MyHome } from "@/homes/types";
 import { taskQueryString } from "@/tasks/filters";
-import { tasksPath } from "@/tasks/format";
+import { formatTaskDate, memberNames, personName, tasksPath } from "@/tasks/format";
 import { loadTaskWidget } from "@/tasks/widget-data";
 
 /**
@@ -377,6 +387,275 @@ async function TasksBody({
   );
 }
 
+const choreStateKey = {
+  outstanding: "choreStateOutstanding",
+  overdue: "choreStateOverdue",
+  pending_approval: "choreStatePending",
+  rework: "choreStateRework",
+  completed: "choreStateCompleted",
+} as const;
+
+/**
+ * A My Chores or All Home Chores widget (S20): one Home's occurrences in the chosen state and
+ * date range, earliest due first (completed ones newest first), with what is shown always named:
+ * the state, the range with its dates in the Home's timezone, and whose. Quick complete where
+ * nothing needs a choice (it submits for approval where the chore requires it); anything else opens
+ * the occurrence.
+ */
+async function ChoresBody({
+  homeId,
+  kind,
+  config,
+  formats,
+}: {
+  readonly homeId: string;
+  readonly kind: ChoreWidgetKind;
+  readonly config: ChoreListConfig;
+  readonly formats: DateTimeFormats;
+}) {
+  const [tChoreWidget, tChores, data] = await Promise.all([
+    getTranslations("ChoreWidgets"),
+    getTranslations("Chores"),
+    loadChoreWidget(homeId, kind, config),
+  ]);
+  if (data.status === "unavailable") {
+    return <ErrorState title={tChoreWidget("failedTitle")} description={tChoreWidget("failed")} />;
+  }
+  const base = choresPath(homeId);
+  const names = memberNames(data.members);
+  const who = (memberId: string | null) => {
+    if (memberId === null) return tChores("personFormer");
+    const name = personName({ me: false, member: memberId }, names);
+    return name.kind === "me"
+      ? tChores("personYou")
+      : name.kind === "member"
+        ? isolate(name.name)
+        : name.kind === "unnamed"
+          ? tChores("personUnnamed")
+          : tChores("personFormer");
+  };
+  const assignee = "assignee" in config ? config.assignee : "any";
+  const memberId = "memberId" in config ? config.memberId : null;
+  const scope: string[] = [tChoreWidget(choreStateKey[config.state])];
+  if (data.from || data.to) {
+    const dates = {
+      from: data.from ? formatTaskDate(data.from, formats) : "",
+      to: data.to ? formatTaskDate(data.to, formats) : "",
+    };
+    scope.push(
+      config.state === "completed"
+        ? tChoreWidget("rangeCompleted", dates)
+        : data.from === data.to
+          ? tChoreWidget("rangeDueOn", dates)
+          : tChoreWidget("rangeDue", dates),
+    );
+  }
+  if (kind === "home-chores") {
+    scope.push(
+      assignee === "unassigned"
+        ? tChoreWidget("filterUnassigned")
+        : assignee === "member"
+          ? tChoreWidget("filterAssignedTo", { person: who(memberId) })
+          : tChoreWidget("filterEveryone"),
+    );
+  }
+  const sort =
+    config.state === "completed" ? tChoreWidget("sortCompleted") : tChoreWidget("sortDue");
+  const selfId = names.selfId;
+  return (
+    <div className="flex flex-col gap-3" data-testid="chore-widget">
+      <p className="text-helper text-fg-muted" data-testid="chore-widget-scope">
+        {scope.join(" · ")} · {sort}
+      </p>
+      {data.missingMember ? (
+        <p className="text-helper text-warning">{tChoreWidget("memberMissing")}</p>
+      ) : null}
+      {data.rows.length === 0 ? (
+        <EmptyState title={tChoreWidget("emptyTitle")} description={tChoreWidget("empty")} />
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {data.rows.map((row) => {
+            const quick =
+              row.status === "open" &&
+              row.mandatoryOpen === 0 &&
+              selfId !== null &&
+              (row.assignedToMe || row.assigneeIds.length === 0);
+            return (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
+                data-testid="chore-widget-row"
+              >
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <Link
+                    href={`${base}/${row.id}`}
+                    className="text-body font-medium text-fg underline-offset-2 hover:underline"
+                  >
+                    <bdi>{row.title}</bdi>
+                  </Link>
+                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-helper text-fg-muted">
+                    {row.category ? (
+                      <LabelChip name={row.category.name} color={row.category.color} />
+                    ) : null}
+                    {row.status === "completed" && row.completedAt ? (
+                      <span>
+                        {tChores("widgetCompletedBy", {
+                          person: row.contributor?.me
+                            ? tChores("personYou")
+                            : who(row.contributor?.member ?? null),
+                          date: formatDateTime(row.completedAt, formats),
+                        })}
+                      </span>
+                    ) : (
+                      <span className={row.overdue ? "font-semibold text-danger" : undefined}>
+                        {row.overdue
+                          ? tChores("overdueSince", { date: formatTaskDate(row.dueDate, formats) })
+                          : tChores("dueOn", { date: formatTaskDate(row.dueDate, formats) })}
+                      </span>
+                    )}
+                    {kind === "home-chores" ? (
+                      <span>
+                        {row.assigneeIds.length === 0
+                          ? tChores("unassigned")
+                          : row.assigneeIds.map(who).join(", ")}
+                      </span>
+                    ) : null}
+                    {row.status === "pending_approval" ? (
+                      <span className="font-semibold text-fg">{tChores("pendingMark")}</span>
+                    ) : null}
+                    {row.inRework ? (
+                      <span className="font-semibold text-fg">{tChores("reworkMark")}</span>
+                    ) : null}
+                  </p>
+                </div>
+                {quick && selfId ? (
+                  <QuickComplete
+                    occurrenceId={row.id}
+                    title={row.title}
+                    contributor={selfId}
+                    requiresApproval={row.requiresApproval}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="flex flex-wrap items-baseline justify-between gap-2">
+        <Link href={base} className={linkClass}>
+          {tChoreWidget("openChores")}
+        </Link>
+        {data.total > data.rows.length ? (
+          <span className="text-helper text-fg-muted">
+            {tChoreWidget("showing", { shown: data.rows.length, total: data.total })}
+          </span>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A Pending Approvals widget (S20): the oldest submissions waiting in the Home's review queue,
+ * with approve and reject (each confirmed; rejecting needs a reason), for current chore reviewers
+ * only. Anyone else sees that it is for reviewers, without titles or counts.
+ */
+async function ChoreApprovalsBody({
+  homeId,
+  count,
+  formats,
+}: {
+  readonly homeId: string;
+  readonly count: number;
+  readonly formats: DateTimeFormats;
+}) {
+  const [tChoreWidget, tChores, data] = await Promise.all([
+    getTranslations("ChoreWidgets"),
+    getTranslations("Chores"),
+    loadChoreApprovalsWidget(homeId, count),
+  ]);
+  if (data.status === "unavailable") {
+    return <ErrorState title={tChoreWidget("failedTitle")} description={tChoreWidget("failed")} />;
+  }
+  if (data.status === "not-reviewer") {
+    return (
+      <EmptyState
+        title={tChoreWidget("notReviewerTitle")}
+        description={tChoreWidget("notReviewer")}
+      />
+    );
+  }
+  const base = choresPath(homeId);
+  const names = memberNames(data.members);
+  const who = (person: { readonly me: boolean; readonly member: string | null } | null) => {
+    if (person === null) return tChores("personFormer");
+    const name = personName(person, names);
+    return name.kind === "me"
+      ? tChores("personYou")
+      : name.kind === "member"
+        ? isolate(name.name)
+        : name.kind === "unnamed"
+          ? tChores("personUnnamed")
+          : tChores("personFormer");
+  };
+  return (
+    <div className="flex flex-col gap-3" data-testid="chore-approvals-widget">
+      <p className="text-helper text-fg-muted">{tChoreWidget("approvalsScope")}</p>
+      {data.approvals.length === 0 ? (
+        <EmptyState
+          title={tChoreWidget("approvalsEmptyTitle")}
+          description={tChoreWidget("approvalsEmpty")}
+        />
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {data.approvals.map((item) => {
+            const reported = formatDateTime(item.submittedAt, formats);
+            return (
+              <li key={item.submissionId} className="flex flex-col gap-1 py-2">
+                <Link
+                  href={`${base}/${item.occurrenceId}`}
+                  className="text-body font-medium text-fg underline-offset-2 hover:underline"
+                >
+                  <bdi>{item.title}</bdi>
+                </Link>
+                <p className="text-helper text-fg-muted">
+                  {tChores("pendingRecord", {
+                    person: who(item.submittedBy),
+                    contributor: who(item.contributor),
+                    date: reported,
+                  })}
+                  {item.late ? ` ${tChores("reportedLate")}` : ""}
+                </p>
+                <ChoreReview
+                  occurrenceId={item.occurrenceId}
+                  revision={item.revision}
+                  title={item.title}
+                  summary={tChores("submissionSummary", {
+                    contributor: who(item.contributor),
+                    date: reported,
+                  })}
+                  contributorGone={!item.contributorCurrent}
+                  compact
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="flex flex-wrap items-baseline justify-between gap-2">
+        <Link href={`${base}/approvals`} className={linkClass}>
+          {tChoreWidget("openApprovals")}
+        </Link>
+        {data.total > data.approvals.length ? (
+          <span className="text-helper text-fg-muted">
+            {tChoreWidget("showing", { shown: data.approvals.length, total: data.total })}
+          </span>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
 // readLayout and checkLayout already parsed every widget's settings with its type's schema; parsing
 // again here gives the typed settings, and falls back to the defaults rather than failing.
 function welcomeConfig(widget: DashboardWidget): WidgetConfigs["welcome"] {
@@ -400,6 +679,15 @@ function tasksConfig(widget: DashboardWidget): WidgetConfigs["tasks"] {
   return parsed.success ? parsed.data : config.parse({});
 }
 
+function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals">(
+  type: T,
+  widget: DashboardWidget,
+): WidgetConfigs[T] {
+  const { config } = widgetRegistry[type];
+  const parsed = config.safeParse(widget.config);
+  return (parsed.success ? parsed.data : config.parse({})) as WidgetConfigs[T];
+}
+
 async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<WidgetEntry> {
   const t = await getTranslations("Dashboard");
   const titles = {
@@ -408,6 +696,9 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     notifications: t("widgetNotifications"),
     "home-members": t("widgetHomeMembers"),
     tasks: t("widgetTasks"),
+    "my-chores": t("widgetMyChores"),
+    "home-chores": t("widgetHomeChores"),
+    "chore-approvals": t("widgetChoreApprovals"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -497,6 +788,41 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: t("widgetHomeTasks"), home: isolate(home.name) }),
         sourceName: home.name,
         body: <TasksBody homeId={home.id} config={tasksConfig(widget)} formats={scope.formats} />,
+        unavailable: false,
+      };
+    }
+    case "my-chores":
+    case "home-chores":
+    case "chore-approvals": {
+      // Chores are Home-only: the Home's own dashboard, or one the viewer belongs to now.
+      const home =
+        scope.kind === "home"
+          ? null
+          : scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (scope.kind !== "home" && !home) return unavailable;
+      const homeId = scope.kind === "home" ? scope.home.id : (home?.id ?? "");
+      const body =
+        widget.type === "chore-approvals" ? (
+          <ChoreApprovalsBody
+            homeId={homeId}
+            count={choreConfig("chore-approvals", widget).count}
+            formats={scope.formats}
+          />
+        ) : (
+          <ChoresBody
+            homeId={homeId}
+            kind={widget.type}
+            config={choreConfig(widget.type, widget)}
+            formats={scope.formats}
+          />
+        );
+      return {
+        id: widget.id,
+        title: home
+          ? t("widgetFromHome", { widget: titles[widget.type], home: isolate(home.name) })
+          : titles[widget.type],
+        sourceName: home?.name ?? null,
+        body,
         unavailable: false,
       };
     }

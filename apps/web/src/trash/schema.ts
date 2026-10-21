@@ -6,7 +6,7 @@ import { z } from "zod";
  */
 
 /** Each module step adds its own value here and in the database check constraints. */
-export const trashModules = ["sample", "dashboard", "tasks"] as const;
+export const trashModules = ["sample", "dashboard", "tasks", "chores"] as const;
 export type TrashModule = (typeof trashModules)[number];
 export const trashItemTypes = [
   "sample",
@@ -16,6 +16,9 @@ export const trashItemTypes = [
   "task_series_removal",
   "task_attachment",
   "task_series_attachment",
+  "chore",
+  "chore_occurrence",
+  "chore_removal",
 ] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 
@@ -32,6 +35,7 @@ export const trashResolutions = [
   "detach_parent",
   "move_to_list",
   "restore_tasks_only",
+  "restore_occurrences_only",
 ] as const;
 export type TrashResolution = (typeof trashResolutions)[number];
 
@@ -39,12 +43,13 @@ export type TrashResolution = (typeof trashResolutions)[number];
  * A chosen resolution as sent: a plain option, or an option with its argument after a colon
  * (`move_to_list:<list id>`: restore a task into another list of the same context, S18).
  * `restore_tasks_only` (S19): a removed series changed since; bring back only its occurrences.
+ * `restore_occurrences_only` (S20): the same for a chore's removed occurrences.
  */
 export type TrashResolutionChoice =
   Exclude<TrashResolution, "move_to_list"> | `move_to_list:${string}`;
 
 const resolutionChoiceSchema = z.union([
-  z.enum(["clear_slot", "detach_parent", "restore_tasks_only"]),
+  z.enum(["clear_slot", "detach_parent", "restore_tasks_only", "restore_occurrences_only"]),
   z
     .string()
     .regex(/^move_to_list:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)

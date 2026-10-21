@@ -158,11 +158,11 @@ select tests.assert_true(
 
 select tests.act_as('carol');
 select tests.assert_true(
-  (select count(*) = 12 and bool_and(not overridden)
+  (select count(*) = 18 and bool_and(not overridden)
      and bool_and(enabled = (channel = 'in_app'))
-     and count(distinct category) = 2
+     and count(distinct category) = 3
    from public.get_notification_settings()),
-  'By default nothing is overridden: in-app on, email off, for both optional categories (S19b: reminders), the account and both of her Homes'
+  'By default nothing is overridden: in-app on, email off, for the three optional categories (S19b: reminders, S20: approvals), the account and both of her Homes'
 );
 select tests.assert_true(
   public.set_notification_preference('invitations', 'email', true, null) = 'ok',

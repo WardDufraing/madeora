@@ -238,7 +238,7 @@ describe("quiet hours", () => {
     renderWithQuery(<NotificationSettings {...props({ quietHours: [quiet] })} />);
     const thuis = within(scope("Thuis"));
     expect(thuis.getByRole("checkbox", { name: "Use quiet hours" })).toBeChecked();
-    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(3);
+    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(4);
     expect(thuis.getByTestId("notification-preview")).toHaveTextContent(
       "Quiet hours: 22:00 to 07:00 (Europe/Brussels).",
     );

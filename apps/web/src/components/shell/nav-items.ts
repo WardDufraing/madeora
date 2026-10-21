@@ -64,7 +64,6 @@ export const secondaryNav: readonly NavItem[] = [
  */
 export const unbuiltSections: ReadonlySet<NavId> = new Set([
   "calendar",
-  "chores",
   "meals",
   "shopping",
   "habits",
@@ -89,11 +88,14 @@ export function homeIdFromPath(pathname: string): string | null {
 
 /**
  * Where an item leads in the current context: Dashboard opens the Home's dashboard while a Home is
- * open (S09), the personal dashboard otherwise; Tasks opens the Home's tasks (S18). Other sections
+ * open (S09), the personal dashboard otherwise; Tasks opens the Home's tasks (S18), Chores the Home's
+ * chores (S20). Other sections
  * are not Home-aware yet; each module's step decides when it adds its pages.
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
-  if (item.id === "tasks") return homeId !== null ? `/homes/${homeId}/tasks` : item.href;
+  if (item.id === "tasks" || item.id === "chores") {
+    return homeId !== null ? `/homes/${homeId}/${item.id}` : item.href;
+  }
   if (item.id !== "dashboard") return item.href;
   // In Personal, Dashboard says so, so a Home remembered from earlier cannot pull the person back.
   return homeId !== null ? `/homes/${homeId}` : "/?context=personal";

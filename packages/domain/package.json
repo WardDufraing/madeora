@@ -6,7 +6,8 @@
   "exports": {
     "./permissions": "./src/permissions/index.ts",
     "./notifications": "./src/notifications/index.ts",
-    "./tasks": "./src/tasks/index.ts"
+    "./tasks": "./src/tasks/index.ts",
+    "./chores": "./src/chores/index.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

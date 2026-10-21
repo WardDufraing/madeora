@@ -22,6 +22,8 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261027090000_task_recurrence.sql`                   | S19  | `task_series_table` is not `NULL`                      |
 | `supabase/migrations/20261028090000_task_reminders_templates_bulk.sql`     | S19b | `task_templates_table` is not `NULL`                   |
 | `supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql` | S19c | `task_attachments_table` is not `NULL`                 |
+| `supabase/migrations/20261030090000_chores.sql`                            | S20  | `chores_table` is not `NULL`                           |
+| `supabase/migrations/20261031090000_chore_templates_history_bulk.sql`      | S20  | `chore_templates_table` is not `NULL`                  |
 
 Check query (read-only, safe to run any time):
 
@@ -38,7 +40,9 @@ select
   to_regclass('private.tasks') as tasks_table,
   to_regclass('private.task_series') as task_series_table,
   to_regclass('private.task_templates') as task_templates_table,
-  to_regclass('private.task_attachments') as task_attachments_table;
+  to_regclass('private.task_attachments') as task_attachments_table,
+  to_regclass('private.chores') as chores_table,
+  to_regclass('private.chore_templates') as chore_templates_table;
 ```
 
 ## Apply a migration
@@ -324,6 +328,31 @@ From S19c files can be attached to tasks, tasks have a calendar view, and dashbo
    It must show `task_attachments_table` **private.task_attachments**, **false** for `members_can_read_attachments`, **true** for `members_can_attach`, `attachment_limit` **10** and `attachments` **0**.
 
 2. In the app open **Tasks**: a **List / Calendar** switch is above the tasks, and **Calendar** shows the month. Open a task: its page has an **Attachments** section. On the dashboard, **Customize** offers **Personal tasks**.
+
+## Check S20 (`20261030090000_chores.sql`, `20261031090000_chore_templates_history_bulk.sql`)
+
+From S20 every Home has **Chores**: one-off and repeating chores with rotation, checklists, optional approval, templates, a searchable history, bulk changes and three dashboard widgets. Nothing changes for existing data. Apply the two files in this order, after S19c (`20261029090000_task_attachments_calendar_widgets.sql`), because they reuse its task schedule functions.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.chores') as chores_table,
+     to_regclass('private.chore_templates') as chore_templates_table,
+     has_table_privilege('authenticated', 'private.chores', 'select') as members_can_read_chores,
+     has_table_privilege('authenticated', 'private.chore_submissions', 'select')
+       as members_can_read_submissions,
+     has_function_privilege('authenticated',
+       'public.review_chore_submission(uuid, integer, text, text)', 'execute') as members_can_review_call,
+     has_function_privilege('authenticated',
+       'public.bulk_chore_occurrences(uuid, text, jsonb, boolean, uuid, date, text)', 'execute')
+       as members_can_bulk_call,
+     (select count(*) from private.chores) as chores;
+   ```
+
+   It must show both tables (**private.chores**, **private.chore_templates**), **false** for `members_can_read_chores` and `members_can_read_submissions`, **true** for both `_call` columns (the functions check each person's rights themselves) and `chores` **0**.
+
+2. In the app open a Home: the sidebar's **Chores** opens its chores, with **History** and, for the Owner, **Manage chores and categories** (with **Templates**). On the Home dashboard, **Customize** offers **My Chores**, **All Home Chores** and **Pending Approvals**. Under **Notifications** in Settings, a **Chore approvals** group appears.
 
 ## If a migration file changed after you applied it
 

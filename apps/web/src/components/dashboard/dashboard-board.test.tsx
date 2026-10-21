@@ -254,7 +254,9 @@ describe("DashboardBoard edit mode", () => {
     renderBoard({ sourceHomes: [] });
     await openEditor();
     const catalogue = screen.getByTestId("dashboard-catalogue");
-    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(2);
+    // Home members, Tasks of a Home and the three chore widgets.
+    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(5);
+    expect(within(catalogue).getByRole("button", { name: "Add My Chores" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Home members" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Tasks" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Personal tasks" })).toBeEnabled();

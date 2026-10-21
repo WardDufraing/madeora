@@ -2,6 +2,7 @@ import {
   contextHref,
   homeIdFromPath,
   isActive,
+  isUnbuiltSection,
   primaryNav,
   secondaryNav,
   unbuiltSections,
@@ -73,5 +74,14 @@ describe("navigation items", () => {
     expect(isActive(`/homes/${HOME}/tasks`, `/homes/${HOME}/tasks-x`)).toBe(false);
     expect(isActive(`/homes/${HOME}/tasks`, `/homes/${HOME}`)).toBe(false);
     expect(isActive(`/homes/${HOME}`, `/homes/${HOME}/tasks`)).toBe(false);
+  });
+
+  it("points Chores at the open Home's chores (S20) and marks it built", () => {
+    const chores = primaryNav.find((item) => item.id === "chores");
+    if (!chores) throw new Error("chores item missing");
+    expect(contextHref(chores, HOME)).toBe(`/homes/${HOME}/chores`);
+    expect(contextHref(chores, null)).toBe("/chores");
+    expect(isUnbuiltSection("chores")).toBe(false);
+    expect(isActive(`/homes/${HOME}/chores`, `/homes/${HOME}/chores/manage`)).toBe(true);
   });
 });

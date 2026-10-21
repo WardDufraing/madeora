@@ -109,6 +109,45 @@ const tasksConfig = z.strictObject({
   count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
 });
 
+/**
+ * The chore widgets (S20; spec "Confirmed configurable chore dashboard widgets"): always one Home
+ * (on its own dashboard, or bound to one on the personal dashboard; chores are Home-only). My Chores
+ * shows the viewer's own, All Home Chores everyone's (or one member's, or unassigned ones), Pending
+ * Approvals the review queue for chore reviewers only. Dates are relative to the Home's today, so
+ * a saved setting keeps its meaning: due ones by due date, completed ones by completion date.
+ */
+export const choreWidgetCounts = [5, 10, 15] as const;
+export const choreWidgetStates = [
+  "outstanding",
+  "overdue",
+  "pending_approval",
+  "rework",
+  "completed",
+] as const;
+export const choreWidgetRanges = ["any", "today", "next_7_days", "past_7_days"] as const;
+export const choreWidgetAssignees = ["any", "unassigned", "member"] as const;
+const choreCount = z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5);
+const myChoresConfig = z.strictObject({
+  state: z.enum(choreWidgetStates).default("outstanding"),
+  range: z.enum(choreWidgetRanges).default("any"),
+  count: choreCount,
+});
+const homeChoresConfig = z.strictObject({
+  state: z.enum(choreWidgetStates).default("outstanding"),
+  range: z.enum(choreWidgetRanges).default("any"),
+  /** 'member' names memberId (a membership id). */
+  assignee: z.enum(choreWidgetAssignees).default("any"),
+  memberId: z.uuid().nullable().default(null),
+  count: choreCount,
+});
+const choreApprovalsConfig = z.strictObject({ count: choreCount });
+
+const choreSizes = sizes(
+  { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
+  { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
+  { h: 5, minH: 3, maxH: 10 },
+);
+
 export const widgetRegistry = {
   welcome: {
     surfaces: ["personal", "home"],
@@ -155,6 +194,21 @@ export const widgetRegistry = {
     ),
     config: tasksConfig,
   },
+  "my-chores": {
+    surfaces: ["home", "home-source"],
+    sizes: choreSizes,
+    config: myChoresConfig,
+  },
+  "home-chores": {
+    surfaces: ["home", "home-source"],
+    sizes: choreSizes,
+    config: homeChoresConfig,
+  },
+  "chore-approvals": {
+    surfaces: ["home", "home-source"],
+    sizes: choreSizes,
+    config: choreApprovalsConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -168,6 +222,9 @@ export interface WidgetConfigs {
   readonly notifications: WidgetConfig<"notifications">;
   readonly "home-members": WidgetConfig<"home-members">;
   readonly tasks: WidgetConfig<"tasks">;
+  readonly "my-chores": WidgetConfig<"my-chores">;
+  readonly "home-chores": WidgetConfig<"home-chores">;
+  readonly "chore-approvals": WidgetConfig<"chore-approvals">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

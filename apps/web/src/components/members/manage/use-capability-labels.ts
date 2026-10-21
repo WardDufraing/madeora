@@ -17,6 +17,8 @@ export function useCapabilityLabels(): {
     removeMembers: t("capRemoveMembers"),
     manageHomeDashboard: t("capManageHomeDashboard"),
     manageHomeTasks: t("capManageHomeTasks"),
+    manageHomeChores: t("capManageHomeChores"),
+    approveHomeChores: t("capApproveHomeChores"),
   };
   const descriptions: { readonly [C in DelegableCapability]: string } = {
     manageHomeSettings: t("capManageHomeSettingsDescription"),
@@ -24,6 +26,8 @@ export function useCapabilityLabels(): {
     removeMembers: t("capRemoveMembersDescription"),
     manageHomeDashboard: t("capManageHomeDashboardDescription"),
     manageHomeTasks: t("capManageHomeTasksDescription"),
+    manageHomeChores: t("capManageHomeChoresDescription"),
+    approveHomeChores: t("capApproveHomeChoresDescription"),
   };
   return { name: (c) => names[c], description: (c) => descriptions[c] };
 }

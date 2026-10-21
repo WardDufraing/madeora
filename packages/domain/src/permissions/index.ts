@@ -31,3 +31,11 @@ export {
   type TaskFacts,
   type TaskPermissionProjection,
 } from "./tasks";
+export {
+  choreActions,
+  chorePermissions,
+  decideChoreAction,
+  type ChoreAction,
+  type ChoreFacts,
+  type ChorePermissionProjection,
+} from "./chores";

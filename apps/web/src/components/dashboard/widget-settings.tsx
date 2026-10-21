@@ -12,6 +12,7 @@ import {
   widgetRegistry,
 } from "@/dashboard/widgets";
 
+import { ChoreWidgetSettings } from "./chore-widget-settings";
 import { TaskWidgetSettings } from "./task-widget-settings";
 
 /**
@@ -75,6 +76,39 @@ export function WidgetSettings({
       const parsed = widgetRegistry.tasks.config.safeParse(widget.config);
       const tasks = parsed.success ? parsed.data : widgetRegistry.tasks.config.parse({});
       return <TaskWidgetSettings config={tasks} homeId={contextHomeId} onChange={onChange} />;
+    }
+    case "my-chores": {
+      const parsed = widgetRegistry["my-chores"].config.safeParse(widget.config);
+      return (
+        <ChoreWidgetSettings
+          type="my-chores"
+          config={parsed.success ? parsed.data : widgetRegistry["my-chores"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
+      );
+    }
+    case "home-chores": {
+      const parsed = widgetRegistry["home-chores"].config.safeParse(widget.config);
+      return (
+        <ChoreWidgetSettings
+          type="home-chores"
+          config={parsed.success ? parsed.data : widgetRegistry["home-chores"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
+      );
+    }
+    case "chore-approvals": {
+      const parsed = widgetRegistry["chore-approvals"].config.safeParse(widget.config);
+      return (
+        <ChoreWidgetSettings
+          type="chore-approvals"
+          config={parsed.success ? parsed.data : widgetRegistry["chore-approvals"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
+      );
     }
   }
 }

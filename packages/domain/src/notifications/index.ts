@@ -8,11 +8,17 @@
  * `supabase/migrations/*_notifications.sql`; a database test lists what the triggers write.
  */
 
-export const notificationCategories = ["security", "invitations", "storage", "reminders"] as const;
+export const notificationCategories = [
+  "security",
+  "invitations",
+  "storage",
+  "reminders",
+  "approvals",
+] as const;
 export type NotificationCategory = (typeof notificationCategories)[number];
 
 /** Categories a person can configure; the others are essential and cannot be switched off. */
-export const optionalNotificationCategories = ["invitations", "reminders"] as const;
+export const optionalNotificationCategories = ["invitations", "reminders", "approvals"] as const;
 export type OptionalNotificationCategory = (typeof optionalNotificationCategories)[number];
 
 export const notificationChannels = ["in_app", "email"] as const;
@@ -44,6 +50,7 @@ export const notificationKinds = [
   "storage.home_warning",
   "storage.home_critical",
   "task.reminder",
+  "chore.approval_requested",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -74,6 +81,7 @@ export function notificationPath(
   const home = `/homes/${encodeURIComponent(homeId)}`;
   if (kind === "join_request.received") return `${home}/invitations`;
   if (kind.startsWith("storage.home_")) return `${home}/storage`;
+  if (kind === "chore.approval_requested") return `${home}/chores/approvals`;
   if (
     kind === "recovery.claimant_review_started" ||
     kind === "recovery.claimant_approved" ||

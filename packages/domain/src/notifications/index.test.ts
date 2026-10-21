@@ -15,6 +15,9 @@ describe("notificationPath", () => {
     expect(notificationPath("recovery.owner_approved", homeId)).toBe(`/homes/${homeId}`);
     expect(notificationPath("recovery.member_requested", homeId)).toBe(`/homes/${homeId}`);
     expect(notificationPath("join_request.received", homeId)).toBe(`/homes/${homeId}/invitations`);
+    expect(notificationPath("chore.approval_requested", homeId)).toBe(
+      `/homes/${homeId}/chores/approvals`,
+    );
   });
 
   it("falls back to the dashboard or the recoveries page when there is no Home", () => {
@@ -44,6 +47,7 @@ describe("notificationKinds", () => {
   it("recognises exactly its kinds", () => {
     expect(isNotificationKind("join_request.received")).toBe(true);
     expect(isNotificationKind("chores.assigned")).toBe(false);
+    expect(isNotificationKind("chore.approval_requested")).toBe(true);
     expect(isNotificationKind(7)).toBe(false);
   });
 
@@ -57,7 +61,8 @@ describe("notificationKinds", () => {
         (name) =>
           name.endsWith("_notifications.sql") ||
           name.endsWith("_file_storage.sql") ||
-          name.endsWith("_task_reminders_templates_bulk.sql"),
+          name.endsWith("_task_reminders_templates_bulk.sql") ||
+          name.endsWith("_chores.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -66,6 +71,7 @@ describe("notificationKinds", () => {
     const written = new Set([
       ...[...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'reminders', '(task\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });

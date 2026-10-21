@@ -31,6 +31,8 @@ export const delegableCapabilities = [
   "removeMembers",
   "manageHomeDashboard",
   "manageHomeTasks",
+  "manageHomeChores",
+  "approveHomeChores",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -58,6 +60,10 @@ export const homeActions = [
   "home.tasks.create",
   "home.tasks.comment",
   "home.tasks.manage",
+  "home.chores.view",
+  "home.chores.complete",
+  "home.chores.manage",
+  "home.chores.review",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -153,6 +159,19 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.tasks.create": { roles: ["owner", "administrator", "member"] },
   "home.tasks.comment": { roles: ["owner", "administrator", "member"] },
   "home.tasks.manage": { roles: ["owner"], delegatedThrough: "manageHomeTasks" },
+  // Home chores (S20; default picked in the S20 brief, the per-module matrix is open in the spec):
+  // every current member sees the Home's chores, their checklists, notes and history, ticks
+  // checklist steps and completes any occurrence, naming who actually did it (spec "Confirmed
+  // completion of another member's chore"); chore managers (the Owner, Administrators granted
+  // manageHomeChores) create, edit, pause and delete chores, skip and reopen occurrences and manage
+  // categories. SQL: private.can_manage_chores. Reviewing completions of chores that require
+  // approval is its own explicit permission (spec "Confirmed self-approval of chore completions":
+  // ordinary completion rights never review; a reviewer may approve their own completion): the
+  // Owner, and Administrators granted approveHomeChores. SQL: private.can_review_chores.
+  "home.chores.view": { roles: ["owner", "administrator", "member"] },
+  "home.chores.complete": { roles: ["owner", "administrator", "member"] },
+  "home.chores.manage": { roles: ["owner"], delegatedThrough: "manageHomeChores" },
+  "home.chores.review": { roles: ["owner"], delegatedThrough: "approveHomeChores" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -210,6 +229,10 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.tasks.create": can("home.tasks.create"),
     "home.tasks.comment": can("home.tasks.comment"),
     "home.tasks.manage": can("home.tasks.manage"),
+    "home.chores.view": can("home.chores.view"),
+    "home.chores.complete": can("home.chores.complete"),
+    "home.chores.manage": can("home.chores.manage"),
+    "home.chores.review": can("home.chores.review"),
   };
 }
 

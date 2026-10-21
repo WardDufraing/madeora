@@ -24,6 +24,7 @@ export const notificationKinds = [
   "task.reminder.home_due",
   "task.reminder.personal",
   "task.reminder.personal_due",
+  "chore.approval_requested",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -165,6 +166,13 @@ const en: Catalogue = {
     body: "You have a reminder for a task in your personal space that is due {date}. Open Madeora to see which task it is.",
     button: "Open the task",
   },
+  "chore.approval_requested": {
+    subject: "Chores in {home} are waiting for your review",
+    preview: "Open Madeora to approve or reject them.",
+    heading: "Completed chores are waiting for your review",
+    body: "Someone in {home} completed a chore that needs approval. Open Madeora to see what waits and to approve or reject it.",
+    button: "Review chores",
+  },
 };
 
 const nl: Catalogue = {
@@ -294,6 +302,13 @@ const nl: Catalogue = {
     body: "Je hebt een herinnering voor een taak in je persoonlijke ruimte die vervalt op {date}. Open Madeora om te zien welke taak het is.",
     button: "Taak openen",
   },
+  "chore.approval_requested": {
+    subject: "Klusjes in {home} wachten op je beoordeling",
+    preview: "Open Madeora om ze goed te keuren of af te wijzen.",
+    heading: "Afgewerkte klusjes wachten op je beoordeling",
+    body: "Iemand in {home} heeft een klusje afgewerkt dat goedkeuring nodig heeft. Open Madeora om te zien wat er wacht en het goed te keuren of af te wijzen.",
+    button: "Klusjes beoordelen",
+  },
 };
 
 export const notificationMessages = {
@@ -329,5 +344,9 @@ export const notificationMessages = {
 
 /** Optional kinds follow the person's choices; the others are security messages. */
 export function isOptionalNotificationKind(kind: NotificationEmailKind): boolean {
-  return kind.startsWith("join_request.") || kind.startsWith("task.reminder.");
+  return (
+    kind.startsWith("join_request.") ||
+    kind.startsWith("task.reminder.") ||
+    kind === "chore.approval_requested"
+  );
 }
