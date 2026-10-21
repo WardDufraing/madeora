@@ -7,6 +7,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import type { ChoreSummary } from "@/chores/api";
 import {
   getChoreContext,
+  getChoreSettings,
   listChoreCategories,
   listChores,
   listChoreTemplates,
@@ -16,11 +17,13 @@ import { getDateTimeFormats } from "@/invitations/server";
 import { formatTaskDate } from "@/tasks/format";
 
 import { CategoryManager } from "./category-manager";
+import { ChoreSettingsForm } from "./chore-settings-form";
 import { TemplateManager } from "./template-manager";
 
 /**
  * Managing a Home's chores (S20, chore managers): every chore, active and ended, with its state
- * and the occurrence to open, the Home's chore templates and its categories. Anyone else is told so, and the database
+ * and the occurrence to open, the Home's chore templates and its categories, and (S21) the Home's
+ * chore settings. Anyone else is told so, and the database
  * refuses their changes anyway.
  */
 export async function ChoreManagePage({
@@ -28,7 +31,7 @@ export async function ChoreManagePage({
 }: {
   readonly home: { readonly id: string; readonly name: string };
 }) {
-  const [t, formats, context, active, ended, categories, templates] = await Promise.all([
+  const [t, formats, context, active, ended, categories, templates, settings] = await Promise.all([
     getTranslations("Chores"),
     getDateTimeFormats(),
     getChoreContext(home.id),
@@ -36,6 +39,7 @@ export async function ChoreManagePage({
     listChores(home.id, true),
     listChoreCategories(home.id, true),
     listChoreTemplates(home.id, true),
+    getChoreSettings(home.id),
   ]);
   const base = choresPath(home.id);
   const header = (
@@ -55,7 +59,8 @@ export async function ChoreManagePage({
     active.status !== "ok" ||
     ended.status !== "ok" ||
     categories.status !== "ok" ||
-    templates.status !== "ok"
+    templates.status !== "ok" ||
+    settings.status !== "ok"
   ) {
     return (
       <>
@@ -151,6 +156,7 @@ export async function ChoreManagePage({
             .map(({ id, name }) => ({ id, name }))}
         />
         <CategoryManager homeId={home.id} categories={categories.value} />
+        <ChoreSettingsForm homeId={home.id} settings={settings.value} />
       </div>
     </>
   );

@@ -3,6 +3,19 @@ import type {
   OptionalNotificationCategory,
 } from "@madeora/domain/notifications";
 
+/** A join request's decision (S11), a chore reassignment request's answer or decision, or a chore
+ * proposal's decision (S21). */
+export const notificationDecisions = [
+  "approved",
+  "declined",
+  "rejected",
+  "accepted",
+  "awaiting_manager",
+  "confirmed",
+  "refused",
+] as const;
+export type NotificationDecision = (typeof notificationDecisions)[number];
+
 /** One notification as the notification centre shows it. Client-safe. */
 export interface NotificationView {
   readonly id: string;
@@ -12,7 +25,11 @@ export interface NotificationView {
   readonly homeName: string | null;
   /** Dates and codes only (never free text); the words come from the reader's language. */
   readonly objectionEndsAt: string | null;
-  readonly decision: "approved" | "declined" | null;
+  readonly decision: NotificationDecision | null;
+  /** Why a chore claim was released (S21): automatically, or by a chore manager. */
+  readonly reason: "auto" | "manager" | null;
+  /** The chore occurrence a claim or reassignment notice is about (S21). */
+  readonly occurrenceId: string | null;
   /** A reminder's task (S19b), its due day, and its title when the reader can still see it. */
   readonly taskId: string | null;
   readonly dueDate: string | null;

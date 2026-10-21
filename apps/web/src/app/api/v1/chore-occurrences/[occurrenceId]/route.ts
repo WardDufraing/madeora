@@ -36,7 +36,8 @@ export async function GET(
 
 /**
  * Changes this open occurrence only (S20, chore managers): due date, assignees, estimate and its own
- * checklist, or previews that with `dryRun`. Removing a ticked step needs `confirmChecklist`;
+ * checklist, or previews that with `dryRun`. Removing a ticked step needs `confirmChecklist`, and a
+ * new due date that releases a claim at once (its automatic release moment passed) `confirmRelease`;
  * without it the answer is `409 needs-confirmation` with the impact.
  */
 export async function PATCH(
@@ -60,6 +61,7 @@ export async function PATCH(
       : {}),
     ...(change.steps !== undefined ? { p_steps: stepsArg(change.steps) } : {}),
     ...(change.confirmChecklist ? { p_confirm_checklist: true } : {}),
+    ...(change.confirmRelease ? { p_confirm_release: true } : {}),
   });
   if (error) return databaseFailure("chores.occurrence_update_failed", error);
   const row = data[0];

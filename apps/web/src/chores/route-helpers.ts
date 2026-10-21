@@ -107,6 +107,7 @@ export function outcomeAnswer(
       return json(201, body);
     case "exists":
     case "saved":
+    case "removed":
     case "deleted":
     case "completed":
     case "already_completed":
@@ -121,6 +122,17 @@ export function outcomeAnswer(
     case "rejected":
     case "corrected":
     case "unchanged":
+    case "claimed":
+    case "released":
+    case "requested":
+    case "accepted":
+    case "awaiting_manager":
+    case "declined":
+    case "cancelled":
+    case "refused":
+    case "withdrawn":
+    case "sent":
+    case "added":
       return json(200, body);
     case "conflict":
       return failure(409, "conflict", revision === undefined ? {} : { revision });
@@ -158,6 +170,44 @@ export function outcomeAnswer(
       return failure(409, "not-completed", revision === undefined ? {} : { revision });
     case "ended":
       return failure(409, "schedule-ended");
+    case "already_claimed":
+      return failure(409, "already-claimed");
+    case "assigned":
+      return failure(409, "assigned");
+    case "not_claimable":
+      return failure(409, "not-claimable");
+    case "not_eligible":
+      return failure(403, "not-eligible");
+    case "expired":
+      return failure(409, "expired");
+    case "not_claimed":
+      return failure(409, "not-claimed");
+    case "not_assignee":
+      return failure(409, "not-assignee");
+    case "request_open":
+      return failure(409, "request-open");
+    case "not_open":
+      return failure(409, "not-open");
+    case "invalidated":
+      return failure(409, "invalidated");
+    case "duplicate":
+      return failure(409, "duplicate");
+    case "not_in_review":
+      return failure(409, "not-in-review");
+    case "deadline_passed":
+      return failure(409, "deadline-passed");
+    case "not_volunteered":
+      return failure(409, "not-volunteered");
+    case "not_invited":
+      return failure(404, "not-found");
+    case "in_past":
+      return failure(409, "in-past");
+    case "invalid_date":
+      return failure(400, "invalid", { fields: ["dueDate"] });
+    case "invalid_recipient":
+      return failure(400, "invalid", { fields: ["toMember"] });
+    case "invalid_member":
+      return failure(400, "invalid", { fields: ["memberIds"] });
     case "invalid_category":
       return failure(400, "invalid", { fields: ["categoryId"] });
     case "invalid_assignee":

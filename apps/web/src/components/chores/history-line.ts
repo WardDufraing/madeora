@@ -10,7 +10,7 @@ import { useChoreTexts } from "./use-chore-texts";
 
 /**
  * The outcome line of a history row (S20), the same in a chore's history and the Home's: who did
- * it and who recorded it, with the approval; pending, needs rework, skipped (who), missed or open.
+ * it and who recorded it, with the approval; pending, needs rework, skipped (who), closed unclaimed (S21), missed or open.
  * A missed occurrence never reads as skipped, and nothing unresolved gets a completion time.
  */
 export function useHistoryLine(names: MemberNames, formats: DateTimeFormats) {
@@ -37,6 +37,8 @@ export function useHistoryLine(names: MemberNames, formats: DateTimeFormats) {
           person: texts.person(row.skippedBy),
           date: row.skippedAt ? formatDateTime(row.skippedAt, formats) : "",
         });
+      case "expired":
+        return t("historyLineExpired");
       case "missed":
         return t("historyLineMissed");
       case "due_today":

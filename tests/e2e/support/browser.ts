@@ -12,6 +12,14 @@ interface AxeResult {
  * React build reports hydration mismatches this way (minified errors #418/#423 and their
  * recoverable-error logs), so this is also the hydration-warning check.
  */
+/**
+ * Whether the stack serves Supabase Realtime. CI's stack does; the local stand-in
+ * (`pnpm test:e2e:fallback`) has none and sets `E2E_REALTIME=0`, so live-update assertions read
+ * the page again instead and the browser's failed Realtime connection is not an error there.
+ */
+export const realtimeAvailable = process.env.E2E_REALTIME !== "0";
+const realtimeUnavailable = /WebSocket connection to .*\/realtime\/v1\//;
+
 export const test = base.extend<{
   /** Console messages a test expects, such as the browser's log line for a deliberate 404. */
   allowedConsoleErrors: readonly RegExp[];
@@ -23,6 +31,7 @@ export const test = base.extend<{
       const problems: string[] = [];
       page.on("console", (message) => {
         if (allowedConsoleErrors.some((pattern) => pattern.test(message.text()))) return;
+        if (!realtimeAvailable && realtimeUnavailable.test(message.text())) return;
         if (message.type() === "error" || /hydrat/i.test(message.text())) {
           problems.push(`console ${message.type()}: ${message.text()}`);
         }

@@ -38,6 +38,39 @@ describe("notificationPath", () => {
     expect(notificationPath("task.reminder", null, { taskId: 7 })).toBe("/tasks");
   });
 
+  it("leads a claim or reassignment notice to its occurrence, or to the chores page", () => {
+    const occurrenceId = "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
+    for (const kind of [
+      "chore.claim_released",
+      "chore.reassignment_requested",
+      "chore.reassignment_answered",
+      "chore.reassignment_confirmation_needed",
+      "chore.reassignment_decided",
+      "chore.reassignment_invalidated",
+      "chore.volunteer_invited",
+      "chore.volunteer_accepted",
+      "chore.assignment_corrected",
+      "chore.reminder",
+    ]) {
+      expect(notificationPath(kind, homeId, { occurrenceId })).toBe(
+        `/homes/${homeId}/chores/${occurrenceId}`,
+      );
+      expect(notificationPath(kind, homeId, { occurrenceId: 7 })).toBe(`/homes/${homeId}/chores`);
+    }
+  });
+
+  it("leads a proposal decision to the proposals page", () => {
+    expect(notificationPath("chore.proposal_decided", homeId, { decision: "approved" })).toBe(
+      `/homes/${homeId}/chores/proposals`,
+    );
+  });
+
+  it("leads a manager summary to the live Summary page", () => {
+    expect(notificationPath("chore.manager_summary", homeId, { overdueAssigned: 2 })).toBe(
+      `/homes/${homeId}/chores/summary`,
+    );
+  });
+
   it("encodes the Home id", () => {
     expect(notificationPath("recovery.member_ended", "a/b")).toBe("/homes/a%2Fb");
   });
@@ -62,16 +95,20 @@ describe("notificationKinds", () => {
           name.endsWith("_notifications.sql") ||
           name.endsWith("_file_storage.sql") ||
           name.endsWith("_task_reminders_templates_bulk.sql") ||
-          name.endsWith("_chores.sql"),
+          name.endsWith("_chores.sql") ||
+          name.endsWith("_chore_pool_claims.sql") ||
+          name.endsWith("_chore_proposals_volunteers.sql") ||
+          name.endsWith("_chore_overview_reminders.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
-    // Task kinds share their prefix with audit actions, so only those written with the reminders
-    // category count.
+    // Task and chore kinds share their prefix with audit actions, so only those written with a
+    // notification category count.
     const written = new Set([
       ...[...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((m) => m[1]),
-      ...[...sql.matchAll(/'reminders', '(task\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'reminders', '((?:task|chore)\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'chores', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });

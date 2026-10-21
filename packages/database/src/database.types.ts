@@ -5,6 +5,32 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      chore_pool_signals: {
+        Row: {
+          changed_at: string;
+          home_id: string;
+          version: number;
+        };
+        Insert: {
+          changed_at?: string;
+          home_id: string;
+          version?: number;
+        };
+        Update: {
+          changed_at?: string;
+          home_id?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_pool_signals_home_id_fkey";
+            columns: ["home_id"];
+            isOneToOne: true;
+            referencedRelation: "homes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       home_member_profiles: {
         Row: {
           accent_color: string | null;
@@ -321,6 +347,20 @@ export type Database = {
       advance_chores: { Args: { p_home_id: string }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
+      answer_chore_reassignment: {
+        Args: { p_action: string; p_request_id: string };
+        Returns: {
+          outcome: string;
+          status: string;
+        }[];
+      };
+      answer_chore_volunteer_invitation: {
+        Args: { p_action: string; p_request_id: string };
+        Returns: {
+          outcome: string;
+          status: string;
+        }[];
+      };
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
@@ -409,6 +449,15 @@ export type Database = {
         Args: { p_home_id: string; p_transfer_id: string };
         Returns: string;
       };
+      change_chore_volunteer_request: {
+        Args: { p_action: string; p_member_ids?: string[]; p_request_id: string };
+        Returns: {
+          closed: boolean;
+          outcome: string;
+          skipped: string[];
+          status: string;
+        }[];
+      };
       change_home_member_role: {
         Args: {
           p_expected_role: string;
@@ -417,6 +466,15 @@ export type Database = {
           p_role: string;
         };
         Returns: string;
+      };
+      claim_chore_occurrence: {
+        Args: { p_occurrence_id: string };
+        Returns: {
+          claimant_member: string;
+          claimed_by_me: boolean;
+          outcome: string;
+          revision: number;
+        }[];
       };
       claim_job_outbox: {
         Args: { p_lease_seconds: number; p_limit: number };
@@ -460,6 +518,21 @@ export type Database = {
         Returns: {
           outcome: string;
           revision: number;
+        }[];
+      };
+      correct_chore_volunteer_assignment: {
+        Args: {
+          p_dry_run: boolean;
+          p_expected_revision: number;
+          p_member_id?: string;
+          p_occurrence_id: string;
+          p_reason: string;
+        };
+        Returns: {
+          outcome: string;
+          overdue: boolean;
+          revision: number;
+          volunteer_member: string;
         }[];
       };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
@@ -506,6 +579,20 @@ export type Database = {
           p_title: string;
         };
         Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_chore_volunteer_request: {
+        Args: {
+          p_dry_run: boolean;
+          p_expected_revision: number;
+          p_id: string;
+          p_member_ids: string[];
+          p_occurrence_id: string;
+        };
+        Returns: {
+          deadline: string;
           outcome: string;
           revision: number;
         }[];
@@ -727,6 +814,10 @@ export type Database = {
           revision: number;
         }[];
       };
+      deliver_chore_reminder: {
+        Args: { p_occurrence_id: string; p_revision: number; p_user_id: string };
+        Returns: string;
+      };
       deliver_recovery_ready: {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
@@ -764,6 +855,8 @@ export type Database = {
         };
         Returns: boolean;
       };
+      get_chore_claim_policy: { Args: { p_chore_id: string }; Returns: Json };
+      get_chore_claim_state: { Args: { p_occurrence_id: string }; Returns: Json };
       get_chore_context: {
         Args: { p_home_id: string };
         Returns: {
@@ -774,6 +867,19 @@ export type Database = {
         }[];
       };
       get_chore_occurrence: { Args: { p_occurrence_id: string }; Returns: Json };
+      get_chore_reminder: { Args: { p_occurrence_id: string }; Returns: Json };
+      get_chore_settings: {
+        Args: { p_home_id: string };
+        Returns: {
+          can_manage: boolean;
+          reassignment_confirmation: boolean;
+          revision: number;
+          week_start: string;
+        }[];
+      };
+      get_chore_summary: { Args: { p_home_id: string }; Returns: Json };
+      get_chore_summary_setting: { Args: { p_home_id: string }; Returns: Json };
+      get_chore_volunteer_state: { Args: { p_occurrence_id: string }; Returns: Json };
       get_dashboard: {
         Args: { p_home_id?: string };
         Returns: {
@@ -1021,6 +1127,54 @@ export type Database = {
           total_count: number;
         }[];
       };
+      list_chore_pool: {
+        Args: { p_date?: string; p_home_id: string };
+        Returns: {
+          category_color: string;
+          category_id: string;
+          category_name: string;
+          chore_id: string;
+          closes_on: string;
+          due_date: string;
+          eligible: boolean;
+          id: string;
+          kind: string;
+          minutes: number;
+          overdue: boolean;
+          requires_approval: boolean;
+          restricted: boolean;
+          revision: number;
+          scheduled_date: string;
+          section: string;
+          steps_total: number;
+          title: string;
+          today: string;
+          truncated: boolean;
+          week_start: string;
+        }[];
+      };
+      list_chore_proposals: { Args: { p_home_id: string }; Returns: Json };
+      list_chore_reassignment_requests: {
+        Args: { p_home_id: string };
+        Returns: {
+          box: string;
+          created_at: string;
+          due_date: string;
+          from_me: boolean;
+          from_member: string;
+          id: string;
+          note: string;
+          occurrence_id: string;
+          status: string;
+          title: string;
+          to_me: boolean;
+          to_member: string;
+        }[];
+      };
+      list_chore_schedule: {
+        Args: { p_from: string; p_home_id: string; p_to: string };
+        Returns: Json;
+      };
       list_chore_templates: {
         Args: { p_home_id: string; p_include_retired?: boolean };
         Returns: {
@@ -1033,6 +1187,20 @@ export type Database = {
           minutes: number;
           retired: boolean;
           revision: number;
+          steps: Json;
+          title: string;
+        }[];
+      };
+      list_chore_volunteer_offers: {
+        Args: { p_home_id: string };
+        Returns: {
+          deadline: string;
+          due_date: string;
+          instructions: string;
+          invited_at: string;
+          minutes: number;
+          occurrence_id: string;
+          request_id: string;
           steps: Json;
           title: string;
         }[];
@@ -1381,6 +1549,22 @@ export type Database = {
           role: string;
         }[];
       };
+      propose_chore: {
+        Args: {
+          p_category_id?: string;
+          p_due_date: string;
+          p_home_id: string;
+          p_id: string;
+          p_instructions?: string;
+          p_minutes?: number;
+          p_steps?: Json;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       purge_expired_trash_entry: { Args: { p_entry_id: string }; Returns: string };
       purge_stored_file: { Args: { p_file_id: string }; Returns: string };
       purge_trash_entries: {
@@ -1398,8 +1582,27 @@ export type Database = {
         Args: { p_error_code?: string; p_notification_id: string; p_status: string };
         Returns: boolean;
       };
+      release_chore_occurrence: {
+        Args: { p_occurrence_id: string; p_undo?: boolean };
+        Returns: {
+          outcome: string;
+          revision: number;
+          status: string;
+        }[];
+      };
       release_job_outbox: { Args: { p_ids: string[] }; Returns: number };
       release_my_upload: { Args: { p_file_id: string }; Returns: boolean };
+      release_overdue_chore_claim: {
+        Args: { p_claim: number; p_occurrence_id: string };
+        Returns: string;
+      };
+      remove_chore_reminder: {
+        Args: { p_expected_revision: number; p_occurrence_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       remove_home_member: {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
@@ -1454,6 +1657,19 @@ export type Database = {
       reorder_chore_categories: { Args: { p_home_id: string; p_ids: string[] }; Returns: string };
       reorder_subtasks: { Args: { p_subtask_ids: string[]; p_task_id: string }; Returns: string };
       reorder_task_lists: { Args: { p_home_id?: string; p_list_ids: string[] }; Returns: string };
+      request_chore_reassignment: {
+        Args: {
+          p_from_member?: string;
+          p_id: string;
+          p_note?: string;
+          p_occurrence_id: string;
+          p_to_member: string;
+        };
+        Returns: {
+          outcome: string;
+          status: string;
+        }[];
+      };
       request_ownership_recovery: {
         Args: { p_home_id: string; p_request_id: string; p_statement: string };
         Returns: {
@@ -1496,6 +1712,26 @@ export type Database = {
           outcome: string;
         }[];
       };
+      review_chore_proposal: {
+        Args: {
+          p_category_id?: string;
+          p_decision: string;
+          p_due_date?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_instructions?: string;
+          p_minutes?: number;
+          p_reason?: string;
+          p_steps?: Json;
+          p_title?: string;
+        };
+        Returns: {
+          occurrence_id: string;
+          outcome: string;
+          revision: number;
+          status: string;
+        }[];
+      };
       review_chore_submission: {
         Args: {
           p_decision: string;
@@ -1533,9 +1769,27 @@ export type Database = {
           revision: number;
         }[];
       };
+      send_chore_summaries: { Args: { p_limit: number }; Returns: number };
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
+      };
+      set_chore_claim_policy: {
+        Args: {
+          p_auto_release_hours?: number;
+          p_chore_id: string;
+          p_confirm?: boolean;
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_expiry: string;
+          p_member_ids: string[];
+          p_mode: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
       };
       set_chore_paused: {
         Args: {
@@ -1551,6 +1805,23 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_chore_reminder: {
+        Args: {
+          p_days_before?: number;
+          p_dry_run: boolean;
+          p_expected_revision: number;
+          p_local_at?: string;
+          p_mode: string;
+          p_occurrence_id: string;
+          p_time?: string;
+        };
+        Returns: {
+          dst: string;
+          fire_at: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       set_chore_step: {
         Args: { p_checked: boolean; p_step_id: string };
         Returns: {
@@ -1558,6 +1829,19 @@ export type Database = {
           done: number;
           outcome: string;
           total: number;
+        }[];
+      };
+      set_chore_summary_setting: {
+        Args: {
+          p_enabled: boolean;
+          p_expected_revision: number;
+          p_home_id: string;
+          p_hour: number;
+          p_time_zone: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
         }[];
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
@@ -1781,6 +2065,7 @@ export type Database = {
         Args: {
           p_assignee_ids?: string[];
           p_confirm_checklist?: boolean;
+          p_confirm_release?: boolean;
           p_dry_run: boolean;
           p_due_date?: string;
           p_expected_revision: number;
@@ -1817,6 +2102,18 @@ export type Database = {
         Returns: {
           impact: Json;
           occurrence_id: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_chore_settings: {
+        Args: {
+          p_expected_revision: number;
+          p_home_id: string;
+          p_reassignment_confirmation: boolean;
+          p_week_start: string;
+        };
+        Returns: {
           outcome: string;
           revision: number;
         }[];
@@ -1926,6 +2223,14 @@ export type Database = {
         Returns: {
           outcome: string;
           revision: number;
+        }[];
+      };
+      withdraw_chore_proposal: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+          status: string;
         }[];
       };
       withdraw_join_request: { Args: { p_request_id: string }; Returns: string };

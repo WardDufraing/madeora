@@ -12,6 +12,7 @@ import {
 } from "@madeora/storage";
 
 import type {
+  ChoreClaimReleaseOutcome,
   EmailRecordStatus,
   InvitationEmailRead,
   JobDataPort,
@@ -42,6 +43,13 @@ export class FakeJobData implements JobDataPort {
   purgeStatus: StoredFileStatus = "purged";
   trashStatus: TrashEntryStatus = "purged";
   readonly trashCalls: string[] = [];
+  /** Chores (S21): what an automatic claim release answers, and the calls. */
+  claimReleaseOutcome: ChoreClaimReleaseOutcome = "released";
+  readonly claimReleaseCalls: { occurrenceId: string; claim: number }[] = [];
+  choreReminderOutcome: TaskReminderOutcome = "notified";
+  readonly choreReminderCalls: { occurrenceId: string; userId: string; revision: number }[] = [];
+  summariesSent = 0;
+  readonly summaryCalls: number[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
   readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
 
@@ -109,6 +117,28 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.trashCalls.push(entryId);
     return Promise.resolve(this.trashStatus);
+  }
+
+  releaseOverdueChoreClaim(occurrenceId: string, claim: number): Promise<ChoreClaimReleaseOutcome> {
+    this.check();
+    this.claimReleaseCalls.push({ occurrenceId, claim });
+    return Promise.resolve(this.claimReleaseOutcome);
+  }
+
+  deliverChoreReminder(
+    occurrenceId: string,
+    userId: string,
+    revision: number,
+  ): Promise<TaskReminderOutcome> {
+    this.check();
+    this.choreReminderCalls.push({ occurrenceId, userId, revision });
+    return Promise.resolve(this.choreReminderOutcome);
+  }
+
+  sendChoreSummaries(limit: number): Promise<number> {
+    this.check();
+    this.summaryCalls.push(limit);
+    return Promise.resolve(this.summariesSent);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
-import { ChoreRequestError } from "@/chores/api";
+import { ChoreRequestError, type ChoreFailure } from "@/chores/api";
 import { choreKeys } from "@/chores/format";
 
 /**
@@ -17,7 +17,12 @@ export function useChoreMutation<Input, Output>(
   scope: string,
   send: (input: Input) => Promise<Output>,
   onSuccess?: (output: Output, input: Input) => void,
-  options: { readonly refresh?: (output: Output, input: Input) => boolean } = {},
+  options: {
+    readonly refresh?: (output: Output, input: Input) => boolean;
+    /** Failures after which the page is stale and refreshes too (a lost claim race, S21). */
+    readonly refreshOnError?: (failure: ChoreFailure) => boolean;
+    readonly onError?: (error: ChoreRequestError) => void;
+  } = {},
 ) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -40,7 +45,12 @@ export function useChoreMutation<Input, Output>(
       });
     },
     onError: (error) => {
-      if (error.failure === "signedOut" || error.failure === "notFound") {
+      options.onError?.(error);
+      if (
+        error.failure === "signedOut" ||
+        error.failure === "notFound" ||
+        options.refreshOnError?.(error.failure)
+      ) {
         startTransition(() => {
           router.refresh();
         });

@@ -6,6 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/ui/select-field";
 import type { DashboardWidget } from "@/dashboard/layout";
 import {
+  choreScheduleLayouts,
+  choreScheduleLimits,
   notificationCounts,
   parseConfig,
   defaultConfig,
@@ -99,6 +101,33 @@ export function WidgetSettings({
         />
       );
     }
+    case "chore-schedule":
+      return (
+        <div className="flex flex-col gap-4">
+          <SelectField
+            label={t("settingScheduleLayout")}
+            value={String(config.layout)}
+            options={choreScheduleLayouts.map((layout) => ({
+              value: layout,
+              label: layout === "matrix" ? t("scheduleLayoutMatrix") : t("scheduleLayoutCards"),
+            }))}
+            onChange={(event) => {
+              set("layout", event.currentTarget.value);
+            }}
+          />
+          <SelectField
+            label={t("settingScheduleLimit")}
+            value={String(config.limit)}
+            options={choreScheduleLimits.map((limit) => ({
+              value: String(limit),
+              label: t("settingScheduleLimitOption", { count: limit }),
+            }))}
+            onChange={(event) => {
+              set("limit", Number(event.currentTarget.value));
+            }}
+          />
+        </div>
+      );
     case "chore-approvals": {
       const parsed = widgetRegistry["chore-approvals"].config.safeParse(widget.config);
       return (

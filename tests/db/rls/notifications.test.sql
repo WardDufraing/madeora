@@ -141,7 +141,7 @@ select tests.assert_row_count($$select id from public.notifications$$, 0,
 
 select tests.act_as_owner();
 select tests.assert_denied(
-  $$select private.notify_user(tests.user_id('carol'), null, 'chores', 'a.b', '{}', 'test:bad')$$,
+  $$select private.notify_user(tests.user_id('carol'), null, 'gossip', 'a.b', '{}', 'test:bad')$$,
   'An unknown category is refused', '22023'
 );
 select tests.assert_true(
@@ -158,11 +158,11 @@ select tests.assert_true(
 
 select tests.act_as('carol');
 select tests.assert_true(
-  (select count(*) = 18 and bool_and(not overridden)
+  (select count(*) = 24 and bool_and(not overridden)
      and bool_and(enabled = (channel = 'in_app'))
-     and count(distinct category) = 3
+     and count(distinct category) = 4
    from public.get_notification_settings()),
-  'By default nothing is overridden: in-app on, email off, for the three optional categories (S19b: reminders, S20: approvals), the account and both of her Homes'
+  'By default nothing is overridden: in-app on, email off, for the four optional categories (S19b: reminders, S20: approvals, S21: chores), the account and both of her Homes'
 );
 select tests.assert_true(
   public.set_notification_preference('invitations', 'email', true, null) = 'ok',

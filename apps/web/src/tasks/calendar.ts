@@ -96,7 +96,7 @@ export function daysBetween(from: string, to: string): number {
 
 const weekStartDay: { readonly [W in WeekStart]: number } = { sunday: 0, monday: 1, saturday: 6 };
 
-function startOfWeek(date: string, weekStart: WeekStart): string {
+export function startOfWeek(date: string, weekStart: WeekStart): string {
   const day = toUtc(date).getUTCDay();
   return addDays(date, -((day - weekStartDay[weekStart] + 7) % 7));
 }

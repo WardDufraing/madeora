@@ -29,10 +29,40 @@ export interface NotificationEmailInput {
 
 const paramsSchema = z.object({
   objectionEndsAt: z.iso.datetime().optional(),
-  decision: z.enum(["approved", "declined"]).optional(),
+  decision: z
+    .enum([
+      "approved",
+      "declined",
+      "rejected",
+      "accepted",
+      "awaiting_manager",
+      "confirmed",
+      "refused",
+    ])
+    .optional(),
+  reason: z.enum(["auto", "manager"]).optional(),
+  occurrenceId: z.uuid().optional(),
   taskId: z.uuid().optional(),
   dueDate: z.iso.date().nullable().optional(),
 });
+
+/** The template for a kind whose wording depends on a parameter (the decision, the reason). */
+function emailKind(kind: string, inHome: boolean, params: z.infer<typeof paramsSchema>): string {
+  if (kind === "join_request.decided" && params.decision) return `${kind}.${params.decision}`;
+  if (kind === "task.reminder") {
+    return `${kind}.${inHome ? "home" : "personal"}${params.dueDate ? "_due" : ""}`;
+  }
+  if (kind === "chore.claim_released" && params.reason) return `${kind}.${params.reason}`;
+  if (
+    (kind === "chore.reassignment_answered" ||
+      kind === "chore.reassignment_decided" ||
+      kind === "chore.proposal_decided") &&
+    params.decision
+  ) {
+    return `${kind}.${params.decision}`;
+  }
+  return kind;
+}
 
 function isEmailKind(kind: string): kind is NotificationEmailKind {
   return (notificationKinds as readonly string[]).includes(kind);
@@ -69,12 +99,7 @@ export async function buildNotificationEmail(
     });
   }
 
-  const kind =
-    input.kind === "join_request.decided" && params.data.decision
-      ? `join_request.decided.${params.data.decision}`
-      : input.kind === "task.reminder"
-        ? `task.reminder.${input.homeId ? "home" : "personal"}${params.data.dueDate ? "_due" : ""}`
-        : input.kind;
+  const kind = emailKind(input.kind, input.homeId !== null, params.data);
   if (!isEmailKind(kind)) throw new PermanentJobError("no_email_template");
   if (kind === "recovery.claimant_approved" && !endsAt)
     throw new PermanentJobError("invalid_params");

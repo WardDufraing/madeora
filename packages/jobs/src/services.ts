@@ -80,7 +80,25 @@ export interface JobDataPort {
   completeStorageObjectDeletion(deletionId: string): Promise<boolean>;
   /** trash-entry-purge (S16): purges a trash entry past its recovery window; its status afterwards. */
   purgeExpiredTrashEntry(entryId: string): Promise<TrashEntryStatus>;
+  /**
+   * chore-claim-release (S21): releases a claim held past its automatic release time. 'stale': the
+   * claim changed, ended or is not due; 'missing': the occurrence is gone.
+   */
+  releaseOverdueChoreClaim(occurrenceId: string, claim: number): Promise<ChoreClaimReleaseOutcome>;
+  /**
+   * chore-reminder (S21): delivers one person's reminder on an occurrence if its revision is still
+   * current; the outcomes are the task reminder's.
+   */
+  deliverChoreReminder(
+    occurrenceId: string,
+    userId: string,
+    revision: number,
+  ): Promise<TaskReminderOutcome>;
+  /** chore-digest (S21): sends the daily summaries whose hour has come; how many were sent. */
+  sendChoreSummaries(limit: number): Promise<number>;
 }
+
+export type ChoreClaimReleaseOutcome = "released" | "stale" | "missing";
 
 export type TaskReminderOutcome = "notified" | "not_sent" | "stale" | "not_due";
 

@@ -63,6 +63,7 @@ describe("widget registry", () => {
       { type: "my-chores", needsSource: true },
       { type: "home-chores", needsSource: true },
       { type: "chore-approvals", needsSource: true },
+      { type: "chore-schedule", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
@@ -72,12 +73,14 @@ describe("widget registry", () => {
       "my-chores",
       "home-chores",
       "chore-approvals",
+      "chore-schedule",
     ]);
   });
 
   it("has valid defaults for every type", () => {
     for (const type of widgetTypes) expect(defaultConfig(type)).toBeTypeOf("object");
     expect(defaultConfig("notifications")).toEqual({ count: 5 });
+    expect(defaultConfig("chore-schedule")).toEqual({ layout: "matrix", limit: 3 });
   });
 });
 

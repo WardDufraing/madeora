@@ -142,6 +142,19 @@ const homeChoresConfig = z.strictObject({
 });
 const choreApprovalsConfig = z.strictObject({ count: choreCount });
 
+/**
+ * The Chore schedule widget (S21; spec "Confirmed Home chore overview widget"): a Home-local week or
+ * day of chores as a member-by-day matrix or daily grouped cards, with the week's unassigned chores
+ * to claim. The settings hold the default layout and how many chores a cell shows before "+N more";
+ * a viewer's own layout switch is remembered in their browser.
+ */
+export const choreScheduleLayouts = ["matrix", "cards"] as const;
+export const choreScheduleLimits = [2, 3, 5] as const;
+const choreScheduleConfig = z.strictObject({
+  layout: z.enum(choreScheduleLayouts).default("matrix"),
+  limit: z.union([z.literal(2), z.literal(3), z.literal(5)]).default(3),
+});
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -209,6 +222,15 @@ export const widgetRegistry = {
     sizes: choreSizes,
     config: choreApprovalsConfig,
   },
+  "chore-schedule": {
+    surfaces: ["home", "home-source"],
+    sizes: sizes(
+      { w: 12, h: 5, minW: 6, maxW: 12, minH: 4, maxH: 10 },
+      { w: 6, h: 5, minW: 4, maxW: 6, minH: 4, maxH: 10 },
+      { h: 6, minH: 4, maxH: 10 },
+    ),
+    config: choreScheduleConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -225,6 +247,7 @@ export interface WidgetConfigs {
   readonly "my-chores": WidgetConfig<"my-chores">;
   readonly "home-chores": WidgetConfig<"home-chores">;
   readonly "chore-approvals": WidgetConfig<"chore-approvals">;
+  readonly "chore-schedule": WidgetConfig<"chore-schedule">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

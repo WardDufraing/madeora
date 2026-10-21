@@ -33,8 +33,34 @@ import type {
  * - `GET|POST|PUT /api/v1/chore-categories` (list, create, order), `PATCH /api/v1/chore-categories/:id`,
  *   `POST /api/v1/chore-categories/:id/delete` (or its preview).
  *
+ *
+ * The pool and claims (S21):
+ * - `GET /api/v1/chore-pool?homeId&date` (the unassigned occurrences of the Home-local week holding
+ *   `date`, today by default, and the overdue ones still available).
+ * - `GET|POST /api/v1/chore-occurrences/:id/claim` (its claim state, or claim it: first come wins),
+ *   `POST …/:id/release` (`{ undo }`: the claimant or a chore manager returns it to the pool).
+ * - `POST …/:id/reassignment-requests` (ask a member to take over the caller's part),
+ *   `GET /api/v1/chore-reassignment-requests?homeId` (the caller's open ones),
+ *   `PATCH /api/v1/chore-reassignment-requests/:id` (accept, decline, cancel, confirm, refuse).
+ * - `GET|PUT /api/v1/chores/:id/claim-policy` (who may claim, expiry, automatic release; a preview
+ *   with `dryRun`, and `confirm` for immediate effects).
+ * - `GET|PATCH /api/v1/chore-settings?homeId` (week start, reassignment confirmation).
+ *
+ * Proposals and volunteer requests (S21):
+ * - `GET|POST /api/v1/chore-proposals?homeId` (the proposals the caller may see; propose one),
+ *   `PATCH /api/v1/chore-proposals/:id` (withdraw; reject with a reason or approve the final fields).
+ * - `GET|POST /api/v1/chore-occurrences/:id/volunteers` (the volunteer side of an occurrence; ask
+ *   members to volunteer, or its preview), `POST …/:id/volunteer-correction` (or its preview).
+ * - `GET /api/v1/chore-volunteer-requests?homeId` (the caller's open invitations),
+ *   `PATCH /api/v1/chore-volunteer-requests/:id` (accept, decline; withdraw, add, cancel).
+ *
  * `409 conflict` (with the current `revision` when known) means someone changed it since it was read.
  */
+export const CHORE_POOL_ENDPOINT = "/api/v1/chore-pool";
+export const CHORE_SETTINGS_ENDPOINT = "/api/v1/chore-settings";
+export const CHORE_REASSIGNMENTS_ENDPOINT = "/api/v1/chore-reassignment-requests";
+export const CHORE_PROPOSALS_ENDPOINT = "/api/v1/chore-proposals";
+export const CHORE_VOLUNTEERS_ENDPOINT = "/api/v1/chore-volunteer-requests";
 export const CHORES_ENDPOINT = "/api/v1/chores";
 export const CHORE_OCCURRENCES_ENDPOINT = "/api/v1/chore-occurrences";
 export const CHORE_CATEGORIES_ENDPOINT = "/api/v1/chore-categories";
@@ -42,6 +68,8 @@ export const CHORE_APPROVALS_ENDPOINT = "/api/v1/chore-approvals";
 export const CHORE_HISTORY_ENDPOINT = "/api/v1/chore-history";
 export const CHORE_BULK_ENDPOINT = "/api/v1/chore-occurrences/bulk";
 export const CHORE_TEMPLATES_ENDPOINT = "/api/v1/chore-templates";
+export const CHORE_SCHEDULE_ENDPOINT = "/api/v1/chore-schedule";
+export const CHORE_SUMMARY_SETTINGS_ENDPOINT = "/api/v1/chore-summary-settings";
 
 export type ChoreErrorCode =
   | "forbidden"
@@ -68,6 +96,22 @@ export type ChoreErrorCode =
   | "scope-unavailable"
   | "not-recurring"
   | "schedule-ended"
+  | "already-claimed"
+  | "assigned"
+  | "not-claimable"
+  | "not-eligible"
+  | "expired"
+  | "not-claimed"
+  | "not-assignee"
+  | "invalid-recipient"
+  | "request-open"
+  | "not-open"
+  | "invalidated"
+  | "duplicate"
+  | "not-in-review"
+  | "deadline-passed"
+  | "not-volunteered"
+  | "in-past"
   | "failed";
 
 export interface ChoreErrorResponse {
@@ -76,8 +120,13 @@ export interface ChoreErrorResponse {
   /** Mandatory steps still open (steps-incomplete). */
   readonly count?: number;
   readonly fields?: readonly string[];
-  /** What a checklist change would remove (needs-confirmation). */
-  readonly impact?: OccurrenceImpact;
+  /** What a checklist change would remove, or a claim policy would do now (needs-confirmation). */
+  readonly impact?: OccurrenceImpact | ClaimPolicyImpact;
+  /** Who has it (already-claimed): the viewer, or a member's membership id. */
+  readonly claimedByMe?: boolean;
+  readonly claimant?: string | null;
+  /** The request's status now (not-open, exists). */
+  readonly status?: string;
 }
 
 /** A person as a chore shows them: the viewer, a current member (membership id), or a former one. */
@@ -148,7 +197,8 @@ export interface ChoreStepTemplate {
   readonly mandatory: boolean;
 }
 
-export type ChoreStatus = "open" | "pending_approval" | "completed" | "skipped";
+/** `expired`: closed unclaimed at the end of its week (S21), never completed, distinct from skipped. */
+export type ChoreStatus = "open" | "pending_approval" | "completed" | "skipped" | "expired";
 
 export type ChoreEventKind =
   | "completed"
@@ -158,7 +208,13 @@ export type ChoreEventKind =
   | "approved"
   | "rejected"
   | "withdrawn"
-  | "corrected";
+  | "corrected"
+  | "claimed"
+  | "released"
+  | "expired"
+  | "reassigned"
+  | "volunteered"
+  | "assignment_corrected";
 
 export interface ChoreEvent {
   readonly kind: ChoreEventKind;
@@ -277,7 +333,14 @@ export interface ChoreOccurrenceDetail {
 }
 
 export type ChoreHistoryStatus =
-  "completed" | "skipped" | "missed" | "due_today" | "open" | "pending_approval" | "rework";
+  | "completed"
+  | "skipped"
+  | "expired"
+  | "missed"
+  | "due_today"
+  | "open"
+  | "pending_approval"
+  | "rework";
 
 export interface ChoreHistoryRow {
   readonly id: string;
@@ -322,7 +385,7 @@ export interface ChoreSummary {
 }
 
 /** What a change to this occurrence's checklist removes or makes mandatory. */
-export interface OccurrenceImpact {
+export interface OccurrenceImpact extends Partial<MoveImpact> {
   readonly removed: number;
   readonly removedChecked: number;
   readonly added: number;
@@ -518,6 +581,22 @@ export type ChoreFailure =
   | "scopeUnavailable"
   | "notRecurring"
   | "scheduleEnded"
+  | "alreadyClaimed"
+  | "assigned"
+  | "notClaimable"
+  | "notEligible"
+  | "expired"
+  | "notClaimed"
+  | "notAssignee"
+  | "invalidRecipient"
+  | "requestOpen"
+  | "notOpen"
+  | "invalidated"
+  | "duplicate"
+  | "notInReview"
+  | "deadlinePassed"
+  | "notVolunteered"
+  | "inPast"
   | "network"
   | "failed";
 
@@ -555,6 +634,22 @@ const failures: { readonly [C in ChoreErrorCode]?: ChoreFailure } = {
   "scope-unavailable": "scopeUnavailable",
   "not-recurring": "notRecurring",
   "schedule-ended": "scheduleEnded",
+  "already-claimed": "alreadyClaimed",
+  assigned: "assigned",
+  "not-claimable": "notClaimable",
+  "not-eligible": "notEligible",
+  expired: "expired",
+  "not-claimed": "notClaimed",
+  "not-assignee": "notAssignee",
+  "invalid-recipient": "invalidRecipient",
+  "request-open": "requestOpen",
+  "not-open": "notOpen",
+  invalidated: "invalidated",
+  duplicate: "duplicate",
+  "not-in-review": "notInReview",
+  "deadline-passed": "deadlinePassed",
+  "not-volunteered": "notVolunteered",
+  "in-past": "inPast",
 };
 
 /** Sends one request; resolves with the JSON answer or rejects with a ChoreRequestError. */
@@ -588,4 +683,353 @@ export async function sendChoreRequest<T>(method: string, url: string, body?: un
     throw new ChoreRequestError(failures[code] ?? "failed", detail, fields);
   }
   return payload as T;
+}
+
+/** Who may claim a chore's unassigned occurrences (S21). */
+export type ClaimMode = "all" | "selected" | "none";
+/** Whether an unclaimed occurrence stays available as overdue or closes at the end of its week. */
+export type ExpiryPolicy = "overdue" | "week_end";
+
+/** One claimable occurrence in the pool. */
+export interface ChorePoolRow {
+  readonly id: string;
+  readonly choreId: string;
+  readonly title: string;
+  readonly kind: ChoreKind;
+  readonly category: ChoreCategoryRef | null;
+  readonly scheduledDate: string;
+  readonly dueDate: string;
+  /** `week`: in the shown week; `overdue`: due before the current week and still available. */
+  readonly section: "week" | "overdue";
+  readonly overdue: boolean;
+  readonly minutes: number | null;
+  readonly stepsTotal: number;
+  readonly requiresApproval: boolean;
+  /** Only selected members may claim it (who they are is not shown). */
+  readonly restricted: boolean;
+  /** The viewer may claim it. */
+  readonly eligible: boolean;
+  /** The day it closes unclaimed (it can be claimed until the day before), or null. */
+  readonly closesOn: string | null;
+  readonly revision: number;
+}
+
+export interface ChorePool {
+  readonly rows: readonly ChorePoolRow[];
+  /** The shown week's first day and today, both Home-local (null when the pool is empty). */
+  readonly weekStart: string | null;
+  readonly today: string | null;
+  /** More rows exist than were answered. */
+  readonly truncated: boolean;
+}
+
+/** Why an occurrence cannot be claimed by the viewer now (null: it can). */
+export type ClaimBlock =
+  | "already_claimed"
+  | "assigned"
+  | "not_claimable"
+  | "not_eligible"
+  | "expired"
+  | "pending_approval"
+  | "already_completed"
+  | "already_skipped";
+
+export type ReassignmentStatus =
+  | "pending"
+  | "awaiting_manager"
+  | "accepted"
+  | "declined"
+  | "cancelled"
+  | "invalidated"
+  | "refused";
+
+export type ReassignmentAction = "accept" | "decline" | "cancel" | "confirm" | "refuse";
+
+export interface ReassignmentRequest {
+  readonly id: string;
+  readonly status: ReassignmentStatus;
+  readonly from: ChorePerson | null;
+  readonly to: ChorePerson | null;
+  readonly by: ChorePerson | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+  readonly respondedAt: string | null;
+  readonly decidedAt: string | null;
+  readonly decidedBy: ChorePerson | null;
+  readonly invalidReason: "occurrence_closed" | "assignment_changed" | "member_left" | null;
+  readonly canAnswer: boolean;
+  readonly canCancel: boolean;
+  readonly canConfirm: boolean;
+}
+
+/** An occurrence's claim, its policies and the reassignment requests the viewer may see. */
+export interface ChoreClaimState {
+  readonly claimMode: ClaimMode;
+  readonly expiryPolicy: ExpiryPolicy;
+  readonly autoReleaseHours: number | null;
+  readonly claimable: boolean;
+  readonly block: ClaimBlock | null;
+  readonly claimedBy: ChorePerson | null;
+  readonly claimedAt: string | null;
+  readonly canRelease: boolean;
+  /** When an automatic release would return the claim to the pool. */
+  readonly releaseAt: string | null;
+  readonly closesOn: string | null;
+  readonly expiredAt: string | null;
+  readonly canRequest: boolean;
+  /** A chore manager may ask on behalf of any assignee. */
+  readonly canRequestForOthers: boolean;
+  readonly confirmationRequired: boolean;
+  readonly requests: readonly ReassignmentRequest[];
+}
+
+export interface ChoreClaimPolicy {
+  readonly claimMode: ClaimMode;
+  /** Membership ids, for chore managers only (null for everyone else). */
+  readonly members: readonly (string | null)[] | null;
+  readonly expiryPolicy: ExpiryPolicy;
+  readonly autoReleaseHours: number | null;
+  readonly revision: number;
+}
+
+/** What a claim policy change does at once: closes, releases, and claims it would not allow. */
+export interface ClaimPolicyImpact {
+  readonly expireNow: number;
+  readonly releaseNow: number;
+  readonly claimedIneligible: number;
+}
+
+export interface ChoreSettings {
+  readonly weekStart: "monday" | "saturday" | "sunday";
+  readonly reassignmentConfirmation: boolean;
+  /** 0 while the defaults were never changed. */
+  readonly revision: number;
+  readonly canManage: boolean;
+}
+
+/** One of the viewer's open requests in a Home. */
+export interface ReassignmentListItem {
+  readonly id: string;
+  readonly occurrenceId: string;
+  readonly title: string;
+  readonly dueDate: string;
+  readonly status: "pending" | "awaiting_manager";
+  /** `incoming`: waiting for the viewer's answer; `outgoing`: theirs; `confirm`: for a manager. */
+  readonly box: "incoming" | "outgoing" | "confirm";
+  readonly from: ChorePerson;
+  readonly to: ChorePerson;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
+export interface ClaimResponse {
+  readonly outcome: "claimed";
+  readonly revision: number;
+}
+
+export interface ReleaseResponse {
+  readonly outcome: "released";
+  readonly status: "open" | "expired";
+  readonly revision: number;
+}
+
+export type ProposalStatus = "pending" | "approved" | "rejected" | "withdrawn";
+
+/** A proposed chore as its proposer or a chore manager sees it (S21). */
+export interface ChoreProposal {
+  readonly id: string;
+  readonly status: ProposalStatus;
+  readonly title: string;
+  readonly instructions: string | null;
+  readonly category: ChoreCategoryRef | null;
+  readonly minutes: number | null;
+  readonly steps: readonly ChoreStepTemplate[];
+  readonly dueDate: string;
+  /** The reviewer's reason for a rejection. */
+  readonly feedback: string | null;
+  /** The reviewer changed it before approving. */
+  readonly revised: boolean;
+  readonly by: ChorePerson | null;
+  readonly createdAt: string;
+  readonly decidedAt: string | null;
+  readonly decidedBy: ChorePerson | null;
+  readonly revision: number;
+  /** The published occurrence of an approved proposal. */
+  readonly occurrenceId: string | null;
+  readonly canWithdraw: boolean;
+  readonly canReview: boolean;
+  /** For reviewers: another waiting proposal or an open chore of the Home has this title. */
+  readonly possibleDuplicate: boolean;
+}
+
+export interface ChoreProposalList {
+  readonly canReview: boolean;
+  readonly proposals: readonly ChoreProposal[];
+  /** Waiting proposals, for chore managers (null for everyone else). */
+  readonly pendingCount: number | null;
+}
+
+export type VolunteerRequestStatus =
+  "open" | "accepted" | "cancelled" | "resolved" | "closed" | "expired";
+export type VolunteerInvitationStatus =
+  "pending" | "accepted" | "declined" | "withdrawn" | "expired" | "closed";
+
+export interface VolunteerInvitation {
+  readonly member: ChorePerson | null;
+  readonly status: VolunteerInvitationStatus;
+  readonly invitedAt: string;
+  readonly respondedAt: string | null;
+  readonly canAnswer: boolean;
+}
+
+/** One volunteer request: managers see every invitation, an invitee only their own. */
+export interface VolunteerRequestView {
+  readonly id: string;
+  readonly status: VolunteerRequestStatus;
+  readonly createdAt: string;
+  readonly closedAt: string | null;
+  readonly by: ChorePerson | null;
+  readonly acceptedBy: ChorePerson | null;
+  readonly canChange: boolean;
+  readonly invitations: readonly VolunteerInvitation[];
+}
+
+/** The volunteer side of one occurrence for the viewer (S21). */
+export interface ChoreVolunteerState {
+  /** Needs assignment review: open, flagged, nobody assigned. */
+  readonly inReview: boolean;
+  readonly awaitingVolunteer: boolean;
+  /** When a request for it expires: the end of its due day in the Home's timezone. */
+  readonly deadline: string;
+  readonly canRequest: boolean;
+  readonly canCorrect: boolean;
+  /** The accepted volunteer, for chore managers. */
+  readonly volunteer: ChorePerson | null;
+  readonly requests: readonly VolunteerRequestView[];
+}
+
+/** One of the viewer's open invitations, with what they need to decide. */
+export interface VolunteerOffer {
+  readonly requestId: string;
+  readonly occurrenceId: string;
+  readonly title: string;
+  readonly dueDate: string;
+  readonly deadline: string;
+  readonly instructions: string | null;
+  readonly minutes: number | null;
+  readonly steps: readonly ChoreStepTemplate[];
+  readonly invitedAt: string;
+}
+
+export interface VolunteerPreview {
+  readonly outcome: "preview" | "sent" | "exists";
+  readonly deadline: string | null;
+}
+
+export interface CorrectionPreview {
+  readonly outcome: "preview" | "corrected";
+  /** The volunteer's membership id (null: no longer a member). */
+  readonly volunteer: string | null;
+  readonly overdue: boolean;
+  readonly revision: number | null;
+}
+
+/** The caller's own reminder on an occurrence (S21): one per assignee, in the Home's timezone. */
+export interface ChoreReminderView {
+  readonly occurrenceId: string;
+  readonly dueDate: string;
+  readonly timeZone: string;
+  /** An assignee of an open (or waiting) occurrence. */
+  readonly canSet: boolean;
+  readonly reminder: {
+    readonly mode: "absolute" | "relative";
+    /** Wall clock in the Home's timezone ("2026-10-24T18:00:00"). */
+    readonly localAt: string | null;
+    readonly daysBefore: number | null;
+    readonly time: string | null;
+    readonly fireAt: string;
+    readonly dst: "gap" | "overlap" | null;
+    readonly status: "scheduled" | "sent";
+  } | null;
+  /** 0 when the person never had one. */
+  readonly revision: number;
+  readonly channels: { readonly inApp: boolean; readonly email: boolean };
+}
+
+export interface ChoreReminderPreview {
+  readonly outcome: "preview" | "saved";
+  readonly fireAt: string | null;
+  readonly dst: "gap" | "overlap" | null;
+  readonly revision: number | null;
+}
+
+/** One chore on a day of the schedule (S21): an occurrence, or a date of a recurring chore to come. */
+export interface ChoreAgendaItem {
+  /** Null for a projected date (not created yet, never movable). */
+  readonly id: string | null;
+  readonly choreId: string;
+  readonly title: string;
+  readonly date: string;
+  readonly category: {
+    readonly id: string;
+    readonly name: string;
+    readonly color: LabelColor | null;
+  } | null;
+  readonly status: ChoreStatus;
+  readonly overdue: boolean;
+  readonly inRework: boolean;
+  readonly needsReassignment: boolean;
+  readonly awaitingVolunteer: boolean;
+  /** Membership ids; null for an empty place. */
+  readonly assigneeIds: readonly (string | null)[];
+  readonly minutes: number | null;
+  readonly revision: number | null;
+  readonly recurring: boolean;
+  readonly projected: boolean;
+}
+
+export interface ChoreAgenda {
+  readonly today: string;
+  readonly canManage: boolean;
+  readonly items: readonly ChoreAgendaItem[];
+  /** More than one read returns: the range shows the first ones only. */
+  readonly truncated: boolean;
+}
+
+export type ManagerSummaryGroup =
+  "overdueAssigned" | "overdueUnassigned" | "pendingReview" | "rework" | "inReview" | "releaseSoon";
+
+/** The live daily summary of a Home's chores for a chore manager (S21). */
+export interface ManagerSummary {
+  readonly today: string;
+  readonly counts: { readonly [G in ManagerSummaryGroup]: number };
+  readonly items: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly dueDate: string;
+    readonly group: ManagerSummaryGroup;
+    readonly assigneeIds: readonly (string | null)[];
+    readonly releaseAt: string | null;
+  }[];
+}
+
+export interface ManagerSummarySetting {
+  readonly canManage: boolean;
+  readonly enabled: boolean;
+  /** 0-23 in timeZone. */
+  readonly hour: number;
+  /** The timezone it was saved in (null: never saved). */
+  readonly timeZone: string | null;
+  readonly revision: number;
+}
+
+/** What moving an occurrence also does (S21; S20's impact gains these with a date or assignee). */
+export interface MoveImpact {
+  readonly overdue: boolean;
+  readonly remindersMoved: number;
+  readonly remindersEnded: number;
+  readonly handoverEnded: boolean;
+  readonly volunteerEnded: boolean;
+  /** The claim goes back to the pool at once: its automatic release moment passed. */
+  readonly releaseNow: boolean;
 }

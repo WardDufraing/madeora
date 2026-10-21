@@ -4,12 +4,21 @@ import type { HomePermissionProjection, HomeRole } from "@madeora/domain/permiss
 import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 
+import { requireIdentity } from "@/auth/identity";
 import { ChoreReview } from "@/components/chores/chore-review";
+import { ChoreScheduleWidget } from "@/components/chores/chore-schedule-widget";
 import { QuickComplete } from "@/components/chores/quick-complete";
 import { messageKeyFor } from "@/components/notifications/notification-list";
 import { MemberAvatar } from "@/components/members/member-avatar";
 import { CompactTaskList } from "@/components/tasks/compact-task-list";
 import { LabelChip } from "@/components/tasks/label-chip";
+import {
+  advanceChores,
+  getChoreContext,
+  getChorePool,
+  getChoreSettings,
+  listChoreSchedule,
+} from "@/chores/data";
 import { choresPath } from "@/chores/format";
 import {
   loadChoreApprovalsWidget,
@@ -24,8 +33,10 @@ import { widgetRegistry, type WidgetConfigs } from "@/dashboard/widgets";
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
 import { getHomeDirectory } from "@/members/directory";
 import { listNotifications } from "@/notifications/server";
-import { formatDate, formatWeekday, isoDate } from "@/preferences/regional";
+import { formatDate, formatWeekday, isoDate, weekdayNames } from "@/preferences/regional";
 import type { MyHome } from "@/homes/types";
+import { addDays, startOfWeek } from "@/tasks/calendar";
+import { listTaskMembers } from "@/tasks/data";
 import { taskQueryString } from "@/tasks/filters";
 import { formatTaskDate, memberNames, personName, tasksPath } from "@/tasks/format";
 import { loadTaskWidget } from "@/tasks/widget-data";
@@ -656,6 +667,60 @@ async function ChoreApprovalsBody({
   );
 }
 
+/**
+ * The Chore schedule widget (S21): the Home's current week, its pool and members, read with the
+ * page; other weeks and days are read by the widget itself with the same session.
+ */
+async function ChoreScheduleBody({
+  homeId,
+  widgetId,
+  config,
+  formats,
+}: {
+  readonly homeId: string;
+  readonly widgetId: string;
+  readonly config: WidgetConfigs["chore-schedule"];
+  readonly formats: DateTimeFormats;
+}) {
+  const { userId } = await requireIdentity();
+  const tChoreWidget = await getTranslations("ChoreWidgets");
+  await advanceChores(homeId);
+  const [context, settings, members] = await Promise.all([
+    getChoreContext(homeId),
+    getChoreSettings(homeId),
+    listTaskMembers(homeId),
+  ]);
+  if (context.status !== "ok" || settings.status !== "ok" || members.status !== "ok") {
+    return <ErrorState title={tChoreWidget("failedTitle")} description={tChoreWidget("failed")} />;
+  }
+  const today = context.value.today;
+  const weekStart = startOfWeek(today, settings.value.weekStart);
+  const [agenda, pool] = await Promise.all([
+    listChoreSchedule(homeId, weekStart, addDays(weekStart, 6)),
+    getChorePool(homeId, weekStart),
+  ]);
+  if (agenda.status !== "ok" || pool.status !== "ok") {
+    return <ErrorState title={tChoreWidget("failedTitle")} description={tChoreWidget("failed")} />;
+  }
+  return (
+    <ChoreScheduleWidget
+      homeId={homeId}
+      widgetId={widgetId}
+      userId={userId}
+      config={config}
+      today={today}
+      weekStart={weekStart}
+      weekdays={weekdayNames(settings.value.weekStart, formats.locale, "short")}
+      weekdaysLong={weekdayNames(settings.value.weekStart, formats.locale, "long")}
+      members={members.value}
+      formats={formats}
+      agenda={agenda.value}
+      pool={pool.value}
+      loadedAt={new Date().toISOString()}
+    />
+  );
+}
+
 // readLayout and checkLayout already parsed every widget's settings with its type's schema; parsing
 // again here gives the typed settings, and falls back to the defaults rather than failing.
 function welcomeConfig(widget: DashboardWidget): WidgetConfigs["welcome"] {
@@ -679,7 +744,7 @@ function tasksConfig(widget: DashboardWidget): WidgetConfigs["tasks"] {
   return parsed.success ? parsed.data : config.parse({});
 }
 
-function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals">(
+function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals" | "chore-schedule">(
   type: T,
   widget: DashboardWidget,
 ): WidgetConfigs[T] {
@@ -699,6 +764,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "my-chores": t("widgetMyChores"),
     "home-chores": t("widgetHomeChores"),
     "chore-approvals": t("widgetChoreApprovals"),
+    "chore-schedule": t("widgetChoreSchedule"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -793,7 +859,8 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     }
     case "my-chores":
     case "home-chores":
-    case "chore-approvals": {
+    case "chore-approvals":
+    case "chore-schedule": {
       // Chores are Home-only: the Home's own dashboard, or one the viewer belongs to now.
       const home =
         scope.kind === "home"
@@ -802,7 +869,14 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
       if (scope.kind !== "home" && !home) return unavailable;
       const homeId = scope.kind === "home" ? scope.home.id : (home?.id ?? "");
       const body =
-        widget.type === "chore-approvals" ? (
+        widget.type === "chore-schedule" ? (
+          <ChoreScheduleBody
+            homeId={homeId}
+            widgetId={widget.id}
+            config={choreConfig("chore-schedule", widget)}
+            formats={scope.formats}
+          />
+        ) : widget.type === "chore-approvals" ? (
           <ChoreApprovalsBody
             homeId={homeId}
             count={choreConfig("chore-approvals", widget).count}

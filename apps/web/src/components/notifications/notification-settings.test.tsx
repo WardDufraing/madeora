@@ -191,11 +191,13 @@ describe("NotificationSettings", () => {
   it("has its own choices for task reminders, in the app by default", async () => {
     const user = userEvent.setup();
     renderWithQuery(<NotificationSettings {...props()} />);
-    const reminders = within(within(scope("Thuis")).getByRole("group", { name: "Task reminders" }));
+    const reminders = within(
+      within(scope("Thuis")).getByRole("group", { name: "Task and chore reminders" }),
+    );
     expect(reminders.getByRole("checkbox", { name: "In the app" })).toBeChecked();
     expect(reminders.getByRole("checkbox", { name: "By email" })).not.toBeChecked();
     expect(within(scope("Thuis")).getByTestId("notification-preview")).toHaveTextContent(
-      "Task reminders arrive in the app only.",
+      "Task and chore reminders arrive in the app only.",
     );
     await user.click(reminders.getByRole("checkbox", { name: "By email" }));
     await waitFor(() => {
@@ -238,7 +240,7 @@ describe("quiet hours", () => {
     renderWithQuery(<NotificationSettings {...props({ quietHours: [quiet] })} />);
     const thuis = within(scope("Thuis"));
     expect(thuis.getByRole("checkbox", { name: "Use quiet hours" })).toBeChecked();
-    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(4);
+    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(5);
     expect(thuis.getByTestId("notification-preview")).toHaveTextContent(
       "Quiet hours: 22:00 to 07:00 (Europe/Brussels).",
     );

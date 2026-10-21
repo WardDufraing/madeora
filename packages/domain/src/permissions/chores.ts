@@ -33,6 +33,20 @@ export const choreActions = [
   "chore.bulk",
   "chore.correct",
   "chore.review",
+  "chore.claim",
+  "chore.release",
+  "chore.requestReassignment",
+  "chore.propose",
+  "chore.respondVolunteer",
+  "chore.remind",
+  "chore.setClaimPolicy",
+  "chore.configure",
+  "chore.reviewProposal",
+  "chore.requestVolunteer",
+  "chore.correctVolunteer",
+  "chore.handoverForOthers",
+  "chore.move",
+  "chore.summary",
 ] as const;
 export type ChoreAction = (typeof choreActions)[number];
 
@@ -58,6 +72,16 @@ export function decideChoreAction(
   switch (action) {
     case "chore.view":
       return allowed;
+    // S21: every current member claims from the pool, hands over their own chore, proposes a chore,
+    // answers a volunteer invitation and sets a personal reminder (the database narrows each to the
+    // person's own chores and invitations).
+    case "chore.claim":
+    case "chore.release":
+    case "chore.requestReassignment":
+    case "chore.propose":
+    case "chore.respondVolunteer":
+    case "chore.remind":
+      return allowed;
     case "chore.complete":
     case "chore.tickStep":
       return decideHomeAction(chore.homeId, membership, "home.chores.complete");
@@ -70,6 +94,14 @@ export function decideChoreAction(
     case "chore.manageTemplates":
     case "chore.bulk":
     case "chore.correct":
+    case "chore.setClaimPolicy":
+    case "chore.configure":
+    case "chore.reviewProposal":
+    case "chore.requestVolunteer":
+    case "chore.correctVolunteer":
+    case "chore.handoverForOthers":
+    case "chore.move":
+    case "chore.summary":
       return decideHomeAction(chore.homeId, membership, "home.chores.manage").allowed
         ? allowed
         : refused;
@@ -102,5 +134,19 @@ export function chorePermissions(
     "chore.bulk": can("chore.bulk"),
     "chore.correct": can("chore.correct"),
     "chore.review": can("chore.review"),
+    "chore.claim": can("chore.claim"),
+    "chore.release": can("chore.release"),
+    "chore.requestReassignment": can("chore.requestReassignment"),
+    "chore.propose": can("chore.propose"),
+    "chore.respondVolunteer": can("chore.respondVolunteer"),
+    "chore.remind": can("chore.remind"),
+    "chore.setClaimPolicy": can("chore.setClaimPolicy"),
+    "chore.configure": can("chore.configure"),
+    "chore.reviewProposal": can("chore.reviewProposal"),
+    "chore.requestVolunteer": can("chore.requestVolunteer"),
+    "chore.correctVolunteer": can("chore.correctVolunteer"),
+    "chore.handoverForOthers": can("chore.handoverForOthers"),
+    "chore.move": can("chore.move"),
+    "chore.summary": can("chore.summary"),
   };
 }

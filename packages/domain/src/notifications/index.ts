@@ -14,11 +14,17 @@ export const notificationCategories = [
   "storage",
   "reminders",
   "approvals",
+  "chores",
 ] as const;
 export type NotificationCategory = (typeof notificationCategories)[number];
 
 /** Categories a person can configure; the others are essential and cannot be switched off. */
-export const optionalNotificationCategories = ["invitations", "reminders", "approvals"] as const;
+export const optionalNotificationCategories = [
+  "invitations",
+  "reminders",
+  "approvals",
+  "chores",
+] as const;
 export type OptionalNotificationCategory = (typeof optionalNotificationCategories)[number];
 
 export const notificationChannels = ["in_app", "email"] as const;
@@ -51,6 +57,18 @@ export const notificationKinds = [
   "storage.home_critical",
   "task.reminder",
   "chore.approval_requested",
+  "chore.claim_released",
+  "chore.reassignment_requested",
+  "chore.reassignment_answered",
+  "chore.reassignment_confirmation_needed",
+  "chore.reassignment_decided",
+  "chore.reassignment_invalidated",
+  "chore.proposal_decided",
+  "chore.volunteer_invited",
+  "chore.volunteer_accepted",
+  "chore.assignment_corrected",
+  "chore.reminder",
+  "chore.manager_summary",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -82,6 +100,14 @@ export function notificationPath(
   if (kind === "join_request.received") return `${home}/invitations`;
   if (kind.startsWith("storage.home_")) return `${home}/storage`;
   if (kind === "chore.approval_requested") return `${home}/chores/approvals`;
+  if (kind === "chore.proposal_decided") return `${home}/chores/proposals`;
+  if (kind === "chore.manager_summary") return `${home}/chores/summary`;
+  if (kind.startsWith("chore.")) {
+    // Claims, reassignment and volunteer requests and reminders (S21) lead to their occurrence.
+    const occurrenceId =
+      typeof params.occurrenceId === "string" ? encodeURIComponent(params.occurrenceId) : null;
+    return occurrenceId ? `${home}/chores/${occurrenceId}` : `${home}/chores`;
+  }
   if (
     kind === "recovery.claimant_review_started" ||
     kind === "recovery.claimant_approved" ||

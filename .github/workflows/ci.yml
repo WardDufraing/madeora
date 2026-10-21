@@ -140,9 +140,10 @@ jobs:
       # Installs the Chromium build that matches the pinned @playwright/test version.
       - run: pnpm --filter @madeora/e2e exec playwright install --with-deps chromium
       # Accounts need Supabase Auth: a fresh local stack with only the database, Auth, the API
-      # gateway and the mail catcher that Playwright reads confirmation and reset emails from.
-      - name: Start a fresh local Supabase stack (Auth and mail catcher)
-        run: pnpm exec supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,postgres-meta
+      # gateway, Realtime (the live chore pool, S21) and the mail catcher that Playwright reads
+      # confirmation and reset emails from.
+      - name: Start a fresh local Supabase stack (Auth, Realtime and mail catcher)
+        run: pnpm exec supabase start -x storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Point the app at the local Supabase stack
         run: |
           status="$(pnpm exec supabase status -o env)"
