@@ -292,7 +292,13 @@ export function ChoreEdit({ occurrence, members, dateFormat }: ChoreEditProps) {
     return null;
   }
   function run(dryRun: boolean) {
-    const body = dryRun ? bodyOf() : preview?.body;
+    const previewed = preview?.body;
+    // A new due date that releases a claim at once was in the preview the person confirms.
+    const body = dryRun
+      ? bodyOf()
+      : previewed && preview.kind === "occurrence" && preview.impact.releaseNow
+        ? { ...previewed, confirmRelease: true }
+        : previewed;
     if (!body) return;
     if (scope === "occurrence") occurrenceMutation.mutate({ body, dryRun });
     else seriesMutation.mutate({ body, dryRun });
@@ -536,6 +542,7 @@ export function ChoreEdit({ occurrence, members, dateFormat }: ChoreEditProps) {
                     added: preview.impact.added,
                     newlyMandatory: preview.impact.newlyMandatory,
                   })}
+                  {preview.impact.releaseNow ? ` ${t("moveReleaseNow")}` : null}
                 </p>
               ) : (
                 <>

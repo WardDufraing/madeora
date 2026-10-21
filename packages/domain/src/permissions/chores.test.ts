@@ -30,6 +30,20 @@ const member: Expected = {
   "chore.bulk": false,
   "chore.correct": false,
   "chore.review": false,
+  "chore.claim": true,
+  "chore.release": true,
+  "chore.requestReassignment": true,
+  "chore.propose": true,
+  "chore.respondVolunteer": true,
+  "chore.remind": true,
+  "chore.setClaimPolicy": false,
+  "chore.configure": false,
+  "chore.reviewProposal": false,
+  "chore.requestVolunteer": false,
+  "chore.correctVolunteer": false,
+  "chore.handoverForOthers": false,
+  "chore.move": false,
+  "chore.summary": false,
 };
 const reviewer: Expected = { ...member, "chore.review": true };
 const manager: Expected = {
@@ -46,6 +60,20 @@ const manager: Expected = {
   "chore.bulk": true,
   "chore.correct": true,
   "chore.review": false,
+  "chore.claim": true,
+  "chore.release": true,
+  "chore.requestReassignment": true,
+  "chore.propose": true,
+  "chore.respondVolunteer": true,
+  "chore.remind": true,
+  "chore.setClaimPolicy": true,
+  "chore.configure": true,
+  "chore.reviewProposal": true,
+  "chore.requestVolunteer": true,
+  "chore.correctVolunteer": true,
+  "chore.handoverForOthers": true,
+  "chore.move": true,
+  "chore.summary": true,
 };
 const owner: Expected = { ...manager, "chore.review": true };
 

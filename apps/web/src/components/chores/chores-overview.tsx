@@ -8,18 +8,29 @@ import type { ChoreOccurrenceRow } from "@/chores/api";
 import {
   advanceChores,
   getChoreContext,
+  getChorePool,
+  getChorePoolVersion,
+  getChoreSettings,
   listChoreCategories,
   listChoreOccurrences,
+  listChoreProposals,
   listChoreTemplates,
+  listReassignmentRequests,
+  listVolunteerOffers,
 } from "@/chores/data";
 import { choresPath } from "@/chores/format";
-import { parseOverviewQuery } from "@/chores/schema";
+import { parseOverviewQuery, parsePoolWeek } from "@/chores/schema";
+import { addDays, startOfWeek } from "@/tasks/calendar";
 import { getDateTimeFormats } from "@/invitations/server";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate, memberNames, personName } from "@/tasks/format";
 
 import { ChoreBulk } from "./chore-bulk";
 import { ChoreFilters } from "./chore-filters";
+import { ChorePool } from "./chore-pool";
+import { ChorePoolLive } from "./chore-pool-live";
+import { ChoreRequests } from "./chore-requests";
+import { VolunteerOffers } from "./chore-volunteers";
 import { NewChore } from "./new-chore";
 import { QuickComplete } from "./quick-complete";
 
@@ -39,16 +50,51 @@ function groupOf(row: ChoreOccurrenceRow): Group {
   return row.dueToday ? "today" : "upcoming";
 }
 
+/** The address of the overview with the pool showing the week of `date` (null: this week). */
+function poolWeekHref(
+  base: string,
+  searchParams: ChoresOverviewProps["searchParams"],
+  date: string | null,
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (key === "poolWeek" || key === "deleted" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  if (date !== null) params.set("poolWeek", date);
+  const search = params.toString();
+  return search === "" ? base : `${base}?${search}`;
+}
+
 /**
  * A Home's chores (S20): its open occurrences grouped Needs reassignment, Overdue, Today and the
- * next days, with filters, and adding a chore or changing several at once for chore managers. Everything is read with the
- * viewer's session; the controls shown follow their rights, which the database checks again.
+ * next days, with filters, and adding a chore or changing several at once for chore managers. Above
+ * them (S21) the reassignment requests waiting for the viewer and the pool of unassigned chores to
+ * claim, kept current live. Everything is read with the viewer's session; the controls shown follow
+ * their rights, which the database checks again.
  */
 export async function ChoresOverview({ home, searchParams, notice }: ChoresOverviewProps) {
   const query = parseOverviewQuery(searchParams);
-  // Recurring chores create their due occurrences before anything is read (lazy generation).
+  const poolWeek = parsePoolWeek(searchParams);
+  // Recurring chores create their due occurrences, and due expiries and automatic releases are
+  // applied, before anything is read (lazy generation). The signal version is read first, so a
+  // change made while the page renders is caught by the live view.
   await advanceChores(home.id);
-  const [t, formats, context, categories, members, page, templates] = await Promise.all([
+  const version = await getChorePoolVersion(home.id);
+  const [
+    t,
+    formats,
+    context,
+    categories,
+    members,
+    page,
+    templates,
+    pool,
+    settings,
+    requests,
+    proposals,
+    offers,
+  ] = await Promise.all([
     getTranslations("Chores"),
     getDateTimeFormats(),
     getChoreContext(home.id),
@@ -57,12 +103,21 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
     listChoreOccurrences(home.id, query),
     // Managers only (anyone else gets none); a failure only hides the template choice.
     listChoreTemplates(home.id, false),
+    getChorePool(home.id, poolWeek),
+    getChoreSettings(home.id),
+    listReassignmentRequests(home.id),
+    // S21: the proposal count for managers and the viewer's volunteer invitations; a failure
+    // only hides them.
+    listChoreProposals(home.id),
+    listVolunteerOffers(home.id),
   ]);
   if (
     context.status !== "ok" ||
     categories.status !== "ok" ||
     members.status !== "ok" ||
-    page.status !== "ok"
+    page.status !== "ok" ||
+    pool.status !== "ok" ||
+    settings.status !== "ok"
   ) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -87,6 +142,12 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
     { id: "upcoming", title: t("groupUpcoming") },
   ];
   const filtered = query.assignee !== "any" || query.category !== "any";
+  const today = context.value.today;
+  const currentWeek = startOfWeek(today, settings.value.weekStart);
+  const shownWeek = startOfWeek(poolWeek ?? today, settings.value.weekStart);
+  // Claimable chores show in the pool; the groups below keep everything else.
+  const inPool = new Set(pool.value.rows.map((row) => row.id));
+  const listed = page.value.occurrences.filter((row) => !inPool.has(row.id));
   const activeCategories = categories.value.filter((category) => !category.archived);
 
   return (
@@ -103,6 +164,36 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
               data-testid="chores-approvals-link"
             >
               {t("approvalsLink", { count: context.value.pendingCount })}
+            </Link>
+          </>
+        ) : null}
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={`${base}/proposals`}
+          className="font-medium text-accent-fg underline"
+          data-testid="chores-proposals-link"
+        >
+          {proposals.status === "ok" && proposals.value.pendingCount !== null
+            ? t("proposalsLink", { count: proposals.value.pendingCount })
+            : t("proposeLink")}
+        </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={`${base}/calendar`}
+          className="font-medium text-accent-fg underline"
+          data-testid="chores-calendar-link"
+        >
+          {t("calendarLink")}
+        </Link>
+        {context.value.canManage ? (
+          <>
+            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <Link
+              href={`${base}/summary`}
+              className="font-medium text-accent-fg underline"
+              data-testid="chores-summary-link"
+            >
+              {t("summaryLink")}
             </Link>
           </>
         ) : null}
@@ -130,7 +221,33 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           </Link>
         </p>
       ) : null}
+      <ChorePoolLive homeId={home.id} version={version} />
       <div className="flex max-w-4xl flex-col gap-6">
+        {offers.status === "ok" && offers.value.length > 0 ? (
+          <VolunteerOffers homeId={home.id} offers={offers.value} formats={formats} />
+        ) : null}
+        {requests.status === "ok" && requests.value.length > 0 ? (
+          <ChoreRequests
+            homeId={home.id}
+            requests={requests.value}
+            members={members.value}
+            formats={formats}
+          />
+        ) : null}
+        <ChorePool
+          homeId={home.id}
+          pool={pool.value}
+          week={{
+            start: shownWeek,
+            current: shownWeek === currentWeek,
+            previousHref: poolWeekHref(base, searchParams, addDays(shownWeek, -7)),
+            nextHref: poolWeekHref(base, searchParams, addDays(shownWeek, 7)),
+            currentHref: poolWeekHref(base, searchParams, null),
+          }}
+          today={today}
+          categories={categories.value.map(({ id, name }) => ({ id, name }))}
+          formats={formats}
+        />
         {context.value.canManage ? (
           <NewChore
             homeId={home.id}
@@ -163,7 +280,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           categories={categories.value.map(({ id, name }) => ({ id, name }))}
           filtered={filtered}
         />
-        {page.value.occurrences.length === 0 ? (
+        {listed.length === 0 ? (
           <EmptyState
             title={filtered ? t("emptyFilteredTitle") : t("emptyTitle")}
             description={
@@ -176,7 +293,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           />
         ) : (
           groups.map((group) => {
-            const rows = page.value.occurrences.filter((row) => groupOf(row) === group.id);
+            const rows = listed.filter((row) => groupOf(row) === group.id);
             if (rows.length === 0) return null;
             return (
               <section

@@ -9,7 +9,12 @@ import { cache } from "react";
 import { getVerifiedIdentity } from "@/auth/identity";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
-import type { NotificationView, PreferenceRow, QuietHoursRow } from "./types";
+import {
+  notificationDecisions,
+  type NotificationView,
+  type PreferenceRow,
+  type QuietHoursRow,
+} from "./types";
 
 /**
  * Reads for the notification centre and its settings (S14). Every read uses the person's own
@@ -83,8 +88,9 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       homeId: row.home_id,
       homeName: isRecord(home) && typeof home.name === "string" ? home.name : null,
       objectionEndsAt: typeof params.objectionEndsAt === "string" ? params.objectionEndsAt : null,
-      decision:
-        params.decision === "approved" || params.decision === "declined" ? params.decision : null,
+      decision: oneOf(notificationDecisions, params.decision),
+      reason: oneOf(["auto", "manager"] as const, params.reason),
+      occurrenceId: typeof params.occurrenceId === "string" ? params.occurrenceId : null,
       taskId: typeof params.taskId === "string" ? params.taskId : null,
       dueDate: typeof params.dueDate === "string" ? params.dueDate : null,
       taskTitle: typeof params.taskId === "string" ? (titles.get(params.taskId) ?? null) : null,
@@ -117,7 +123,7 @@ export interface NotificationSettingsView {
   readonly quietHours: readonly QuietHoursRow[];
 }
 
-function oneOf<T extends string>(list: readonly T[], value: string): T | null {
+function oneOf<T extends string>(list: readonly T[], value: unknown): T | null {
   return list.find((item) => item === value) ?? null;
 }
 

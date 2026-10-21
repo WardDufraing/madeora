@@ -24,6 +24,9 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql` | S19c | `task_attachments_table` is not `NULL`                 |
 | `supabase/migrations/20261030090000_chores.sql`                            | S20  | `chores_table` is not `NULL`                           |
 | `supabase/migrations/20261031090000_chore_templates_history_bulk.sql`      | S20  | `chore_templates_table` is not `NULL`                  |
+| `supabase/migrations/20261101090000_chore_pool_claims.sql`                 | S21  | `chore_requests_table` is not `NULL`                   |
+| `supabase/migrations/20261102090000_chore_proposals_volunteers.sql`        | S21  | `chore_proposals_table` is not `NULL`                  |
+| `supabase/migrations/20261103090000_chore_overview_reminders.sql`          | S21  | `chore_reminders_table` is not `NULL`                  |
 
 Check query (read-only, safe to run any time):
 
@@ -42,7 +45,10 @@ select
   to_regclass('private.task_templates') as task_templates_table,
   to_regclass('private.task_attachments') as task_attachments_table,
   to_regclass('private.chores') as chores_table,
-  to_regclass('private.chore_templates') as chore_templates_table;
+  to_regclass('private.chore_templates') as chore_templates_table,
+  to_regclass('private.chore_reassignment_requests') as chore_requests_table,
+  to_regclass('private.chore_proposals') as chore_proposals_table,
+  to_regclass('private.chore_reminders') as chore_reminders_table;
 ```
 
 ## Apply a migration
@@ -353,6 +359,71 @@ From S20 every Home has **Chores**: one-off and repeating chores with rotation, 
    It must show both tables (**private.chores**, **private.chore_templates**), **false** for `members_can_read_chores` and `members_can_read_submissions`, **true** for both `_call` columns (the functions check each person's rights themselves) and `chores` **0**.
 
 2. In the app open a Home: the sidebar's **Chores** opens its chores, with **History** and, for the Owner, **Manage chores and categories** (with **Templates**). On the Home dashboard, **Customize** offers **My Chores**, **All Home Chores** and **Pending Approvals**. Under **Notifications** in Settings, a **Chore approvals** group appears.
+
+## Check S21 (`20261101090000_chore_pool_claims.sql`)
+
+From S21 unassigned chores wait in a **pool** where members claim them, with Undo, release, an optional close at the end of the week and automatic release, and members can ask someone else to take over an occurrence. Existing chores get the defaults (all members may claim, unclaimed chores stay available as overdue, no automatic release). Apply it after the two S20 files.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.chore_reassignment_requests') as requests_table,
+     to_regclass('public.chore_pool_signals') as signals_table,
+     has_table_privilege('authenticated', 'private.chore_reassignment_requests', 'select')
+       as members_can_read_requests,
+     has_function_privilege('authenticated', 'public.claim_chore_occurrence(uuid)', 'execute')
+       as members_can_claim_call,
+     exists (select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime' and tablename = 'chore_pool_signals') as realtime_on,
+     (select count(*) from private.chores where claim_mode <> 'all') as changed_chores;
+   ```
+
+   It must show both tables, **false** for `members_can_read_requests`, **true** for `members_can_claim_call` and `realtime_on`, and `changed_chores` **0**. If `realtime_on` is **false**, the pool still works but updates only after a reload; run `alter publication supabase_realtime add table public.chore_pool_signals;`.
+
+2. In the app add a chore without assignees: it shows under **Unassigned chores** on the Home's Chores page with **Claim**. In a second browser signed in as another member, the claimed chore disappears without reloading. **Manage chores and categories** has **Chore settings** (week start, confirmation of handovers); an occurrence page has **Claim** with the chore's claim rules.
+
+## Check S21b (`20261102090000_chore_proposals_volunteers.sql`)
+
+From here every member can propose a chore for a chore manager to approve, and a chore that needs reassignment can be offered to selected members, the first to volunteer getting it. Nothing changes for existing chores. Apply it after `20261101090000_chore_pool_claims.sql`.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.chore_proposals') as proposals_table,
+     to_regclass('private.chore_volunteer_requests') as volunteer_table,
+     has_table_privilege('authenticated', 'private.chore_proposals', 'select')
+       as members_can_read_proposals,
+     has_function_privilege('authenticated', 'public.list_chore_proposals(uuid)', 'execute')
+       as members_can_list_call;
+   ```
+
+   It must show both tables, **false** for `members_can_read_proposals` and **true** for `members_can_list_call`.
+
+2. In the app the Home's Chores page has **Suggest a chore** (for chore managers **Proposals**). An occurrence that needs reassignment has **Ask for a volunteer** for chore managers.
+
+## Check S21c (`20261103090000_chore_overview_reminders.sql`)
+
+From here the Chores page has a **Calendar** where chore managers move one occurrence, assignees can set a personal reminder on an occurrence, chore managers can turn on a daily summary, and dashboards can show a **Chore schedule** widget. Nothing changes for existing chores. Apply it after the S21b file, and deploy the Trigger.dev tasks from the same commit (`docs/trigger-setup.md`, step 4): reminders are delivered by `chore-reminder` and the summary is sent by the hourly schedule `chore-digest`.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.chore_reminders') as reminders_table,
+     to_regclass('private.chore_summary_settings') as summary_table,
+     has_table_privilege('authenticated', 'private.chore_reminders', 'select')
+       as members_can_read_reminders,
+     has_function_privilege('authenticated', 'public.list_chore_schedule(uuid, date, date)', 'execute')
+       as members_can_read_schedule_call,
+     has_function_privilege('authenticated', 'public.send_chore_summaries(integer)', 'execute')
+       as members_can_send_summaries;
+   ```
+
+   It must show both tables, **false** for `members_can_read_reminders` and `members_can_send_summaries` (only the jobs worker sends), and **true** for `members_can_read_schedule_call`.
+
+2. In the app the Chores page has **Calendar** and, for chore managers, **Daily summary**. An occurrence assigned to you has **Your reminder**. On a Home dashboard, **Customize** offers **Chore schedule**.
 
 ## If a migration file changed after you applied it
 

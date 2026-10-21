@@ -38,10 +38,49 @@ const kindMessage = {
   "storage.home_warning": "kindStorageHomeWarning",
   "storage.home_critical": "kindStorageHomeCritical",
   "chore.approval_requested": "kindChoreApprovalRequested",
+  "chore.claim_released": "kindChoreClaimReleased",
+  "chore.reassignment_requested": "kindChoreReassignmentRequested",
+  "chore.reassignment_answered": "kindChoreReassignmentAnswered",
+  "chore.reassignment_confirmation_needed": "kindChoreReassignmentConfirmationNeeded",
+  "chore.reassignment_decided": "kindChoreReassignmentDecided",
+  "chore.reassignment_invalidated": "kindChoreReassignmentInvalidated",
+  "chore.proposal_decided": "kindChoreProposalDecided",
+  "chore.volunteer_invited": "kindChoreVolunteerInvited",
+  "chore.volunteer_accepted": "kindChoreVolunteerAccepted",
+  "chore.assignment_corrected": "kindChoreAssignmentCorrected",
+  "chore.reminder": "kindChoreReminder",
+  "chore.manager_summary": "kindChoreManagerSummary",
 } as const;
+
+/** Chore notices whose words follow their outcome (S21). */
+const choreOutcomeMessage = {
+  "chore.claim_released": {
+    auto: "kindChoreClaimReleasedAuto",
+    manager: "kindChoreClaimReleasedManager",
+  },
+  "chore.reassignment_answered": {
+    accepted: "kindChoreReassignmentAccepted",
+    declined: "kindChoreReassignmentDeclined",
+    awaiting_manager: "kindChoreReassignmentAwaitingManager",
+  },
+  "chore.reassignment_decided": {
+    confirmed: "kindChoreReassignmentConfirmed",
+    refused: "kindChoreReassignmentRefused",
+  },
+  "chore.proposal_decided": {
+    approved: "kindChoreProposalApproved",
+    rejected: "kindChoreProposalRejected",
+  },
+} as const;
+
+type OutcomeKey<T> = T[keyof T];
 
 type MessageKey =
   | (typeof kindMessage)[keyof typeof kindMessage]
+  | OutcomeKey<(typeof choreOutcomeMessage)["chore.claim_released"]>
+  | OutcomeKey<(typeof choreOutcomeMessage)["chore.reassignment_answered"]>
+  | OutcomeKey<(typeof choreOutcomeMessage)["chore.reassignment_decided"]>
+  | OutcomeKey<(typeof choreOutcomeMessage)["chore.proposal_decided"]>
   | "kindJoinRequestApproved"
   | "kindJoinRequestDeclined"
   | "kindTaskReminder"
@@ -50,8 +89,14 @@ type MessageKey =
 
 /** The message key for a notification (exported for tests). */
 export function messageKeyFor(
-  item: Pick<NotificationView, "kind" | "decision"> & Partial<Pick<NotificationView, "dueDate">>,
+  item: Pick<NotificationView, "kind" | "decision"> &
+    Partial<Pick<NotificationView, "dueDate" | "reason">>,
 ): MessageKey {
+  const outcomes: Readonly<Record<string, MessageKey>> | undefined = (
+    choreOutcomeMessage as Readonly<Record<string, Readonly<Record<string, MessageKey>>>>
+  )[item.kind];
+  const outcome = item.kind === "chore.claim_released" ? item.reason : item.decision;
+  if (outcomes && outcome && outcomes[outcome]) return outcomes[outcome];
   if (item.kind === "task.reminder")
     return item.dueDate ? "kindTaskReminderDue" : "kindTaskReminder";
   if (item.kind === "join_request.decided") {
@@ -99,7 +144,11 @@ export async function NotificationList({
           const href = notificationPath(
             item.kind,
             item.homeId,
-            item.taskId ? { taskId: item.taskId } : {},
+            item.taskId
+              ? { taskId: item.taskId }
+              : item.occurrenceId
+                ? { occurrenceId: item.occurrenceId }
+                : {},
           );
           const isUnread = item.readAt === null;
           return (

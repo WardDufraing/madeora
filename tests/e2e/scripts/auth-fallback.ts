@@ -529,6 +529,8 @@ try {
     PLAYWRIGHT_MAILPIT_URL: `http://127.0.0.1:${String(MAILPIT_HTTP_PORT)}`,
     // Turns on the Google browser tests (tests/e2e/google), which need the stand-in Google.
     PLAYWRIGHT_FAKE_GOOGLE: "1",
+    // No Realtime here (S21): live-update checks read the page again (tests/e2e/support/browser.ts).
+    E2E_REALTIME: "0",
   };
 
   if (process.argv.includes("--serve")) {

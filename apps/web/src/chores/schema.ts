@@ -1,10 +1,13 @@
 import { z } from "zod";
 
 import { nameProblem, normalizeName } from "@/names/visible-name";
+import { weekStarts } from "@/preferences/schema";
 import {
+  clockTimeSchema,
   dateOnlySchema,
   isLabelColor,
   type LabelColor,
+  localDateTimeSchema,
   plainTextSchema,
   recurrenceSchema,
 } from "@/tasks/schema";
@@ -15,6 +18,13 @@ import {
  * again. Recurring chores use the S19 schedule (`recurrenceSchema`) unchanged.
  */
 export const CHORE_LIMITS = {
+  /** S21 (`private.chore_pool_limit`). */
+  pool: 200,
+  requestNote: 200,
+  autoReleaseHours: 720,
+  /** S21 proposals and volunteer requests (`private.chore_volunteer_limit`). */
+  proposalDays: 365,
+  recipients: 20,
   title: 200,
   instructions: 2000,
   categoryName: 40,
@@ -228,6 +238,121 @@ export const correctionSchema = z
   );
 export const stepCheckSchema = z.strictObject({ checked: z.boolean() });
 
+/** Claiming takes no fields; a release says whether it is the Undo right after claiming. */
+export const claimSchema = z.strictObject({});
+export const releaseSchema = z.strictObject({ undo: z.boolean().default(false) });
+
+export const claimModes = ["all", "selected", "none"] as const;
+export const expiryPolicies = ["overdue", "week_end"] as const;
+
+/** Who may claim a chore, whether it closes after its week, its automatic release (S21). */
+export const claimPolicySchema = z
+  .strictObject({
+    expectedRevision: z.int().min(1),
+    mode: z.enum(claimModes),
+    memberIds: z.array(id).max(CHORE_LIMITS.members),
+    expiry: z.enum(expiryPolicies),
+    /** Hours after the end of the due day; null: never released automatically. */
+    autoReleaseHours: z.int().min(0).max(CHORE_LIMITS.autoReleaseHours).nullable(),
+    dryRun: z.boolean(),
+    confirm: z.boolean().default(false),
+  })
+  .refine((policy) => (policy.mode === "selected") === policy.memberIds.length > 0, {
+    message: "required",
+    path: ["memberIds"],
+  });
+
+export const choreSettingsSchema = z.strictObject({
+  homeId: id,
+  expectedRevision: z.int().min(0),
+  weekStart: z.enum(weekStarts),
+  reassignmentConfirmation: z.boolean(),
+});
+
+export const reassignmentRequestSchema = z.strictObject({
+  id,
+  toMember: id,
+  note: shortTextSchema(CHORE_LIMITS.requestNote).nullable(),
+  /** The assignee whose part is handed over; only chore managers may name someone else. */
+  fromMember: id.optional(),
+});
+
+export const reassignmentStatuses = [
+  "pending",
+  "awaiting_manager",
+  "accepted",
+  "declined",
+  "cancelled",
+  "invalidated",
+  "refused",
+] as const;
+
+export const reassignmentActions = ["accept", "decline", "cancel", "confirm", "refuse"] as const;
+export const reassignmentAnswerSchema = z.strictObject({
+  action: z.enum(reassignmentActions),
+});
+
+/** A reason that must be given (a rejection, a correction). */
+const requiredReasonSchema = reasonSchema.refine((value) => value !== null, {
+  message: "required",
+});
+
+/** A proposed chore's fields (S21): the same as a one-off unassigned chore's. */
+const proposalFields = {
+  title: choreTitleSchema,
+  instructions: instructionsSchema.nullable(),
+  categoryId: id.nullable(),
+  minutes: minutesSchema.nullable(),
+  steps: stepsSchema,
+  dueDate: dateOnlySchema,
+};
+export const proposalSchema = z.strictObject({ id, homeId: id, ...proposalFields });
+export type ProposalInput = z.output<typeof proposalSchema>;
+
+/** A decision on a proposal: withdraw (its proposer), reject with a reason or approve the final fields. */
+export const proposalDecisionSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("withdraw"), expectedRevision: z.int().min(1) }),
+  z.strictObject({
+    action: z.literal("reject"),
+    expectedRevision: z.int().min(1),
+    reason: requiredReasonSchema,
+  }),
+  z.strictObject({
+    action: z.literal("approve"),
+    expectedRevision: z.int().min(1),
+    ...proposalFields,
+  }),
+]);
+export type ProposalDecisionInput = z.output<typeof proposalDecisionSchema>;
+
+const recipientsSchema = z
+  .array(id)
+  .min(1)
+  .max(CHORE_LIMITS.recipients)
+  .refine((ids) => new Set(ids).size === ids.length, { message: "duplicate" });
+
+export const volunteerRequestSchema = z.strictObject({
+  id,
+  expectedRevision: z.int().min(1),
+  memberIds: recipientsSchema,
+  dryRun: z.boolean().default(false),
+});
+
+/** An invitee's answer, or a chore manager's change to an open request. */
+export const volunteerChangeSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.enum(["accept", "decline", "cancel"]) }),
+  z.strictObject({ action: z.enum(["withdraw", "add"]), memberIds: recipientsSchema }),
+]);
+export type VolunteerChangeInput = z.output<typeof volunteerChangeSchema>;
+
+export const volunteerCorrectionSchema = z.strictObject({
+  expectedRevision: z.int().min(1),
+  reason: requiredReasonSchema,
+  /** The new assignee's membership id; null returns the occurrence to Needs assignment review. */
+  memberId: id.nullable(),
+  dryRun: z.boolean().default(false),
+});
+
 /** A change to this occurrence only; each part optional, at least one given. */
 export const occurrenceChangeSchema = z
   .strictObject({
@@ -239,6 +364,8 @@ export const occurrenceChangeSchema = z
     minutes: minutesSchema.nullable().optional(),
     steps: occurrenceStepsSchema.optional(),
     confirmChecklist: z.boolean().optional(),
+    /** Confirms a new due date that releases a claim at once (S21). */
+    confirmRelease: z.boolean().optional(),
   })
   .refine(
     (change) =>
@@ -486,6 +613,14 @@ export function firstParam(value: string | string[] | undefined): string | undef
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** The pool's week (S21): any day of it from `?poolWeek=`, or null for the current week. */
+export function parsePoolWeek(
+  params: Record<string, string | string[] | undefined>,
+): string | null {
+  const date = dateOnlySchema.safeParse(firstParam(params.poolWeek));
+  return date.success ? date.data : null;
+}
+
 export function parseOverviewQuery(
   params: Record<string, string | string[] | undefined>,
 ): OverviewQuery {
@@ -503,3 +638,49 @@ export function parseOverviewQuery(
   }
   return query;
 }
+
+/** S21: personal reminders, the schedule range and the manager summary (`private.chore_schedule_limit`). */
+export const CHORE_SCHEDULE_LIMITS = { days: 42, reminderDays: 30 } as const;
+
+const choreReminderBase = {
+  /** The person's reminder revision as read (0: they had none). */
+  expectedRevision: z.int().min(0),
+  dryRun: z.boolean(),
+};
+
+/** A personal reminder: at a date and time, or days before the due day at a time (Home's timezone). */
+export const choreReminderSchema = z.discriminatedUnion("mode", [
+  z.strictObject({
+    ...choreReminderBase,
+    mode: z.literal("absolute"),
+    localAt: localDateTimeSchema,
+  }),
+  z.strictObject({
+    ...choreReminderBase,
+    mode: z.literal("relative"),
+    daysBefore: z.int().min(0).max(CHORE_SCHEDULE_LIMITS.reminderDays),
+    time: clockTimeSchema,
+  }),
+]);
+export type ChoreReminderInput = z.output<typeof choreReminderSchema>;
+
+export const removeChoreReminderSchema = z.strictObject({ expectedRevision: z.int().min(0) });
+
+/** A schedule read: a Home and an inclusive date range of at most 42 days. */
+export const scheduleQuerySchema = z
+  .strictObject({ homeId: id, from: dateOnlySchema, to: dateOnlySchema })
+  .refine(
+    ({ from, to }) => {
+      const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+      return days >= 0 && days < CHORE_SCHEDULE_LIMITS.days;
+    },
+    { message: "invalid", path: ["to"] },
+  );
+
+/** The daily summary setting of a chore manager for a Home; the hour is in their own timezone. */
+export const summarySettingSchema = z.strictObject({
+  homeId: id,
+  enabled: z.boolean(),
+  hour: z.int().min(0).max(23),
+  expectedRevision: z.int().min(0),
+});

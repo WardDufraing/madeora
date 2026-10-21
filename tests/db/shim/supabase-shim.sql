@@ -18,7 +18,8 @@
 -- Known differences from Supabase: PostgreSQL 16 here, 17 there; auth.users, auth.identities,
 -- auth.sessions, auth.mfa_amr_claims and auth.flow_state are small subsets owned by supabase_admin (Supabase:
 -- supabase_auth_admin, more columns and RLS on); no GoTrue, PostgREST,
--- Realtime or other extensions. A test that passes here but fails in CI is a shim gap: fix the shim.
+-- Realtime server (only its publication) or other extensions. A test that passes here but fails in CI
+-- is a shim gap: fix the shim.
 
 \set ON_ERROR_STOP on
 
@@ -153,3 +154,7 @@ create function auth.jwt() returns jsonb
   $$;
 
 grant execute on function auth.uid(), auth.role(), auth.jwt() to postgres, anon, authenticated, service_role;
+
+-- Supabase's image creates the Realtime publication (empty) and lets postgres add tables to it (S21).
+create publication supabase_realtime;
+alter publication supabase_realtime owner to postgres;

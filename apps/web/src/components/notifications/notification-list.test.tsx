@@ -40,6 +40,8 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     homeName: "Thuis",
     objectionEndsAt: null,
     decision: null,
+    reason: null,
+    occurrenceId: null,
     taskId: null,
     dueDate: null,
     taskTitle: null,
@@ -79,6 +81,28 @@ describe("messageKeyFor", () => {
       "kindJoinRequestApproved",
     );
     expect(messageKeyFor({ kind: "chores.assigned", decision: null })).toBe("kindUnknown");
+  });
+
+  it("picks a chore notice's words by its outcome, with a neutral fallback", () => {
+    expect(messageKeyFor({ kind: "chore.claim_released", decision: null, reason: "auto" })).toBe(
+      "kindChoreClaimReleasedAuto",
+    );
+    expect(messageKeyFor({ kind: "chore.claim_released", decision: null, reason: "manager" })).toBe(
+      "kindChoreClaimReleasedManager",
+    );
+    expect(messageKeyFor({ kind: "chore.claim_released", decision: null })).toBe(
+      "kindChoreClaimReleased",
+    );
+    expect(
+      messageKeyFor({ kind: "chore.reassignment_answered", decision: "awaiting_manager" }),
+    ).toBe("kindChoreReassignmentAwaitingManager");
+    expect(messageKeyFor({ kind: "chore.reassignment_decided", decision: "refused" })).toBe(
+      "kindChoreReassignmentRefused",
+    );
+    // A decision that belongs to another kind does not change the words.
+    expect(messageKeyFor({ kind: "chore.reassignment_decided", decision: "approved" })).toBe(
+      "kindChoreReassignmentDecided",
+    );
   });
 });
 
@@ -138,6 +162,19 @@ describe("NotificationList", () => {
     expect(within(named as HTMLElement).getByRole("link", { name: "Open" })).toHaveAttribute(
       "href",
       `/homes/${HOME_ID}/tasks/${taskId}`,
+    );
+  });
+
+  it("words a chore handover notice by its answer and links to the occurrence", async () => {
+    const occurrenceId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00c1";
+    await show([item({ kind: "chore.reassignment_answered", decision: "declined", occurrenceId })]);
+    const row = screen.getByTestId("notification");
+    expect(row).toHaveTextContent(
+      "Your request to hand over a chore in \u2068Thuis\u2069 was declined.",
+    );
+    expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      `/homes/${HOME_ID}/chores/${occurrenceId}`,
     );
   });
 

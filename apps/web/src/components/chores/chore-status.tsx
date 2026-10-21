@@ -143,19 +143,21 @@ export function ChoreStatus({ occurrence, members, formats }: ChoreStatusProps) 
                   person: texts.person(occurrence.skip.by),
                   date: formatDateTime(occurrence.skip.at, formats),
                 })
-              : pending
-                ? t("pendingRecord", {
-                    person: texts.person(pending.by),
-                    contributor: texts.person(pending.contributor),
-                    date: formatDateTime(pending.at, formats),
-                  })
-                : occurrence.inRework
-                  ? occurrence.overdue
-                    ? t("statusReworkOverdue")
-                    : t("statusRework")
-                  : occurrence.overdue
-                    ? t("statusOverdue")
-                    : t("statusOpen")}
+              : occurrence.status === "expired"
+                ? t("expiredRecord")
+                : pending
+                  ? t("pendingRecord", {
+                      person: texts.person(pending.by),
+                      contributor: texts.person(pending.contributor),
+                      date: formatDateTime(pending.at, formats),
+                    })
+                  : occurrence.inRework
+                    ? occurrence.overdue
+                      ? t("statusReworkOverdue")
+                      : t("statusRework")
+                    : occurrence.overdue
+                      ? t("statusOverdue")
+                      : t("statusOpen")}
         </p>
         {occurrence.completion?.approvedAt ? (
           <p className="text-body text-fg" data-testid="chore-approved">
@@ -231,7 +233,9 @@ export function ChoreStatus({ occurrence, members, formats }: ChoreStatusProps) 
               {t("skip")}
             </Button>
           ) : null}
-          {occurrence.can.manage && occurrence.status !== "open" ? (
+          {occurrence.can.manage &&
+          occurrence.status !== "open" &&
+          occurrence.status !== "expired" ? (
             <Button
               variant="secondary"
               loading={reopen.busy}

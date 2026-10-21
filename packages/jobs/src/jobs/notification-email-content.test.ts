@@ -82,6 +82,44 @@ describe("buildNotificationEmail", () => {
     expect(nl.subject).toBe("Klusjes in \u2068De Boomgaard\u2069 wachten op je beoordeling");
   });
 
+  it("emails claim and handover notices by outcome, linking to the occurrence", async () => {
+    const occurrenceId = "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
+    const cases = [
+      ["chore.claim_released", { reason: "auto" }, "went back to the pool"],
+      ["chore.claim_released", { reason: "manager" }, "was released"],
+      ["chore.reassignment_requested", {}, "asks you to take over"],
+      ["chore.reassignment_answered", { decision: "accepted" }, "was taken over"],
+      ["chore.reassignment_answered", { decision: "declined" }, "was declined"],
+      [
+        "chore.reassignment_answered",
+        { decision: "awaiting_manager" },
+        "waits for a chore manager",
+      ],
+      ["chore.reassignment_confirmation_needed", {}, "needs your confirmation"],
+      ["chore.reassignment_decided", { decision: "confirmed" }, "was confirmed"],
+      ["chore.reassignment_decided", { decision: "refused" }, "was refused"],
+      ["chore.reassignment_invalidated", {}, "no longer applies"],
+    ] as const;
+    for (const [kind, extra, subject] of cases) {
+      for (const locale of ["en", "nl"] as const) {
+        const email = await buildNotificationEmail({
+          ...base,
+          locale,
+          kind,
+          params: { homeId, occurrenceId, ...extra },
+        });
+        expect(email.text).toContain(
+          `https://app.madeora.test/homes/${homeId}/chores/${occurrenceId}`,
+        );
+        if (locale === "en") expect(email.subject).toContain(subject);
+      }
+    }
+    // A notice whose outcome is unknown has no template rather than a misleading one.
+    await expect(
+      buildNotificationEmail({ ...base, kind: "chore.reassignment_answered", params: { homeId } }),
+    ).rejects.toThrow("no_email_template");
+  });
+
   it("keeps the owner's two recovery emails on their own template", async () => {
     const review = await buildNotificationEmail({
       ...base,

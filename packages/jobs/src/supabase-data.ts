@@ -39,6 +39,8 @@ const fileStatuses = ["pending", "ready", "failed", "deleted", "purged", "missin
 
 const trashStatuses = ["trashed", "restored", "purged", "missing"] as const;
 
+const claimReleaseOutcomes = ["released", "stale", "missing"] as const;
+
 const reminderOutcomes = ["notified", "not_sent", "stale", "not_due"] as const;
 
 function fileStatus(operation: string, value: string | null): StoredFileStatus {
@@ -179,6 +181,35 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       const status = oneOf(trashStatuses, data);
       if (!status) throw new JobStoreError("purge_expired_trash_entry", "unexpected_result");
       return status;
+    },
+
+    async releaseOverdueChoreClaim(occurrenceId, claim) {
+      const { data, error } = await client.rpc("release_overdue_chore_claim", {
+        p_occurrence_id: occurrenceId,
+        p_claim: claim,
+      });
+      if (error) throw new JobStoreError("release_overdue_chore_claim", error.code);
+      const outcome = oneOf(claimReleaseOutcomes, data);
+      if (!outcome) throw new JobStoreError("release_overdue_chore_claim", "unexpected_result");
+      return outcome;
+    },
+
+    async deliverChoreReminder(occurrenceId, userId, revision) {
+      const { data, error } = await client.rpc("deliver_chore_reminder", {
+        p_occurrence_id: occurrenceId,
+        p_user_id: userId,
+        p_revision: revision,
+      });
+      if (error) throw new JobStoreError("deliver_chore_reminder", error.code);
+      const outcome = oneOf(reminderOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_chore_reminder", "unexpected_result");
+      return outcome;
+    },
+
+    async sendChoreSummaries(limit) {
+      const { data, error } = await client.rpc("send_chore_summaries", { p_limit: limit });
+      if (error) throw new JobStoreError("send_chore_summaries", error.code);
+      return data;
     },
 
     async getStorageObjectDeletion(deletionId) {

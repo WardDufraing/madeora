@@ -11,6 +11,7 @@ import { parseStorageEnv } from "@madeora/storage";
 
 import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
+import { choreClaimRelease, choreReminder } from "../jobs/chores.ts";
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
@@ -74,6 +75,8 @@ export const storageFilePurgeTask = jobTask(storageFilePurge);
 export const storageObjectDeleteTask = jobTask(storageObjectDelete);
 export const trashEntryPurgeTask = jobTask(trashEntryPurge);
 export const taskReminderTask = jobTask(taskReminder);
+export const choreClaimReleaseTask = jobTask(choreClaimRelease);
+export const choreReminderTask = jobTask(choreReminder);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
@@ -91,6 +94,25 @@ export const taskReminderAdvance = schedules.task({
     const created = await services.data.advanceReminderSeries(REMINDER_ADVANCE_BATCH);
     logger.info("jobs.task_reminder_advance.done", { created });
     return { created };
+  },
+});
+
+/** How many daily summaries one hourly run handles; the rest wait for the next hour. */
+const CHORE_SUMMARY_BATCH = 200;
+
+// The chore managers' daily summaries (S21): each is due from its hour in the person's timezone, so
+// an hourly run sends those whose hour has come. ~720 runs a month, well inside the free tier.
+export const choreDigest = schedules.task({
+  id: "chore-digest",
+  cron: "5 * * * *",
+  queue: { concurrencyLimit: 1 },
+  retry: { maxAttempts: 2, minTimeoutInMs: 5_000, maxTimeoutInMs: 30_000, factor: 2 },
+  maxDuration: 90,
+  run: async () => {
+    const { services, logger } = getServices();
+    const sent = await services.data.sendChoreSummaries(CHORE_SUMMARY_BATCH);
+    logger.info("jobs.chore_digest.done", { sent });
+    return { sent };
   },
 });
 
