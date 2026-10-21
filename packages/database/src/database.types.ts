@@ -318,6 +318,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      advance_chores: { Args: { p_home_id: string }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
       appeal_ownership_recovery: {
@@ -353,6 +354,27 @@ export type Database = {
           claim_token: string;
           lease_until: string;
           state: string;
+        }[];
+      };
+      bulk_chore_occurrences: {
+        Args: {
+          p_action: string;
+          p_dry_run: boolean;
+          p_due_date?: string;
+          p_home_id: string;
+          p_items: Json;
+          p_member?: string;
+          p_reason?: string;
+        };
+        Returns: {
+          assignees_after: string[];
+          assignees_before: string[];
+          due_after: string;
+          due_before: string;
+          occurrence_id: string;
+          outcome: string;
+          revision: number;
+          title: string;
         }[];
       };
       bulk_update_tasks: {
@@ -410,9 +432,84 @@ export type Database = {
         }[];
       };
       claim_my_upload: { Args: { p_file_id: string }; Returns: string };
+      complete_chore_occurrence: {
+        Args: { p_contributor: string; p_note?: string; p_occurrence_id: string };
+        Returns: {
+          completed_at: string;
+          completed_by_me: boolean;
+          completed_by_member: string;
+          contributor_me: boolean;
+          contributor_member: string;
+          open_mandatory: number;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
+      correct_chore_completion: {
+        Args: {
+          p_completed_at?: string;
+          p_contributor?: string;
+          p_expected_revision: number;
+          p_note?: string;
+          p_occurrence_id: string;
+          p_reason?: string;
+          p_set_note?: boolean;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
+      create_chore: {
+        Args: {
+          p_assignment: Json;
+          p_category_id?: string;
+          p_due_date?: string;
+          p_ends_on?: string;
+          p_frequency?: string;
+          p_home_id: string;
+          p_id: string;
+          p_instructions?: string;
+          p_interval?: number;
+          p_max_count?: number;
+          p_minutes?: number;
+          p_requires_approval?: boolean;
+          p_starts_on?: string;
+          p_steps?: Json;
+          p_title: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          occurrence_id: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_chore_category: {
+        Args: { p_color: string; p_home_id: string; p_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_chore_template: {
+        Args: {
+          p_category_id?: string;
+          p_home_id: string;
+          p_id: string;
+          p_instructions?: string;
+          p_minutes?: number;
+          p_steps?: Json;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       create_dashboard_template: {
         Args: { p_kind: string; p_layout: Json; p_name: string };
         Returns: {
@@ -563,6 +660,28 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
       };
+      delete_chore_category: {
+        Args: { p_dry_run: boolean; p_expected_revision: number; p_id: string };
+        Returns: {
+          chore_count: number;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      delete_chore_occurrences: {
+        Args: {
+          p_dry_run: boolean;
+          p_expected_revision: number;
+          p_occurrence_id: string;
+          p_scope: string;
+        };
+        Returns: {
+          entry_id: string;
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
       delete_subtask: { Args: { p_id: string }; Returns: string };
       delete_task: {
@@ -645,6 +764,16 @@ export type Database = {
         };
         Returns: boolean;
       };
+      get_chore_context: {
+        Args: { p_home_id: string };
+        Returns: {
+          can_manage: boolean;
+          can_review: boolean;
+          pending_count: number;
+          today: string;
+        }[];
+      };
+      get_chore_occurrence: { Args: { p_occurrence_id: string }; Returns: Json };
       get_dashboard: {
         Args: { p_home_id?: string };
         Returns: {
@@ -791,6 +920,173 @@ export type Database = {
         }[];
       };
       leave_home: { Args: { p_home_id: string }; Returns: string };
+      list_chore_approvals: {
+        Args: { p_home_id: string; p_limit?: number };
+        Returns: {
+          assignee_member_ids: string[];
+          attempt: number;
+          category_color: string;
+          category_name: string;
+          chore_id: string;
+          contributor_current: boolean;
+          contributor_me: boolean;
+          contributor_member: string;
+          due_date: string;
+          late: boolean;
+          note: string;
+          occurrence_id: string;
+          revision: number;
+          scheduled_date: string;
+          steps_done: number;
+          steps_total: number;
+          submission_id: string;
+          submitted_at: string;
+          submitted_by_me: boolean;
+          submitted_by_member: string;
+          title: string;
+          total_count: number;
+        }[];
+      };
+      list_chore_categories: {
+        Args: { p_home_id: string; p_include_archived?: boolean };
+        Returns: {
+          archived: boolean;
+          chore_count: number;
+          color: string;
+          id: string;
+          name: string;
+          position: number;
+          revision: number;
+        }[];
+      };
+      list_chore_history: {
+        Args: { p_chore_id: string; p_filter?: string; p_limit?: number; p_offset?: number };
+        Returns: {
+          approved_at: string;
+          approved_by_me: boolean;
+          approved_by_member: string;
+          attempts: number;
+          category: string;
+          completed_at: string;
+          completed_by_me: boolean;
+          completed_by_member: string;
+          contributor_me: boolean;
+          contributor_member: string;
+          due_date: string;
+          id: string;
+          note: string;
+          scheduled_date: string;
+          skip_reason: string;
+          skipped_at: string;
+          skipped_by_me: boolean;
+          skipped_by_member: string;
+          status: string;
+          title: string;
+          total_count: number;
+        }[];
+      };
+      list_chore_occurrences: {
+        Args: {
+          p_assignee?: string;
+          p_category?: string;
+          p_category_id?: string;
+          p_home_id: string;
+          p_limit?: number;
+          p_member?: string;
+          p_offset?: number;
+        };
+        Returns: {
+          assigned_to_me: boolean;
+          assignee_member_ids: string[];
+          category_color: string;
+          category_id: string;
+          category_name: string;
+          chore_id: string;
+          due_date: string;
+          due_today: boolean;
+          id: string;
+          in_rework: boolean;
+          kind: string;
+          mandatory_open: number;
+          minutes: number;
+          needs_reassignment: boolean;
+          overdue: boolean;
+          requires_approval: boolean;
+          revision: number;
+          scheduled_date: string;
+          status: string;
+          steps_done: number;
+          steps_total: number;
+          title: string;
+          total_count: number;
+        }[];
+      };
+      list_chore_templates: {
+        Args: { p_home_id: string; p_include_retired?: boolean };
+        Returns: {
+          category_archived: boolean;
+          category_color: string;
+          category_id: string;
+          category_name: string;
+          id: string;
+          instructions: string;
+          minutes: number;
+          retired: boolean;
+          revision: number;
+          steps: Json;
+          title: string;
+        }[];
+      };
+      list_chore_widget: {
+        Args: {
+          p_from?: string;
+          p_home_id: string;
+          p_limit?: number;
+          p_member?: string;
+          p_state: string;
+          p_to?: string;
+          p_unassigned?: boolean;
+          p_view: string;
+        };
+        Returns: {
+          assigned_to_me: boolean;
+          assignee_member_ids: string[];
+          category_color: string;
+          category_name: string;
+          chore_id: string;
+          completed_at: string;
+          contributor_me: boolean;
+          contributor_member: string;
+          due_date: string;
+          id: string;
+          in_rework: boolean;
+          mandatory_open: number;
+          overdue: boolean;
+          requires_approval: boolean;
+          revision: number;
+          status: string;
+          title: string;
+          total_count: number;
+        }[];
+      };
+      list_chores: {
+        Args: { p_ended?: boolean; p_home_id: string };
+        Returns: {
+          assignment: string;
+          category_color: string;
+          category_id: string;
+          category_name: string;
+          finished: boolean;
+          id: string;
+          kind: string;
+          next_due: string;
+          occurrence_id: string;
+          open_count: number;
+          paused: boolean;
+          revision: number;
+          title: string;
+        }[];
+      };
       list_dashboard_templates: {
         Args: { p_home_id?: string };
         Returns: {
@@ -801,6 +1097,48 @@ export type Database = {
           shared_home_ids: string[];
           template_id: string;
           updated_at: string;
+        }[];
+      };
+      list_home_chore_history: {
+        Args: {
+          p_approval?: string;
+          p_basis?: string;
+          p_chore_id?: string;
+          p_from?: string;
+          p_home_id: string;
+          p_limit?: number;
+          p_member?: string;
+          p_offset?: number;
+          p_search?: string;
+          p_state?: string;
+          p_to?: string;
+        };
+        Returns: {
+          approved_at: string;
+          approved_by_me: boolean;
+          approved_by_member: string;
+          assignee_member_ids: string[];
+          attempts: number;
+          category: string;
+          category_color: string;
+          chore_id: string;
+          completed_at: string;
+          completed_by_me: boolean;
+          completed_by_member: string;
+          contributor_me: boolean;
+          contributor_member: string;
+          due_date: string;
+          id: string;
+          note: string;
+          rejected: number;
+          scheduled_date: string;
+          skip_reason: string;
+          skipped_at: string;
+          skipped_by_me: boolean;
+          skipped_by_member: string;
+          status: string;
+          title: string;
+          total_count: number;
         }[];
       };
       list_home_invitations: {
@@ -1106,6 +1444,14 @@ export type Database = {
           outcome: string;
         }[];
       };
+      reopen_chore_occurrence: {
+        Args: { p_occurrence_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      reorder_chore_categories: { Args: { p_home_id: string; p_ids: string[] }; Returns: string };
       reorder_subtasks: { Args: { p_subtask_ids: string[]; p_task_id: string }; Returns: string };
       reorder_task_lists: { Args: { p_home_id?: string; p_list_ids: string[] }; Returns: string };
       request_ownership_recovery: {
@@ -1150,6 +1496,19 @@ export type Database = {
           outcome: string;
         }[];
       };
+      review_chore_submission: {
+        Args: {
+          p_decision: string;
+          p_expected_revision: number;
+          p_occurrence_id: string;
+          p_reason?: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+          status: string;
+        }[];
+      };
       review_task_reminder: {
         Args: { p_choice: string; p_expected_revision: number; p_task_id: string };
         Returns: {
@@ -1177,6 +1536,29 @@ export type Database = {
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
+      };
+      set_chore_paused: {
+        Args: {
+          p_chore_id: string;
+          p_dry_run?: boolean;
+          p_expected_schedule_revision: number;
+          p_paused: boolean;
+          p_until?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_chore_step: {
+        Args: { p_checked: boolean; p_step_id: string };
+        Returns: {
+          checked: boolean;
+          done: number;
+          outcome: string;
+          total: number;
+        }[];
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
       set_my_home_avatar: { Args: { p_file_id?: string; p_home_id: string }; Returns: string };
@@ -1257,6 +1639,13 @@ export type Database = {
       share_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
+      };
+      skip_chore_occurrence: {
+        Args: { p_occurrence_id: string; p_reason?: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       staff_close_recovery_appeal: {
         Args: { p_appeal_id: string; p_notes: string };
@@ -1360,6 +1749,93 @@ export type Database = {
       unshare_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
+      };
+      update_chore: {
+        Args: {
+          p_category_id?: string;
+          p_chore_id: string;
+          p_expected_revision: number;
+          p_instructions?: string;
+          p_requires_approval?: boolean;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_chore_category: {
+        Args: {
+          p_archived: boolean;
+          p_color: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_name: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_chore_occurrence: {
+        Args: {
+          p_assignee_ids?: string[];
+          p_confirm_checklist?: boolean;
+          p_dry_run: boolean;
+          p_due_date?: string;
+          p_expected_revision: number;
+          p_minutes?: number;
+          p_occurrence_id: string;
+          p_set_minutes?: boolean;
+          p_steps?: Json;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_chore_series: {
+        Args: {
+          p_assignment?: Json;
+          p_dry_run: boolean;
+          p_ends_on?: string;
+          p_expected_revision: number;
+          p_expected_schedule_revision: number;
+          p_frequency?: string;
+          p_interval?: number;
+          p_max_count?: number;
+          p_minutes?: number;
+          p_occurrence_id: string;
+          p_scope: string;
+          p_set_minutes?: boolean;
+          p_set_schedule?: boolean;
+          p_starts_on?: string;
+          p_steps?: Json;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          impact: Json;
+          occurrence_id: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_chore_template: {
+        Args: {
+          p_category_id?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_instructions?: string;
+          p_minutes?: number;
+          p_retired?: boolean;
+          p_steps?: Json;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       update_task: {
         Args: {

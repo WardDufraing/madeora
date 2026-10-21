@@ -63,6 +63,9 @@ const itemTypeKey = {
   task_series_removal: "itemTypeTaskSeriesRemoval",
   task_attachment: "itemTypeTaskAttachment",
   task_series_attachment: "itemTypeTaskSeriesAttachment",
+  chore: "itemTypeChore",
+  chore_occurrence: "itemTypeChoreOccurrence",
+  chore_removal: "itemTypeChoreRemoval",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -80,6 +83,12 @@ function conflictMessage(kind: string) {
       return "conflictSeriesUnavailable";
     case "attachment_limit":
       return "conflictAttachmentLimit";
+    case "schedule_changed":
+      return "conflictScheduleChanged";
+    case "chore_unavailable":
+      return "conflictChoreUnavailable";
+    case "chore_limit":
+      return "conflictChoreLimit";
     default:
       return "conflictOther";
   }
@@ -88,6 +97,7 @@ const resolutionKey = {
   clear_slot: "resolveClearSlot",
   detach_parent: "resolveDetachParent",
   restore_tasks_only: "resolveRestoreTasksOnly",
+  restore_occurrences_only: "resolveRestoreOccurrencesOnly",
 } as const satisfies Record<Exclude<TrashResolution, "move_to_list">, string>;
 const errorKey = {
   signedOut: "errorSignedOut",

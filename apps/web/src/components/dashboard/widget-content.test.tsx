@@ -9,6 +9,12 @@ import type { DateTimeFormats } from "@/invitations/format";
 import type { TaskRow } from "@/tasks/api";
 import { defaultTaskQuery } from "@/tasks/filters";
 import type { TaskWidgetConfig, TaskWidgetData } from "@/tasks/widget-data";
+import type {
+  ChoreApprovalsWidgetData,
+  ChoreListConfig,
+  ChoreWidgetData,
+  ChoreWidgetRow,
+} from "@/chores/widget-data";
 import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
 
@@ -21,6 +27,9 @@ interface State {
     { status: "ok"; members: unknown[] } | { status: "not-found" } | { status: "unavailable" };
   tasks: TaskWidgetData | null;
   taskCalls: { homeId: string | null; config: TaskWidgetConfig }[];
+  chores: ChoreWidgetData | null;
+  approvals: ChoreApprovalsWidgetData;
+  choreCalls: { homeId: string; kind: string; config: ChoreListConfig }[];
 }
 const state = vi.hoisted((): State => ({
   locale: "en",
@@ -28,6 +37,9 @@ const state = vi.hoisted((): State => ({
   directory: { status: "ok", members: [] },
   tasks: null,
   taskCalls: [],
+  chores: null,
+  approvals: { status: "not-reviewer" },
+  choreCalls: [],
 }));
 
 vi.mock("next-intl/server", async () => {
@@ -58,9 +70,53 @@ vi.mock("@/tasks/widget-data", () => ({
     return Promise.resolve(state.tasks ?? emptyTasks());
   },
 }));
+vi.mock("@/chores/widget-data", () => ({
+  loadChoreWidget: (homeId: string, kind: string, config: ChoreListConfig) => {
+    state.choreCalls.push({ homeId, kind, config });
+    return Promise.resolve(state.chores ?? emptyChores());
+  },
+  loadChoreApprovalsWidget: () => Promise.resolve(state.approvals),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const noOptions = { lists: [], labels: [], members: [] };
+const SELF = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0500";
+const BEA = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0501";
+const choreMembers = [
+  { id: SELF, name: "Ann", isSelf: true },
+  { id: BEA, name: "Bea", isSelf: false },
+];
+function emptyChores(): Extract<ChoreWidgetData, { status: "ok" }> {
+  return {
+    status: "ok",
+    rows: [],
+    total: 0,
+    members: choreMembers,
+    today: "2027-01-01",
+    from: null,
+    to: null,
+    missingMember: false,
+  };
+}
+function choreRow(overrides: Partial<ChoreWidgetRow> = {}): ChoreWidgetRow {
+  return {
+    id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0600",
+    title: "Bins",
+    category: null,
+    dueDate: "2026-12-30",
+    status: "open",
+    overdue: true,
+    inRework: false,
+    requiresApproval: false,
+    assigneeIds: [SELF],
+    assignedToMe: true,
+    mandatoryOpen: 0,
+    completedAt: null,
+    contributor: null,
+    revision: 1,
+    ...overrides,
+  } as ChoreWidgetRow;
+}
 function emptyTasks(): TaskWidgetData {
   return {
     status: "ok",
@@ -172,6 +228,9 @@ beforeEach(() => {
   state.directory = { status: "ok", members: [] };
   state.tasks = null;
   state.taskCalls = [];
+  state.chores = null;
+  state.approvals = { status: "not-reviewer" };
+  state.choreCalls = [];
   vi.useFakeTimers({ toFake: ["Date"] });
   // 31 December 2026, 23:30 UTC: already 1 January 2027 in Brussels.
   vi.setSystemTime(new Date(Date.UTC(2026, 11, 31, 23, 30)));
@@ -444,5 +503,134 @@ describe("tasks widgets", () => {
     expect(entries.find((e) => e.id === TASKS_WIDGET)).toMatchObject({ unavailable: true });
     await show(entries);
     expect(state.taskCalls).toEqual([]);
+  });
+});
+
+const CHORE_WIDGET = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0202";
+function withChoreWidget(
+  type: "my-chores" | "home-chores" | "chore-approvals",
+  config: Record<string, unknown> = {},
+  layout: DashboardLayout = homeStarterLayout,
+  homeId?: string,
+): DashboardLayout {
+  return addWidget(layout, {
+    id: CHORE_WIDGET,
+    type,
+    hidden: false,
+    config,
+    ...(homeId ? { source: { homeId } } : {}),
+  });
+}
+
+describe("chore widgets", () => {
+  it("lists my chores with quick complete and names the state and order", async () => {
+    state.chores = { ...emptyChores(), rows: [choreRow()], total: 3 };
+    const container = await show(await renderWidgets(withChoreWidget("my-chores"), homeScope()));
+    const region = screen.getByRole("region", { name: "My Chores" });
+    expect(within(region).getByTestId("chore-widget-scope")).toHaveTextContent(
+      "Outstanding · earliest due first",
+    );
+    expect(within(region).getByRole("link", { name: "Bins" })).toHaveAttribute(
+      "href",
+      `/homes/${HOME_ID}/chores/6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0600`,
+    );
+    expect(within(region).getByText(/Overdue since/)).toBeInTheDocument();
+    expect(within(region).getByRole("button", { name: /Bins/ })).toBeInTheDocument();
+    expect(within(region).getByText("Showing 1 of 3")).toBeInTheDocument();
+    expect(state.choreCalls[0]).toMatchObject({ homeId: HOME_ID, kind: "my-chores" });
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("offers no quick complete for another member's chore or one with required steps", async () => {
+    state.chores = {
+      ...emptyChores(),
+      rows: [
+        choreRow({ assigneeIds: [BEA], assignedToMe: false }),
+        choreRow({ id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0601", title: "Floor", mandatoryOpen: 1 }),
+      ],
+      total: 2,
+    };
+    await show(
+      await renderWidgets(withChoreWidget("home-chores", { assignee: "any" }), homeScope()),
+    );
+    const region = screen.getByRole("region", { name: "All Home Chores" });
+    expect(within(region).queryByRole("button")).toBeNull();
+    expect(within(region).getByText(/Bea/)).toBeInTheDocument();
+  });
+
+  it("names a date range and a member who left", async () => {
+    state.chores = {
+      ...emptyChores(),
+      from: "2027-01-01",
+      to: "2027-01-07",
+      missingMember: true,
+    };
+    await show(
+      await renderWidgets(
+        withChoreWidget("home-chores", { range: "next_7_days", assignee: "member", memberId: BEA }),
+        homeScope(),
+      ),
+    );
+    const region = screen.getByRole("region", { name: "All Home Chores" });
+    expect(within(region).getByTestId("chore-widget-scope")).toHaveTextContent(
+      "Outstanding · due 2027-01-01 to 2027-01-07 · Assigned to",
+    );
+    expect(within(region).getByText(/no longer in the Home/)).toBeInTheDocument();
+    expect(within(region).getByText("Nothing here")).toBeInTheDocument();
+  });
+
+  it("shows Pending Approvals only to reviewers, without titles or counts for others", async () => {
+    await show(await renderWidgets(withChoreWidget("chore-approvals"), homeScope()));
+    const region = screen.getByRole("region", { name: "Pending Approvals" });
+    expect(within(region).getByText("For chore reviewers")).toBeInTheDocument();
+    expect(within(region).queryByRole("button")).toBeNull();
+  });
+
+  it("lets a reviewer approve or reject from the widget", async () => {
+    state.approvals = {
+      status: "ok",
+      total: 1,
+      members: choreMembers,
+      approvals: [
+        {
+          occurrenceId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0600",
+          choreId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0610",
+          title: "Windows",
+          category: null,
+          scheduledDate: "2026-12-30",
+          dueDate: "2026-12-30",
+          late: true,
+          assigneeIds: [BEA],
+          submissionId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0620",
+          attempt: 1,
+          submittedAt: "2026-12-31T10:00:00Z",
+          submittedBy: { me: false, member: BEA },
+          contributor: { me: false, member: BEA },
+          contributorCurrent: true,
+          note: null,
+          stepsDone: 0,
+          stepsTotal: 0,
+          revision: 4,
+        },
+      ],
+    };
+    const container = await show(
+      await renderWidgets(withChoreWidget("chore-approvals"), homeScope()),
+    );
+    const region = screen.getByRole("region", { name: "Pending Approvals" });
+    expect(within(region).getByRole("button", { name: "Approve Windows" })).toBeInTheDocument();
+    expect(within(region).getByRole("button", { name: "Reject Windows" })).toBeInTheDocument();
+    expect(within(region).getByText(/submitted by .*Bea/)).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("never reads chores of a Home the person left", async () => {
+    const entries = await renderWidgets(
+      withChoreWidget("my-chores", {}, personalStarterLayout, LEFT_HOME),
+      personalScope(),
+    );
+    expect(entries.find((e) => e.id === CHORE_WIDGET)).toMatchObject({ unavailable: true });
+    await show(entries);
+    expect(state.choreCalls).toEqual([]);
   });
 });

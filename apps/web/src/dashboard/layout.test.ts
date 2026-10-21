@@ -60,12 +60,18 @@ describe("widget registry", () => {
       { type: "home-members", needsSource: true },
       { type: "tasks", needsSource: false },
       { type: "tasks", needsSource: true },
+      { type: "my-chores", needsSource: true },
+      { type: "home-chores", needsSource: true },
+      { type: "chore-approvals", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
       "quick-actions",
       "home-members",
       "tasks",
+      "my-chores",
+      "home-chores",
+      "chore-approvals",
     ]);
   });
 

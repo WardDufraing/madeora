@@ -17,6 +17,7 @@ const moduleKey = {
   sample: "moduleSample",
   dashboard: "moduleDashboard",
   tasks: "moduleTasks",
+  chores: "moduleChores",
 } as const;
 const itemTypeKey = {
   sample: "itemTypeSample",
@@ -26,6 +27,9 @@ const itemTypeKey = {
   task_series_removal: "itemTypeTaskSeriesRemoval",
   task_attachment: "itemTypeTaskAttachment",
   task_series_attachment: "itemTypeTaskSeriesAttachment",
+  chore: "itemTypeChore",
+  chore_occurrence: "itemTypeChoreOccurrence",
+  chore_removal: "itemTypeChoreRemoval",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

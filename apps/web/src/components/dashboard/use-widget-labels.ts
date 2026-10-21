@@ -19,6 +19,9 @@ export function useWidgetLabels(): {
     notifications: t("widgetNotifications"),
     "home-members": t("widgetHomeMembers"),
     tasks: t("widgetTasks"),
+    "my-chores": t("widgetMyChores"),
+    "home-chores": t("widgetHomeChores"),
+    "chore-approvals": t("widgetChoreApprovals"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -26,6 +29,9 @@ export function useWidgetLabels(): {
     notifications: t("widgetNotificationsDescription"),
     "home-members": t("widgetHomeMembersDescription"),
     tasks: t("widgetTasksDescription"),
+    "my-chores": t("widgetMyChoresDescription"),
+    "home-chores": t("widgetHomeChoresDescription"),
+    "chore-approvals": t("widgetChoreApprovalsDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),

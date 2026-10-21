@@ -44,6 +44,8 @@ const matrix: readonly {
       ["removeMembers"],
       ["manageHomeDashboard"],
       ["manageHomeTasks"],
+      ["manageHomeChores"],
+      ["approveHomeChores"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -85,6 +87,11 @@ const matrix: readonly {
           "home.tasks.create": true,
           "home.tasks.comment": true,
           "home.tasks.manage": owner || (admin && has("manageHomeTasks")),
+          // Every member sees chores and completes any occurrence; chore managers manage them.
+          "home.chores.view": true,
+          "home.chores.complete": true,
+          "home.chores.manage": owner || (admin && has("manageHomeChores")),
+          "home.chores.review": owner || (admin && has("approveHomeChores")),
         },
       };
     }),

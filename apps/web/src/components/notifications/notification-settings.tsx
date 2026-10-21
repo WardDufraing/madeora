@@ -65,6 +65,14 @@ const categoryText = {
     email: "previewRemindersEmail",
     none: "previewRemindersNone",
   },
+  approvals: {
+    title: "categoryApprovals",
+    hint: "categoryApprovalsHint",
+    both: "previewApprovalsBoth",
+    inApp: "previewApprovalsInApp",
+    email: "previewApprovalsEmail",
+    none: "previewApprovalsNone",
+  },
 } as const satisfies Record<OptionalNotificationCategory, Record<string, string>>;
 
 /** Runs one change, then refreshes the page so every status and preview follows. */

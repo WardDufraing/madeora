@@ -37,6 +37,7 @@ const kindMessage = {
   "storage.personal_critical": "kindStoragePersonalCritical",
   "storage.home_warning": "kindStorageHomeWarning",
   "storage.home_critical": "kindStorageHomeCritical",
+  "chore.approval_requested": "kindChoreApprovalRequested",
 } as const;
 
 type MessageKey =
