@@ -11,6 +11,9 @@ import { choreKeys } from "@/chores/format";
 /** Changes that arrive close together become one refresh. */
 const REFRESH_DELAY_MS = 300;
 
+/** While the tab is visible the stored version is also read this often: delivery is not assumed. */
+const RECONCILE_INTERVAL_MS = 5_000;
+
 export interface ChorePoolLiveProps {
   readonly homeId: string;
   /** The Home's pool signal version the page was rendered at (null: unknown, refresh on connect). */
@@ -26,8 +29,10 @@ export interface ChorePoolLiveProps {
  *
  * Delivery and order are not trusted: on (re)connecting and when the tab becomes visible again it
  * compares the stored version with the rendered one, so a change missed between rendering and
- * subscribing, or while offline, still shows. The subscription ends when the view unmounts, the
- * Home changes, or the person signs out (the shell then re-renders without it).
+ * subscribing, or while offline, still shows. While the tab is visible it also compares them every
+ * few seconds, so a dropped or never-delivered event delays an update instead of losing it. The
+ * subscription ends when the view unmounts, the Home changes, or the person signs out (the shell
+ * then re-renders without it).
  */
 export function ChorePoolLive({ homeId, version }: ChorePoolLiveProps) {
   const router = useRouter();
@@ -82,14 +87,16 @@ export function ChorePoolLive({ homeId, version }: ChorePoolLiveProps) {
       .subscribe((status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) void check();
       });
-    const onVisible = () => {
+    const checkIfVisible = () => {
       if (document.visibilityState === "visible") void check();
     };
-    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", checkIfVisible);
+    const reconcile = setInterval(checkIfVisible, RECONCILE_INTERVAL_MS);
     return () => {
       active = false;
+      clearInterval(reconcile);
       clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", checkIfVisible);
       void supabase.removeChannel(channel);
     };
   }, [homeId, queryClient, router]);
