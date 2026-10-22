@@ -582,7 +582,7 @@ describe("live updates", () => {
     // Connected with nothing missed: no refresh.
     await act(async () => {
       realtime.channel.status?.("SUBSCRIBED");
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(1000);
     });
     expect(router.refresh).not.toHaveBeenCalled();
     // A change by someone else: one refresh, however many events arrive together.
@@ -591,7 +591,7 @@ describe("live updates", () => {
       realtime.channel.handler?.({ new: { version: 5 } });
     });
     await act(async () => {
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(1000);
     });
     expect(router.refresh).toHaveBeenCalledTimes(1);
     // An event the page already shows changes nothing.
@@ -599,7 +599,7 @@ describe("live updates", () => {
       realtime.channel.handler?.({ new: { version: 5 } });
     });
     await act(async () => {
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(1000);
     });
     expect(router.refresh).toHaveBeenCalledTimes(1);
     unmount();
@@ -612,7 +612,23 @@ describe("live updates", () => {
     renderWithQuery(<ChorePoolLive homeId={HOME} version={6} />);
     await act(async () => {
       realtime.channel.status?.("SUBSCRIBED");
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("catches a change whose event never arrived, by reading the version every few seconds", async () => {
+    vi.useFakeTimers();
+    realtime.version = 3;
+    renderWithQuery(<ChorePoolLive homeId={HOME} version={3} />);
+    await act(async () => {
+      realtime.channel.status?.("SUBSCRIBED");
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(router.refresh).not.toHaveBeenCalled();
+    realtime.version = 4;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
     });
     expect(router.refresh).toHaveBeenCalledTimes(1);
   });
