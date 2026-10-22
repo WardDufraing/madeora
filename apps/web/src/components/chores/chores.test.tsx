@@ -402,6 +402,36 @@ describe("editing", () => {
     });
   });
 
+  it("names members away on a Home vacation and confirms assigning them on save (S22)", async () => {
+    const user = userEvent.setup();
+    const impact = { removed: 1, removedChecked: 0, added: 0, newlyMandatory: 0, away: [CAL] };
+    fetchMock
+      .mockResolvedValueOnce(Response.json({ outcome: "preview", impact, revision: 2 }))
+      .mockResolvedValueOnce(Response.json({ outcome: "saved", impact, revision: 3 }));
+    renderWithQuery(
+      <ChoreEdit
+        occurrence={occurrence({
+          can: { complete: true, review: false, correct: false, manage: true },
+          steps: [{ id: STEP, label: "Sort the glass", mandatory: false, checked: false }],
+        })}
+        members={members}
+        dateFormat="ymd-dash"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Change this occurrence" }));
+    await user.click(screen.getByRole("button", { name: "Remove step 1" }));
+    await user.click(screen.getByRole("button", { name: "Preview the change" }));
+    expect(await screen.findByTestId("chore-edit-away")).toHaveTextContent("Cal");
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).not.toHaveProperty("confirmAway");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toMatchObject({
+        dryRun: false,
+        confirmAway: true,
+      });
+    });
+  });
+
   it("asks to confirm removing a ticked step of this occurrence", async () => {
     const user = userEvent.setup();
     fetchMock

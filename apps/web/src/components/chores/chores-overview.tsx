@@ -24,6 +24,8 @@ import { addDays, startOfWeek } from "@/tasks/calendar";
 import { getDateTimeFormats } from "@/invitations/server";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate, memberNames, personName } from "@/tasks/format";
+import { getVacationWidget } from "@/vacations/data";
+import { absencesPath, vacationsPath } from "@/vacations/format";
 
 import { ChoreBulk } from "./chore-bulk";
 import { ChoreFilters } from "./chore-filters";
@@ -94,6 +96,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
     requests,
     proposals,
     offers,
+    vacation,
   ] = await Promise.all([
     getTranslations("Chores"),
     getDateTimeFormats(),
@@ -110,6 +113,8 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
     // only hides them.
     listChoreProposals(home.id),
     listVolunteerOffers(home.id),
+    // S22: whether a Home vacation pauses chores today; a failure only hides the notice.
+    getVacationWidget(home.id),
   ]);
   if (
     context.status !== "ok" ||
@@ -201,6 +206,22 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         <Link href={`${base}/history`} className="font-medium text-accent-fg underline">
           {t("homeHistoryLink")}
         </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={vacationsPath(home.id)}
+          className="font-medium text-accent-fg underline"
+          data-testid="chores-vacations-link"
+        >
+          {t("vacationsLink")}
+        </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={absencesPath(home.id)}
+          className="font-medium text-accent-fg underline"
+          data-testid="chores-absences-link"
+        >
+          {t("absencesLink")}
+        </Link>
         {context.value.canManage ? (
           <>
             <span aria-hidden="true">{"\u{00B7}"}</span>
@@ -210,6 +231,18 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           </>
         ) : null}
       </p>
+      {vacation.status === "ok" && vacation.value.pausedToday ? (
+        <p
+          role="status"
+          className="mb-4 rounded-card border border-line bg-surface-sunken p-3 text-body text-fg"
+          data-testid="chores-paused-today"
+        >
+          {t("pausedTodayNotice")}{" "}
+          <Link href={vacationsPath(home.id)} className="font-medium text-accent-fg underline">
+            {t("openVacations")}
+          </Link>
+        </p>
+      ) : null}
       {notice === "deleted" ? (
         <p
           role="status"

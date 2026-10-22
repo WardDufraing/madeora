@@ -101,6 +101,13 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
         >
           {t("settingsLink")}
         </Link>
+        <Link
+          href={`/homes/${home.id}/vacations`}
+          className="text-body font-medium text-accent-fg underline"
+          data-testid="vacations-link"
+        >
+          {t("vacationsLink")}
+        </Link>
         {canInvite ? (
           <Link
             href={`/homes/${home.id}/invitations`}

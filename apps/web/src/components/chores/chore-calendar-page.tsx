@@ -23,6 +23,7 @@ import { getDateTimeFormats } from "@/invitations/server";
 import { weekdayNames } from "@/preferences/regional";
 import { getRegionalFormats } from "@/preferences/server";
 import { calendarWindow } from "@/tasks/calendar";
+import { listVacationDays } from "@/vacations/data";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate } from "@/tasks/format";
 
@@ -58,7 +59,11 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
   }
   const today = context.value.today;
   const window = calendarWindow(query.view, query.date ?? today, regional.effective.weekStart);
-  const schedule = await listChoreSchedule(home.id, window.from, window.to);
+  const [schedule, vacationDays] = await Promise.all([
+    listChoreSchedule(home.id, window.from, window.to),
+    // S22: vacation days to mark; a failure only leaves them out.
+    listVacationDays(home.id, window.from, window.to),
+  ]);
   if (schedule.status !== "ok") {
     return <ErrorState title={t("calendarLoadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -199,6 +204,7 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
           weekdays={weekdayNames(regional.effective.weekStart, formats.locale, "short")}
           weekdaysLong={weekdayNames(regional.effective.weekStart, formats.locale, "long")}
           title={title}
+          vacationDays={vacationDays.status === "ok" ? vacationDays.value.days : []}
         />
       </div>
     </>

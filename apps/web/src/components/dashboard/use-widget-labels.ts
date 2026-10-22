@@ -23,6 +23,7 @@ export function useWidgetLabels(): {
     "home-chores": t("widgetHomeChores"),
     "chore-approvals": t("widgetChoreApprovals"),
     "chore-schedule": t("widgetChoreSchedule"),
+    "home-vacation": t("widgetHomeVacation"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -34,6 +35,7 @@ export function useWidgetLabels(): {
     "home-chores": t("widgetHomeChoresDescription"),
     "chore-approvals": t("widgetChoreApprovalsDescription"),
     "chore-schedule": t("widgetChoreScheduleDescription"),
+    "home-vacation": t("widgetHomeVacationDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),

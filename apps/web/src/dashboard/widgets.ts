@@ -155,6 +155,12 @@ const choreScheduleConfig = z.strictObject({
   limit: z.union([z.literal(2), z.literal(3), z.literal(5)]).default(3),
 });
 
+/**
+ * The Home vacation widget (S22; spec "Home vacation dashboard widget"): the active vacation, else
+ * the next upcoming one, with its dates, scope and whether chores are paused. No settings.
+ */
+const homeVacationConfig = z.strictObject({});
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -231,6 +237,15 @@ export const widgetRegistry = {
     ),
     config: choreScheduleConfig,
   },
+  "home-vacation": {
+    surfaces: ["home", "home-source"],
+    sizes: sizes(
+      { w: 4, h: 2, minW: 3, maxW: 12, minH: 2, maxH: 4 },
+      { w: 3, h: 2, minW: 3, maxW: 6, minH: 2, maxH: 4 },
+      { h: 3, minH: 2, maxH: 4 },
+    ),
+    config: homeVacationConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -248,6 +263,7 @@ export interface WidgetConfigs {
   readonly "home-chores": WidgetConfig<"home-chores">;
   readonly "chore-approvals": WidgetConfig<"chore-approvals">;
   readonly "chore-schedule": WidgetConfig<"chore-schedule">;
+  readonly "home-vacation": WidgetConfig<"home-vacation">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

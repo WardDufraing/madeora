@@ -47,3 +47,32 @@ export const choreReminder = defineJob({
     logger.info("jobs.chore_reminder.done", { outcome });
   },
 });
+
+/**
+ * Pre-vacation reminders (S22, ADR 0029). Queued in the outbox for 09:00 Home time the chosen number
+ * of days before a vacation starts, whenever a chore manager sets the reminder or the start moves;
+ * the payload names the vacation, the start and the lead days it was planned for. The database
+ * re-checks at delivery (not cancelled, the same start and lead days, the start still ahead) and
+ * tells each chore manager once, so a duplicate or outdated run tells nobody twice. One that is not
+ * due yet (a clock difference) is retried.
+ */
+export const vacationReminder = defineJob({
+  name: "vacation-reminder",
+  version: 1,
+  payload: z.strictObject({
+    vacationId: z.uuid(),
+    startsOn: z.iso.date(),
+    days: z.int().min(1).max(30),
+  }),
+  retry: { maxAttempts: 5 },
+  leaseSeconds: 60,
+  async handle(data, { services, logger }) {
+    const outcome = await services.data.deliverVacationReminder(
+      data.vacationId,
+      data.startsOn,
+      data.days,
+    );
+    if (outcome === "not_due") throw new RetryableJobError("not_due");
+    logger.info("jobs.vacation_reminder.done", { outcome });
+  },
+});

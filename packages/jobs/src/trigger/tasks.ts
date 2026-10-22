@@ -11,7 +11,7 @@ import { parseStorageEnv } from "@madeora/storage";
 
 import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
-import { choreClaimRelease, choreReminder } from "../jobs/chores.ts";
+import { choreClaimRelease, choreReminder, vacationReminder } from "../jobs/chores.ts";
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
@@ -77,6 +77,7 @@ export const trashEntryPurgeTask = jobTask(trashEntryPurge);
 export const taskReminderTask = jobTask(taskReminder);
 export const choreClaimReleaseTask = jobTask(choreClaimRelease);
 export const choreReminderTask = jobTask(choreReminder);
+export const vacationReminderTask = jobTask(vacationReminder);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;

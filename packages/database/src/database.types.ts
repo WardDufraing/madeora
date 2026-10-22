@@ -344,6 +344,19 @@ export type Database = {
           revision: number;
         }[];
       };
+      add_vacation_participants: {
+        Args: {
+          p_dry_run: boolean;
+          p_expected_revision: number;
+          p_people: Json;
+          p_vacation_id: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       advance_chores: { Args: { p_home_id: string }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
@@ -359,6 +372,14 @@ export type Database = {
         Returns: {
           outcome: string;
           status: string;
+        }[];
+      };
+      answer_vacation_date_proposal: {
+        Args: { p_action: string; p_dry_run: boolean; p_proposal_id: string };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
         }[];
       };
       appeal_ownership_recovery: {
@@ -466,6 +487,21 @@ export type Database = {
           p_role: string;
         };
         Returns: string;
+      };
+      change_vacation_participation: {
+        Args: {
+          p_action: string;
+          p_dry_run: boolean;
+          p_ends_on?: string;
+          p_expected_revision: number;
+          p_participant_id: string;
+          p_starts_on?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
       };
       claim_chore_occurrence: {
         Args: { p_occurrence_id: string };
@@ -627,6 +663,21 @@ export type Database = {
           token: string;
         }[];
       };
+      create_home_vacation: {
+        Args: {
+          p_dry_run?: boolean;
+          p_home_id: string;
+          p_id: string;
+          p_name: string;
+          p_people: Json;
+          p_reminder_days?: number;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       create_task: {
         Args: {
           p_assignee_ids?: string[];
@@ -743,9 +794,33 @@ export type Database = {
           upload_key: string;
         }[];
       };
+      decide_chore_vacation_item: {
+        Args: {
+          p_confirm_away?: boolean;
+          p_decision: string;
+          p_due_date?: string;
+          p_expected_revision: number;
+          p_member?: string;
+          p_occurrence_id: string;
+          p_source_id: string;
+          p_source_kind: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       decide_join_request: {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
+      };
+      delete_chore_absence: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       delete_chore_category: {
         Args: { p_dry_run: boolean; p_expected_revision: number; p_id: string };
@@ -823,6 +898,10 @@ export type Database = {
         Returns: string;
       };
       deliver_task_reminder: { Args: { p_revision: number; p_task_id: string }; Returns: string };
+      deliver_vacation_reminder: {
+        Args: { p_days: number; p_starts_on: string; p_vacation_id: string };
+        Returns: string;
+      };
       empty_trash: {
         Args: { p_deleted_before?: string; p_home_id?: string };
         Returns: {
@@ -879,6 +958,7 @@ export type Database = {
       };
       get_chore_summary: { Args: { p_home_id: string }; Returns: Json };
       get_chore_summary_setting: { Args: { p_home_id: string }; Returns: Json };
+      get_chore_vacation_state: { Args: { p_occurrence_id: string }; Returns: Json };
       get_chore_volunteer_state: { Args: { p_occurrence_id: string }; Returns: Json };
       get_dashboard: {
         Args: { p_home_id?: string };
@@ -890,6 +970,8 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      get_home_vacation: { Args: { p_vacation_id: string }; Returns: Json };
+      get_home_vacation_widget: { Args: { p_home_id: string }; Returns: Json };
       get_invitation_email: {
         Args: { p_invitation_id: string; p_send: number };
         Returns: {
@@ -1026,6 +1108,8 @@ export type Database = {
         }[];
       };
       leave_home: { Args: { p_home_id: string }; Returns: string };
+      list_absence_review: { Args: { p_id: string }; Returns: Json };
+      list_chore_absences: { Args: { p_home_id: string }; Returns: Json };
       list_chore_approvals: {
         Args: { p_home_id: string; p_limit?: number };
         Returns: {
@@ -1343,6 +1427,11 @@ export type Database = {
           state: string;
         }[];
       };
+      list_home_vacation_days: {
+        Args: { p_from: string; p_home_id: string; p_to: string };
+        Returns: Json;
+      };
+      list_home_vacations: { Args: { p_home_id: string }; Returns: Json };
       list_my_join_requests: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1499,6 +1588,7 @@ export type Database = {
           module: string;
         }[];
       };
+      list_vacation_review: { Args: { p_vacation_id: string }; Returns: Json };
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
       move_task: {
         Args: { p_expected_revision: number; p_list_id: string; p_task_id: string };
@@ -1756,6 +1846,21 @@ export type Database = {
       revoke_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: string;
+      };
+      save_chore_absence: {
+        Args: {
+          p_ends_on: string;
+          p_expected_revision?: number;
+          p_home_id: string;
+          p_id: string;
+          p_member: string;
+          p_reason?: string;
+          p_starts_on: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       save_dashboard: {
         Args: {
@@ -2064,6 +2169,7 @@ export type Database = {
       update_chore_occurrence: {
         Args: {
           p_assignee_ids?: string[];
+          p_confirm_away?: boolean;
           p_confirm_checklist?: boolean;
           p_confirm_release?: boolean;
           p_dry_run: boolean;
@@ -2130,6 +2236,22 @@ export type Database = {
           p_title: string;
         };
         Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_home_vacation: {
+        Args: {
+          p_action: string;
+          p_dry_run: boolean;
+          p_ends_on?: string;
+          p_expected_revision: number;
+          p_name?: string;
+          p_reminder_days?: number;
+          p_vacation_id: string;
+        };
+        Returns: {
+          impact: Json;
           outcome: string;
           revision: number;
         }[];

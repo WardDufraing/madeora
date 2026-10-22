@@ -366,6 +366,8 @@ export const occurrenceChangeSchema = z
     confirmChecklist: z.boolean().optional(),
     /** Confirms a new due date that releases a claim at once (S21). */
     confirmRelease: z.boolean().optional(),
+    /** Confirms assigning a member who is away on a Home vacation on the due date (S22). */
+    confirmAway: z.boolean().optional(),
   })
   .refine(
     (change) =>

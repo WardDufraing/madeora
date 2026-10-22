@@ -133,6 +133,7 @@ export function outcomeAnswer(
     case "withdrawn":
     case "sent":
     case "added":
+    case "decided":
       return json(200, body);
     case "conflict":
       return failure(409, "conflict", revision === undefined ? {} : { revision });
@@ -202,6 +203,28 @@ export function outcomeAnswer(
       return failure(404, "not-found");
     case "in_past":
       return failure(409, "in-past");
+    case "member_away":
+      return failure(
+        409,
+        "member-away",
+        details.impact === undefined ? {} : { impact: details.impact },
+      );
+    case "already_decided":
+      return failure(409, "already-decided", revision === undefined ? {} : { revision });
+    case "protected":
+      return failure(409, "protected");
+    case "nobody_assigned":
+      return failure(409, "nobody-assigned");
+    case "not_one_off":
+      return failure(409, "not-one-off");
+    case "already_participant":
+      return failure(409, "already-participant");
+    case "not_whole_home":
+      return failure(409, "not-whole-home");
+    case "stale":
+      return failure(409, "stale");
+    case "invalid_dates":
+      return failure(400, "invalid", { fields: ["dates"] });
     case "invalid_date":
       return failure(400, "invalid", { fields: ["dueDate"] });
     case "invalid_recipient":

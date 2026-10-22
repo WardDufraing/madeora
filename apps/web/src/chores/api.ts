@@ -112,6 +112,17 @@ export type ChoreErrorCode =
   | "deadline-passed"
   | "not-volunteered"
   | "in-past"
+  // S22: Home vacations, absences and their decisions.
+  | "member-away"
+  | "already-decided"
+  | "protected"
+  | "nobody-assigned"
+  | "not-one-off"
+  | "already-participant"
+  | "not-whole-home"
+  | "stale"
+  | "vacation-ended"
+  | "vacation-cancelled"
   | "failed";
 
 export interface ChoreErrorResponse {
@@ -121,12 +132,17 @@ export interface ChoreErrorResponse {
   readonly count?: number;
   readonly fields?: readonly string[];
   /** What a checklist change would remove, or a claim policy would do now (needs-confirmation). */
-  readonly impact?: OccurrenceImpact | ClaimPolicyImpact;
+  readonly impact?: OccurrenceImpact | ClaimPolicyImpact | AwayImpact;
   /** Who has it (already-claimed): the viewer, or a member's membership id. */
   readonly claimedByMe?: boolean;
   readonly claimant?: string | null;
   /** The request's status now (not-open, exists). */
   readonly status?: string;
+}
+
+/** Members away on the due date (member-away, S22): the viewer or a membership id. */
+export interface AwayImpact {
+  readonly away: readonly (string | null)[];
 }
 
 /** A person as a chore shows them: the viewer, a current member (membership id), or a former one. */
@@ -197,8 +213,12 @@ export interface ChoreStepTemplate {
   readonly mandatory: boolean;
 }
 
-/** `expired`: closed unclaimed at the end of its week (S21), never completed, distinct from skipped. */
-export type ChoreStatus = "open" | "pending_approval" | "completed" | "skipped" | "expired";
+/**
+ * `expired`: closed unclaimed at the end of its week (S21), never completed, distinct from skipped.
+ * `paused`: on a date of a confirmed Home-wide vacation pause (S22): not open, not overdue.
+ */
+export type ChoreStatus =
+  "open" | "pending_approval" | "completed" | "skipped" | "expired" | "paused";
 
 export type ChoreEventKind =
   | "completed"
@@ -214,7 +234,12 @@ export type ChoreEventKind =
   | "expired"
   | "reassigned"
   | "volunteered"
-  | "assignment_corrected";
+  | "assignment_corrected"
+  // S22: a Home-wide vacation pause, a rotation turn passed on, and given back.
+  | "vacation_paused"
+  | "vacation_resumed"
+  | "vacation_substituted"
+  | "vacation_restored";
 
 export interface ChoreEvent {
   readonly kind: ChoreEventKind;
@@ -336,6 +361,7 @@ export type ChoreHistoryStatus =
   | "completed"
   | "skipped"
   | "expired"
+  | "paused"
   | "missed"
   | "due_today"
   | "open"
@@ -390,6 +416,8 @@ export interface OccurrenceImpact extends Partial<MoveImpact> {
   readonly removedChecked: number;
   readonly added: number;
   readonly newlyMandatory: number;
+  /** Newly assigned members away on a Home vacation on the due date (S22); null: a former member. */
+  readonly away?: readonly (string | null)[];
 }
 
 export interface SeriesImpact {
@@ -597,6 +625,16 @@ export type ChoreFailure =
   | "deadlinePassed"
   | "notVolunteered"
   | "inPast"
+  | "memberAway"
+  | "alreadyDecided"
+  | "protectedOccurrence"
+  | "nobodyAssigned"
+  | "notOneOff"
+  | "alreadyParticipant"
+  | "notWholeHome"
+  | "staleDates"
+  | "vacationEnded"
+  | "vacationCancelled"
   | "network"
   | "failed";
 
@@ -650,6 +688,16 @@ const failures: { readonly [C in ChoreErrorCode]?: ChoreFailure } = {
   "deadline-passed": "deadlinePassed",
   "not-volunteered": "notVolunteered",
   "in-past": "inPast",
+  "member-away": "memberAway",
+  "already-decided": "alreadyDecided",
+  protected: "protectedOccurrence",
+  "nobody-assigned": "nobodyAssigned",
+  "not-one-off": "notOneOff",
+  "already-participant": "alreadyParticipant",
+  "not-whole-home": "notWholeHome",
+  stale: "staleDates",
+  "vacation-ended": "vacationEnded",
+  "vacation-cancelled": "vacationCancelled",
 };
 
 /** Sends one request; resolves with the JSON answer or rejects with a ChoreRequestError. */

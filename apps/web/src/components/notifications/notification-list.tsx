@@ -50,6 +50,9 @@ const kindMessage = {
   "chore.assignment_corrected": "kindChoreAssignmentCorrected",
   "chore.reminder": "kindChoreReminder",
   "chore.manager_summary": "kindChoreManagerSummary",
+  "vacation.invited": "kindVacationInvited",
+  "vacation.dates_proposed": "kindVacationDatesProposed",
+  "vacation.reminder": "kindVacationReminder",
 } as const;
 
 /** Chore notices whose words follow their outcome (S21). */

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { LabelChip } from "@/components/tasks/label-chip";
 import { ErrorState } from "@/components/ui/states";
+import { VacationStateNote } from "@/components/vacations/vacation-state-note";
 import {
   advanceChores,
   getChoreClaimPolicy,
@@ -22,6 +23,7 @@ import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate, memberNames, personName } from "@/tasks/format";
+import { getChoreVacationState } from "@/vacations/data";
 
 import { ChoreAttempts } from "./chore-attempts";
 import { ChoreChecklist } from "./chore-checklist";
@@ -63,15 +65,17 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
   }
   const detail = occurrence.value;
   if (detail.homeId !== homeId) notFound();
-  const [members, categories, history, claim, policy, volunteers, reminder] = await Promise.all([
-    listTaskMembers(homeId),
-    listChoreCategories(homeId, false),
-    listChoreHistory(detail.chore.id, "all", 0),
-    getChoreClaimState(occurrenceId),
-    detail.can.manage ? getChoreClaimPolicy(detail.chore.id) : null,
-    getChoreVolunteerState(occurrenceId),
-    getChoreReminder(occurrenceId),
-  ]);
+  const [members, categories, history, claim, policy, volunteers, reminder, vacation] =
+    await Promise.all([
+      listTaskMembers(homeId),
+      listChoreCategories(homeId, false),
+      listChoreHistory(detail.chore.id, "all", 0),
+      getChoreClaimState(occurrenceId),
+      detail.can.manage ? getChoreClaimPolicy(detail.chore.id) : null,
+      getChoreVolunteerState(occurrenceId),
+      getChoreReminder(occurrenceId),
+      getChoreVacationState(occurrenceId),
+    ]);
   if (
     members.status !== "ok" ||
     categories.status !== "ok" ||
@@ -164,6 +168,21 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
               date,
             })
           : t("eventVolunteerReturned", { person: by, from: who(event.previousContributor), date });
+      // S22: what a Home vacation rule did; never a person's action.
+      case "vacation_paused":
+        return t("eventVacationPaused", { date });
+      case "vacation_resumed":
+        return t("eventVacationResumed", { date });
+      case "vacation_substituted":
+        return event.contributor
+          ? t("eventVacationSubstituted", {
+              to: contributor,
+              from: who(event.previousContributor),
+              date,
+            })
+          : t("eventVacationNoSubstitute", { from: who(event.previousContributor), date });
+      case "vacation_restored":
+        return t("eventVacationRestored", { to: contributor, date });
     }
   };
   const base = choresPath(homeId);
@@ -193,6 +212,14 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
       <ChorePoolLive homeId={homeId} version={version} />
       <div className="flex max-w-3xl flex-col gap-8">
         <ChoreStatus occurrence={detail} members={members.value} formats={formats} />
+        {vacation.status === "ok" ? (
+          <VacationStateNote
+            homeId={homeId}
+            state={vacation.value}
+            names={memberNames(members.value)}
+            formats={formats}
+          />
+        ) : null}
         {detail.status === "open" || claim.value.requests.length > 0 ? (
           <ChoreClaim
             occurrenceId={detail.id}

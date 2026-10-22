@@ -94,6 +94,15 @@ export interface JobDataPort {
     userId: string,
     revision: number,
   ): Promise<TaskReminderOutcome>;
+  /**
+   * vacation-reminder (S22): tells the chore managers about an upcoming vacation if it still starts
+   * on that date with that lead time; the outcomes are the task reminder's.
+   */
+  deliverVacationReminder(
+    vacationId: string,
+    startsOn: string,
+    days: number,
+  ): Promise<TaskReminderOutcome>;
   /** chore-digest (S21): sends the daily summaries whose hour has come; how many were sent. */
   sendChoreSummaries(limit: number): Promise<number>;
 }

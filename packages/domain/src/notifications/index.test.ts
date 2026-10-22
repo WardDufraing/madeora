@@ -65,6 +65,19 @@ describe("notificationPath", () => {
     );
   });
 
+  it("leads vacation invitations and proposals to the Vacations page, a reminder to its vacation", () => {
+    const vacationId = "3b4c5d6e-7f80-4a1b-9c2d-3e4f5a6b7c8d";
+    for (const kind of ["vacation.invited", "vacation.dates_proposed"]) {
+      expect(notificationPath(kind, homeId, { vacationId })).toBe(`/homes/${homeId}/vacations`);
+    }
+    expect(notificationPath("vacation.reminder", homeId, { vacationId })).toBe(
+      `/homes/${homeId}/vacations/${vacationId}`,
+    );
+    expect(notificationPath("vacation.reminder", homeId, { vacationId: 7 })).toBe(
+      `/homes/${homeId}/vacations`,
+    );
+  });
+
   it("leads a manager summary to the live Summary page", () => {
     expect(notificationPath("chore.manager_summary", homeId, { overdueAssigned: 2 })).toBe(
       `/homes/${homeId}/chores/summary`,
@@ -98,7 +111,8 @@ describe("notificationKinds", () => {
           name.endsWith("_chores.sql") ||
           name.endsWith("_chore_pool_claims.sql") ||
           name.endsWith("_chore_proposals_volunteers.sql") ||
-          name.endsWith("_chore_overview_reminders.sql"),
+          name.endsWith("_chore_overview_reminders.sql") ||
+          name.endsWith("_home_vacations.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -109,6 +123,7 @@ describe("notificationKinds", () => {
       ...[...sql.matchAll(/'reminders', '((?:task|chore)\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'chores', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'(?:chores|reminders)', '(vacation\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });
