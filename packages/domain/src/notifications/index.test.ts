@@ -78,6 +78,16 @@ describe("notificationPath", () => {
     );
   });
 
+  it("leads points notices to the points page and reward notices to the rewards pages", () => {
+    for (const kind of ["points.awarded", "points.reversed", "points.bonus", "points.corrected"]) {
+      expect(notificationPath(kind, homeId, { amount: 5 })).toBe(`/homes/${homeId}/points`);
+    }
+    expect(notificationPath("reward.requested", homeId)).toBe(`/homes/${homeId}/rewards/approvals`);
+    for (const kind of ["reward.approved", "reward.refunded", "reward.unable"]) {
+      expect(notificationPath(kind, homeId)).toBe(`/homes/${homeId}/rewards`);
+    }
+  });
+
   it("leads a manager summary to the live Summary page", () => {
     expect(notificationPath("chore.manager_summary", homeId, { overdueAssigned: 2 })).toBe(
       `/homes/${homeId}/chores/summary`,
@@ -112,7 +122,8 @@ describe("notificationKinds", () => {
           name.endsWith("_chore_pool_claims.sql") ||
           name.endsWith("_chore_proposals_volunteers.sql") ||
           name.endsWith("_chore_overview_reminders.sql") ||
-          name.endsWith("_home_vacations.sql"),
+          name.endsWith("_home_vacations.sql") ||
+          name.endsWith("_points_rewards.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -124,6 +135,8 @@ describe("notificationKinds", () => {
       ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'chores', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'(?:chores|reminders)', '(vacation\.[a-z_]+)'/g)].map((m) => m[1]),
+      // S23 audit actions use other prefixes (rewards., point_entry.), so these are all notices.
+      ...[...sql.matchAll(/'((?:points|reward)\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });

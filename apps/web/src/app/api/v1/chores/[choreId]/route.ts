@@ -8,6 +8,7 @@ import {
   pathId,
   readChoreMutation,
 } from "@/chores/route-helpers";
+import { chorePointsArgs } from "@/points/chore-points";
 import { updateChoreSchema } from "@/chores/schema";
 
 interface ChoreRouteContext {
@@ -35,6 +36,7 @@ export async function PATCH(request: Request, { params }: ChoreRouteContext): Pr
     ...(change.requiresApproval !== undefined
       ? { p_requires_approval: change.requiresApproval }
       : {}),
+    ...(change.points !== undefined ? chorePointsArgs(change.points) : {}),
   });
   if (error) return databaseFailure("chores.update_failed", error);
   const row = data[0];

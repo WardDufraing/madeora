@@ -15,6 +15,8 @@ export const notificationCategories = [
   "reminders",
   "approvals",
   "chores",
+  "points",
+  "rewards",
 ] as const;
 export type NotificationCategory = (typeof notificationCategories)[number];
 
@@ -24,6 +26,8 @@ export const optionalNotificationCategories = [
   "reminders",
   "approvals",
   "chores",
+  "points",
+  "rewards",
 ] as const;
 export type OptionalNotificationCategory = (typeof optionalNotificationCategories)[number];
 
@@ -72,6 +76,19 @@ export const notificationKinds = [
   "vacation.invited",
   "vacation.dates_proposed",
   "vacation.reminder",
+  "points.awarded",
+  "points.reversed",
+  "points.bonus",
+  "points.corrected",
+  "points.adjustment_reversed",
+  "reward.requested",
+  "reward.approved",
+  "reward.rejected",
+  "reward.cancelled",
+  "reward.fulfilled",
+  "reward.unable",
+  "reward.refunded",
+  "reward.replacement",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -113,6 +130,11 @@ export function notificationPath(
       typeof params.vacationId === "string" ? encodeURIComponent(params.vacationId) : null;
     return vacationId ? `${home}/vacations/${vacationId}` : `${home}/vacations`;
   }
+  // S23: points notices lead to the person's points, reward notices to the rewards page (a request
+  // to review it, the rest to the requester's own requests).
+  if (kind.startsWith("points.")) return `${home}/points`;
+  if (kind === "reward.requested") return `${home}/rewards/approvals`;
+  if (kind.startsWith("reward.")) return `${home}/rewards`;
   if (kind.startsWith("chore.")) {
     // Claims, reassignment and volunteer requests and reminders (S21) lead to their occurrence.
     const occurrenceId =

@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ChorePointsPanel } from "@/components/points/chore-points-panel";
 import { PageHeader } from "@/components/shell/page-header";
 import { LabelChip } from "@/components/tasks/label-chip";
 import { ErrorState } from "@/components/ui/states";
@@ -21,6 +22,7 @@ import type { ChoreEvent } from "@/chores/api";
 import { choresPath } from "@/chores/format";
 import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
+import { getChorePoints } from "@/points/data";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate, memberNames, personName } from "@/tasks/format";
 import { getChoreVacationState } from "@/vacations/data";
@@ -65,7 +67,7 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
   }
   const detail = occurrence.value;
   if (detail.homeId !== homeId) notFound();
-  const [members, categories, history, claim, policy, volunteers, reminder, vacation] =
+  const [members, categories, history, claim, policy, volunteers, reminder, vacation, points] =
     await Promise.all([
       listTaskMembers(homeId),
       listChoreCategories(homeId, false),
@@ -75,6 +77,7 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
       getChoreVolunteerState(occurrenceId),
       getChoreReminder(occurrenceId),
       getChoreVacationState(occurrenceId),
+      getChorePoints(occurrenceId),
     ]);
   if (
     members.status !== "ok" ||
@@ -183,6 +186,9 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
           : t("eventVacationNoSubstitute", { from: who(event.previousContributor), date });
       case "vacation_restored":
         return t("eventVacationRestored", { to: contributor, date });
+      // S23: the reason is shown with the occurrence's points.
+      case "points_corrected":
+        return t("eventPointsCorrected", { person: by, date });
     }
   };
   const base = choresPath(homeId);
@@ -211,7 +217,12 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
       </p>
       <ChorePoolLive homeId={homeId} version={version} />
       <div className="flex max-w-3xl flex-col gap-8">
-        <ChoreStatus occurrence={detail} members={members.value} formats={formats} />
+        <ChoreStatus
+          occurrence={detail}
+          members={members.value}
+          formats={formats}
+          awardedPoints={points.status === "ok" ? (points.value.awarded?.amount ?? null) : null}
+        />
         {vacation.status === "ok" ? (
           <VacationStateNote
             homeId={homeId}
@@ -244,6 +255,16 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
         ) : null}
         <ChoreChecklist occurrence={detail} />
         <ChoreAttempts submissions={detail.submissions} members={members.value} formats={formats} />
+        {points.status === "ok" ? (
+          <ChorePointsPanel
+            occurrenceId={detail.id}
+            revision={detail.revision}
+            status={detail.status}
+            points={points.value}
+            names={names}
+            formats={formats}
+          />
+        ) : null}
         <section aria-labelledby="chore-details-heading" className="flex flex-col gap-3">
           <h2 id="chore-details-heading" className="text-section-title font-semibold text-fg">
             {t("detailsHeading")}
@@ -301,6 +322,7 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
           {manage ? (
             <ChoreFieldsEdit
               chore={detail.chore}
+              {...(points.status === "ok" ? { points: points.value.chore } : {})}
               categories={categories.value.map(({ id, name }) => ({ id, name }))}
             />
           ) : null}

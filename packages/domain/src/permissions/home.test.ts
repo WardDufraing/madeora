@@ -46,6 +46,9 @@ const matrix: readonly {
       ["manageHomeTasks"],
       ["manageHomeChores"],
       ["approveHomeChores"],
+      ["manageHomeRewards"],
+      ["approveHomeRewards"],
+      ["manageHomePoints"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -92,6 +95,11 @@ const matrix: readonly {
           "home.chores.complete": true,
           "home.chores.manage": owner || (admin && has("manageHomeChores")),
           "home.chores.review": owner || (admin && has("approveHomeChores")),
+          // Every member has their own points; balances of others and rewards are managed apart.
+          "home.points.view": true,
+          "home.points.manage": owner || (admin && has("manageHomePoints")),
+          "home.rewards.manage": owner || (admin && has("manageHomeRewards")),
+          "home.rewards.approve": owner || (admin && has("approveHomeRewards")),
         },
       };
     }),

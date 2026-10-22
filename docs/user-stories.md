@@ -165,7 +165,6 @@ As a Home member, I want to review chore history and handle approvals so complet
 - Approval actions are available only to authorized members.
 - Approval and history records refer to the correct Home and occurrence.
 
-
 ### US-019 — Claim unassigned chores and hand over assignments
 
 As a Home member, I want to claim an available chore occurrence or request a reassignment so unassigned work and handovers are visible and coordinated.
@@ -200,6 +199,18 @@ As a Home member, I want to review the chore schedule and manage my reminders so
 - I can configure or remove my supported personal reminder for an occurrence.
 - I can view and save the Home's daily summary settings only when authorized; another Home member's setting is not exposed as my personal preference.
 - Schedule, reminder, and summary actions preserve Home access boundaries.
+
+### US-022 — Earn chore points and redeem rewards
+
+As a Home member, I want completed chores to earn points that I can spend on the Home's rewards so household work is recognised.
+
+**Acceptance checks**
+
+- A chore shows its points; completing it adds them to my Home balance once, even when it is approved later, corrected or retried. A late completion follows the chore's late policy.
+- I see my own available, reserved, earned and spent points and my ledger; other members cannot see them. Only members allowed to manage points see everyone's balances and can add a bonus or correction with a reason, after a preview.
+- Redeeming a reward shows the cost and my points after; a reward that needs approval reserves the cost until a different authorized member approves or rejects it. I can cancel my own pending request.
+- Limits, the availability window and an archived or disabled reward are enforced by the server; my points stay with my membership in that Home only and never expire.
+- The leaderboard is optional for the Home and for each member; the weekly points and leaderboard widgets show only what I may see.
 
 ## 6. Notifications
 
@@ -258,7 +269,7 @@ These checks apply to every story above:
 
 ## Implementation evidence for chore workflows
 
-The additional chore stories are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), and the corresponding migrations in `supabase/migrations/`. These tests verify selected end-to-end paths; they do not certify every product requirement or all failure and permission cases.
+The additional chore stories are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), and the corresponding migrations in `supabase/migrations/`. These tests verify selected end-to-end paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 

@@ -357,6 +357,22 @@ export type Database = {
           revision: number;
         }[];
       };
+      adjust_points: {
+        Args: {
+          p_amount: number;
+          p_dry_run?: boolean;
+          p_home_id: string;
+          p_id: string;
+          p_kind: string;
+          p_member: string;
+          p_reason: string;
+        };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+          preview: Json;
+        }[];
+      };
       advance_chores: { Args: { p_home_id: string }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
@@ -385,6 +401,14 @@ export type Database = {
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
+      };
+      archive_reward: {
+        Args: { p_archived: boolean; p_expected_revision: number; p_reward_id: string };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
       };
       attach_task_file: {
         Args: { p_file_id: string; p_scope?: string };
@@ -469,6 +493,13 @@ export type Database = {
       cancel_ownership_transfer: {
         Args: { p_home_id: string; p_transfer_id: string };
         Returns: string;
+      };
+      cancel_reward_redemption: {
+        Args: { p_expected_revision: number; p_reason?: string; p_redemption_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       change_chore_volunteer_request: {
         Args: { p_action: string; p_member_ids?: string[]; p_request_id: string };
@@ -583,8 +614,11 @@ export type Database = {
           p_id: string;
           p_instructions?: string;
           p_interval?: number;
+          p_late_points?: number;
+          p_late_policy?: string;
           p_max_count?: number;
           p_minutes?: number;
+          p_points?: number;
           p_requires_approval?: boolean;
           p_starts_on?: string;
           p_steps?: Json;
@@ -610,7 +644,10 @@ export type Database = {
           p_home_id: string;
           p_id: string;
           p_instructions?: string;
+          p_late_points?: number;
+          p_late_policy?: string;
           p_minutes?: number;
+          p_points?: number;
           p_steps?: Json;
           p_title: string;
         };
@@ -674,6 +711,26 @@ export type Database = {
         };
         Returns: {
           impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_reward: {
+        Args: {
+          p_available_from?: string;
+          p_available_until?: string;
+          p_cost: number;
+          p_description?: string;
+          p_enabled?: boolean;
+          p_home_id: string;
+          p_id: string;
+          p_member_limit?: number;
+          p_member_period?: string;
+          p_name: string;
+          p_requires_approval?: boolean;
+          p_total_limit?: number;
+        };
+        Returns: {
           outcome: string;
           revision: number;
         }[];
@@ -946,6 +1003,7 @@ export type Database = {
         }[];
       };
       get_chore_occurrence: { Args: { p_occurrence_id: string }; Returns: Json };
+      get_chore_points: { Args: { p_occurrence_id: string }; Returns: Json };
       get_chore_reminder: { Args: { p_occurrence_id: string }; Returns: Json };
       get_chore_settings: {
         Args: { p_home_id: string };
@@ -1021,6 +1079,9 @@ export type Database = {
           overridden: boolean;
         }[];
       };
+      get_point_leaderboard: { Args: { p_home_id: string; p_period?: string }; Returns: Json };
+      get_point_summary: { Args: { p_home_id: string }; Returns: Json };
+      get_reward_redemption: { Args: { p_redemption_id: string }; Returns: Json };
       get_storage_object_deletion: {
         Args: { p_deletion_id: string };
         Returns: {
@@ -1039,6 +1100,10 @@ export type Database = {
       };
       get_task_reminder: { Args: { p_task_id: string; p_time_zone?: string }; Returns: Json };
       get_task_template: { Args: { p_id: string }; Returns: Json };
+      get_weekly_points: {
+        Args: { p_date?: string; p_home_id: string; p_shared?: boolean };
+        Returns: Json;
+      };
       home_capabilities: {
         Args: { p_home_id: string };
         Returns: {
@@ -1211,6 +1276,16 @@ export type Database = {
           total_count: number;
         }[];
       };
+      list_chore_points: {
+        Args: { p_home_id: string; p_occurrence_ids: string[] };
+        Returns: {
+          awarded: number;
+          late_points: number;
+          late_policy: string;
+          occurrence_id: string;
+          points: number;
+        }[];
+      };
       list_chore_pool: {
         Args: { p_date?: string; p_home_id: string };
         Returns: {
@@ -1268,7 +1343,10 @@ export type Database = {
           category_name: string;
           id: string;
           instructions: string;
+          late_points: number;
+          late_policy: string;
           minutes: number;
+          points: number;
           retired: boolean;
           revision: number;
           steps: Json;
@@ -1445,6 +1523,21 @@ export type Database = {
           state: string;
         }[];
       };
+      list_point_accounts: {
+        Args: { p_home_id: string };
+        Returns: {
+          account_id: string;
+          former: boolean;
+          member_id: string;
+          totals: Json;
+        }[];
+      };
+      list_point_entries: {
+        Args: { p_account_id?: string; p_before?: number; p_home_id: string; p_limit?: number };
+        Returns: Json;
+      };
+      list_reward_redemptions: { Args: { p_home_id: string; p_view: string }; Returns: Json };
+      list_rewards: { Args: { p_home_id: string; p_include_archived?: boolean }; Returns: Json };
       list_task_attachments: { Args: { p_task_id: string }; Returns: Json };
       list_task_calendar: {
         Args: {
@@ -1627,6 +1720,15 @@ export type Database = {
         Args: { p_home_id: string; p_reason: string };
         Returns: string;
       };
+      preview_chore_points_change: {
+        Args: {
+          p_action: string;
+          p_completed_at?: string;
+          p_contributor?: string;
+          p_occurrence_id: string;
+        };
+        Returns: Json;
+      };
       preview_home_invitation: {
         Args: { p_token: string };
         Returns: {
@@ -1671,6 +1773,13 @@ export type Database = {
       record_notification_email: {
         Args: { p_error_code?: string; p_notification_id: string; p_status: string };
         Returns: boolean;
+      };
+      redeem_reward: {
+        Args: { p_dry_run?: boolean; p_expected_cost: number; p_id: string; p_reward_id: string };
+        Returns: {
+          detail: Json;
+          outcome: string;
+        }[];
       };
       release_chore_occurrence: {
         Args: { p_occurrence_id: string; p_undo?: boolean };
@@ -1788,6 +1897,22 @@ export type Database = {
         Returns: boolean;
       };
       reset_notification_quiet_hours: { Args: { p_home_id?: string }; Returns: boolean };
+      resolve_reward_redemption: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_note?: string;
+          p_redemption_id: string;
+          p_replacement?: string;
+          p_resolution: string;
+          p_responsible?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       respond_to_ownership_transfer: {
         Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
         Returns: string;
@@ -1800,6 +1925,14 @@ export type Database = {
           entry_id: string;
           options: string[];
           outcome: string;
+        }[];
+      };
+      reverse_point_entry: {
+        Args: { p_dry_run?: boolean; p_entry_id: string; p_reason: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+          preview: Json;
         }[];
       };
       review_chore_proposal: {
@@ -1833,6 +1966,20 @@ export type Database = {
           outcome: string;
           revision: number;
           status: string;
+        }[];
+      };
+      review_reward_redemption: {
+        Args: {
+          p_confirm?: boolean;
+          p_decision: string;
+          p_expected_revision: number;
+          p_reason?: string;
+          p_redemption_id: string;
+        };
+        Returns: {
+          detail: Json;
+          outcome: string;
+          revision: number;
         }[];
       };
       review_task_reminder: {
@@ -1889,6 +2036,22 @@ export type Database = {
           p_expiry: string;
           p_member_ids: string[];
           p_mode: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_chore_occurrence_points: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_late_points?: number;
+          p_late_policy: string;
+          p_occurrence_id: string;
+          p_points: number;
+          p_reason?: string;
         };
         Returns: {
           impact: Json;
@@ -1964,6 +2127,30 @@ export type Database = {
           p_time_zone: string;
         };
         Returns: string;
+      };
+      set_replacement_outcome: {
+        Args: {
+          p_expected_revision: number;
+          p_note?: string;
+          p_redemption_id: string;
+          p_state: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_reward_fulfillment: {
+        Args: {
+          p_expected_revision: number;
+          p_note?: string;
+          p_redemption_id: string;
+          p_state: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       set_storage_allowance: {
         Args: { p_bytes: number; p_home_id: string; p_user_id: string };
@@ -2145,6 +2332,9 @@ export type Database = {
           p_chore_id: string;
           p_expected_revision: number;
           p_instructions?: string;
+          p_late_points?: number;
+          p_late_policy?: string;
+          p_points?: number;
           p_requires_approval?: boolean;
           p_title: string;
         };
@@ -2230,7 +2420,10 @@ export type Database = {
           p_expected_revision: number;
           p_id: string;
           p_instructions?: string;
+          p_late_points?: number;
+          p_late_policy?: string;
           p_minutes?: number;
+          p_points?: number;
           p_retired?: boolean;
           p_steps?: Json;
           p_title: string;
@@ -2249,6 +2442,43 @@ export type Database = {
           p_name?: string;
           p_reminder_days?: number;
           p_vacation_id: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_point_preferences: {
+        Args: {
+          p_home_id: string;
+          p_participates?: boolean;
+          p_set_target?: boolean;
+          p_share_target?: boolean;
+          p_target?: number;
+          p_target_paused?: boolean;
+        };
+        Returns: string;
+      };
+      update_point_settings: {
+        Args: { p_default_period: string; p_home_id: string; p_leaderboard_enabled: boolean };
+        Returns: string;
+      };
+      update_reward: {
+        Args: {
+          p_available_from?: string;
+          p_available_until?: string;
+          p_cost: number;
+          p_description?: string;
+          p_dry_run?: boolean;
+          p_enabled?: boolean;
+          p_expected_revision: number;
+          p_member_limit?: number;
+          p_member_period?: string;
+          p_name: string;
+          p_requires_approval?: boolean;
+          p_reward_id: string;
+          p_total_limit?: number;
         };
         Returns: {
           impact: Json;

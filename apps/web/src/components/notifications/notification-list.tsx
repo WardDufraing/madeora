@@ -53,6 +53,19 @@ const kindMessage = {
   "vacation.invited": "kindVacationInvited",
   "vacation.dates_proposed": "kindVacationDatesProposed",
   "vacation.reminder": "kindVacationReminder",
+  "points.awarded": "kindPointsAwarded",
+  "points.reversed": "kindPointsReversed",
+  "points.bonus": "kindPointsBonus",
+  "points.corrected": "kindPointsCorrected",
+  "points.adjustment_reversed": "kindPointsAdjustmentReversed",
+  "reward.requested": "kindRewardRequested",
+  "reward.approved": "kindRewardApproved",
+  "reward.rejected": "kindRewardRejected",
+  "reward.cancelled": "kindRewardCancelled",
+  "reward.fulfilled": "kindRewardFulfilled",
+  "reward.unable": "kindRewardUnable",
+  "reward.refunded": "kindRewardRefunded",
+  "reward.replacement": "kindRewardReplacement",
 } as const;
 
 /** Chore notices whose words follow their outcome (S21). */

@@ -13,6 +13,7 @@ import {
   requireReader,
 } from "@/chores/route-helpers";
 import { createTemplateSchema } from "@/chores/schema";
+import { chorePointsArgs } from "@/points/chore-points";
 
 /**
  * The Home's chore templates (S20), retired ones too with `retired=true`. Chore managers only:
@@ -48,6 +49,7 @@ export async function POST(request: Request): Promise<Response> {
     ...(template.categoryId === null ? {} : { p_category_id: template.categoryId }),
     ...(template.minutes === null ? {} : { p_minutes: template.minutes }),
     p_steps: template.steps,
+    ...chorePointsArgs(template.points),
   });
   if (error) return databaseFailure("chores.template_create_failed", error);
   const row = data[0];

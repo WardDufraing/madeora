@@ -33,6 +33,9 @@ export const delegableCapabilities = [
   "manageHomeTasks",
   "manageHomeChores",
   "approveHomeChores",
+  "manageHomeRewards",
+  "approveHomeRewards",
+  "manageHomePoints",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -64,6 +67,10 @@ export const homeActions = [
   "home.chores.complete",
   "home.chores.manage",
   "home.chores.review",
+  "home.points.view",
+  "home.points.manage",
+  "home.rewards.manage",
+  "home.rewards.approve",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -172,6 +179,22 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.chores.complete": { roles: ["owner", "administrator", "member"] },
   "home.chores.manage": { roles: ["owner"], delegatedThrough: "manageHomeChores" },
   "home.chores.review": { roles: ["owner"], delegatedThrough: "approveHomeChores" },
+  // Points and rewards (S23; defaults picked in the S23 brief, the per-module matrix is open in the
+  // spec): every current member sees their own balance and ledger, the enabled reward catalog,
+  // redeems and requests, cancels their own request, sees the leaderboard when the Home turned it on
+  // and sets their own participation and weekly target. Balances are private (spec "Confirmed reward
+  // balance privacy"): only points managers (the Owner, Administrators granted manageHomePoints) see
+  // other members' balances and ledgers and post bonuses, corrections and reversals; together with
+  // home.chores.manage they also correct or reopen completions that change awarded points. Rewards
+  // managers (manageHomeRewards) manage the catalog, limits, the leaderboard settings, fulfillment
+  // and its resolutions, and cancel someone else's request. Reviewers (approveHomeRewards) approve or
+  // reject requests, never their own (spec "Confirmed independent reviewer for reward redemptions":
+  // ./points.ts decides that per request). SQL: private.can_manage_points, can_manage_rewards,
+  // can_approve_rewards.
+  "home.points.view": { roles: ["owner", "administrator", "member"] },
+  "home.points.manage": { roles: ["owner"], delegatedThrough: "manageHomePoints" },
+  "home.rewards.manage": { roles: ["owner"], delegatedThrough: "manageHomeRewards" },
+  "home.rewards.approve": { roles: ["owner"], delegatedThrough: "approveHomeRewards" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -233,6 +256,10 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.chores.complete": can("home.chores.complete"),
     "home.chores.manage": can("home.chores.manage"),
     "home.chores.review": can("home.chores.review"),
+    "home.points.view": can("home.points.view"),
+    "home.points.manage": can("home.points.manage"),
+    "home.rewards.manage": can("home.rewards.manage"),
+    "home.rewards.approve": can("home.rewards.approve"),
   };
 }
 

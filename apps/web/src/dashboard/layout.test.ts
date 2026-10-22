@@ -65,6 +65,9 @@ describe("widget registry", () => {
       { type: "chore-approvals", needsSource: true },
       { type: "chore-schedule", needsSource: true },
       { type: "home-vacation", needsSource: true },
+      { type: "weekly-points", needsSource: true },
+      { type: "points-leaderboard", needsSource: true },
+      { type: "my-points", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
@@ -76,6 +79,9 @@ describe("widget registry", () => {
       "chore-approvals",
       "chore-schedule",
       "home-vacation",
+      "weekly-points",
+      "points-leaderboard",
+      "my-points",
     ]);
   });
 

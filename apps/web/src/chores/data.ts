@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { weekStarts } from "@/preferences/schema";
 import { dateOnlySchema, isLabelColor } from "@/tasks/schema";
 
+import { latePolicies } from "@madeora/domain/points";
 import { recurrenceFrequencies } from "@madeora/domain/tasks";
 
 import type {
@@ -288,6 +289,7 @@ const detailSchema = z.object({
         "vacation_resumed",
         "vacation_substituted",
         "vacation_restored",
+        "points_corrected",
       ]),
       at: z.string(),
       by: personSchema,
@@ -562,6 +564,8 @@ export async function listHomeChoreHistory(
 const templateStepsSchema = z.array(z.object({ label: z.string(), mandatory: z.boolean() }));
 
 /** The Home's templates (chore managers; anyone else gets an empty list). */
+const latePolicySchema = z.enum(latePolicies);
+
 export async function listChoreTemplates(
   homeId: string,
   includeRetired: boolean,
@@ -584,6 +588,11 @@ export async function listChoreTemplates(
       nullable(row.category_name),
       nullable(row.category_color),
     );
+    const latePolicy = latePolicySchema.safeParse(row.late_policy);
+    if (!latePolicy.success) {
+      logChores("chores.template_shape", "unexpected_shape");
+      return { status: "unavailable" };
+    }
     templates.push({
       id: row.id,
       title: row.title,
@@ -593,6 +602,11 @@ export async function listChoreTemplates(
       steps: steps.data,
       retired: row.retired,
       revision: row.revision,
+      points: {
+        points: row.points,
+        latePolicy: latePolicy.data,
+        latePoints: nullable(row.late_points),
+      },
     });
   }
   return { status: "ok", value: templates };

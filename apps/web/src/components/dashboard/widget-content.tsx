@@ -7,6 +7,11 @@ import Link from "next/link";
 import { requireIdentity } from "@/auth/identity";
 import { ChoreReview } from "@/components/chores/chore-review";
 import { ChoreScheduleWidget } from "@/components/chores/chore-schedule-widget";
+import {
+  LeaderboardWidget,
+  MyPointsWidget,
+  WeeklyPointsWidget,
+} from "@/components/points/points-widgets";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
 import { QuickComplete } from "@/components/chores/quick-complete";
 import { messageKeyFor } from "@/components/notifications/notification-list";
@@ -767,6 +772,9 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "chore-approvals": t("widgetChoreApprovals"),
     "chore-schedule": t("widgetChoreSchedule"),
     "home-vacation": t("widgetHomeVacation"),
+    "weekly-points": t("widgetWeeklyPoints"),
+    "points-leaderboard": t("widgetPointsLeaderboard"),
+    "my-points": t("widgetMyPoints"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -874,6 +882,46 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
           : titles["home-vacation"],
         sourceName: home?.name ?? null,
         body: <HomeVacationWidget homeId={homeId} formats={scope.formats} />,
+        unavailable: false,
+      };
+    }
+    case "weekly-points":
+    case "points-leaderboard":
+    case "my-points": {
+      // Home-only, like chores: the Home's own dashboard, or one the viewer belongs to now.
+      const home =
+        scope.kind === "home"
+          ? null
+          : scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (scope.kind !== "home" && !home) return unavailable;
+      const homeId = scope.kind === "home" ? scope.home.id : (home?.id ?? "");
+      let body;
+      if (widget.type === "weekly-points") {
+        const parsed = widgetRegistry["weekly-points"].config.safeParse(widget.config);
+        const view = parsed.success ? parsed.data.view : "mine";
+        body = <WeeklyPointsWidget homeId={homeId} view={view} formats={scope.formats} />;
+      } else if (widget.type === "points-leaderboard") {
+        const parsed = widgetRegistry["points-leaderboard"].config.safeParse(widget.config);
+        const config = parsed.success
+          ? parsed.data
+          : widgetRegistry["points-leaderboard"].config.parse({});
+        body = (
+          <LeaderboardWidget
+            homeId={homeId}
+            period={config.period === "default" ? null : config.period}
+            count={config.count}
+          />
+        );
+      } else {
+        body = <MyPointsWidget homeId={homeId} />;
+      }
+      return {
+        id: widget.id,
+        title: home
+          ? t("widgetFromHome", { widget: titles[widget.type], home: isolate(home.name) })
+          : titles[widget.type],
+        sourceName: home?.name ?? null,
+        body,
         unavailable: false,
       };
     }

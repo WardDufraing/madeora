@@ -142,6 +142,47 @@ describe("message dictionaries", () => {
       Accent: accentPalette.map((entry) => entry.id),
       // Each recovery state's sentence and staff label, looked up by state (S12b).
       Recovery: [...Object.values(stateKey), ...Object.values(staffStateKey)],
+      // Points and rewards (S23): kinds, policies, periods, blocks and states, looked up by the
+      // value the database answers.
+      Dashboard: [
+        ...withPrefix("settingPointsView_", ["mine", "shared"]),
+        ...withPrefix("settingLeaderboardPeriod_", ["default", "week", "month", "all"]),
+      ],
+      Points: [
+        ...withPrefix("latePolicy_", ["full", "reduced", "zero"]),
+        ...withPrefix("kind_", [
+          "chore_award",
+          "chore_reversal",
+          "bonus",
+          "correction",
+          "manual_reversal",
+          "redemption",
+          "refund",
+        ]),
+        ...withPrefix("period_", ["week", "month", "all"]),
+      ],
+      Rewards: [
+        ...withPrefix("memberPeriod_", ["week", "month", "year", "ever"]),
+        ...withPrefix("block_", [
+          "archived",
+          "disabled",
+          "not_started",
+          "ended",
+          "sold_out",
+          "member_limit",
+        ]),
+        ...withPrefix("blocker_", ["own_request", "no_reviewer"]),
+        ...withPrefix("status_", ["pending", "redeemed", "rejected", "cancelled"]),
+        ...withPrefix("statusReplacement_", ["pending", "fulfilled", "unable"]),
+        ...withPrefix("fulfillment_", ["pending", "fulfilled", "unable"]),
+        ...withPrefix("fulfil_", ["fulfilled", "unable", "pending"]),
+        ...withPrefix("fulfilTitle_", ["fulfilled", "unable", "pending"]),
+        ...withPrefix("replacement_", ["fulfilled", "unable"]),
+        ...withPrefix("replacementTitle_", ["fulfilled", "unable"]),
+        ...["archive", "restore"].flatMap((action) =>
+          ["For", "Title", "Body", "dAnnounce"].map((part) => action + part),
+        ),
+      ],
       // Vacation states, changes, reasons, decisions, events and participant actions, looked up
       // by the value the database answers (S22).
       Vacations: [

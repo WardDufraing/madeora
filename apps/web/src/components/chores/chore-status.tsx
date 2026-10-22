@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { PointsChangeNote } from "@/components/points/points-change";
 import { HydrationGate } from "@/components/tasks/hydration-gate";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -30,9 +31,11 @@ export interface ChoreStatusProps {
   readonly occurrence: ChoreOccurrenceDetail;
   readonly members: readonly MemberOption[];
   readonly formats: DateTimeFormats;
+  /** The points this completed occurrence carries (S23): reopening it asks first, with the change. */
+  readonly awardedPoints?: number | null;
 }
 
-type Dialogs = "complete" | "skip" | null;
+type Dialogs = "complete" | "skip" | "reopen" | null;
 
 /**
  * The occurrence's state and record (S20): open (or overdue), Needs rework with the reviewer's
@@ -42,7 +45,12 @@ type Dialogs = "complete" | "skip" | null;
  * chore); reviewers approve or reject; chore managers skip, reopen (withdrawing a pending
  * submission) and correct a completed record.
  */
-export function ChoreStatus({ occurrence, members, formats }: ChoreStatusProps) {
+export function ChoreStatus({
+  occurrence,
+  members,
+  formats,
+  awardedPoints = null,
+}: ChoreStatusProps) {
   const t = useTranslations("Chores");
   const names = useMemo(() => memberNames(members), [members]);
   const texts = useChoreTexts(names);
@@ -243,6 +251,11 @@ export function ChoreStatus({ occurrence, members, formats }: ChoreStatusProps) 
               variant="secondary"
               loading={reopen.busy}
               onClick={() => {
+                if (occurrence.status === "completed" && (awardedPoints ?? 0) !== 0) {
+                  reopen.reset();
+                  setDialog("reopen");
+                  return;
+                }
                 reopen.mutate(undefined);
               }}
               data-testid="chore-reopen"
@@ -353,6 +366,43 @@ export function ChoreStatus({ occurrence, members, formats }: ChoreStatusProps) 
             {completion.error ? (
               <FormAlert tone="error" announce>
                 {texts.failure(completion.error.failure, completion.error.detail)}
+              </FormAlert>
+            ) : null}
+          </div>
+        </Dialog>
+
+        <Dialog
+          open={dialog === "reopen"}
+          onClose={close}
+          title={t("reopenTitle")}
+          description={t("reopenPointsBody")}
+          closeLabel={t("close")}
+          footer={
+            <>
+              <Button variant="secondary" onClick={close}>
+                {t("cancel")}
+              </Button>
+              <Button
+                loading={reopen.busy}
+                onClick={() => {
+                  reopen.mutate(undefined);
+                }}
+                data-testid="chore-reopen-confirm"
+              >
+                {t("reopen")}
+              </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <PointsChangeNote
+              occurrenceId={occurrence.id}
+              request={dialog === "reopen" ? { action: "reopen" } : null}
+              names={names}
+            />
+            {reopen.error ? (
+              <FormAlert tone="error" announce>
+                {texts.failure(reopen.error.failure, reopen.error.detail)}
               </FormAlert>
             ) : null}
           </div>

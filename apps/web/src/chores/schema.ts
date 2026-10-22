@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { nameProblem, normalizeName } from "@/names/visible-name";
+import { chorePointsSchema, NO_CHORE_POINTS } from "@/points/chore-points";
 import { weekStarts } from "@/preferences/schema";
 import {
   clockTimeSchema,
@@ -54,7 +55,7 @@ export type ChoreFieldError =
 const id = z.uuid();
 
 /** A name others see (chore titles, category names, step labels), as the database stores it. */
-function nameSchema(max: number) {
+export function nameSchema(max: number) {
   return z
     .string({ error: "required" satisfies ChoreFieldError })
     .max(4 * max, { error: "tooLong" satisfies ChoreFieldError })
@@ -181,6 +182,8 @@ export const createChoreSchema = z
     recurrence: recurrenceSchema.nullable(),
     /** Completions wait for a reviewer's approval. */
     requiresApproval: z.boolean().default(false),
+    /** What a completion earns (S23); left out: no points. */
+    points: chorePointsSchema.default(NO_CHORE_POINTS),
   })
   .refine((chore) => (chore.recurrence === null) !== (chore.dueDate === null), {
     message: "required",
@@ -199,6 +202,8 @@ export const updateChoreSchema = z.strictObject({
   categoryId: id.nullable(),
   /** Left out: unchanged. */
   requiresApproval: z.boolean().optional(),
+  /** Left out: unchanged. Prospective: occurrences already created keep theirs (S23). */
+  points: chorePointsSchema.optional(),
 });
 
 export const completionSchema = z.strictObject({
@@ -454,13 +459,21 @@ const templateFields = {
   minutes: minutesSchema.nullable(),
   steps: stepsSchema,
 };
-export const createTemplateSchema = z.strictObject({ id, homeId: id, ...templateFields });
+export const createTemplateSchema = z.strictObject({
+  id,
+  homeId: id,
+  ...templateFields,
+  /** Suggested points (S23); left out: none. */
+  points: chorePointsSchema.default(NO_CHORE_POINTS),
+});
 export type CreateTemplateInput = z.output<typeof createTemplateSchema>;
 export const updateTemplateSchema = z.strictObject({
   expectedRevision: z.int().min(1),
   ...templateFields,
   /** Retire (true) or reinstate (false); left out: unchanged. */
   retired: z.boolean().optional(),
+  /** Left out: unchanged (S23). */
+  points: chorePointsSchema.optional(),
 });
 
 export const historyFilters = [

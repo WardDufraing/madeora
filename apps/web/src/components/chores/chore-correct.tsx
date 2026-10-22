@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { PointsChangeNote } from "@/components/points/points-change";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
@@ -36,7 +37,8 @@ export interface ChoreCorrectProps {
  * Correcting a completed record (S20, chore managers; spec "Confirmed correction and reversal of
  * completed chores"): who actually did it, when (a date and time in the viewer's timezone: a time
  * skipped by daylight saving is refused, never guessed), and the note, with an optional reason.
- * What was recorded before stays in the occurrence's events. Reward points follow in S23.
+ * What was recorded before stays in the occurrence's events. The points change it makes is shown
+ * before saving (S23).
  */
 export function ChoreCorrect({ occurrence, members, formats, onCorrected }: ChoreCorrectProps) {
   const t = useTranslations("Chores");
@@ -191,6 +193,20 @@ export function ChoreCorrect({ occurrence, members, formats, onCorrected }: Chor
               setReason(event.target.value);
             }}
             error={reasonTooLong ? t("fieldTooLong") : undefined}
+          />
+          <PointsChangeNote
+            occurrenceId={occurrence.id}
+            request={
+              open
+                ? {
+                    action: "correct",
+                    contributor:
+                      contributor && contributor !== initialContributor ? contributor : null,
+                    completedAt: timeChanged && instant && !future ? instant : null,
+                  }
+                : null
+            }
+            names={memberNames(members)}
           />
           {mutation.error ? (
             <FormAlert tone="error" announce>

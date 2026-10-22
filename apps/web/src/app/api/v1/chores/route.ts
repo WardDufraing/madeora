@@ -14,6 +14,7 @@ import {
 } from "@/chores/route-helpers";
 import { assignmentArg, ruleArgs, stepsArg } from "@/chores/rpc-args";
 import { createChoreSchema } from "@/chores/schema";
+import { chorePointsArgs } from "@/points/chore-points";
 
 /** The Home's chores for managing them (S20): active ones, or ended ones with `ended=true`. */
 export async function GET(request: Request): Promise<Response> {
@@ -54,6 +55,7 @@ export async function POST(request: Request): Promise<Response> {
     ...(chore.dueDate !== null ? { p_due_date: chore.dueDate } : {}),
     ...(chore.recurrence !== null ? ruleArgs(chore.recurrence) : {}),
     p_requires_approval: chore.requiresApproval,
+    ...chorePointsArgs(chore.points),
   });
   if (error) return databaseFailure("chores.create_failed", error);
   const row = data[0];

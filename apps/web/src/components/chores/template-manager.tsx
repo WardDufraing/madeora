@@ -3,10 +3,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import {
+  chorePointsDraftSchema,
+  noPointsDraft,
+  PointsFields,
+  pointsDraft,
+} from "@/components/points/points-fields";
 import { HydrationGate } from "@/components/tasks/hydration-gate";
 import { LabelChip } from "@/components/tasks/label-chip";
 import { Button } from "@/components/ui/button";
@@ -39,6 +45,7 @@ const formSchema = z.object({
   categoryId: z.string(),
   minutes: minutesDraftSchema,
   steps: stepDraftsSchema,
+  points: chorePointsDraftSchema,
 });
 type FormInput = z.input<typeof formSchema>;
 type FormOutput = z.output<typeof formSchema>;
@@ -51,12 +58,16 @@ function fieldsOf(values: FormOutput) {
     categoryId: values.categoryId === "" ? null : values.categoryId,
     minutes: values.minutes,
     steps: values.steps.map(({ label, mandatory }) => ({ label, mandatory })),
+    points: values.points,
   };
 }
 
 /** A template as the form edits it; its checklist rows get fresh keys. */
 export function templateDraft(
-  template: Pick<ChoreTemplate, "title" | "instructions" | "category" | "minutes" | "steps">,
+  template: Pick<
+    ChoreTemplate,
+    "title" | "instructions" | "category" | "minutes" | "steps" | "points"
+  >,
   usableCategory: (id: string) => boolean,
 ): FormInput {
   return {
@@ -71,6 +82,7 @@ export function templateDraft(
       label: step.label,
       mandatory: step.mandatory,
     })),
+    points: pointsDraft(template.points),
   };
 }
 
@@ -80,6 +92,7 @@ const emptyTemplate: FormInput = {
   categoryId: "",
   minutes: "",
   steps: [],
+  points: noPointsDraft,
 };
 
 interface TemplateFormProps {
@@ -107,6 +120,7 @@ function TemplateForm({
     defaultValues: defaults,
   });
   const errors = form.formState.errors;
+  const latePolicy = useWatch({ control: form.control, name: "points.latePolicy" });
   return (
     <form
       noValidate
@@ -157,6 +171,16 @@ function TemplateForm({
             error={message(stepsError(errors.steps))}
           />
         )}
+      />
+      <PointsFields
+        register={{
+          points: form.register("points.points"),
+          latePolicy: form.register("points.latePolicy"),
+          latePoints: form.register("points.latePoints"),
+        }}
+        policy={latePolicy}
+        errors={{ points: errors.points?.points, latePoints: errors.points?.latePoints }}
+        help={t("pointsTemplateHelp")}
       />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" loading={busy} data-testid="chore-template-save">
@@ -255,6 +279,7 @@ export function TemplateManager({
     categoryId: template.category?.id ?? null,
     minutes: template.minutes,
     steps: template.steps.map(({ label, mandatory }) => ({ label, mandatory })),
+    points: template.points,
   });
 
   const row = (template: ChoreTemplate) => (

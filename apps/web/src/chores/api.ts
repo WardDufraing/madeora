@@ -123,6 +123,28 @@ export type ChoreErrorCode =
   | "stale"
   | "vacation-ended"
   | "vacation-cancelled"
+  // S23: points and rewards.
+  | "points-not-permitted"
+  | "reason-required"
+  | "insufficient-points"
+  | "cost-changed"
+  | "sold-out"
+  | "member-limit"
+  | "reward-not-started"
+  | "reward-ended"
+  | "reward-disabled"
+  | "reward-archived"
+  | "own-request"
+  | "reward-unavailable"
+  | "requester-unavailable"
+  | "already-reversed"
+  | "not-reversible"
+  | "already-resolved"
+  | "not-unable"
+  | "not-redeemed"
+  | "not-replacement"
+  | "member-unavailable"
+  | "account-unavailable"
   | "failed";
 
 export interface ChoreErrorResponse {
@@ -239,7 +261,9 @@ export type ChoreEventKind =
   | "vacation_paused"
   | "vacation_resumed"
   | "vacation_substituted"
-  | "vacation_restored";
+  | "vacation_restored"
+  // S23: a chore manager corrected the occurrence's points.
+  | "points_corrected";
 
 export interface ChoreEvent {
   readonly kind: ChoreEventKind;
@@ -491,6 +515,12 @@ export interface ChoreTemplate {
   readonly steps: readonly { readonly label: string; readonly mandatory: boolean }[];
   readonly retired: boolean;
   readonly revision: number;
+  /** Suggested points (S23), copied into a new chore's form. */
+  readonly points: {
+    readonly points: number;
+    readonly latePolicy: "full" | "reduced" | "zero";
+    readonly latePoints: number | null;
+  };
 }
 
 /** One occurrence in the Home-wide history. */
@@ -635,6 +665,27 @@ export type ChoreFailure =
   | "staleDates"
   | "vacationEnded"
   | "vacationCancelled"
+  | "pointsNotPermitted"
+  | "reasonRequired"
+  | "insufficientPoints"
+  | "costChanged"
+  | "soldOut"
+  | "memberLimit"
+  | "rewardNotStarted"
+  | "rewardEnded"
+  | "rewardDisabled"
+  | "rewardArchived"
+  | "ownRequest"
+  | "rewardUnavailable"
+  | "requesterUnavailable"
+  | "alreadyReversed"
+  | "notReversible"
+  | "alreadyResolved"
+  | "notUnable"
+  | "notRedeemed"
+  | "notReplacement"
+  | "memberUnavailable"
+  | "accountUnavailable"
   | "network"
   | "failed";
 
@@ -698,6 +749,27 @@ const failures: { readonly [C in ChoreErrorCode]?: ChoreFailure } = {
   stale: "staleDates",
   "vacation-ended": "vacationEnded",
   "vacation-cancelled": "vacationCancelled",
+  "points-not-permitted": "pointsNotPermitted",
+  "reason-required": "reasonRequired",
+  "insufficient-points": "insufficientPoints",
+  "cost-changed": "costChanged",
+  "sold-out": "soldOut",
+  "member-limit": "memberLimit",
+  "reward-not-started": "rewardNotStarted",
+  "reward-ended": "rewardEnded",
+  "reward-disabled": "rewardDisabled",
+  "reward-archived": "rewardArchived",
+  "own-request": "ownRequest",
+  "reward-unavailable": "rewardUnavailable",
+  "requester-unavailable": "requesterUnavailable",
+  "already-reversed": "alreadyReversed",
+  "not-reversible": "notReversible",
+  "already-resolved": "alreadyResolved",
+  "not-unable": "notUnable",
+  "not-redeemed": "notRedeemed",
+  "not-replacement": "notReplacement",
+  "member-unavailable": "memberUnavailable",
+  "account-unavailable": "accountUnavailable",
 };
 
 /** Sends one request; resolves with the JSON answer or rejects with a ChoreRequestError. */
@@ -760,6 +832,8 @@ export interface ChorePoolRow {
   /** The day it closes unclaimed (it can be claimed until the day before), or null. */
   readonly closesOn: string | null;
   readonly revision: number;
+  /** Base points (S23), merged in by the page; absent when they could not be read. */
+  readonly points?: number | null;
 }
 
 export interface ChorePool {

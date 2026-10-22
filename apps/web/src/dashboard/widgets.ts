@@ -161,6 +161,31 @@ const choreScheduleConfig = z.strictObject({
  */
 const homeVacationConfig = z.strictObject({});
 
+/**
+ * The points widgets (S23; spec "Confirmed weekly points dashboard widget", "Confirmed reward
+ * leaderboard" and the points summary): Weekly points shows the viewer's own week or the shared
+ * overview of participating members (never a ranking); Leaderboard the top members of a period
+ * (the Home's default unless chosen), calm when the Home turned it off; My points the viewer's own
+ * available and reserved points and the cheapest rewards they can afford. Never someone else's
+ * balance.
+ */
+export const weeklyPointsViews = ["mine", "shared"] as const;
+export const leaderboardWidgetPeriods = ["default", "week", "month", "all"] as const;
+export const leaderboardWidgetCounts = [5, 10] as const;
+const weeklyPointsConfig = z.strictObject({
+  view: z.enum(weeklyPointsViews).default("mine"),
+});
+const pointsLeaderboardConfig = z.strictObject({
+  period: z.enum(leaderboardWidgetPeriods).default("default"),
+  count: z.union([z.literal(5), z.literal(10)]).default(5),
+});
+const myPointsConfig = z.strictObject({});
+const pointsSizes = sizes(
+  { w: 4, h: 3, minW: 3, maxW: 12, minH: 2, maxH: 8 },
+  { w: 3, h: 3, minW: 3, maxW: 6, minH: 2, maxH: 8 },
+  { h: 3, minH: 2, maxH: 8 },
+);
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -246,6 +271,21 @@ export const widgetRegistry = {
     ),
     config: homeVacationConfig,
   },
+  "weekly-points": {
+    surfaces: ["home", "home-source"],
+    sizes: pointsSizes,
+    config: weeklyPointsConfig,
+  },
+  "points-leaderboard": {
+    surfaces: ["home", "home-source"],
+    sizes: pointsSizes,
+    config: pointsLeaderboardConfig,
+  },
+  "my-points": {
+    surfaces: ["home", "home-source"],
+    sizes: pointsSizes,
+    config: myPointsConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -264,6 +304,9 @@ export interface WidgetConfigs {
   readonly "chore-approvals": WidgetConfig<"chore-approvals">;
   readonly "chore-schedule": WidgetConfig<"chore-schedule">;
   readonly "home-vacation": WidgetConfig<"home-vacation">;
+  readonly "weekly-points": WidgetConfig<"weekly-points">;
+  readonly "points-leaderboard": WidgetConfig<"points-leaderboard">;
+  readonly "my-points": WidgetConfig<"my-points">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {
