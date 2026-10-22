@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 21 October 2026
+**Last reviewed:** 22 October 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
@@ -165,6 +165,42 @@ As a Home member, I want to review chore history and handle approvals so complet
 - Approval actions are available only to authorized members.
 - Approval and history records refer to the correct Home and occurrence.
 
+
+### US-019 — Claim unassigned chores and hand over assignments
+
+As a Home member, I want to claim an available chore occurrence or request a reassignment so unassigned work and handovers are visible and coordinated.
+
+**Acceptance checks**
+
+- I can see eligible unassigned chore occurrences in the pool for the Home I am viewing.
+- A successful claim removes that occurrence from the available pool for other members; concurrent attempts do not give it to more than one person.
+- I can undo or release my own claim where the current rules allow it.
+- A reassignment request shows its chore and reason, and an authorized response applies only to that occurrence in that Home.
+- Pool and request actions remain subject to Home membership and role checks.
+
+### US-020 — Propose chores and respond to volunteer requests
+
+As a Home member, I want to propose a chore or respond to a targeted volunteer request so the Home can add responsibilities and find volunteers through a reviewable process.
+
+**Acceptance checks**
+
+- I can submit a proposal for review; it is shown as pending until an authorized member decides it.
+- The decision and resulting chore are visible in the same Home.
+- A targeted volunteer request shows its deadline and lets an invited member respond.
+- A volunteer offer is not shown to unrelated members, and assignment changes apply only to the intended occurrence and Home.
+
+### US-021 — Plan the chore schedule and configure reminders
+
+As a Home member, I want to review the chore schedule and manage my reminders so I can plan upcoming household responsibilities.
+
+**Acceptance checks**
+
+- I can view scheduled and unassigned occurrences in the Chores calendar and schedule widget for a Home where I have access.
+- Moving an occurrence shows the proposed date change before it is applied; the saved occurrence remains in the correct Home and schedule.
+- I can configure or remove my supported personal reminder for an occurrence.
+- I can view and save the Home's daily summary settings only when authorized; another Home member's setting is not exposed as my personal preference.
+- Schedule, reminder, and summary actions preserve Home access boundaries.
+
 ## 6. Notifications
 
 ### US-015 — Review and configure notifications
@@ -219,6 +255,10 @@ These checks apply to every story above:
 - Forms and actions provide understandable validation, loading, success, empty, and error states.
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
+
+## Implementation evidence for chore workflows
+
+The additional chore stories are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), and the corresponding migrations in `supabase/migrations/`. These tests verify selected end-to-end paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 
