@@ -1,3 +1,4 @@
+import { choreAward } from "@madeora/domain/points";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
@@ -9,6 +10,7 @@ import { getChoreContext, listChoreApprovals } from "@/chores/data";
 import { choresPath } from "@/chores/format";
 import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
+import { listChorePoints } from "@/points/data";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate, memberNames, personName } from "@/tasks/format";
 
@@ -17,7 +19,8 @@ import { ChoreReview } from "./chore-review";
 /**
  * A Home's review queue (S20; spec "Confirmed optional approval of chore completions"): every
  * completion waiting for approval, oldest first, with who submitted it for whom and when, whether
- * it was reported late, the note and the checklist, and approve or reject on each. Chore reviewers
+ * it was reported late and (S23) the points approving it awards, the note and the checklist, and
+ * approve or reject on each. Chore reviewers
  * only: anyone else is told so and gets no rows from the database.
  */
 export async function ChoreApprovalsPage({
@@ -77,6 +80,10 @@ export async function ChoreApprovalsPage({
           : t("personFormer");
   };
 
+  const points = await listChorePoints(
+    home.id,
+    approvals.value.map((item) => item.occurrenceId),
+  );
   return (
     <>
       {header}
@@ -90,6 +97,9 @@ export async function ChoreApprovalsPage({
             data-testid="chore-approvals"
           >
             {approvals.value.map((item) => {
+              const setting =
+                points.status === "ok" ? points.value.get(item.occurrenceId) : undefined;
+              const award = setting ? choreAward(setting, item.late) : null;
               const reported = formatDateTime(item.submittedAt, formats);
               const summary = t("submissionSummary", {
                 contributor: who(item.contributor),
@@ -119,6 +129,11 @@ export async function ChoreApprovalsPage({
                     ) : null}
                     {item.attempt > 1 ? (
                       <span>{t("attemptNumber", { attempt: item.attempt })}</span>
+                    ) : null}
+                    {award !== null && setting && setting.points > 0 ? (
+                      <span className="font-medium text-fg" data-testid="chore-approval-points">
+                        {t("approvalAward", { count: award })}
+                      </span>
                     ) : null}
                   </p>
                   <p className="text-body text-fg">

@@ -698,7 +698,14 @@ describe("approval", () => {
 
   it("corrects a completed record's contributor, keeping the rest", async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(Response.json({ outcome: "corrected", revision: 6 }));
+    // S23: the dialog reads the points change of the choices first.
+    fetchMock.mockImplementation((url: unknown) =>
+      Promise.resolve(
+        typeof url === "string" && url.includes("/points?preview=correct")
+          ? Response.json({ change: null })
+          : Response.json({ outcome: "corrected", revision: 6 }),
+      ),
+    );
     renderWithQuery(
       <ChoreStatus
         occurrence={occurrence({
@@ -726,11 +733,21 @@ describe("approval", () => {
     expect(within(dialog).getByLabelText("Done on")).toHaveValue("2026-10-21");
     expect(within(dialog).getByLabelText("At")).toHaveValue("11:00");
     await user.selectOptions(within(dialog).getByLabelText("Who did it"), "Cal");
-    await user.click(within(dialog).getByRole("button", { name: "Save the correction" }));
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/chore-occurrences/${OCCURRENCE}/points?preview=correct&contributor=${CAL}`,
+        expect.anything(),
+      );
     });
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    await user.click(within(dialog).getByRole("button", { name: "Save the correction" }));
+    const save = () =>
+      fetchMock.mock.calls.find(
+        ([url]) => typeof url === "string" && url.endsWith("/completion-record"),
+      );
+    await waitFor(() => {
+      expect(save()).toBeDefined();
+    });
+    const [url, init] = save() ?? [];
     expect(url).toBe(`/api/v1/chore-occurrences/${OCCURRENCE}/completion-record`);
     expect(bodyOf(init)).toEqual({ expectedRevision: 5, contributor: CAL, reason: null });
   });
@@ -750,6 +767,7 @@ describe("templates", () => {
     ],
     retired: false,
     revision: 2,
+    points: { points: 5, latePolicy: "full", latePoints: null },
   };
 
   it("duplicates a template into a new one and retires another", async () => {

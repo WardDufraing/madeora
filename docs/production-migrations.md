@@ -34,12 +34,11 @@ Each link opens one standalone migration file. Apply each file once, oldest firs
 - [`supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql`](../supabase/migrations/20261029090000_task_attachments_calendar_widgets.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261030090000_chores.sql`](../supabase/migrations/20261030090000_chores.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261031090000_chore_templates_history_bulk.sql`](../supabase/migrations/20261031090000_chore_templates_history_bulk.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
-
 - [`supabase/migrations/20261101090000_chore_pool_claims.sql`](../supabase/migrations/20261101090000_chore_pool_claims.sql) — Chore pool claims, automatic release, settings, and reassignment requests.
-
 - [`supabase/migrations/20261102090000_chore_proposals_volunteers.sql`](../supabase/migrations/20261102090000_chore_proposals_volunteers.sql) — Member-proposed chores, Home review, targeted volunteer requests, and volunteer assignment.
-
 - [`supabase/migrations/20261103090000_chore_overview_reminders.sql`](../supabase/migrations/20261103090000_chore_overview_reminders.sql) — Chore schedule, occurrence updates, personal reminders, summary settings, and daily summaries.
+- [`supabase/migrations/20261104090000_home_vacations.sql`](../supabase/migrations/20261104090000_home_vacations.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261105090000_points_rewards.sql`](../supabase/migrations/20261105090000_points_rewards.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 
 ## One copyable migration for an empty database
 
@@ -19332,9 +19331,9 @@ begin
 end
 $$;
 
--- Migrations added after the earlier bundle: chore pool claims, member proposals,
--- volunteer requests, chore schedule, reminders and summaries.
-
+-- ============================================================================
+-- supabase/migrations/20261101090000_chore_pool_claims.sql
+-- ============================================================================
 -- S21: the unassigned chore pool, claims and reassignment requests (brief plans/steps/S21-brief.md;
 -- ADR 0027; spec "Confirmed weekly unassigned chore pool and self-claiming", "Confirmed immediate
 -- first-come-first-served claims for approved unassigned chores", "Confirmed instant chore claiming
@@ -19389,13 +19388,13 @@ $$;
 -- Notifications: the optional category 'chores' (in-app on, email opt-in) --------------------------
 
 create or replace function private.notification_category_essential(p_category text) returns boolean
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select case p_category
     when 'security' then true when 'storage' then true
     when 'invitations' then false when 'reminders' then false when 'approvals' then false
     when 'chores' then false
   end;
-  $;
+  $$;
 
 alter table public.notifications drop constraint notifications_category_check;
 alter table public.notifications add constraint notifications_category_check
@@ -19407,13 +19406,13 @@ alter table public.notification_preferences add constraint notification_preferen
 
 -- packages/domain optionalNotificationCategories lists the same.
 create or replace function private.notification_category_optional(p_category text) returns boolean
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select coalesce(p_category in ('invitations', 'reminders', 'approvals', 'chores'), false);
-  $;
+  $$;
 
 create or replace function public.get_notification_settings()
 returns table (home_id uuid, category text, channel text, enabled boolean, overridden boolean)
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
   begin
@@ -19434,7 +19433,7 @@ returns table (home_id uuid, category text, channel text, enabled boolean, overr
       cross join (values ('in_app'), ('email')) ch (channel)
       order by s.home_id nulls first, c.category, ch.channel;
   end
-  $;
+  $$;
 
 alter table private.audit_events drop constraint audit_events_subject_type_check;
 alter table private.audit_events add constraint audit_events_subject_type_check
@@ -19581,19 +19580,19 @@ create policy chore_pool_signals_select_member on public.chore_pool_signals
 comment on table public.chore_pool_signals is
   'S21: a per-Home version that moves when its chores change (Realtime). No chore content.';
 
-do $
+do $$
 begin
   if exists (select 1 from pg_catalog.pg_publication where pubname = 'supabase_realtime') then
     alter publication supabase_realtime add table public.chore_pool_signals;
   end if;
 end
-$;
+$$;
 
 -- Limits ------------------------------------------------------------------------------------------------
 
 -- apps/web/src/chores/schema.ts uses the same numbers.
 create function private.chore_pool_limit(p_name text) returns integer
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select case p_name
     when 'pool' then 200               -- occurrences one pool read returns
     when 'process' then 200            -- expiries and releases one advance applies
@@ -19601,13 +19600,13 @@ create function private.chore_pool_limit(p_name text) returns integer
     when 'requests' then 10            -- reassignment requests one occurrence read returns
     when 'auto_release_hours' then 720
   end;
-  $;
+  $$;
 
 -- Settings and time -----------------------------------------------------------------------------------
 
 -- A Home's chore settings, or the defaults when no chore manager changed them.
 create function private.chore_settings(p_home_id uuid) returns private.home_chore_settings
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_settings private.home_chore_settings;
   begin
@@ -19620,24 +19619,24 @@ create function private.chore_settings(p_home_id uuid) returns private.home_chor
     end if;
     return v_settings;
   end
-  $;
+  $$;
 
 -- The first day of the week that holds p_date, for a week starting on p_week_start.
 create function private.chore_week_start(p_week_start text, p_date date) returns date
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select p_date - ((extract(isodow from p_date)::integer
     - case p_week_start when 'saturday' then 6 when 'sunday' then 7 else 1 end + 7) % 7);
-  $;
+  $$;
 
 -- The day an unclaimed occurrence closes (its week has ended), or null when its chore keeps it
 -- available as overdue.
 create function private.chore_claim_cutoff(
   p_occurrence private.chore_occurrences, p_chore private.chores, p_week_start text
 ) returns date
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select case when p_chore.expiry_policy = 'week_end'
     then private.chore_week_start(p_week_start, p_occurrence.due_date) + 7 end;
-  $;
+  $$;
 
 -- Whether an occurrence is due to close unclaimed on p_today: open, nobody assigned, in the pool (not
 -- flagged, its chore open to claims) and its chore closing unclaimed work after its week, which has
@@ -19645,30 +19644,30 @@ create function private.chore_claim_cutoff(
 create function private.chore_expires(
   p_occurrence private.chore_occurrences, p_chore private.chores, p_week_start text, p_today date
 ) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select coalesce(p_occurrence.status = 'open' and p_occurrence.deleted_at is null
     and not p_occurrence.needs_reassignment and p_chore.claim_mode <> 'none'
     and p_chore.deleted_at is null
     and p_today >= private.chore_claim_cutoff(p_occurrence, p_chore, p_week_start)
     and not exists (select 1 from private.chore_occurrence_assignees a
       where a.occurrence_id = p_occurrence.id), false);
-  $;
+  $$;
 
 -- When a self-claimed occurrence is released automatically, or null: the end of its due day in the
 -- Home's timezone (local midnight, so daylight saving is handled by the zone) plus the chore's hours.
 create function private.chore_release_at(
   p_occurrence private.chore_occurrences, p_chore private.chores, p_zone text
 ) returns timestamptz
-  language sql stable set search_path = '' as $
+  language sql stable set search_path = '' as $$
   select case when p_chore.auto_release_hours is not null and p_occurrence.claimed_by is not null
     then ((p_occurrence.due_date + 1)::timestamp at time zone coalesce(p_zone, 'UTC'))
       + pg_catalog.make_interval(hours => p_chore.auto_release_hours) end;
-  $;
+  $$;
 
 create function private.home_zone(p_home_id uuid) returns text
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select h.timezone from public.homes h where h.id = p_home_id;
-  $;
+  $$;
 
 -- Why p_user cannot claim the occurrence now, or null when they can. 'already_claimed' when someone
 -- claimed it (the caller tells a retry of their own claim apart), 'assigned' when it is assigned
@@ -19679,7 +19678,7 @@ create function private.chore_claim_block(
   p_occurrence private.chore_occurrences, p_chore private.chores, p_user uuid, p_today date,
   p_week_start text
 ) returns text
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_cutoff date;
   begin
@@ -19707,7 +19706,7 @@ create function private.chore_claim_block(
     end if;
     return null;
   end
-  $;
+  $$;
 
 -- Queues the delayed release of a claim (chore-claim-release) for its deadline, when the chore has
 -- one. The key holds the claim and the deadline, so a moved deadline queues a new run and an old one
@@ -19715,7 +19714,7 @@ create function private.chore_claim_block(
 create function private.schedule_chore_release(
   p_occurrence private.chore_occurrences, p_chore private.chores
 ) returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_at timestamptz := private.chore_release_at(p_occurrence, p_chore, private.home_zone(p_occurrence.home_id));
   begin
@@ -19729,13 +19728,13 @@ create function private.schedule_chore_release(
       pg_catalog.jsonb_build_object('occurrenceId', p_occurrence.id, 'claim', p_occurrence.claim_count),
       null, v_at);
   end
-  $;
+  $$;
 
 -- Closes an open, unassigned occurrence as expired (its chore locked by the caller), at the moment
 -- its week ended.
 create function private.expire_chore_occurrence(p_occurrence_id uuid, p_cutoff date, p_zone text)
 returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   begin
     update private.chore_occurrences o
       set status = 'expired', in_rework = false,
@@ -19747,7 +19746,7 @@ returns void
       where o.id = p_occurrence_id and c.id = o.chore_id;
     insert into private.chore_occurrence_events (occurrence_id, kind) values (p_occurrence_id, 'expired');
   end
-  $;
+  $$;
 
 -- Ends the current claim of an open occurrence (its chore locked by the caller): the assignee and the
 -- checklist progress go, a release event keeps who it was and why. Past the cutoff of a closing
@@ -19755,7 +19754,7 @@ returns void
 create function private.end_chore_claim(
   p_occurrence private.chore_occurrences, p_actor uuid, p_reason text
 ) returns text
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_chore private.chores;
     v_settings private.home_chore_settings := private.chore_settings(p_occurrence.home_id);
@@ -19780,13 +19779,13 @@ create function private.end_chore_claim(
     end if;
     return 'open';
   end
-  $;
+  $$;
 
 -- Releases one claim whose automatic-release time has passed (its chore locked by the caller), and
 -- tells the former claimant (once per claim). Returns the status afterwards, or null when it no
 -- longer qualifies (submitted, in rework, released, another claim, a later deadline).
 create function private.auto_release_chore_claim(p_occurrence_id uuid, p_claim integer) returns text
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_occurrence private.chore_occurrences;
     v_chore private.chores;
@@ -19814,12 +19813,12 @@ create function private.auto_release_chore_claim(p_occurrence_id uuid, p_claim i
       v_occurrence.id, pg_catalog.jsonb_build_object('reason', 'auto'));
     return v_status;
   end
-  $;
+  $$;
 
 -- Applies the Home's due expiries and automatic releases (at most 'process' of each per call), one
 -- chore lock at a time in chore order. Idempotent: what is done is not found again.
 create function private.process_chore_pool(p_home_id uuid) returns integer
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_settings private.home_chore_settings := private.chore_settings(p_home_id);
     v_zone text := private.home_zone(p_home_id);
@@ -19864,7 +19863,7 @@ create function private.process_chore_pool(p_home_id uuid) returns integer
     end loop;
     return v_done;
   end
-  $;
+  $$;
 
 -- The chore lock and the Realtime signal ---------------------------------------------------------------
 
@@ -19872,7 +19871,7 @@ create function private.process_chore_pool(p_home_id uuid) returns integer
 -- taken after every chore lock and never inside them. A Home deleted in the same transaction gets
 -- none.
 create function private.bump_chore_signal() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_home uuid := case when tg_op = 'DELETE' then old.home_id else new.home_id end;
     v_key text;
@@ -19890,7 +19889,7 @@ create function private.bump_chore_signal() returns trigger
       on conflict (home_id) do update set version = s.version + 1, changed_at = pg_catalog.now();
     return null;
   end
-  $;
+  $$;
 
 create constraint trigger chore_occurrences_signal after insert or update or delete on private.chore_occurrences
   deferrable initially deferred for each row execute function private.bump_chore_signal();
@@ -19908,7 +19907,7 @@ create constraint trigger home_chore_settings_signal after insert or update on p
 -- Ends an open request with p_reason and tells both people (in-app; email for those who opted in).
 create function private.invalidate_chore_request(p_request private.chore_reassignment_requests, p_reason text)
 returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user uuid;
   begin
@@ -19925,12 +19924,12 @@ returns void
         'chore-reassignment-invalidated:' || p_request.id::text, true);
     end loop;
   end
-  $;
+  $$;
 
 -- An assignee leaving an occurrence ends their claim and the open request that would move it away
 -- from them; a new assignee ends a request that would hand it to them.
 create function private.chore_assignees_changed() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_request private.chore_reassignment_requests;
   begin
@@ -19955,7 +19954,7 @@ create function private.chore_assignees_changed() returns trigger
     end if;
     return null;
   end
-  $;
+  $$;
 
 create trigger chore_occurrence_assignees_changed after insert or delete on private.chore_occurrence_assignees
   for each row execute function private.chore_assignees_changed();
@@ -19963,7 +19962,7 @@ create trigger chore_occurrence_assignees_changed after insert or delete on priv
 -- An occurrence that is no longer open (completed, submitted, skipped, expired, in the trash) ends
 -- its open request.
 create function private.chore_occurrence_closed() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_request private.chore_reassignment_requests;
   begin
@@ -19975,7 +19974,7 @@ create function private.chore_occurrence_closed() returns trigger
     end loop;
     return null;
   end
-  $;
+  $$;
 
 create trigger chore_occurrences_closed after update of status, deleted_at on private.chore_occurrences
   for each row when (new.status <> 'open' or new.deleted_at is not null)
@@ -19985,7 +19984,7 @@ create trigger chore_occurrences_closed after update of status, deleted_at on pr
 -- was meant to do them; their progress is cleared, a release event keeps who it was); their other
 -- open assignments are flagged for reassignment as before. Their open requests (either side) end.
 create or replace function private.flag_departed_chore_assignments() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_request private.chore_reassignment_requests;
     v_released uuid[];
@@ -20023,13 +20022,13 @@ create or replace function private.flag_departed_chore_assignments() returns tri
     end loop;
     return old;
   end
-  $;
+  $$;
 
 -- A series change (update_chore_series) leaves claimed occurrences with their claimant (spec: a
 -- claim is not undone by series edits); every other caller replaces the assignees as before.
 create or replace function private.set_occurrence_assignees(p_occurrence_id uuid, p_home_id uuid, p_users uuid[])
 returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   begin
     if pg_catalog.current_setting('madeora.keep_chore_claims', true) = 'on' and exists (
       select 1 from private.chore_occurrences o
@@ -20042,16 +20041,16 @@ returns void
       select p_occurrence_id, p_home_id, u from unnest(coalesce(p_users, '{}')) as u
       on conflict do nothing;
   end
-  $;
+  $$;
 
 -- A claimed occurrence counts as having progress: a schedule change or a pause keeps it.
 create or replace function private.chore_occurrence_touched(p_occurrence private.chore_occurrences) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select p_occurrence.detached or p_occurrence.claimed_by is not null or exists (
     select 1 from private.chore_occurrence_steps s
     where s.occurrence_id = p_occurrence.id and s.checked_at is not null
   );
-  $;
+  $$;
 
 -- S20 functions wrapped for the new states -------------------------------------------------------------
 
@@ -20060,14 +20059,14 @@ alter function private.advance_chores(uuid) rename to advance_chores_before_pool
 
 -- Creates the due occurrences (S20), then applies due expiries and automatic releases.
 create function public.advance_chores(p_home_id uuid) returns integer
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_created integer := private.advance_chores_before_pool(p_home_id);
   begin
     perform private.process_chore_pool(p_home_id);
     return v_created;
   end
-  $;
+  $$;
 
 alter function public.complete_chore_occurrence(uuid, uuid, text) set schema private;
 alter function private.complete_chore_occurrence(uuid, uuid, text) rename to complete_chore_occurrence_before_pool;
@@ -20079,7 +20078,7 @@ create function public.complete_chore_occurrence(
   outcome text, completed_at timestamptz, completed_by_me boolean, completed_by_member uuid,
   contributor_me boolean, contributor_member uuid, open_mandatory integer, revision integer
 )
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_occurrence private.chore_occurrences;
   begin
@@ -20091,7 +20090,7 @@ create function public.complete_chore_occurrence(
     end if;
     return query select * from private.complete_chore_occurrence_before_pool(p_occurrence_id, p_contributor, p_note);
   end
-  $;
+  $$;
 
 alter function public.skip_chore_occurrence(uuid, text) set schema private;
 alter function private.skip_chore_occurrence(uuid, text) rename to skip_chore_occurrence_before_pool;
@@ -20099,7 +20098,7 @@ alter function private.skip_chore_occurrence(uuid, text) rename to skip_chore_oc
 -- As S20, and an expired occurrence answers 'occurrence_closed'.
 create function public.skip_chore_occurrence(p_occurrence_id uuid, p_reason text default null)
 returns table (outcome text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_occurrence private.chore_occurrences;
   begin
@@ -20110,7 +20109,7 @@ returns table (outcome text, revision integer)
     end if;
     return query select * from private.skip_chore_occurrence_before_pool(p_occurrence_id, p_reason);
   end
-  $;
+  $$;
 
 alter function public.reopen_chore_occurrence(uuid) set schema private;
 alter function private.reopen_chore_occurrence(uuid) rename to reopen_chore_occurrence_before_pool;
@@ -20119,7 +20118,7 @@ alter function private.reopen_chore_occurrence(uuid) rename to reopen_chore_occu
 -- 'occurrence_closed'.
 create function public.reopen_chore_occurrence(p_occurrence_id uuid)
 returns table (outcome text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_occurrence private.chore_occurrences;
   begin
@@ -20130,7 +20129,7 @@ returns table (outcome text, revision integer)
     end if;
     return query select * from private.reopen_chore_occurrence_before_pool(p_occurrence_id);
   end
-  $;
+  $$;
 
 alter function public.update_chore_series(uuid, text, integer, integer, boolean, jsonb, jsonb, boolean,
   integer, boolean, text, integer, smallint[], date, date, integer) set schema private;
@@ -20148,7 +20147,7 @@ create function public.update_chore_series(
   p_weekdays smallint[] default null, p_starts_on date default null, p_ends_on date default null,
   p_max_count integer default null
 ) returns table (outcome text, impact jsonb, revision integer, occurrence_id uuid)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_row record;
   begin
@@ -20165,7 +20164,7 @@ create function public.update_chore_series(
     end if;
     return query select v_row.outcome, v_row.impact, v_row.revision, v_row.occurrence_id;
   end
-  $;
+  $$;
 
 -- Claiming and releasing ---------------------------------------------------------------------------------
 
@@ -20176,7 +20175,7 @@ create function public.update_chore_series(
 -- 'not_eligible', 'expired', 'pending_approval', 'already_completed', 'already_skipped', 'not_found'.
 create function public.claim_chore_occurrence(p_occurrence_id uuid)
 returns table (outcome text, revision integer, claimed_by_me boolean, claimant_member uuid)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -20219,7 +20218,7 @@ returns table (outcome text, revision integer, claimed_by_me boolean, claimant_m
     return query select 'claimed', v_occurrence.revision, true,
       private.member_ref(v_occurrence.home_id, v_user_id);
   end
-  $;
+  $$;
 
 -- Releases a claimed occurrence back to the pool (spec "Confirmed self-release", "instant claiming
 -- with brief Undo"): by its claimant (p_undo marks the Undo right after claiming) or a chore
@@ -20230,7 +20229,7 @@ returns table (outcome text, revision integer, claimed_by_me boolean, claimant_m
 -- 'occurrence_closed', 'not_permitted', 'not_found'.
 create function public.release_chore_occurrence(p_occurrence_id uuid, p_undo boolean default false)
 returns table (outcome text, status text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -20278,13 +20277,13 @@ returns table (outcome text, status text, revision integer)
     return query select 'released', v_status,
       (select o.revision from private.chore_occurrences o where o.id = v_occurrence.id);
   end
-  $;
+  $$;
 
 -- The delayed job (service role only): releases the claim p_claim of an occurrence when its
 -- automatic-release time has passed. 'released', 'stale' (submitted, released, claimed again, in
 -- rework or no longer due: nothing to do), 'missing'.
 create function public.release_overdue_chore_claim(p_occurrence_id uuid, p_claim integer) returns text
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_chore_id uuid;
   begin
@@ -20296,7 +20295,7 @@ create function public.release_overdue_chore_claim(p_occurrence_id uuid, p_claim
     return case when private.auto_release_chore_claim(p_occurrence_id, p_claim) is null
       then 'stale' else 'released' end;
   end
-  $;
+  $$;
 
 -- The pool ----------------------------------------------------------------------------------------------
 
@@ -20312,7 +20311,7 @@ returns table (
   minutes integer, steps_total integer, requires_approval boolean, restricted boolean,
   eligible boolean, closes_on date, revision integer, week_start date, today date, truncated boolean
 )
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_settings private.home_chore_settings;
@@ -20359,7 +20358,7 @@ returns table (
       order by r.due_date, private.task_name_key(r.chore_title), r.id
       limit private.chore_pool_limit('pool');
   end
-  $;
+  $$;
 
 -- What the caller sees about one occurrence's claim and reassignment (null when it is not theirs to
 -- see): the chore's policies, whether they can claim it (and if not why), the current claim, whether
@@ -20367,7 +20366,7 @@ returns table (
 -- the reassignment requests they are part of (chore managers see every one; the newest
 -- 'requests'). Who else may claim a restricted chore is never shown here.
 create function public.get_chore_claim_state(p_occurrence_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -20437,7 +20436,7 @@ create function public.get_chore_claim_state(p_occurrence_id uuid) returns jsonb
           order by r.created_at desc
           limit private.chore_pool_limit('requests')) x), '[]'::jsonb));
   end
-  $;
+  $$;
 
 -- Claim policies (chore managers) ------------------------------------------------------------------------
 
@@ -20445,7 +20444,7 @@ create function public.get_chore_claim_state(p_occurrence_id uuid) returns jsonb
 -- ids for chore managers only), the expiry policy and the automatic release. Null when it is not the
 -- caller's to see.
 create function public.get_chore_claim_policy(p_chore_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_chore private.chores;
@@ -20463,7 +20462,7 @@ create function public.get_chore_claim_policy(p_chore_id uuid) returns jsonb
       'autoReleaseHours', v_chore.auto_release_hours,
       'revision', v_chore.revision);
   end
-  $;
+  $$;
 
 -- Sets who may claim a chore's unassigned occurrences, whether they close at the end of their week,
 -- and the automatic release (chore managers; spec "per-chore eligibility", "configurable end-of-week
@@ -20480,7 +20479,7 @@ create function public.set_chore_claim_policy(
   p_auto_release_hours integer default null, p_dry_run boolean default false,
   p_confirm boolean default false
 ) returns table (outcome text, impact jsonb, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_chore private.chores;
@@ -20575,7 +20574,7 @@ create function public.set_chore_claim_policy(
     perform private.process_chore_pool(v_chore.home_id);
     return query select 'saved', v_impact, v_chore.revision;
   end
-  $;
+  $$;
 
 -- Home chore settings -----------------------------------------------------------------------------------
 
@@ -20583,7 +20582,7 @@ create function public.set_chore_claim_policy(
 -- member (they shape what everyone sees); can_manage says who may change them.
 create function public.get_chore_settings(p_home_id uuid)
 returns table (week_start text, reassignment_confirmation boolean, revision integer, can_manage boolean)
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_settings private.home_chore_settings;
@@ -20593,7 +20592,7 @@ returns table (week_start text, reassignment_confirmation boolean, revision inte
     return query select v_settings.week_start, v_settings.reassignment_confirmation, v_settings.revision,
       private.can_manage_chores(p_home_id, v_user_id);
   end
-  $;
+  $$;
 
 -- Changes them (chore managers). p_expected_revision 0 when they were never changed. A new week
 -- start moves every week boundary from now on (closed occurrences stay closed). Outcomes: 'saved',
@@ -20601,7 +20600,7 @@ returns table (week_start text, reassignment_confirmation boolean, revision inte
 create function public.update_chore_settings(
   p_home_id uuid, p_expected_revision integer, p_week_start text, p_reassignment_confirmation boolean
 ) returns table (outcome text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_settings private.home_chore_settings;
@@ -20631,7 +20630,7 @@ create function public.update_chore_settings(
       pg_catalog.jsonb_build_object('weekStart', p_week_start, 'confirmation', p_reassignment_confirmation));
     return query select 'saved', v_settings.revision;
   end
-  $;
+  $$;
 
 -- Reassignment requests (spec "Confirmed request-based chore reassignment") ------------------------------
 
@@ -20645,7 +20644,7 @@ create function public.request_chore_reassignment(
   p_id uuid, p_occurrence_id uuid, p_to_member uuid, p_note text default null,
   p_from_member uuid default null
 ) returns table (outcome text, status text)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_note text := private.chore_short_text(p_note);
@@ -20716,14 +20715,14 @@ create function public.request_chore_reassignment(
       p_id, pg_catalog.jsonb_build_object('occurrence', v_occurrence.id, 'note', v_note is not null));
     return query select 'requested', 'pending';
   end
-  $;
+  $$;
 
 -- Hands the occurrence over (the caller holds the chore lock and has re-checked the request): the
 -- request is accepted first, so the assignee triggers find no open request to end.
 create function private.transfer_chore_occurrence(
   p_request private.chore_reassignment_requests, p_actor uuid
 ) returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   begin
     update private.chore_reassignment_requests r
       set status = 'accepted', decided_at = pg_catalog.now(), decided_by = p_actor,
@@ -20744,7 +20743,7 @@ create function private.transfer_chore_occurrence(
     perform private.audit_chore('chore_reassignment.accepted', p_request.home_id, 'chore_reassignment',
       p_request.id, pg_catalog.jsonb_build_object('occurrence', p_request.occurrence_id));
   end
-  $;
+  $$;
 
 -- Answers a request. 'accept' or 'decline': the recipient, while it is pending; 'cancel': the
 -- requester, while it is open; 'confirm' or 'refuse': a chore manager, while an accepted request
@@ -20756,7 +20755,7 @@ create function private.transfer_chore_occurrence(
 -- answered or decided), 'not_permitted', 'not_found'.
 create function public.answer_chore_reassignment(p_request_id uuid, p_action text)
 returns table (outcome text, status text)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_request private.chore_reassignment_requests;
@@ -20884,7 +20883,7 @@ returns table (outcome text, status text)
     end if;
     return query select 'accepted', 'accepted';
   end
-  $;
+  $$;
 
 -- The caller's open requests in a Home: those waiting for their answer ('incoming'), those they
 -- made ('outgoing'), and for chore managers those waiting for confirmation ('confirm'). Newest
@@ -20894,7 +20893,7 @@ returns table (
   id uuid, occurrence_id uuid, title text, due_date date, status text, box text,
   from_me boolean, from_member uuid, to_me boolean, to_member uuid, note text, created_at timestamptz
 )
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_manage boolean;
@@ -20918,11 +20917,11 @@ returns table (
       order by r.created_at desc
       limit 50;
   end
-  $;
+  $$;
 
 -- Grants -------------------------------------------------------------------------------------------------
 
-do $
+do $$
 declare
   v_function regprocedure;
 begin
@@ -20957,9 +20956,11 @@ begin
     execute format('revoke all on function %s from public, anon, authenticated', v_function);
   end loop;
 end
-$;
+$$;
 
-
+-- ============================================================================
+-- supabase/migrations/20261102090000_chore_proposals_volunteers.sql
+-- ============================================================================
 -- S21b: member-proposed chores and targeted volunteer requests (brief plans/steps/S21-brief.md;
 -- ADR 0027; spec "Confirmed member-proposed unassigned chores and manager approval", "Confirmed
 -- targeted chore volunteer requests", "Confirmed minimal volunteer request details", "Confirmed
@@ -21004,7 +21005,7 @@ alter table private.chore_occurrence_events add constraint chore_occurrence_even
 -- reason the manager's reason.
 
 create function private.chore_volunteer_limit(p_name text) returns integer
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select case p_name
     when 'pending_proposals' then 100      -- proposals waiting for review per Home
     when 'own_pending' then 20             -- of them by one member
@@ -21013,7 +21014,7 @@ create function private.chore_volunteer_limit(p_name text) returns integer
     when 'recipients' then 20              -- invitations one request holds
     when 'requests' then 10                -- volunteer requests one occurrence read returns
   end;
-  $;
+  $$;
 
 -- Tables -------------------------------------------------------------------------------------------------
 
@@ -21116,24 +21117,24 @@ create constraint trigger chore_volunteer_invitations_signal after insert or upd
 -- When a request for the occurrence expires: the end of its due day in the Home's timezone. Computed,
 -- never stored, so a changed due date moves it.
 create function private.chore_volunteer_deadline(p_occurrence private.chore_occurrences) returns timestamptz
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select (p_occurrence.due_date + 1)::timestamp at time zone coalesce(private.home_zone(p_occurrence.home_id), 'UTC');
-  $;
+  $$;
 
 -- Whether an occurrence is in Needs assignment review: open, flagged, nobody assigned.
 create function private.chore_in_review(p_occurrence private.chore_occurrences) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select coalesce(p_occurrence.status = 'open' and p_occurrence.deleted_at is null
     and p_occurrence.needs_reassignment
     and not exists (select 1 from private.chore_occurrence_assignees a where a.occurrence_id = p_occurrence.id),
     false);
-  $;
+  $$;
 
 -- Ends an open request: the request takes p_status, its pending invitations p_invitation_status.
 create function private.end_chore_volunteer_request(
   p_request_id uuid, p_status text, p_invitation_status text, p_actor uuid
 ) returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   begin
     update private.chore_volunteer_requests r
       set status = p_status, closed_at = pg_catalog.now(), closed_by = p_actor
@@ -21145,12 +21146,12 @@ create function private.end_chore_volunteer_request(
       set status = p_invitation_status, responded_at = pg_catalog.now()
       where i.request_id = p_request_id and i.status = 'pending';
   end
-  $;
+  $$;
 
 -- Closes an open request nobody can answer any more (every invitation answered, withdrawn or closed,
 -- none accepted). The occurrence stays in review.
 create function private.close_unanswerable_volunteer_request(p_request_id uuid, p_actor uuid) returns boolean
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   begin
     if exists (select 1 from private.chore_volunteer_invitations i
         where i.request_id = p_request_id and i.status = 'pending') then
@@ -21159,11 +21160,11 @@ create function private.close_unanswerable_volunteer_request(p_request_id uuid, 
     perform private.end_chore_volunteer_request(p_request_id, 'closed', 'closed', p_actor);
     return true;
   end
-  $;
+  $$;
 
 -- Expires an open request whose deadline has passed (the occurrence's chore locked by the caller).
 create function private.expire_chore_volunteer_requests(p_occurrence private.chore_occurrences) returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_request uuid;
   begin
@@ -21177,22 +21178,22 @@ create function private.expire_chore_volunteer_requests(p_occurrence private.cho
       perform private.end_chore_volunteer_request(v_request, 'expired', 'expired', null);
     end loop;
   end
-  $;
+  $$;
 
 -- Member users from membership ids for invitations: current members of the Home, distinct, 1–20.
 -- Null when one is not a current member.
 create function private.chore_volunteer_users(p_home_id uuid, p_member_ids uuid[]) returns uuid[]
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select case when cardinality(coalesce(p_member_ids, '{}')) between 1 and private.chore_volunteer_limit('recipients')
     then private.chore_member_users(p_home_id, p_member_ids) end;
-  $;
+  $$;
 
 -- Triggers: requests follow the occurrence and the members ----------------------------------------------
 
 -- Someone assigned to an occurrence some other way (a manager, a rotation change) resolves its open
 -- request. An acceptance marks the request accepted before assigning, so it finds nothing open.
 create function private.chore_volunteer_assigned() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_request uuid;
   begin
@@ -21204,7 +21205,7 @@ create function private.chore_volunteer_assigned() returns trigger
     end loop;
     return null;
   end
-  $;
+  $$;
 
 create trigger chore_occurrence_assignees_volunteer after insert on private.chore_occurrence_assignees
   for each row execute function private.chore_volunteer_assigned();
@@ -21212,7 +21213,7 @@ create trigger chore_occurrence_assignees_volunteer after insert on private.chor
 -- An occurrence that closes (completed, submitted, skipped, expired, in the trash) resolves its open
 -- request; a due date moved into the past expires it.
 create function private.chore_volunteer_occurrence_changed() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_request uuid;
   begin
@@ -21228,7 +21229,7 @@ create function private.chore_volunteer_occurrence_changed() returns trigger
     end if;
     return null;
   end
-  $;
+  $$;
 
 create trigger chore_occurrences_volunteer after update of status, deleted_at, due_date on private.chore_occurrences
   for each row execute function private.chore_volunteer_occurrence_changed();
@@ -21236,7 +21237,7 @@ create trigger chore_occurrences_volunteer after update of status, deleted_at, d
 -- A departing member: their pending invitations close (a request left with nobody to answer closes)
 -- and their pending proposals are withdrawn.
 create function private.chore_volunteer_member_left() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_request uuid;
   begin
@@ -21254,7 +21255,7 @@ create function private.chore_volunteer_member_left() returns trigger
       where p.home_id = old.home_id and p.proposed_by = old.user_id and p.status = 'pending';
     return old;
   end
-  $;
+  $$;
 
 create trigger home_memberships_chore_volunteers before delete on public.home_memberships
   for each row execute function private.chore_volunteer_member_left();
@@ -21265,7 +21266,7 @@ alter function public.advance_chores(uuid) set schema private;
 alter function private.advance_chores(uuid) rename to advance_chores_before_volunteers;
 
 create function public.advance_chores(p_home_id uuid) returns integer
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_created integer := private.advance_chores_before_volunteers(p_home_id);
     v_item record;
@@ -21285,16 +21286,16 @@ create function public.advance_chores(p_home_id uuid) returns integer
     end loop;
     return v_created;
   end
-  $;
+  $$;
 
 -- Proposals ------------------------------------------------------------------------------------------------
 
 -- Whether a proposed due day is acceptable: today (Home) up to a year ahead.
 create function private.valid_proposal_date(p_home_id uuid, p_due_date date) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   select coalesce(p_due_date between private.task_today(p_home_id, null)
     and private.task_today(p_home_id, null) + private.chore_volunteer_limit('proposal_days'), false);
-  $;
+  $$;
 
 -- Proposes a chore (any current member). p_id is the client's id, so a retry answers 'exists'.
 -- Outcomes: 'proposed', 'exists', 'id_taken', 'duplicate' (the caller already proposes a chore with
@@ -21303,7 +21304,7 @@ create function public.propose_chore(
   p_id uuid, p_home_id uuid, p_title text, p_due_date date, p_steps jsonb default '[]'::jsonb,
   p_instructions text default null, p_category_id uuid default null, p_minutes integer default null
 ) returns table (outcome text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_existing private.chore_proposals;
@@ -21353,13 +21354,13 @@ create function public.propose_chore(
     perform private.audit_chore('chore_proposal.submitted', p_home_id, 'chore_proposal', p_id);
     return query select 'proposed', 1;
   end
-  $;
+  $$;
 
 -- Withdraws the caller's own waiting proposal. Outcomes: 'withdrawn', 'not_open' (with its status),
 -- 'conflict', 'not_permitted', 'not_found'.
 create function public.withdraw_chore_proposal(p_id uuid, p_expected_revision integer)
 returns table (outcome text, status text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_proposal private.chore_proposals;
@@ -21393,7 +21394,7 @@ returns table (outcome text, status text, revision integer)
     perform private.audit_chore('chore_proposal.withdrawn', v_proposal.home_id, 'chore_proposal', p_id);
     return query select 'withdrawn', v_proposal.status, v_proposal.revision;
   end
-  $;
+  $$;
 
 -- A chore manager's decision on a waiting proposal, at the revision they saw.
 --   'approve': publishes it with the given final fields (title, due day, checklist, instructions,
@@ -21408,7 +21409,7 @@ create function public.review_chore_proposal(
   p_title text default null, p_due_date date default null, p_steps jsonb default null,
   p_instructions text default null, p_category_id uuid default null, p_minutes integer default null
 ) returns table (outcome text, status text, occurrence_id uuid, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_proposal private.chore_proposals;
@@ -21500,14 +21501,14 @@ create function public.review_chore_proposal(
       v_proposal.id, pg_catalog.jsonb_build_object('revised', v_proposal.revised));
     return query select v_proposal.status, v_proposal.status, v_occurrence, v_proposal.revision;
   end
-  $;
+  $$;
 
 -- The proposals the caller may see in a Home: chore managers every waiting one and those decided in
 -- the last 30 days; anyone else their own (any state, last 30 days for decided ones). Waiting first,
 -- then newest first. possibleDuplicate (managers): another waiting proposal or an open chore of the
 -- Home has the same title.
 create function public.list_chore_proposals(p_home_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_manage boolean;
@@ -21550,7 +21551,7 @@ create function public.list_chore_proposals(p_home_id uuid) returns jsonb
       'pendingCount', case when v_manage then (select count(*) from private.chore_proposals p
         where p.home_id = p_home_id and p.status = 'pending') end);
   end
-  $;
+  $$;
 
 -- Volunteer requests -----------------------------------------------------------------------------------------
 
@@ -21562,7 +21563,7 @@ create function public.list_chore_proposals(p_home_id uuid) returns jsonb
 create function public.create_chore_volunteer_request(
   p_id uuid, p_occurrence_id uuid, p_expected_revision integer, p_member_ids uuid[], p_dry_run boolean
 ) returns table (outcome text, deadline timestamptz, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -21630,7 +21631,7 @@ create function public.create_chore_volunteer_request(
       'chore_volunteer_request', p_id, pg_catalog.jsonb_build_object('recipients', cardinality(v_users)));
     return query select 'sent', v_deadline, v_occurrence.revision;
   end
-  $;
+  $$;
 
 -- An invitee's answer. 'accept': the first valid acceptance wins under the chore lock (the
 -- request open, the invitation pending, the deadline not reached, the occurrence still in review);
@@ -21639,7 +21640,7 @@ create function public.create_chore_volunteer_request(
 -- accepted, it was withdrawn, closed or expired), 'expired' (the deadline passed), 'not_invited'.
 create function public.answer_chore_volunteer_invitation(p_request_id uuid, p_action text)
 returns table (outcome text, status text)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_request private.chore_volunteer_requests;
@@ -21718,7 +21719,7 @@ returns table (outcome text, status text)
       'chore_volunteer_request', p_request_id);
     return query select 'accepted', 'accepted';
   end
-  $;
+  $$;
 
 -- A chore manager's change to an open request:
 --   'withdraw' the pending invitations of p_member_ids (others stay open; with none left it closes),
@@ -21730,7 +21731,7 @@ returns table (outcome text, status text)
 create function public.change_chore_volunteer_request(
   p_request_id uuid, p_action text, p_member_ids uuid[] default null
 ) returns table (outcome text, status text, closed boolean, skipped uuid[])
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_request private.chore_volunteer_requests;
@@ -21815,7 +21816,7 @@ create function public.change_chore_volunteer_request(
       pg_catalog.jsonb_build_object('recipients', cardinality(v_users) - cardinality(v_skipped)));
     return query select 'added', 'open', false, v_skipped;
   end
-  $;
+  $$;
 
 -- Corrects an accepted volunteer assignment (chore managers), before submission, with a reason:
 -- back to Needs assignment review (p_member_id null) or to another current member. The accepted
@@ -21827,7 +21828,7 @@ create function public.correct_chore_volunteer_assignment(
   p_occurrence_id uuid, p_expected_revision integer, p_reason text, p_dry_run boolean,
   p_member_id uuid default null
 ) returns table (outcome text, volunteer_member uuid, overdue boolean, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -21909,14 +21910,14 @@ create function public.correct_chore_volunteer_assignment(
     return query select 'corrected', private.member_ref(v_occurrence.home_id, v_request.accepted_by),
       v_overdue, v_occurrence.revision;
   end
-  $;
+  $$;
 
 -- The volunteer side of one occurrence for the caller. Chore managers: whether it is in review,
 -- whether a request can be sent, the deadline, every request with every invitation, and whether the
 -- accepted volunteer can be corrected. An invitee: their own invitations only (never the roster or
 -- others' answers). Anyone else: whether it awaits a volunteer. Null when not the caller's to see.
 create function public.get_chore_volunteer_state(p_occurrence_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -21980,7 +21981,7 @@ create function public.get_chore_volunteer_state(p_occurrence_id uuid) returns j
           order by r.created_at desc
           limit private.chore_volunteer_limit('requests')) x), '[]'::jsonb));
   end
-  $;
+  $$;
 
 -- The caller's pending volunteer invitations in a Home, with only what they need to decide: the
 -- chore's title, due day, instructions, checklist and estimate, and the deadline.
@@ -21989,7 +21990,7 @@ returns table (
   request_id uuid, occurrence_id uuid, title text, due_date date, deadline timestamptz,
   instructions text, minutes integer, steps jsonb, invited_at timestamptz
 )
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
   begin
@@ -22011,11 +22012,11 @@ returns table (
       order by o.due_date, r.id
       limit 50;
   end
-  $;
+  $$;
 
 -- Grants -------------------------------------------------------------------------------------------------
 
-do $
+do $$
 declare
   v_function regprocedure;
 begin
@@ -22041,9 +22042,11 @@ begin
     execute format('revoke all on function %s from public, anon, authenticated', v_function);
   end loop;
 end
-$;
+$$;
 
-
+-- ============================================================================
+-- supabase/migrations/20261103090000_chore_overview_reminders.sql
+-- ============================================================================
 -- S21c: the chore schedule (overview widget and Chores calendar), moving one occurrence with its
 -- effects, personal chore reminders and the chore manager's daily summary (brief
 -- plans/steps/S21-brief.md; ADR 0028; spec "Confirmed Home chore overview layouts", "Confirmed
@@ -22109,17 +22112,17 @@ revoke all on table private.chore_reminders from public, anon, authenticated;
 create function private.chore_reminder_local(
   p_mode text, p_local_at timestamp, p_due date, p_days integer, p_time time
 ) returns timestamp
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select case when p_mode = 'absolute' then p_local_at
     else private.reminder_local(p_due, p_days, p_time) end;
-  $;
+  $$;
 
 -- Writes a reminder (a new revision) and queues its delivery. A moment already past ends it.
 create function private.put_chore_reminder(
   p_occurrence private.chore_occurrences, p_user_id uuid, p_mode text, p_local_at timestamp,
   p_days integer, p_time time
 ) returns private.chore_reminders
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_zone text := private.home_zone(p_occurrence.home_id);
     v_fire timestamptz := private.chore_reminder_local(p_mode, p_local_at, p_occurrence.due_date,
@@ -22148,12 +22151,12 @@ create function private.put_chore_reminder(
     end if;
     return v_row;
   end
-  $;
+  $$;
 
 -- Ends an occurrence's scheduled reminders (one person's, or everyone's for null): a new revision,
 -- so a queued job finds it stale. Returns how many ended.
 create function private.end_chore_reminders(p_occurrence_id uuid, p_user_id uuid) returns integer
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_count integer;
   begin
@@ -22164,12 +22167,12 @@ create function private.end_chore_reminders(p_occurrence_id uuid, p_user_id uuid
     get diagnostics v_count = row_count;
     return v_count;
   end
-  $;
+  $$;
 
 -- A person who is no longer assigned at the end of the transaction loses their reminder. Deferred:
 -- private.set_occurrence_assignees replaces the whole list, and someone kept keeps their reminder.
 create function private.chore_reminder_unassigned() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     if not exists (
       select 1 from private.chore_occurrence_assignees a
@@ -22179,7 +22182,7 @@ create function private.chore_reminder_unassigned() returns trigger
     end if;
     return null;
   end
-  $;
+  $$;
 
 create constraint trigger chore_occurrence_assignees_reminders
   after delete on private.chore_occurrence_assignees
@@ -22191,7 +22194,7 @@ create constraint trigger chore_occurrence_assignees_reminders
 -- claimed occurrence also queues its automatic release for the new deadline (a single edit, bulk
 -- or series change alike); the old job finds itself not due and does nothing.
 create function private.chore_reminder_occurrence_changed() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_reminder private.chore_reminders;
     v_chore private.chores;
@@ -22215,7 +22218,7 @@ create function private.chore_reminder_occurrence_changed() returns trigger
     end if;
     return null;
   end
-  $;
+  $$;
 
 create trigger chore_occurrences_reminders
   after update of status, deleted_at, due_date on private.chore_occurrences
@@ -22224,7 +22227,7 @@ create trigger chore_occurrences_reminders
 -- The caller's reminder on an occurrence, with whether they may set one (an assignee of an open
 -- occurrence), the Home's timezone and their channels for reminders. Null when not visible.
 create function public.get_chore_reminder(p_occurrence_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -22264,7 +22267,7 @@ create function public.get_chore_reminder(p_occurrence_id uuid) returns jsonb
           and private.confirmed_email(v_user_id) is not null)
     );
   end
-  $;
+  $$;
 
 -- Sets the caller's reminder on an occurrence they are assigned to, at the revision they saw.
 -- p_mode 'absolute' (p_local_at, wall clock in the Home's timezone) or 'relative' (p_days_before
@@ -22275,7 +22278,7 @@ create function public.set_chore_reminder(
   p_occurrence_id uuid, p_mode text, p_expected_revision integer, p_dry_run boolean,
   p_local_at timestamp default null, p_days_before integer default null, p_time time default null
 ) returns table (outcome text, fire_at timestamptz, dst text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -22328,12 +22331,12 @@ create function public.set_chore_reminder(
     return query select 'saved', v_reminder.fire_at, private.zoned_dst_case(v_local, v_zone),
       v_reminder.revision;
   end
-  $;
+  $$;
 
 -- Removes the caller's reminder on an occurrence. Outcomes: 'removed', 'conflict', 'not_found'.
 create function public.remove_chore_reminder(p_occurrence_id uuid, p_expected_revision integer)
 returns table (outcome text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -22363,14 +22366,14 @@ returns table (outcome text, revision integer)
       returning * into v_reminder;
     return query select 'removed', v_reminder.revision;
   end
-  $;
+  $$;
 
 -- Delivers a reminder (the chore-reminder job; service role only). Re-checks everything at delivery
 -- and notifies once per person and revision. Outcomes: 'notified', 'not_sent' (no longer
 -- applicable), 'stale' (a newer revision or not scheduled), 'not_due' (early: the job retries).
 create function public.deliver_chore_reminder(p_occurrence_id uuid, p_user_id uuid, p_revision integer)
 returns text
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_reminder private.chore_reminders;
     v_occurrence private.chore_occurrences;
@@ -22409,7 +22412,7 @@ returns text
       where r.occurrence_id = p_occurrence_id and r.user_id = p_user_id;
     return 'notified';
   end
-  $;
+  $$;
 
 -- Moving one occurrence reports its effects ---------------------------------------------------------------
 
@@ -22434,7 +22437,7 @@ create function public.update_chore_occurrence(
   p_steps jsonb default null, p_confirm_checklist boolean default false,
   p_confirm_release boolean default false
 ) returns table (outcome text, impact jsonb, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_occurrence private.chore_occurrences;
@@ -22500,26 +22503,26 @@ create function public.update_chore_occurrence(
         p_dry_run, p_due_date, p_assignee_ids, p_set_minutes, p_minutes, p_steps,
         p_confirm_checklist) u;
   end
-  $;
+  $$;
 
 -- The chore schedule ----------------------------------------------------------------------------------------
 
 create function private.chore_schedule_limit(p_name text) returns integer
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
   select case p_name
     when 'days' then 42        -- the longest range one read covers (a month view of six weeks)
     when 'items' then 600      -- items one read returns
     when 'summary_items' then 50 -- occurrences per group on the Summary page
     when 'digests' then 200    -- summaries one hourly run considers
   end;
-  $;
+  $$;
 
 -- A Home's chores between two dates (inclusive), for the schedule widget and the calendar: every
 -- occurrence due then (any state, not in the trash) and the dates of recurring chores not created
 -- yet, projected from their current part (assignees by its rule, null for an empty place). Each
 -- item's member ids are membership ids. 42501 for a Home the caller is not in.
 create function public.list_chore_schedule(p_home_id uuid, p_from date, p_to date) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_today date;
@@ -22618,7 +22621,7 @@ create function public.list_chore_schedule(p_home_id uuid, p_from date, p_to dat
       'items', v_items,
       'truncated', v_truncated);
   end
-  $;
+  $$;
 
 -- The daily summary ---------------------------------------------------------------------------------------
 
@@ -22646,7 +22649,7 @@ revoke all on table private.chore_summary_settings from public, anon, authentica
 
 -- What qualifies for a Home's summary now, as counts.
 create function private.chore_summary_counts(p_home_id uuid) returns jsonb
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
   with base as (
     select o.*, c.auto_release_hours, (select count(*) from private.chore_occurrence_assignees a
       where a.occurrence_id = o.id) as assigned
@@ -22667,11 +22670,11 @@ create function private.chore_summary_counts(p_home_id uuid) returns jsonb
         + pg_catalog.make_interval(hours => b.auto_release_hours)
         between pg_catalog.now() and pg_catalog.now() + interval '24 hours'))
   from base b cross join today t;
-  $;
+  $$;
 
 -- The caller's summary setting for a Home. 42501 for a Home they are not in.
 create function public.get_chore_summary_setting(p_home_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_setting private.chore_summary_settings;
@@ -22686,14 +22689,14 @@ create function public.get_chore_summary_setting(p_home_id uuid) returns jsonb
       'timeZone', v_setting.time_zone,
       'revision', coalesce(v_setting.revision, 0));
   end
-  $;
+  $$;
 
 -- Turns the caller's daily summary for a Home on or off (chore managers), at the hour in their own
 -- timezone, at the revision they saw. Outcomes: 'saved', 'conflict', 'not_permitted'.
 create function public.set_chore_summary_setting(
   p_home_id uuid, p_enabled boolean, p_hour integer, p_time_zone text, p_expected_revision integer
 ) returns table (outcome text, revision integer)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_setting private.chore_summary_settings;
@@ -22721,12 +22724,12 @@ create function public.set_chore_summary_setting(
     returning * into v_setting;
     return query select 'saved', v_setting.revision;
   end
-  $;
+  $$;
 
 -- The live Summary page (chore managers): the counts and up to 50 occurrences per group, earliest
 -- due first. Anyone else gets canManage false and nothing else. 42501 for a Home they are not in.
 create function public.get_chore_summary(p_home_id uuid) returns jsonb
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
     v_today date;
@@ -22773,14 +22776,14 @@ create function public.get_chore_summary(p_home_id uuid) returns jsonb
           and o.status in ('open', 'pending_approval') and g.grp is not null
       ) x where x.n <= private.chore_schedule_limit('summary_items')), '[]'::jsonb));
   end
-  $;
+  $$;
 
 -- The hourly run (chore-digest; service role only): for each enabled setting whose hour has come on
 -- a local day not yet handled, a summary notice when something qualifies and the person still
 -- manages the Home's chores. At most one per Home, manager and local day (the day is recorded, and
 -- the notice's dedupe key carries it). Returns how many notices it sent.
 create function public.send_chore_summaries(p_limit integer) returns integer
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_setting private.chore_summary_settings;
     v_local timestamp;
@@ -22817,11 +22820,11 @@ create function public.send_chore_summaries(p_limit integer) returns integer
     end loop;
     return v_sent;
   end
-  $;
+  $$;
 
 -- Grants -------------------------------------------------------------------------------------------------
 
-do $
+do $$
 declare
   v_function regprocedure;
 begin
@@ -22852,8 +22855,5350 @@ begin
     execute format('revoke all on function %s from public, anon, authenticated', v_function);
   end loop;
 end
-$;
+$$;
 
+-- ============================================================================
+-- supabase/migrations/20261104090000_home_vacations.sql
+-- ============================================================================
+-- S22: Home vacations and temporary chore absences (brief plans/steps/S22-brief.md; ADR 0029; spec
+-- "Confirmed recurring chore pauses and Home vacation periods", "Confirmed member-scoped vacations and
+-- participant approval", "Confirmed expiration of unanswered vacation invitations", "Confirmed
+-- individual participant vacation date ranges", "Confirmed participant approval for shared vacation
+-- date changes", "Confirmed member withdrawal from group vacations", "Confirmed automatic Home
+-- vacation statuses", "Confirmed silent Home vacation change updates", "Confirmed early ending of Home
+-- vacations with impact preview", "Confirmed overlapping Home vacations with combined module pauses",
+-- "Confirmed optional pre-vacation manager reminders", "Confirmed optional Home vacation names",
+-- "Confirmed optional Home vacation dashboard widget", "Confirmed non-recurring Home vacation
+-- periods", "Confirmed one-time chore handling during Home vacations", "Confirmed vacation-aware
+-- recurring chore rotation", "Confirmed per-occurrence vacation rotation override", "Confirmed
+-- no-available-participant rotation resolution" and "Confirmed temporary chore absence periods").
+--
+-- A vacation (private.home_vacations) is one bounded, non-recurring record of a Home with an explicit
+-- set of participants (private.home_vacation_participants), each with their own inclusive dates in
+-- the Home's timezone. A participant added by a chore manager, or the creator themselves, is Accepted
+-- at once; a member suggested by someone else waits as Pending until they accept, and expires at the
+-- start of their proposed start day. A participant changes their own dates; a chore manager changes
+-- those of participants a manager added; anyone else's change to a participant's dates is a proposal
+-- (private.home_vacation_date_proposals) that only that participant's acceptance makes effective.
+-- The vacation's dates are the envelope of its accepted participants' dates; its status (Upcoming,
+-- Active, Ended) is derived from them and the Home's today, and Cancelled is final.
+--
+-- Effects on chores, applied once per occurrence however many vacations overlap:
+--   * A member is away on a date when they are an accepted participant of a vacation that is not
+--     cancelled and their own dates cover it (never the envelope, pending invitations or proposals).
+--   * The Home's chores are paused on a date only when a chore manager confirmed the Home-wide pause
+--     of a vacation for that date (home_pause_dates, the dates on which every current member was its
+--     accepted participant at confirmation) and every current member is still away in that vacation.
+--     So it shrinks on its own (a withdrawal, a shorter stay, a new member) and never grows without a
+--     new confirmation; two partial vacations never add up to a Home pause.
+--   * Recurring occurrences on a paused date take the status 'paused': not open, not overdue, not
+--     claimable, no reminders, no release, no points. New ones are created paused, so a cancelled
+--     vacation brings them back; once their date has passed they stay paused (no backfill).
+--   * A rotating occurrence whose turn member is away goes to the next member in the rotation order
+--     who is a current member and not away; with nobody available it is unassigned and flagged
+--     (Needs assignment review). The order and the turns never change; nobody owes catch-up turns.
+--   * These rules only touch occurrences nobody touched (open, from today on, not claimed, not in
+--     rework, no ticked step, not changed on their own, no open handover or volunteer request, no
+--     recorded vacation decision, and still as generated or as a vacation rule left them). A person's
+--     change to the assignees ends the vacation handling of that occurrence.
+--   * Everything else of an away member (fixed, claimed, one-off, manager-assigned work) is listed in
+--     the vacation's review, where a chore manager keeps, skips or reassigns it
+--     (private.chore_vacation_decisions). One-off chores due on a paused date are flagged Needs
+--     vacation review until decided: not claimable, no automatic release.
+--
+-- Temporary absences (private.chore_absences) are only a planning signal: nothing changes on its own;
+-- the same review lets a chore manager keep, skip or reassign the absent member's work.
+--
+-- Silent rule: vacation changes notify nobody. Only actionable requests do (an invitation, a date
+-- proposal: category 'chores') and the optional pre-vacation reminder to chore managers ('reminders').
+--
+-- Concurrency: every vacation or absence change takes the Home's vacation lock first, then the
+-- vacation row, then chores one at a time in chore order (the S20 rule). Chore pages re-apply the
+-- vacation rules lazily (advance_chores), deciding each occurrence again under its chore's lock.
+
+-- Audit subjects, event kinds, occurrence states ---------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template', 'chore_reassignment', 'chore_proposal', 'chore_volunteer_request',
+    'home_vacation', 'chore_absence'
+  ));
+
+alter table private.chore_occurrence_events drop constraint chore_occurrence_events_kind_check;
+alter table private.chore_occurrence_events add constraint chore_occurrence_events_kind_check
+  check (kind in ('completed', 'skipped', 'reopened', 'submitted', 'approved', 'rejected',
+    'withdrawn', 'corrected', 'claimed', 'released', 'expired', 'reassigned', 'volunteered',
+    'assignment_corrected', 'vacation_paused', 'vacation_resumed', 'vacation_substituted',
+    'vacation_restored'));
+-- For 'vacation_substituted': previous_contributor_id the away member whose turn it was,
+-- contributor_id the substitute (null: nobody was available). For 'vacation_restored':
+-- previous_contributor_id the former substitute, contributor_id the member whose turn it is.
+
+alter table private.chore_occurrences drop constraint chore_occurrences_status_check;
+alter table private.chore_occurrences add constraint chore_occurrences_status_check
+  check (status in ('open', 'pending_approval', 'completed', 'skipped', 'expired', 'paused'));
+
+alter table private.chore_occurrences
+  -- How a vacation rule left an untouched occurrence: 'substitute' (the turn passed to another
+  -- member), 'review' (nobody available: flagged), 'paused' (a Home-paused date). Null: as generated,
+  -- or a person changed it.
+  add column vacation_state text
+    constraint chore_occurrences_vacation_state_check check (vacation_state in ('substitute', 'review', 'paused')),
+  -- The away member whose turn it was (substitute and review).
+  add column substitute_for uuid references auth.users (id) on delete set null,
+  -- Needs vacation review: an open occurrence due on a Home-paused date that a vacation rule cannot
+  -- handle (a one-off chore, or one a person touched) and no chore manager decided yet.
+  add column vacation_review boolean not null default false,
+  add column paused_at timestamptz;
+
+alter table private.chore_occurrences add constraint chore_occurrences_vacation_check check (
+  (status = 'paused') = (paused_at is not null)
+  and (status = 'paused') = coalesce(vacation_state = 'paused', false)
+  and (status = 'open' or not vacation_review));
+
+create index chore_occurrences_home_review_idx on private.chore_occurrences (home_id)
+  where vacation_review and deleted_at is null;
+
+-- Tables -------------------------------------------------------------------------------------------------
+
+create table private.home_vacations (
+  id uuid primary key,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  -- Optional display name (trimmed; empty is none: the generic "Home vacation").
+  name text constraint home_vacations_name_check check (name is null or private.is_visible_name(name, 80)),
+  -- The envelope of the accepted participants' dates (kept as they were when nobody is left).
+  starts_on date not null,
+  ends_on date not null,
+  created_by uuid references auth.users (id) on delete set null,
+  -- Pre-vacation reminder to chore managers, this many days before the start (null: off).
+  reminder_days integer constraint home_vacations_reminder_check check (reminder_days between 1 and 30),
+  -- The confirmed Home-wide chore pause: the dates on which every current member was an accepted
+  -- participant when a chore manager confirmed it (null: none).
+  home_pause_dates datemultirange,
+  home_pause_by uuid references auth.users (id) on delete set null,
+  home_pause_at timestamptz,
+  cancelled_at timestamptz,
+  cancelled_by uuid references auth.users (id) on delete set null,
+  revision integer not null default 1 constraint home_vacations_revision_check check (revision >= 1),
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint home_vacations_id_home_key unique (id, home_id),
+  constraint home_vacations_dates_check check (ends_on >= starts_on),
+  constraint home_vacations_pause_check check ((home_pause_dates is null) = (home_pause_at is null))
+);
+
+create index home_vacations_home_idx on private.home_vacations (home_id, ends_on desc);
+
+-- One member's participation in a vacation (one row per invitation or addition; a new invitation
+-- after an expired, declined or withdrawn one is a new row, so nothing is ever revived).
+create table private.home_vacation_participants (
+  id uuid primary key,
+  vacation_id uuid not null,
+  home_id uuid not null,
+  user_id uuid references auth.users (id) on delete set null,
+  status text not null constraint home_vacation_participants_status_check
+    check (status in ('pending', 'accepted', 'declined', 'withdrawn', 'expired')),
+  -- Accepted: the effective dates. Pending: the proposed dates (the invitation expires at the start).
+  starts_on date not null,
+  ends_on date not null,
+  -- Added by a chore manager: a manager changes their dates directly.
+  direct boolean not null,
+  invited_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  responded_at timestamptz,
+  -- Who ended an accepted or pending participation, and why: 'self', 'manager', 'creator',
+  -- 'shortened', 'cancelled', 'departure'.
+  ended_by uuid references auth.users (id) on delete set null,
+  ended_reason text constraint home_vacation_participants_reason_check
+    check (ended_reason in ('self', 'manager', 'creator', 'shortened', 'cancelled', 'departure')),
+  revision integer not null default 1 constraint home_vacation_participants_revision_check check (revision >= 1),
+  constraint home_vacation_participants_dates_check check (ends_on >= starts_on),
+  foreign key (vacation_id, home_id) references private.home_vacations (id, home_id) on delete cascade
+);
+
+create unique index home_vacation_participants_one_open on private.home_vacation_participants (vacation_id, user_id)
+  where status in ('pending', 'accepted');
+create index home_vacation_participants_member_idx on private.home_vacation_participants (home_id, user_id)
+  where status = 'accepted';
+create index home_vacation_participants_vacation_idx on private.home_vacation_participants (vacation_id);
+
+-- A proposed change to an accepted participant's dates, waiting for that participant.
+create table private.home_vacation_date_proposals (
+  id uuid primary key,
+  participant_id uuid not null references private.home_vacation_participants (id) on delete cascade,
+  vacation_id uuid not null,
+  home_id uuid not null,
+  starts_on date not null,
+  ends_on date not null,
+  proposed_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  status text not null default 'pending' constraint home_vacation_date_proposals_status_check
+    check (status in ('pending', 'accepted', 'declined', 'superseded', 'withdrawn')),
+  decided_at timestamptz,
+  constraint home_vacation_date_proposals_dates_check check (ends_on >= starts_on),
+  constraint home_vacation_date_proposals_decision_check check ((status = 'pending') = (decided_at is null)),
+  foreign key (vacation_id, home_id) references private.home_vacations (id, home_id) on delete cascade
+);
+
+create unique index home_vacation_date_proposals_one_pending on private.home_vacation_date_proposals (participant_id)
+  where status = 'pending';
+
+-- Every change to a vacation, in order (append-only): who did what, to whom, with which dates.
+create table private.home_vacation_events (
+  id bigint generated always as identity primary key,
+  vacation_id uuid not null references private.home_vacations (id) on delete cascade,
+  kind text not null constraint home_vacation_events_kind_check check (kind in (
+    'created', 'renamed', 'invited', 'added', 'accepted', 'declined', 'withdrawn', 'removed',
+    'invitation_withdrawn', 'dates_changed', 'dates_proposed', 'proposal_accepted',
+    'proposal_declined', 'proposal_withdrawn', 'shortened', 'cancelled', 'home_pause_confirmed',
+    'home_pause_removed', 'reminder_changed', 'left_home')),
+  actor_id uuid references auth.users (id) on delete set null,
+  subject_id uuid references auth.users (id) on delete set null,
+  starts_on date,
+  ends_on date,
+  created_at timestamptz not null default now()
+);
+
+create index home_vacation_events_vacation_idx on private.home_vacation_events (vacation_id, id);
+
+-- A member's temporary chore absence: a planning signal only.
+create table private.chore_absences (
+  id uuid primary key,
+  home_id uuid not null,
+  user_id uuid not null,
+  starts_on date not null,
+  ends_on date not null,
+  reason text constraint chore_absences_reason_check check (reason is null or private.is_plain_text(reason, 200)),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  revision integer not null default 1 constraint chore_absences_revision_check check (revision >= 1),
+  constraint chore_absences_dates_check check (ends_on >= starts_on),
+  -- The absence ends with the membership.
+  foreign key (home_id, user_id) references public.home_memberships (home_id, user_id) on delete cascade
+);
+
+create index chore_absences_member_idx on private.chore_absences (home_id, user_id, ends_on);
+
+-- A chore manager's decision on one occurrence for one vacation or absence (never asked again for
+-- that source, never reverted by a later change).
+create table private.chore_vacation_decisions (
+  id bigint generated always as identity primary key,
+  occurrence_id uuid not null,
+  home_id uuid not null,
+  source_kind text not null constraint chore_vacation_decisions_source_check
+    check (source_kind in ('vacation', 'absence')),
+  source_id uuid not null,
+  decision text not null constraint chore_vacation_decisions_decision_check
+    check (decision in ('keep', 'skip', 'reassign', 'reschedule')),
+  to_user uuid references auth.users (id) on delete set null,
+  new_date date,
+  decided_by uuid references auth.users (id) on delete set null,
+  decided_at timestamptz not null default now(),
+  foreign key (occurrence_id, home_id) references private.chore_occurrences (id, home_id) on delete cascade,
+  constraint chore_vacation_decisions_once unique (occurrence_id, source_kind, source_id)
+);
+
+create index chore_vacation_decisions_source_idx on private.chore_vacation_decisions (source_id);
+
+alter table private.home_vacations enable row level security;
+alter table private.home_vacation_participants enable row level security;
+alter table private.home_vacation_date_proposals enable row level security;
+alter table private.home_vacation_events enable row level security;
+alter table private.chore_absences enable row level security;
+alter table private.chore_vacation_decisions enable row level security;
+revoke all on table private.home_vacations, private.home_vacation_participants,
+  private.home_vacation_date_proposals, private.home_vacation_events, private.chore_absences,
+  private.chore_vacation_decisions from public, anon, authenticated;
+
+comment on table private.home_vacations is 'S22: Home vacations. Not exposed through the API.';
+comment on table private.chore_absences is 'S22: temporary chore absences. Not exposed through the API.';
+
+-- Vacations move the chore pool's Realtime signal (the pool and widgets show their effects).
+create constraint trigger home_vacations_signal after insert or update on private.home_vacations
+  deferrable initially deferred for each row execute function private.bump_chore_signal();
+create constraint trigger home_vacation_participants_signal after insert or update on private.home_vacation_participants
+  deferrable initially deferred for each row execute function private.bump_chore_signal();
+
+-- Limits and small helpers -------------------------------------------------------------------------------
+
+-- apps/web/src/vacations/schema.ts uses the same numbers.
+create function private.vacation_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'name' then 80
+    when 'people' then 20              -- participants one change names
+    when 'days' then 366               -- the longest stay of one participant (inclusive days)
+    when 'ahead' then 730              -- how far ahead a stay may start
+    when 'reminder_days' then 30
+    when 'reason' then 200             -- an absence's reason
+    when 'review' then 200             -- occurrences one review read returns
+    when 'planned' then 50             -- planned dates one review read returns
+    when 'history' then 100            -- ended and cancelled vacations one list returns
+    when 'events' then 100             -- history entries one vacation read returns
+    when 'absences' then 200           -- absences one list returns
+    when 'calendar_days' then 42
+  end;
+  $$;
+
+-- A vacation name from the API: whitespace runs read as one space, trimmed; empty is no name.
+create function private.vacation_name(p_text text) returns text
+  language sql immutable set search_path = '' as $$
+  select nullif(pg_catalog.btrim(pg_catalog.regexp_replace(p_text, '\s+', ' ', 'g')), '');
+  $$;
+
+-- Whether a stay is acceptable as new dates: starting no earlier than p_earliest (today, or the
+-- current start of a stay already under way) and at most 'ahead' days ahead, ending no earlier than
+-- yesterday (ending early), at most 'days' days long.
+create function private.valid_vacation_stay(
+  p_starts_on date, p_ends_on date, p_today date, p_earliest date
+) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_starts_on >= least(p_today, p_earliest) and p_starts_on <= p_today + private.vacation_limit('ahead')
+    and p_ends_on >= p_starts_on and p_ends_on >= p_today - 1
+    and p_ends_on - p_starts_on < private.vacation_limit('days'), false);
+  $$;
+
+-- The derived status of a vacation on the Home's today.
+create function private.vacation_status(p_vacation private.home_vacations, p_today date) returns text
+  language sql immutable set search_path = '' as $$
+  select case
+    when p_vacation.cancelled_at is not null then 'cancelled'
+    when p_today < p_vacation.starts_on then 'upcoming'
+    when p_today <= p_vacation.ends_on then 'active'
+    else 'ended' end;
+  $$;
+
+-- A participation's state, with a pending invitation read as expired from its proposed start day.
+create function private.vacation_participant_status(
+  p_participant private.home_vacation_participants, p_today date
+) returns text
+  language sql immutable set search_path = '' as $$
+  select case when p_participant.status = 'pending' and p_today >= p_participant.starts_on
+    then 'expired' else p_participant.status end;
+  $$;
+
+-- Serializes vacation and absence changes within one Home.
+create function private.lock_home_vacations(p_home_id uuid) returns void
+  language sql volatile security definer set search_path = '' as $$
+  select private.lock_chore_home('vacations', p_home_id);
+  $$;
+
+create function private.audit_vacation(
+  p_action text, p_home_id uuid, p_subject_type text, p_subject_id uuid, p_details jsonb default '{}'::jsonb
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  -- Ids, counts and flags only: never names, reasons or dates of a person.
+  select private.audit(p_action, p_home_id, p_subject_type, p_subject_id, p_details);
+  $$;
+
+create function private.vacation_event(
+  p_vacation_id uuid, p_kind text, p_actor uuid, p_subject uuid default null,
+  p_starts_on date default null, p_ends_on date default null
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  insert into private.home_vacation_events (vacation_id, kind, actor_id, subject_id, starts_on, ends_on)
+  values (p_vacation_id, p_kind, p_actor, p_subject, p_starts_on, p_ends_on);
+  $$;
+
+-- People from the API: an array of {"memberId": membership id, "startsOn": date, "endsOn": date},
+-- 1–20, no member twice. 22023 when malformed; user_id null for one who is not a current member.
+create function private.vacation_people(p_home_id uuid, p_people jsonb)
+returns table (user_id uuid, member_id uuid, starts_on date, ends_on date)
+  language plpgsql stable security definer set search_path = '' as $$
+  begin
+    if p_people is null or pg_catalog.jsonb_typeof(p_people) <> 'array'
+       or pg_catalog.jsonb_array_length(p_people) not between 1 and private.vacation_limit('people')
+       or exists (
+         select 1 from pg_catalog.jsonb_array_elements(p_people) e (p)
+         where pg_catalog.jsonb_typeof(e.p) <> 'object'
+           or pg_catalog.jsonb_typeof(e.p -> 'memberId') <> 'string'
+           or (e.p ->> 'memberId') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+           or pg_catalog.jsonb_typeof(e.p -> 'startsOn') <> 'string'
+           or (e.p ->> 'startsOn') !~ '^\d{4}-\d{2}-\d{2}$'
+           or pg_catalog.jsonb_typeof(e.p -> 'endsOn') <> 'string'
+           or (e.p ->> 'endsOn') !~ '^\d{4}-\d{2}-\d{2}$')
+       or (select count(distinct e.p ->> 'memberId') from pg_catalog.jsonb_array_elements(p_people) e (p))
+         <> pg_catalog.jsonb_array_length(p_people) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    begin
+      return query
+        select m.user_id, (e.p ->> 'memberId')::uuid, (e.p ->> 'startsOn')::date, (e.p ->> 'endsOn')::date
+        from pg_catalog.jsonb_array_elements(p_people) with ordinality as e (p, o)
+        left join public.home_memberships m on m.home_id = p_home_id and m.id = (e.p ->> 'memberId')::uuid
+        order by e.o;
+    exception when invalid_datetime_format or datetime_field_overflow then
+      raise exception 'invalid request' using errcode = '22023';
+    end;
+  end
+  $$;
+
+-- Who is away when ---------------------------------------------------------------------------------------
+
+-- Whether a member is away on a date: an accepted participant of a vacation that is not cancelled,
+-- whose own dates cover it.
+create function private.vacation_away(p_home_id uuid, p_user_id uuid, p_date date) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(p_user_id is not null and exists (
+    select 1 from private.home_vacation_participants p
+    join private.home_vacations v on v.id = p.vacation_id
+    where p.home_id = p_home_id and p.user_id = p_user_id and p.status = 'accepted'
+      and v.cancelled_at is null and p_date between p.starts_on and p.ends_on), false);
+  $$;
+
+-- Whether every current member of the Home is an accepted participant of this vacation on a date.
+create function private.vacation_everyone_away(p_vacation private.home_vacations, p_date date) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.home_memberships m where m.home_id = p_vacation.home_id)
+    and not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_vacation.home_id and not exists (
+        select 1 from private.home_vacation_participants p
+        where p.vacation_id = p_vacation.id and p.user_id = m.user_id and p.status = 'accepted'
+          and p_date between p.starts_on and p.ends_on));
+  $$;
+
+-- The dates of a vacation, from p_from on, on which every current member is its accepted participant.
+create function private.vacation_full_dates(p_vacation private.home_vacations, p_from date) returns datemultirange
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(pg_catalog.range_agg(pg_catalog.daterange(d::date, d::date + 1)), '{}'::datemultirange)
+  from pg_catalog.generate_series(greatest(p_vacation.starts_on, p_from)::timestamp,
+    p_vacation.ends_on::timestamp, interval '1 day') as g (d)
+  where p_vacation.cancelled_at is null and private.vacation_everyone_away(p_vacation, d::date);
+  $$;
+
+-- The dates on which a vacation pauses the Home's chores now: confirmed, and still everyone away.
+create function private.vacation_pause_dates(p_vacation private.home_vacations) returns datemultirange
+  language sql stable security definer set search_path = '' as $$
+  select case when p_vacation.home_pause_dates is null or p_vacation.cancelled_at is not null
+    then '{}'::datemultirange
+    else p_vacation.home_pause_dates * private.vacation_full_dates(p_vacation, p_vacation.starts_on) end;
+  $$;
+
+-- Whether the Home's chores are paused on a date (by at least one vacation).
+create function private.home_chores_paused_on(p_home_id uuid, p_date date) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(exists (
+    select 1 from private.home_vacations v
+    where v.home_id = p_home_id and v.cancelled_at is null and v.home_pause_dates @> p_date
+      and private.vacation_everyone_away(v, p_date)), false);
+  $$;
+
+-- Re-reads a vacation's envelope from its accepted participants (unchanged when there are none).
+create function private.refresh_vacation_envelope(p_vacation_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    update private.home_vacations v set starts_on = x.s, ends_on = x.e
+      from (select min(p.starts_on) as s, max(p.ends_on) as e from private.home_vacation_participants p
+        where p.vacation_id = p_vacation_id and p.status = 'accepted') x
+      where v.id = p_vacation_id and x.s is not null
+        and (v.starts_on is distinct from x.s or v.ends_on is distinct from x.e);
+  end
+  $$;
+
+-- Applying the rules to occurrences ----------------------------------------------------------------------
+
+-- The rotation member who takes a turn whose member is away: the next place in the order after the
+-- turn's place (wrapping) held by a current member who is not away on that date; null when none.
+create function private.chore_vacation_substitute(p_part private.chore_schedules, p_date date) returns uuid
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_places integer;
+    v_turn integer;
+    v_user uuid;
+  begin
+    select count(*)::integer into v_places from private.chore_schedule_members m where m.schedule_id = p_part.id;
+    if v_places < 2 then
+      return null;
+    end if;
+    v_turn := private.chore_turn(p_part.frequency, p_part.interval_count, p_part.weekdays, p_part.starts_on,
+      p_part.rotation_from, p_date) % v_places;
+    for i in 1 .. v_places - 1 loop
+      select m.user_id into v_user from private.chore_schedule_members m
+        where m.schedule_id = p_part.id and m.position = (v_turn + i) % v_places;
+      if v_user is not null and not private.vacation_away(p_part.home_id, v_user, p_date) then
+        return v_user;
+      end if;
+    end loop;
+    return null;
+  end
+  $$;
+
+-- What the vacation rules want for an occurrence: whether they manage it (untouched, from p_from
+-- on), its status, assignees (sorted), flag, vacation state and substitute_for, and whether it
+-- needs a vacation review. For one they do not manage, everything but the review flag stays.
+-- `orphan`: a paused occurrence its chore would no longer have (the chore ended, its own pause
+-- covers the date, or a schedule change or "delete following" dropped the date). The chore
+-- functions only change open occurrences, so the rules remove these instead of ever reopening
+-- them: the stricter pause wins, and a date the schedule still has is created again when due.
+create function private.chore_vacation_target(
+  p_occurrence private.chore_occurrences, p_from date,
+  out managed boolean, out status text, out users uuid[], out flagged boolean, out state text,
+  out substitute_for uuid, out review boolean, out orphan boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_chore private.chores;
+    v_part private.chore_schedules;
+    v_base uuid[];
+    v_base_flag boolean;
+    v_sub uuid;
+    v_decided boolean;
+  begin
+    managed := false;
+    orphan := false;
+    status := p_occurrence.status;
+    flagged := p_occurrence.needs_reassignment;
+    state := p_occurrence.vacation_state;
+    substitute_for := p_occurrence.substitute_for;
+    select coalesce(array_agg(a.user_id order by a.user_id), '{}') into users
+      from private.chore_occurrence_assignees a where a.occurrence_id = p_occurrence.id;
+    review := p_occurrence.vacation_review;
+    select * into v_chore from private.chores c where c.id = p_occurrence.chore_id;
+    if p_occurrence.deleted_at is not null or v_chore.deleted_at is not null then
+      return;
+    end if;
+    if p_occurrence.status = 'paused' and p_occurrence.schedule_id is not null
+       and p_occurrence.scheduled_date >= p_from then
+      select * into v_part from private.chore_schedules s where s.id = p_occurrence.schedule_id;
+      if v_chore.ended_at is not null or not found
+         or not private.chore_part_has_date(v_part, p_occurrence.scheduled_date)
+         or private.chore_paused_on(v_part, p_occurrence.scheduled_date) then
+        orphan := true;
+        return;
+      end if;
+    end if;
+    v_decided := exists (select 1 from private.chore_vacation_decisions d where d.occurrence_id = p_occurrence.id);
+    if p_occurrence.schedule_id is not null and p_occurrence.status in ('open', 'paused')
+       and v_chore.ended_at is null and not p_occurrence.in_rework and not p_occurrence.detached
+       and p_occurrence.claimed_by is null and p_occurrence.scheduled_date >= p_from and not v_decided
+       and not private.chore_has_progress(p_occurrence.id)
+       and not exists (select 1 from private.chore_reassignment_requests r
+         where r.occurrence_id = p_occurrence.id and r.status in ('pending', 'awaiting_manager'))
+       and not exists (select 1 from private.chore_volunteer_requests r
+         where r.occurrence_id = p_occurrence.id and r.status = 'open') then
+      select * into v_part from private.chore_schedules s where s.id = p_occurrence.schedule_id;
+      if found then
+        select coalesce((select array_agg(u order by u) from unnest(a.user_ids) u), '{}'), a.flagged
+          into v_base, v_base_flag
+          from private.chore_part_assignees(v_part, p_occurrence.scheduled_date) a;
+        managed := p_occurrence.vacation_state is not null
+          or (users = v_base and p_occurrence.needs_reassignment = v_base_flag);
+      end if;
+    end if;
+    if managed then
+      review := false;
+      if private.home_chores_paused_on(p_occurrence.home_id, p_occurrence.scheduled_date) then
+        status := 'paused';
+        users := v_base;
+        flagged := v_base_flag;
+        state := 'paused';
+        substitute_for := null;
+      elsif v_part.assignment = 'rotating' and cardinality(v_base) = 1
+         and private.vacation_away(p_occurrence.home_id, v_base[1], p_occurrence.scheduled_date) then
+        v_sub := private.chore_vacation_substitute(v_part, p_occurrence.scheduled_date);
+        status := 'open';
+        substitute_for := v_base[1];
+        if v_sub is not null then
+          users := array[v_sub];
+          flagged := false;
+          state := 'substitute';
+        else
+          users := '{}';
+          flagged := true;
+          state := 'review';
+        end if;
+      else
+        status := 'open';
+        users := v_base;
+        flagged := v_base_flag;
+        state := null;
+        substitute_for := null;
+      end if;
+      return;
+    end if;
+    review := p_occurrence.status = 'open' and not v_decided
+      and private.home_chores_paused_on(p_occurrence.home_id, p_occurrence.due_date);
+  end
+  $$;
+
+-- Whether the rules want a change to the occurrence.
+create function private.chore_vacation_differs(p_occurrence private.chore_occurrences, p_from date) returns boolean
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    t record;
+  begin
+    select * into t from private.chore_vacation_target(p_occurrence, p_from);
+    return t.orphan or t.status is distinct from p_occurrence.status
+      or t.flagged is distinct from p_occurrence.needs_reassignment
+      or t.state is distinct from p_occurrence.vacation_state
+      or t.substitute_for is distinct from p_occurrence.substitute_for
+      or t.review is distinct from p_occurrence.vacation_review
+      or t.users is distinct from coalesce((select array_agg(a.user_id order by a.user_id)
+        from private.chore_occurrence_assignees a where a.occurrence_id = p_occurrence.id), '{}');
+  end
+  $$;
+
+-- Applies the rules to one occurrence (its chore locked by the caller). Returns what changed, for
+-- previews: {occurrenceId, choreId, title, date, dueDate, change, from, to, for}, or null.
+-- change: 'paused', 'resumed', 'substituted', 'no_substitute', 'restored', 'needs_review',
+-- 'review_cleared'.
+create function private.apply_chore_vacation(p_occurrence_id uuid, p_from date) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_o private.chore_occurrences;
+    t record;
+    v_current uuid[];
+    v_change text;
+    v_title text;
+  begin
+    select * into v_o from private.chore_occurrences o where o.id = p_occurrence_id for update;
+    if not found then
+      return null;
+    end if;
+    select * into t from private.chore_vacation_target(v_o, p_from);
+    if t.orphan then
+      -- Like an untouched occurrence a chore pause or schedule change removes (S20).
+      delete from private.chore_occurrences o where o.id = v_o.id;
+      return null;
+    end if;
+    select coalesce(array_agg(a.user_id order by a.user_id), '{}') into v_current
+      from private.chore_occurrence_assignees a where a.occurrence_id = v_o.id;
+    if t.status is not distinct from v_o.status and t.users is not distinct from v_current
+       and t.flagged is not distinct from v_o.needs_reassignment
+       and t.state is not distinct from v_o.vacation_state
+       and t.substitute_for is not distinct from v_o.substitute_for
+       and t.review is not distinct from v_o.vacation_review then
+      return null;
+    end if;
+    v_change := case
+      when t.status = 'paused' and v_o.status <> 'paused' then 'paused'
+      when v_o.status = 'paused' and t.status <> 'paused' then 'resumed'
+      when t.state = 'substitute' then 'substituted'
+      when t.state = 'review' then 'no_substitute'
+      when t.state is null and v_o.vacation_state is not null then 'restored'
+      when t.review then 'needs_review'
+      else 'review_cleared' end;
+    -- The assignee trigger leaves the vacation state alone for changes made here.
+    perform pg_catalog.set_config('madeora.vacation_apply', 'on', true);
+    if t.users is distinct from v_current then
+      perform private.set_occurrence_assignees(v_o.id, v_o.home_id, t.users);
+    end if;
+    update private.chore_occurrences o
+      set status = t.status,
+        paused_at = case when t.status = 'paused' then coalesce(o.paused_at, pg_catalog.now()) end,
+        vacation_state = t.state, substitute_for = t.substitute_for, needs_reassignment = t.flagged,
+        vacation_review = t.review, revision = o.revision + 1, updated_at = pg_catalog.now()
+      where o.id = v_o.id;
+    perform pg_catalog.set_config('madeora.vacation_apply', 'off', true);
+    if v_change in ('paused', 'resumed') then
+      insert into private.chore_occurrence_events (occurrence_id, kind)
+        values (v_o.id, 'vacation_' || v_change);
+    elsif v_change in ('substituted', 'no_substitute') then
+      insert into private.chore_occurrence_events (occurrence_id, kind, contributor_id, previous_contributor_id)
+        values (v_o.id, 'vacation_substituted', t.users[1], t.substitute_for);
+    elsif v_change = 'restored' then
+      insert into private.chore_occurrence_events (occurrence_id, kind, contributor_id, previous_contributor_id)
+        values (v_o.id, 'vacation_restored', t.users[1], v_current[1]);
+    end if;
+    select c.title into v_title from private.chores c where c.id = v_o.chore_id;
+    return pg_catalog.jsonb_build_object(
+      'occurrenceId', v_o.id, 'choreId', v_o.chore_id, 'title', v_title, 'date', v_o.scheduled_date,
+      'dueDate', v_o.due_date, 'change', v_change,
+      'from', coalesce((select pg_catalog.jsonb_agg(private.member_ref(v_o.home_id, u) order by u)
+        from unnest(v_current) u), '[]'::jsonb),
+      'to', coalesce((select pg_catalog.jsonb_agg(private.member_ref(v_o.home_id, u) order by u)
+        from unnest(t.users) u), '[]'::jsonb),
+      'for', private.member_ref(v_o.home_id, t.substitute_for));
+  end
+  $$;
+
+-- Applies the rules to the Home's occurrences that may need it (from today on, and open ones flagged
+-- for review), one chore lock at a time in chore order, deciding each again under its lock. Only
+-- occurrences whose state differs are locked. Returns the changes.
+create function private.reconcile_chore_vacations(p_home_id uuid, p_chore_id uuid default null) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_today date := private.task_today(p_home_id, null);
+    v_item record;
+    v_occurrence private.chore_occurrences;
+    v_change jsonb;
+    v_changes jsonb := '[]'::jsonb;
+  begin
+    for v_item in
+      select o.id, o.chore_id from private.chore_occurrences o
+      join private.chores c on c.id = o.chore_id
+      where o.home_id = p_home_id and o.deleted_at is null and c.deleted_at is null
+        and (p_chore_id is null or o.chore_id = p_chore_id)
+        and ((o.status in ('open', 'paused') and o.scheduled_date >= v_today)
+          or (o.status = 'open' and (o.vacation_review or o.due_date >= v_today)))
+      order by o.chore_id, o.id
+    loop
+      select * into v_occurrence from private.chore_occurrences o where o.id = v_item.id;
+      if not private.chore_vacation_differs(v_occurrence, v_today) then
+        continue;
+      end if;
+      perform 1 from private.chores c where c.id = v_item.chore_id for update;
+      v_change := private.apply_chore_vacation(v_item.id, v_today);
+      if v_change is not null then
+        v_changes := v_changes || pg_catalog.jsonb_build_array(v_change);
+      end if;
+    end loop;
+    return v_changes;
+  end
+  $$;
+
+-- A person changing an occurrence's assignees ends its vacation handling (it is theirs now).
+create function private.chore_vacation_assignees_changed() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if pg_catalog.current_setting('madeora.vacation_apply', true) = 'on' then
+      return null;
+    end if;
+    update private.chore_occurrences o set vacation_state = null, substitute_for = null
+      where o.id = case when tg_op = 'DELETE' then old.occurrence_id else new.occurrence_id end
+        and o.vacation_state in ('substitute', 'review');
+    return null;
+  end
+  $$;
+
+create trigger chore_occurrence_assignees_vacation after insert or delete on private.chore_occurrence_assignees
+  for each row execute function private.chore_vacation_assignees_changed();
+
+-- An occurrence that leaves 'open' (completed, submitted, skipped, expired) no longer needs a review;
+-- one that leaves 'paused' other than through the rules drops its pause marks.
+create function private.chore_vacation_status_changed() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if new.status <> 'open' then
+      new.vacation_review := false;
+    end if;
+    if old.status = 'paused' and new.status <> 'paused' then
+      new.paused_at := null;
+      if new.vacation_state = 'paused' then
+        new.vacation_state := null;
+      end if;
+    end if;
+    return new;
+  end
+  $$;
+
+create trigger chore_occurrences_vacation_status before update of status on private.chore_occurrences
+  for each row when (new.status is distinct from old.status)
+  execute function private.chore_vacation_status_changed();
+
+-- Chore functions follow the rules ------------------------------------------------------------------------
+
+-- New occurrences are created with the rules applied (paused on a Home-paused date, a substitute for
+-- an away rotation member), whatever their date: nobody touched them yet.
+alter function private.create_chore_occurrence(private.chore_schedules, date)
+  rename to create_chore_occurrence_before_vacations;
+
+create function private.create_chore_occurrence(p_part private.chore_schedules, p_date date) returns uuid
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_id uuid := private.create_chore_occurrence_before_vacations(p_part, p_date);
+  begin
+    if v_id is not null then
+      perform private.apply_chore_vacation(v_id, '-infinity'::date);
+    end if;
+    return v_id;
+  end
+  $$;
+
+-- Chore pages re-apply the rules (membership changes, time passing, vacations changed elsewhere).
+alter function public.advance_chores(uuid) set schema private;
+alter function private.advance_chores(uuid) rename to advance_chores_before_vacations;
+
+create function public.advance_chores(p_home_id uuid) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_created integer := private.advance_chores_before_vacations(p_home_id);
+  begin
+    perform private.reconcile_chore_vacations(p_home_id, null);
+    return v_created;
+  end
+  $$;
+
+-- A series change rebuilds untouched occurrences from the schedule; the rules then apply again.
+alter function public.update_chore_series(uuid, text, integer, integer, boolean, jsonb, jsonb, boolean,
+  integer, boolean, text, integer, smallint[], date, date, integer) set schema private;
+alter function private.update_chore_series(uuid, text, integer, integer, boolean, jsonb, jsonb, boolean,
+  integer, boolean, text, integer, smallint[], date, date, integer) rename to update_chore_series_before_vacations;
+
+create function public.update_chore_series(
+  p_occurrence_id uuid, p_scope text, p_expected_revision integer,
+  p_expected_schedule_revision integer, p_dry_run boolean,
+  p_assignment jsonb default null, p_steps jsonb default null,
+  p_set_minutes boolean default false, p_minutes integer default null,
+  p_set_schedule boolean default false, p_frequency text default null, p_interval integer default null,
+  p_weekdays smallint[] default null, p_starts_on date default null, p_ends_on date default null,
+  p_max_count integer default null
+) returns table (outcome text, impact jsonb, revision integer, occurrence_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_row record;
+    v_home uuid;
+    v_chore uuid;
+  begin
+    select * into v_row from private.update_chore_series_before_vacations(p_occurrence_id, p_scope,
+      p_expected_revision, p_expected_schedule_revision, p_dry_run, p_assignment, p_steps,
+      p_set_minutes, p_minutes, p_set_schedule, p_frequency, p_interval, p_weekdays, p_starts_on,
+      p_ends_on, p_max_count) x;
+    if v_row.outcome = 'saved' then
+      select o.home_id, o.chore_id into v_home, v_chore from private.chore_occurrences o
+        where o.id = coalesce(v_row.occurrence_id, p_occurrence_id);
+      if v_chore is not null then
+        perform private.reconcile_chore_vacations(v_home, v_chore);
+      end if;
+    end if;
+    return query select v_row.outcome, v_row.impact, v_row.revision, v_row.occurrence_id;
+  end
+  $$;
+
+-- A paused occurrence cannot be completed, skipped or reopened (it is not outstanding work).
+alter function public.complete_chore_occurrence(uuid, uuid, text) set schema private;
+alter function private.complete_chore_occurrence(uuid, uuid, text) rename to complete_chore_occurrence_before_vacations;
+
+create function public.complete_chore_occurrence(
+  p_occurrence_id uuid, p_contributor uuid, p_note text default null
+) returns table (
+  outcome text, completed_at timestamptz, completed_by_me boolean, completed_by_member uuid,
+  contributor_me boolean, contributor_member uuid, open_mandatory integer, revision integer
+)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_occurrence private.chore_occurrences;
+  begin
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, private.require_confirmed_caller());
+    if v_occurrence.status = 'paused' then
+      return query select 'occurrence_closed', null::timestamptz, false, null::uuid, false, null::uuid,
+        null::integer, v_occurrence.revision;
+      return;
+    end if;
+    return query select * from private.complete_chore_occurrence_before_vacations(p_occurrence_id, p_contributor, p_note);
+  end
+  $$;
+
+alter function public.skip_chore_occurrence(uuid, text) set schema private;
+alter function private.skip_chore_occurrence(uuid, text) rename to skip_chore_occurrence_before_vacations;
+
+create function public.skip_chore_occurrence(p_occurrence_id uuid, p_reason text default null)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_occurrence private.chore_occurrences;
+  begin
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, private.require_confirmed_caller());
+    if v_occurrence.status = 'paused' then
+      return query select 'occurrence_closed', v_occurrence.revision;
+      return;
+    end if;
+    return query select * from private.skip_chore_occurrence_before_vacations(p_occurrence_id, p_reason);
+  end
+  $$;
+
+alter function public.reopen_chore_occurrence(uuid) set schema private;
+alter function private.reopen_chore_occurrence(uuid) rename to reopen_chore_occurrence_before_vacations;
+
+create function public.reopen_chore_occurrence(p_occurrence_id uuid)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_occurrence private.chore_occurrences;
+  begin
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, private.require_confirmed_caller());
+    if v_occurrence.status = 'paused' then
+      return query select 'occurrence_closed', v_occurrence.revision;
+      return;
+    end if;
+    return query select * from private.reopen_chore_occurrence_before_vacations(p_occurrence_id);
+  end
+  $$;
+
+-- Claims: a paused occurrence, or one waiting for a vacation review, is not claimable (S21's rule
+-- otherwise unchanged).
+create or replace function private.chore_claim_block(
+  p_occurrence private.chore_occurrences, p_chore private.chores, p_user uuid, p_today date,
+  p_week_start text
+) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_cutoff date;
+  begin
+    case p_occurrence.status
+      when 'pending_approval' then return 'pending_approval';
+      when 'completed' then return 'already_completed';
+      when 'skipped' then return 'already_skipped';
+      when 'expired' then return 'expired';
+      when 'paused' then return 'not_claimable';
+      else null;
+    end case;
+    if exists (select 1 from private.chore_occurrence_assignees a where a.occurrence_id = p_occurrence.id) then
+      return case when p_occurrence.claimed_by is not null then 'already_claimed' else 'assigned' end;
+    end if;
+    if p_occurrence.needs_reassignment or p_occurrence.vacation_review or p_chore.ended_at is not null
+       or p_chore.claim_mode = 'none' then
+      return 'not_claimable';
+    end if;
+    v_cutoff := private.chore_claim_cutoff(p_occurrence, p_chore, p_week_start);
+    if v_cutoff is not null and p_today >= v_cutoff then
+      return 'expired';
+    end if;
+    if p_chore.claim_mode = 'selected' and not exists (
+      select 1 from private.chore_claimants k where k.chore_id = p_chore.id and k.user_id = p_user
+    ) then
+      return 'not_eligible';
+    end if;
+    return null;
+  end
+  $$;
+
+-- Nor does one waiting for a vacation review close unclaimed at the end of its week.
+create or replace function private.chore_expires(
+  p_occurrence private.chore_occurrences, p_chore private.chores, p_week_start text, p_today date
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(p_occurrence.status = 'open' and p_occurrence.deleted_at is null
+    and not p_occurrence.needs_reassignment and not p_occurrence.vacation_review
+    and p_chore.claim_mode <> 'none' and p_chore.deleted_at is null
+    and p_today >= private.chore_claim_cutoff(p_occurrence, p_chore, p_week_start)
+    and not exists (select 1 from private.chore_occurrence_assignees a
+      where a.occurrence_id = p_occurrence.id), false);
+  $$;
+
+-- Automatic release waits while the occurrence needs a vacation review or its claimant is away
+-- (spec: release timers are suspended during vacations; they apply again afterwards).
+create or replace function private.auto_release_chore_claim(p_occurrence_id uuid, p_claim integer) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_occurrence private.chore_occurrences;
+    v_chore private.chores;
+    v_at timestamptz;
+    v_status text;
+  begin
+    select * into v_occurrence from private.chore_occurrences o where o.id = p_occurrence_id for update;
+    if not found or v_occurrence.deleted_at is not null or v_occurrence.status <> 'open'
+       or v_occurrence.in_rework or v_occurrence.claimed_by is null or v_occurrence.vacation_review
+       or (p_claim is not null and v_occurrence.claim_count <> p_claim)
+       or private.vacation_away(v_occurrence.home_id, v_occurrence.claimed_by,
+         private.task_today(v_occurrence.home_id, null)) then
+      return null;
+    end if;
+    select * into v_chore from private.chores c where c.id = v_occurrence.chore_id;
+    v_at := private.chore_release_at(v_occurrence, v_chore, private.home_zone(v_occurrence.home_id));
+    if v_at is null or v_at > pg_catalog.now() then
+      return null;
+    end if;
+    v_status := private.end_chore_claim(v_occurrence, null, 'auto');
+    perform private.notify_user(
+      v_occurrence.claimed_by, v_occurrence.home_id, 'chores', 'chore.claim_released',
+      pg_catalog.jsonb_build_object('homeId', v_occurrence.home_id, 'occurrenceId', v_occurrence.id,
+        'reason', 'auto'),
+      'chore-claim-released:' || v_occurrence.id::text || ':' || v_occurrence.claim_count::text, true);
+    perform private.audit_chore('chore_occurrence.released', v_occurrence.home_id, 'chore_occurrence',
+      v_occurrence.id, pg_catalog.jsonb_build_object('reason', 'auto'));
+    return v_status;
+  end
+  $$;
+
+-- The pool leaves out occurrences waiting for a vacation review.
+alter function public.list_chore_pool(uuid, date) set schema private;
+alter function private.list_chore_pool(uuid, date) rename to list_chore_pool_before_vacations;
+
+create function public.list_chore_pool(p_home_id uuid, p_date date default null)
+returns table (
+  id uuid, chore_id uuid, title text, kind text, category_id uuid, category_name text,
+  category_color text, scheduled_date date, due_date date, section text, overdue boolean,
+  minutes integer, steps_total integer, requires_approval boolean, restricted boolean,
+  eligible boolean, closes_on date, revision integer, week_start date, today date, truncated boolean
+)
+  language sql stable security definer set search_path = '' as $$
+  select l.* from private.list_chore_pool_before_vacations(p_home_id, p_date) l
+  where not exists (select 1 from private.chore_occurrences o where o.id = l.id and o.vacation_review);
+  $$;
+
+-- Assigning a member who is away on the due date is an explicit override (spec "per-occurrence
+-- vacation rotation override"): the answer is 'member_away' with who and when, unless p_confirm_away.
+-- The preview names them as well. Eligibility rules are unchanged.
+alter function public.update_chore_occurrence(uuid, integer, boolean, date, uuid[], boolean, integer,
+  jsonb, boolean, boolean) set schema private;
+alter function private.update_chore_occurrence(uuid, integer, boolean, date, uuid[], boolean, integer,
+  jsonb, boolean, boolean) rename to update_chore_occurrence_before_vacations;
+
+create function public.update_chore_occurrence(
+  p_occurrence_id uuid, p_expected_revision integer, p_dry_run boolean,
+  p_due_date date default null, p_assignee_ids uuid[] default null,
+  p_set_minutes boolean default false, p_minutes integer default null,
+  p_steps jsonb default null, p_confirm_checklist boolean default false,
+  p_confirm_release boolean default false, p_confirm_away boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_occurrence private.chore_occurrences;
+    v_users uuid[];
+    v_current uuid[];
+    v_due date;
+    v_away jsonb := '[]'::jsonb;
+  begin
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, private.require_confirmed_caller());
+    if v_occurrence.id is not null and v_occurrence.status = 'open'
+       and (p_assignee_ids is not null or p_due_date is not null) then
+      v_due := coalesce(p_due_date, v_occurrence.due_date);
+      select coalesce(array_agg(a.user_id), '{}') into v_current
+        from private.chore_occurrence_assignees a where a.occurrence_id = v_occurrence.id;
+      v_users := case when p_assignee_ids is null then v_current
+        else coalesce(private.chore_member_users(v_occurrence.home_id, p_assignee_ids), '{}') end;
+      -- Newly assigned people away on the due date (people kept on a moved date are the move's own
+      -- business: the review lists them).
+      select coalesce(pg_catalog.jsonb_agg(private.member_ref(v_occurrence.home_id, u) order by u), '[]'::jsonb)
+        into v_away
+        from unnest(v_users) u
+        where not (u = any (v_current)) and private.vacation_away(v_occurrence.home_id, u, v_due);
+    end if;
+    if pg_catalog.jsonb_array_length(v_away) > 0 and not coalesce(p_dry_run, false)
+       and not coalesce(p_confirm_away, false) then
+      return query
+        select case when u.outcome = 'preview' then 'member_away' else u.outcome end,
+          case when u.impact is null then null else u.impact || pg_catalog.jsonb_build_object('away', v_away) end,
+          u.revision
+        from private.update_chore_occurrence_before_vacations(p_occurrence_id, p_expected_revision,
+          true, p_due_date, p_assignee_ids, p_set_minutes, p_minutes, p_steps,
+          p_confirm_checklist, p_confirm_release) u;
+      return;
+    end if;
+    return query
+      select u.outcome, case when u.impact is null then null
+          else u.impact || pg_catalog.jsonb_build_object('away', v_away) end, u.revision
+      from private.update_chore_occurrence_before_vacations(p_occurrence_id, p_expected_revision,
+        p_dry_run, p_due_date, p_assignee_ids, p_set_minutes, p_minutes, p_steps,
+        p_confirm_checklist, p_confirm_release) u;
+  end
+  $$;
+
+-- Reviews: what a vacation or absence leaves for a chore manager ----------------------------------------
+
+-- Date ranges as [{from, to}] with inclusive ends.
+create function private.vacation_ranges_json(p_dates datemultirange) returns jsonb
+  language sql immutable set search_path = '' as $$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'from', pg_catalog.lower(r), 'to', pg_catalog.upper(r) - 1) order by pg_catalog.lower(r)), '[]'::jsonb)
+  from unnest(coalesce(p_dates, '{}'::datemultirange)) as r;
+  $$;
+
+-- One occurrence as a review entry: why it is listed, its state, its assignees (and which of them are
+-- away on its due date) and the decision taken for this source, if any.
+create function private.chore_review_entry(
+  p_occurrence_id uuid, p_reason text, p_source_kind text, p_source_id uuid, p_viewer uuid
+) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'occurrenceId', o.id, 'choreId', o.chore_id, 'title', c.title, 'kind', c.kind,
+    'scheduledDate', o.scheduled_date, 'dueDate', o.due_date, 'status', o.status,
+    'inRework', o.in_rework, 'claimed', o.claimed_by is not null, 'reason', p_reason,
+    'protected', o.status = 'pending_approval' or o.in_rework, 'revision', o.revision,
+    'substituteFor', private.member_ref(o.home_id, o.substitute_for),
+    'assignees', coalesce((select pg_catalog.jsonb_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id)
+      from private.chore_occurrence_assignees a where a.occurrence_id = o.id), '[]'::jsonb),
+    'away', coalesce((select pg_catalog.jsonb_agg(private.member_ref(a.home_id, a.user_id) order by a.user_id)
+      from private.chore_occurrence_assignees a where a.occurrence_id = o.id
+        and (private.vacation_away(o.home_id, a.user_id, o.due_date) or exists (
+          select 1 from private.chore_absences b where b.home_id = o.home_id and b.user_id = a.user_id
+            and o.due_date between b.starts_on and b.ends_on
+            -- Absences are private to their member and chore managers.
+            and (b.user_id = p_viewer or private.can_manage_chores(o.home_id, p_viewer))))), '[]'::jsonb),
+    'decision', (select pg_catalog.jsonb_build_object('decision', d.decision, 'at', d.decided_at,
+        'by', private.chore_person(o.home_id, d.decided_by, p_viewer),
+        'to', private.member_ref(o.home_id, d.to_user), 'newDate', d.new_date)
+      from private.chore_vacation_decisions d
+      where d.occurrence_id = o.id and d.source_kind = p_source_kind and d.source_id = p_source_id))
+  from private.chore_occurrences o join private.chores c on c.id = o.chore_id
+  where o.id = p_occurrence_id;
+  $$;
+
+-- The planned (not yet created) dates of recurring chores within a range on which a member would be
+-- assigned: fixed assignments, and rotations too when p_rotating (absences: nothing is substituted).
+create function private.chore_planned_for(
+  p_home_id uuid, p_user_id uuid, p_from date, p_to date, p_rotating boolean, p_limit integer
+) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_item record;
+    v_part private.chore_schedules;
+    v_title text;
+    v_date date;
+    v_users uuid[];
+    v_result jsonb := '[]'::jsonb;
+    v_guard integer;
+  begin
+    for v_item in
+      select s.id, c.title from private.chore_schedules s
+      join private.chores c on c.id = s.chore_id
+      where s.home_id = p_home_id and s.superseded_at is null and s.next_date is not null
+        and c.deleted_at is null and c.ended_at is null
+        and (s.assignment = 'fixed' or (p_rotating and s.assignment = 'rotating'))
+        and exists (select 1 from private.chore_schedule_members m where m.schedule_id = s.id and m.user_id = p_user_id)
+      order by c.title, s.id
+    loop
+      select * into v_part from private.chore_schedules s where s.id = v_item.id;
+      v_title := v_item.title;
+      v_date := private.chore_part_next(v_part, greatest(p_from, coalesce(v_part.last_date + 1, p_from)));
+      v_guard := 0;
+      while v_date is not null and v_date <= p_to and v_guard < 400
+        and pg_catalog.jsonb_array_length(v_result) < p_limit loop
+        v_guard := v_guard + 1;
+        if not private.chore_paused_on(v_part, v_date) and not private.home_chores_paused_on(p_home_id, v_date) then
+          select a.user_ids into v_users from private.chore_part_assignees(v_part, v_date) a;
+          if p_user_id = any (v_users) then
+            v_result := v_result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+              'choreId', v_part.chore_id, 'title', v_title, 'date', v_date, 'assignment', v_part.assignment,
+              'member', private.member_ref(p_home_id, p_user_id)));
+          end if;
+        end if;
+        v_date := private.chore_part_next(v_part, v_date + 1);
+      end loop;
+    end loop;
+    return v_result;
+  end
+  $$;
+
+-- What a vacation leaves for review: occurrences of away participants the rules did not handle
+-- ('away': fixed, claimed, one-off or changed work due during their stay), rotations with nobody
+-- available ('no_substitute'), work due on a paused date that waits for a decision ('paused_date'),
+-- and their work overdue before the vacation ('overdue_before'). Pending approval and Needs rework
+-- are listed as protected.
+create function private.vacation_review_items(p_vacation private.home_vacations, p_viewer uuid) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  with stays as (
+    select p.user_id, p.starts_on, p.ends_on from private.home_vacation_participants p
+    where p.vacation_id = p_vacation.id and p.status = 'accepted' and p.user_id is not null
+  ), listed as (
+    select o.id, o.due_date, c.title,
+      case
+        when o.vacation_state = 'review' and exists (select 1 from stays s
+          where s.user_id = o.substitute_for and o.scheduled_date between s.starts_on and s.ends_on) then 'no_substitute'
+        when o.vacation_review and private.vacation_pause_dates(p_vacation) @> o.due_date then 'paused_date'
+        when exists (select 1 from private.chore_occurrence_assignees a join stays s on s.user_id = a.user_id
+          where a.occurrence_id = o.id and o.due_date between s.starts_on and s.ends_on) then 'away'
+        when o.status = 'open' and o.due_date < p_vacation.starts_on
+          and o.due_date < private.task_today(p_vacation.home_id, null)
+          and exists (select 1 from private.chore_occurrence_assignees a join stays s on s.user_id = a.user_id
+            where a.occurrence_id = o.id) then 'overdue_before'
+      end as reason
+    from private.chore_occurrences o join private.chores c on c.id = o.chore_id
+    where o.home_id = p_vacation.home_id and o.deleted_at is null and c.deleted_at is null
+      and o.status in ('open', 'pending_approval') and p_vacation.cancelled_at is null
+  )
+  select coalesce(pg_catalog.jsonb_agg(private.chore_review_entry(l.id, l.reason, 'vacation', p_vacation.id, p_viewer)
+      order by l.due_date, l.title, l.id), '[]'::jsonb)
+  from (select * from listed where reason is not null order by due_date, title, id
+    limit private.vacation_limit('review')) l;
+  $$;
+
+-- What an absence leaves for review: the member's open or pending work due during it ('away') and
+-- their work already overdue before it ('overdue_before').
+create function private.absence_review_items(p_absence private.chore_absences, p_viewer uuid) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  with listed as (
+    select o.id, o.due_date, c.title,
+      case
+        when o.due_date between p_absence.starts_on and p_absence.ends_on then 'away'
+        when o.status = 'open' and o.due_date < p_absence.starts_on
+          and o.due_date < private.task_today(p_absence.home_id, null) then 'overdue_before'
+      end as reason
+    from private.chore_occurrences o join private.chores c on c.id = o.chore_id
+    where o.home_id = p_absence.home_id and o.deleted_at is null and c.deleted_at is null
+      and o.status in ('open', 'pending_approval')
+      and exists (select 1 from private.chore_occurrence_assignees a
+        where a.occurrence_id = o.id and a.user_id = p_absence.user_id)
+  )
+  select coalesce(pg_catalog.jsonb_agg(private.chore_review_entry(l.id, l.reason, 'absence', p_absence.id, p_viewer)
+      order by l.due_date, l.title, l.id), '[]'::jsonb)
+  from (select * from listed where reason is not null order by due_date, title, id
+    limit private.vacation_limit('review')) l;
+  $$;
+
+-- The preview of a vacation change: what the rules changed, what is left for review, and the pause.
+create function private.vacation_impact(p_vacation private.home_vacations, p_changes jsonb, p_viewer uuid)
+returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'changes', coalesce(p_changes, '[]'::jsonb),
+    'review', private.vacation_review_items(p_vacation, p_viewer),
+    'startsOn', p_vacation.starts_on, 'endsOn', p_vacation.ends_on,
+    'pauseDates', private.vacation_ranges_json(private.vacation_pause_dates(p_vacation)),
+    'fullDates', private.vacation_ranges_json(private.vacation_full_dates(p_vacation,
+      private.task_today(p_vacation.home_id, null))));
+  $$;
+
+-- The pre-vacation reminder ---------------------------------------------------------------------------------
+
+-- Queues the reminder (vacation-reminder) for 09:00 Home time, reminder_days before the start, when
+-- it has one, is not cancelled and that moment is still ahead. The key holds the start and the lead
+-- days, so changed dates queue a new run and the old one finds itself stale.
+create function private.schedule_vacation_reminder(p_vacation private.home_vacations) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_at timestamptz;
+  begin
+    if p_vacation.reminder_days is null or p_vacation.cancelled_at is not null then
+      return;
+    end if;
+    v_at := ((p_vacation.starts_on - p_vacation.reminder_days)::timestamp + time '09:00')
+      at time zone coalesce(private.home_zone(p_vacation.home_id), 'UTC');
+    if v_at <= pg_catalog.now() then
+      return;
+    end if;
+    perform private.enqueue_job(
+      'vacation-reminder', 1,
+      'vacation-reminder:' || p_vacation.id::text || ':' || p_vacation.starts_on::text || ':'
+        || p_vacation.reminder_days::text,
+      pg_catalog.jsonb_build_object('vacationId', p_vacation.id, 'startsOn', p_vacation.starts_on,
+        'days', p_vacation.reminder_days),
+      null, v_at);
+  end
+  $$;
+
+-- Delivers a pre-vacation reminder (the vacation-reminder job; service role only): to every chore
+-- manager of the Home, with the counts of what waits for a decision and the claimed chores in the
+-- period at that moment. Nothing changes. Outcomes: 'notified', 'not_sent' (cancelled, already
+-- started), 'stale' (dates or lead days changed), 'not_due' (early: the job retries).
+create function public.deliver_vacation_reminder(p_vacation_id uuid, p_starts_on date, p_days integer)
+returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_vacation private.home_vacations;
+    v_at timestamptz;
+    v_review jsonb;
+    v_claimed integer;
+    v_user uuid;
+  begin
+    if p_vacation_id is null or p_starts_on is null or p_days is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_vacation from private.home_vacations v where v.id = p_vacation_id for update;
+    if not found or v_vacation.cancelled_at is not null
+       or private.task_today(v_vacation.home_id, null) >= v_vacation.starts_on then
+      return 'not_sent';
+    end if;
+    if v_vacation.starts_on <> p_starts_on or v_vacation.reminder_days is distinct from p_days then
+      return 'stale';
+    end if;
+    v_at := ((v_vacation.starts_on - v_vacation.reminder_days)::timestamp + time '09:00')
+      at time zone coalesce(private.home_zone(v_vacation.home_id), 'UTC');
+    if v_at > pg_catalog.now() + interval '1 minute' then
+      return 'not_due';
+    end if;
+    v_review := private.vacation_review_items(v_vacation, null);
+    select count(*)::integer into v_claimed from private.chore_occurrences o
+      where o.home_id = v_vacation.home_id and o.status = 'open' and o.deleted_at is null
+        and o.claimed_by is not null and o.due_date between v_vacation.starts_on and v_vacation.ends_on;
+    for v_user in
+      select m.user_id from public.home_memberships m
+      where m.home_id = v_vacation.home_id and private.can_manage_chores(v_vacation.home_id, m.user_id)
+      order by m.user_id
+    loop
+      perform private.notify_user(
+        v_user, v_vacation.home_id, 'reminders', 'vacation.reminder',
+        pg_catalog.jsonb_build_object('homeId', v_vacation.home_id, 'vacationId', v_vacation.id,
+          'startsOn', v_vacation.starts_on,
+          'decisions', (select count(*)::integer from pg_catalog.jsonb_array_elements(v_review) e
+            where e -> 'decision' = 'null'::jsonb and not (e ->> 'protected')::boolean),
+          'claimed', v_claimed),
+        'vacation-reminder:' || v_vacation.id::text || ':' || v_vacation.starts_on::text || ':'
+          || v_vacation.reminder_days::text,
+        true);
+    end loop;
+    return 'notified';
+  end
+  $$;
+
+-- Creating and changing vacations -------------------------------------------------------------------------
+
+-- Ends the stale pending invitations of a vacation (their proposed start has come), so a new
+-- invitation can be made; under the Home's vacation lock.
+create function private.expire_vacation_invitations(p_vacation_id uuid, p_today date) returns void
+  language sql volatile security definer set search_path = '' as $$
+  update private.home_vacation_participants p
+    set status = 'expired', revision = p.revision + 1
+    where p.vacation_id = p_vacation_id and p.status = 'pending' and p.starts_on <= p_today;
+  $$;
+
+-- Tells an invitee about an invitation (actionable request; category 'chores').
+create function private.notify_vacation_invitation(p_participant private.home_vacation_participants)
+returns void
+  language sql volatile security definer set search_path = '' as $$
+  select private.notify_user(
+    p_participant.user_id, p_participant.home_id, 'chores', 'vacation.invited',
+    pg_catalog.jsonb_build_object('homeId', p_participant.home_id, 'vacationId', p_participant.vacation_id,
+      'startsOn', p_participant.starts_on, 'endsOn', p_participant.ends_on),
+    'vacation-invited:' || p_participant.id::text, true);
+  $$;
+
+-- Creates a vacation (spec "member-scoped vacations and participant approval"). p_people lists the
+-- participants with their own dates (private.vacation_people). A chore manager adds them directly
+-- (accepted, managed by managers). Any other member must include themselves (accepted at once) and
+-- may suggest others, who are invited with their proposed dates (Pending; the start must be after
+-- today, as an invitation expires at its start). Optional name and (chore managers) reminder.
+-- p_dry_run: the same work, rolled back. The id comes from the client: a retry answers 'exists'.
+-- Outcomes: 'created' and 'preview' (impact: changes, review, startsOn, endsOn, pauseDates,
+-- fullDates), 'exists', 'invalid_member', 'invalid_dates', 'not_permitted'.
+create function public.create_home_vacation(
+  p_id uuid, p_home_id uuid, p_name text, p_people jsonb, p_reminder_days integer default null,
+  p_dry_run boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_name text := private.vacation_name(p_name);
+    v_today date;
+    v_manage boolean;
+    v_existing private.home_vacations;
+    v_person record;
+    v_self boolean := false;
+    v_vacation private.home_vacations;
+    v_participant private.home_vacation_participants;
+    v_changes jsonb;
+    v_impact jsonb;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null or p_dry_run is null
+       or (v_name is not null and not private.is_visible_name(v_name, private.vacation_limit('name')))
+       or (p_reminder_days is not null
+         and p_reminder_days not between 1 and private.vacation_limit('reminder_days')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform 1 from private.vacation_people(p_home_id, p_people);
+    perform private.lock_home_vacations(p_home_id);
+    select * into v_existing from private.home_vacations v where v.id = p_id;
+    if found then
+      return query select 'exists', null::jsonb,
+        case when v_existing.home_id = p_home_id and v_existing.created_by = v_user_id then v_existing.revision end;
+      return;
+    end if;
+    v_manage := private.can_manage_chores(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    if p_reminder_days is not null and not v_manage then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if exists (select 1 from private.vacation_people(p_home_id, p_people) x where x.user_id is null) then
+      return query select 'invalid_member', null::jsonb, null::integer;
+      return;
+    end if;
+    for v_person in select * from private.vacation_people(p_home_id, p_people) loop
+      if v_person.user_id = v_user_id then
+        v_self := true;
+      end if;
+      if not private.valid_vacation_stay(v_person.starts_on, v_person.ends_on, v_today, v_today)
+         or (not v_manage and v_person.user_id <> v_user_id and v_person.starts_on <= v_today) then
+        return query select 'invalid_dates', null::jsonb, null::integer;
+        return;
+      end if;
+    end loop;
+    if not v_manage and not v_self then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+
+    begin
+      insert into private.home_vacations (id, home_id, name, starts_on, ends_on, created_by, reminder_days,
+        updated_by)
+        select p_id, p_home_id, v_name, min(x.starts_on), max(x.ends_on), v_user_id, p_reminder_days, v_user_id
+        from private.vacation_people(p_home_id, p_people) x
+        where v_manage or x.user_id = v_user_id
+        returning * into v_vacation;
+      perform private.vacation_event(p_id, 'created', v_user_id, null, v_vacation.starts_on, v_vacation.ends_on);
+      for v_person in select * from private.vacation_people(p_home_id, p_people) loop
+        insert into private.home_vacation_participants (id, vacation_id, home_id, user_id, status, starts_on,
+          ends_on, direct, invited_by, responded_at)
+          values (gen_random_uuid(), p_id, p_home_id, v_person.user_id,
+            case when v_manage or v_person.user_id = v_user_id then 'accepted' else 'pending' end,
+            v_person.starts_on, v_person.ends_on, v_manage, v_user_id,
+            case when v_manage or v_person.user_id = v_user_id then pg_catalog.now() end)
+          returning * into v_participant;
+        perform private.vacation_event(p_id,
+          case when v_participant.status = 'accepted' then 'added' else 'invited' end,
+          v_user_id, v_person.user_id, v_person.starts_on, v_person.ends_on);
+        if v_participant.status = 'pending' then
+          perform private.notify_vacation_invitation(v_participant);
+        end if;
+      end loop;
+      v_changes := private.reconcile_chore_vacations(p_home_id, null);
+      v_impact := private.vacation_impact(v_vacation, v_changes, v_user_id);
+      perform private.schedule_vacation_reminder(v_vacation);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, null::integer;
+        return;
+    end;
+    perform private.audit_vacation('home_vacation.created', p_home_id, 'home_vacation', p_id,
+      pg_catalog.jsonb_build_object('people', pg_catalog.jsonb_array_length(p_people), 'manager', v_manage,
+        'named', v_name is not null, 'reminder', p_reminder_days is not null,
+        'changes', pg_catalog.jsonb_array_length(v_changes)));
+    return query select 'created', v_impact, v_vacation.revision;
+  end
+  $$;
+
+-- A change to a whole vacation, on the revision the person saw. Actions:
+--   'rename' (the creator or a chore manager; p_name, empty clears it): display only, no effects;
+--   'reminder' (chore managers; p_reminder_days, null turns it off);
+--   'shorten' (chore managers; p_ends_on from max(start, yesterday) up to the day before the
+--     current end): every stay is cut there, stays starting after it end ('shortened'), waiting
+--     proposals are withdrawn, the confirmed pause is cut too; ending yesterday ends it now;
+--   'cancel' (chore managers, or the creator while nobody else is an accepted participant): final;
+--     pending invitations and proposals are withdrawn;
+--   'pause' / 'unpause' (chore managers): confirms the Home-wide chore pause for the dates on which
+--     every current member is an accepted participant from today on ('not_whole_home' when there
+--     are none), or removes it.
+-- p_dry_run: the same work, rolled back. Outcomes: 'saved' and 'preview' (impact as
+-- create_home_vacation), 'unchanged', 'conflict' (with the current revision), 'cancelled', 'ended',
+-- 'invalid_dates', 'not_whole_home', 'not_permitted', 'not_found'.
+create function public.update_home_vacation(
+  p_vacation_id uuid, p_expected_revision integer, p_action text, p_dry_run boolean,
+  p_name text default null, p_ends_on date default null, p_reminder_days integer default null
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_name text := private.vacation_name(p_name);
+    v_home uuid;
+    v_vacation private.home_vacations;
+    v_today date;
+    v_manage boolean;
+    v_status text;
+    v_full datemultirange;
+    v_changes jsonb := '[]'::jsonb;
+    v_impact jsonb;
+  begin
+    if p_vacation_id is null or p_expected_revision is null or p_dry_run is null or p_action is null
+       or p_action not in ('rename', 'reminder', 'shorten', 'cancel', 'pause', 'unpause')
+       or (p_action = 'rename' and v_name is not null
+         and not private.is_visible_name(v_name, private.vacation_limit('name')))
+       or (p_action <> 'rename' and p_name is not null)
+       or (p_action <> 'reminder' and p_reminder_days is not null)
+       or (p_reminder_days is not null and p_reminder_days not between 1 and private.vacation_limit('reminder_days'))
+       or (p_action = 'shorten') <> (p_ends_on is not null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select v.home_id into v_home from private.home_vacations v where v.id = p_vacation_id;
+    if v_home is null or not private.is_home_member(v_home, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    perform private.lock_home_vacations(v_home);
+    select * into v_vacation from private.home_vacations v where v.id = p_vacation_id for update;
+    v_today := private.task_today(v_home, null);
+    v_manage := private.can_manage_chores(v_home, v_user_id);
+    v_status := private.vacation_status(v_vacation, v_today);
+    if not (v_manage or (p_action = 'rename' and v_vacation.created_by = v_user_id)
+        or (p_action = 'cancel' and v_vacation.created_by = v_user_id and not exists (
+          select 1 from private.home_vacation_participants p
+          where p.vacation_id = v_vacation.id and p.status = 'accepted' and p.user_id <> v_user_id))) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_vacation.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if v_status = 'cancelled' then
+      return query select 'cancelled', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if v_status = 'ended' and p_action in ('shorten', 'cancel', 'pause') then
+      return query select 'ended', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if (p_action = 'rename' and v_name is not distinct from v_vacation.name)
+       or (p_action = 'reminder' and p_reminder_days is not distinct from v_vacation.reminder_days)
+       or (p_action = 'unpause' and v_vacation.home_pause_dates is null) then
+      return query select 'unchanged', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if p_action = 'shorten' and (p_ends_on < greatest(v_vacation.starts_on, v_today - 1)
+        or p_ends_on >= v_vacation.ends_on) then
+      return query select 'invalid_dates', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if p_action = 'pause' then
+      v_full := private.vacation_full_dates(v_vacation, v_today);
+      if pg_catalog.isempty(v_full) then
+        return query select 'not_whole_home', null::jsonb, v_vacation.revision;
+        return;
+      end if;
+    end if;
+
+    begin
+      case p_action
+        when 'rename' then
+          update private.home_vacations v set name = v_name where v.id = v_vacation.id;
+          perform private.vacation_event(v_vacation.id, 'renamed', v_user_id);
+        when 'reminder' then
+          update private.home_vacations v set reminder_days = p_reminder_days where v.id = v_vacation.id;
+          perform private.vacation_event(v_vacation.id, 'reminder_changed', v_user_id);
+        when 'shorten' then
+          perform private.expire_vacation_invitations(v_vacation.id, v_today);
+          update private.home_vacation_participants p
+            set status = 'withdrawn', ended_by = v_user_id, ended_reason = 'shortened',
+              responded_at = coalesce(p.responded_at, pg_catalog.now()), revision = p.revision + 1
+            where p.vacation_id = v_vacation.id and p.status in ('pending', 'accepted') and p.starts_on > p_ends_on;
+          update private.home_vacation_participants p
+            set ends_on = p_ends_on, revision = p.revision + 1
+            where p.vacation_id = v_vacation.id and p.status in ('pending', 'accepted') and p.ends_on > p_ends_on;
+          update private.home_vacation_date_proposals d set status = 'withdrawn', decided_at = pg_catalog.now()
+            where d.vacation_id = v_vacation.id and d.status = 'pending';
+          update private.home_vacations v
+            set ends_on = p_ends_on,
+              home_pause_dates = case when v.home_pause_dates is not null
+                then v.home_pause_dates * pg_catalog.datemultirange(pg_catalog.daterange(null, p_ends_on + 1)) end
+            where v.id = v_vacation.id;
+          perform private.refresh_vacation_envelope(v_vacation.id);
+          perform private.vacation_event(v_vacation.id, 'shortened', v_user_id, null, null, p_ends_on);
+        when 'cancel' then
+          update private.home_vacation_participants p
+            set status = 'withdrawn', ended_by = v_user_id, ended_reason = 'cancelled',
+              responded_at = coalesce(p.responded_at, pg_catalog.now()), revision = p.revision + 1
+            where p.vacation_id = v_vacation.id and p.status = 'pending';
+          update private.home_vacation_date_proposals d set status = 'withdrawn', decided_at = pg_catalog.now()
+            where d.vacation_id = v_vacation.id and d.status = 'pending';
+          update private.home_vacations v set cancelled_at = pg_catalog.now(), cancelled_by = v_user_id
+            where v.id = v_vacation.id;
+          perform private.vacation_event(v_vacation.id, 'cancelled', v_user_id);
+        when 'pause' then
+          update private.home_vacations v set home_pause_dates = v_full, home_pause_by = v_user_id,
+              home_pause_at = pg_catalog.now()
+            where v.id = v_vacation.id;
+          perform private.vacation_event(v_vacation.id, 'home_pause_confirmed', v_user_id, null,
+            pg_catalog.lower(v_full), pg_catalog.upper(v_full) - 1);
+        when 'unpause' then
+          update private.home_vacations v set home_pause_dates = null, home_pause_by = null, home_pause_at = null
+            where v.id = v_vacation.id;
+          perform private.vacation_event(v_vacation.id, 'home_pause_removed', v_user_id);
+      end case;
+      update private.home_vacations v set revision = v.revision + 1, updated_by = v_user_id,
+          updated_at = pg_catalog.now()
+        where v.id = v_vacation.id
+        returning * into v_vacation;
+      if p_action in ('shorten', 'cancel', 'pause', 'unpause') then
+        v_changes := private.reconcile_chore_vacations(v_home, null);
+      end if;
+      v_impact := private.vacation_impact(v_vacation, v_changes, v_user_id);
+      perform private.schedule_vacation_reminder(v_vacation);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, p_expected_revision;
+        return;
+    end;
+    perform private.audit_vacation('home_vacation.' || p_action, v_home, 'home_vacation', v_vacation.id,
+      pg_catalog.jsonb_build_object('changes', pg_catalog.jsonb_array_length(v_changes)));
+    return query select 'saved', v_impact, v_vacation.revision;
+  end
+  $$;
+
+-- Adds participants to a vacation that is not cancelled or ended: a chore manager adds them directly
+-- (accepted); the creator invites them (pending, start after today). Someone already pending or
+-- accepted answers 'already_participant'. p_dry_run as above. Outcomes: 'saved', 'preview',
+-- 'conflict', 'cancelled', 'ended', 'already_participant', 'invalid_member', 'invalid_dates',
+-- 'not_permitted', 'not_found'.
+create function public.add_vacation_participants(
+  p_vacation_id uuid, p_expected_revision integer, p_people jsonb, p_dry_run boolean
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_home uuid;
+    v_vacation private.home_vacations;
+    v_today date;
+    v_manage boolean;
+    v_person record;
+    v_participant private.home_vacation_participants;
+    v_changes jsonb;
+    v_impact jsonb;
+  begin
+    if p_vacation_id is null or p_expected_revision is null or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select v.home_id into v_home from private.home_vacations v where v.id = p_vacation_id;
+    if v_home is null or not private.is_home_member(v_home, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    perform 1 from private.vacation_people(v_home, p_people);
+    perform private.lock_home_vacations(v_home);
+    select * into v_vacation from private.home_vacations v where v.id = p_vacation_id for update;
+    v_today := private.task_today(v_home, null);
+    v_manage := private.can_manage_chores(v_home, v_user_id);
+    if not v_manage and v_vacation.created_by is distinct from v_user_id then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_vacation.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if private.vacation_status(v_vacation, v_today) in ('cancelled', 'ended') then
+      return query select private.vacation_status(v_vacation, v_today), null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    if exists (select 1 from private.vacation_people(v_home, p_people) x where x.user_id is null) then
+      return query select 'invalid_member', null::jsonb, null::integer;
+      return;
+    end if;
+    perform private.expire_vacation_invitations(v_vacation.id, v_today);
+    if exists (select 1 from private.vacation_people(v_home, p_people) x
+        join private.home_vacation_participants p on p.vacation_id = v_vacation.id and p.user_id = x.user_id
+        where p.status in ('pending', 'accepted')) then
+      return query select 'already_participant', null::jsonb, v_vacation.revision;
+      return;
+    end if;
+    for v_person in select * from private.vacation_people(v_home, p_people) loop
+      if not private.valid_vacation_stay(v_person.starts_on, v_person.ends_on, v_today, v_today)
+         or (not v_manage and v_person.starts_on <= v_today) then
+        return query select 'invalid_dates', null::jsonb, v_vacation.revision;
+        return;
+      end if;
+    end loop;
+
+    begin
+      for v_person in select * from private.vacation_people(v_home, p_people) loop
+        insert into private.home_vacation_participants (id, vacation_id, home_id, user_id, status, starts_on,
+          ends_on, direct, invited_by, responded_at)
+          values (gen_random_uuid(), v_vacation.id, v_home, v_person.user_id,
+            case when v_manage then 'accepted' else 'pending' end, v_person.starts_on, v_person.ends_on,
+            v_manage, v_user_id, case when v_manage then pg_catalog.now() end)
+          returning * into v_participant;
+        perform private.vacation_event(v_vacation.id, case when v_manage then 'added' else 'invited' end,
+          v_user_id, v_person.user_id, v_person.starts_on, v_person.ends_on);
+        if not v_manage then
+          perform private.notify_vacation_invitation(v_participant);
+        end if;
+      end loop;
+      perform private.refresh_vacation_envelope(v_vacation.id);
+      update private.home_vacations v set revision = v.revision + 1, updated_by = v_user_id,
+          updated_at = pg_catalog.now()
+        where v.id = v_vacation.id
+        returning * into v_vacation;
+      v_changes := private.reconcile_chore_vacations(v_home, null);
+      v_impact := private.vacation_impact(v_vacation, v_changes, v_user_id);
+      perform private.schedule_vacation_reminder(v_vacation);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, p_expected_revision;
+        return;
+    end;
+    perform private.audit_vacation('home_vacation.participants_added', v_home, 'home_vacation', v_vacation.id,
+      pg_catalog.jsonb_build_object('people', pg_catalog.jsonb_array_length(p_people), 'manager', v_manage));
+    return query select 'saved', v_impact, v_vacation.revision;
+  end
+  $$;
+
+-- A change to one participation, on the participation's revision the person saw. Actions:
+--   'accept', 'decline' (the invitee, while pending and before the proposed start: 'expired' after);
+--   'withdraw' (the participant, while accepted: their own participation only);
+--   'remove' (chore managers: an accepted or pending participation);
+--   'cancel_invitation' (the creator or a chore manager: a pending one);
+--   'change_dates' (the participant, or a chore manager for one a manager added): new dates
+--     (p_starts_on, p_ends_on); a stay already under way keeps its start;
+--   'propose_dates' (the creator or a chore manager, for an accepted participant other than
+--     themselves who joined by invitation or created it): a proposal that only the participant's
+--     acceptance makes effective; a waiting one is superseded.
+-- p_dry_run: the same work, rolled back (an invitee's personal preview). Outcomes: 'saved' and
+-- 'preview' (impact as create_home_vacation), 'unchanged', 'conflict' (with the current revision),
+-- 'expired', 'not_open' (with nothing to answer), 'cancelled', 'invalid_dates', 'not_permitted',
+-- 'not_found'. revision: the participation's.
+create function public.change_vacation_participation(
+  p_participant_id uuid, p_expected_revision integer, p_action text, p_dry_run boolean,
+  p_starts_on date default null, p_ends_on date default null
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_home uuid;
+    v_vacation private.home_vacations;
+    v_participant private.home_vacation_participants;
+    v_today date;
+    v_manage boolean;
+    v_self boolean;
+    v_status text;
+    v_proposal private.home_vacation_date_proposals;
+    v_changes jsonb;
+    v_impact jsonb;
+  begin
+    if p_participant_id is null or p_expected_revision is null or p_dry_run is null or p_action is null
+       or p_action not in ('accept', 'decline', 'withdraw', 'remove', 'cancel_invitation', 'change_dates',
+         'propose_dates')
+       or (p_action in ('change_dates', 'propose_dates')) <> (p_starts_on is not null and p_ends_on is not null)
+       or (p_action not in ('change_dates', 'propose_dates') and (p_starts_on is not null or p_ends_on is not null)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select p.home_id into v_home from private.home_vacation_participants p where p.id = p_participant_id;
+    if v_home is null or not private.is_home_member(v_home, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    perform private.lock_home_vacations(v_home);
+    select * into v_vacation from private.home_vacations v
+      where v.id = (select p.vacation_id from private.home_vacation_participants p where p.id = p_participant_id)
+      for update;
+    select * into v_participant from private.home_vacation_participants p where p.id = p_participant_id for update;
+    v_today := private.task_today(v_home, null);
+    v_manage := private.can_manage_chores(v_home, v_user_id);
+    v_self := v_participant.user_id = v_user_id;
+    v_status := private.vacation_participant_status(v_participant, v_today);
+    if not (case p_action
+        when 'accept' then v_self
+        when 'decline' then v_self
+        when 'withdraw' then v_self
+        when 'remove' then v_manage
+        when 'cancel_invitation' then v_manage or v_vacation.created_by = v_user_id
+        when 'change_dates' then v_self or (v_manage and v_participant.direct)
+        when 'propose_dates' then not v_self and (v_manage or v_vacation.created_by = v_user_id)
+          and not (v_manage and v_participant.direct)
+      end) then
+      -- Someone who may not see a pending invitation of another member learns nothing about it.
+      return query select case when v_status = 'accepted' or v_self or v_manage
+          or v_vacation.created_by = v_user_id then 'not_permitted' else 'not_found' end,
+        null::jsonb, null::integer;
+      return;
+    end if;
+    if v_participant.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_participant.revision;
+      return;
+    end if;
+    if v_vacation.cancelled_at is not null then
+      return query select 'cancelled', null::jsonb, v_participant.revision;
+      return;
+    end if;
+    if v_status = 'expired' and v_participant.status = 'pending' then
+      perform private.expire_vacation_invitations(v_vacation.id, v_today);
+      return query select 'expired', null::jsonb, v_participant.revision + 1;
+      return;
+    end if;
+    if (p_action in ('accept', 'decline', 'cancel_invitation') and v_status <> 'pending')
+       or (p_action in ('withdraw', 'change_dates', 'propose_dates') and v_status <> 'accepted')
+       or (p_action = 'remove' and v_status not in ('pending', 'accepted')) then
+      return query select 'not_open', null::jsonb, v_participant.revision;
+      return;
+    end if;
+    if p_action in ('change_dates', 'propose_dates') then
+      if (v_participant.starts_on < v_today and p_starts_on <> v_participant.starts_on)
+         or not private.valid_vacation_stay(p_starts_on, p_ends_on, v_today, v_participant.starts_on) then
+        return query select 'invalid_dates', null::jsonb, v_participant.revision;
+        return;
+      end if;
+      if p_starts_on = v_participant.starts_on and p_ends_on = v_participant.ends_on then
+        return query select 'unchanged', null::jsonb, v_participant.revision;
+        return;
+      end if;
+    end if;
+
+    begin
+      case p_action
+        when 'accept' then
+          update private.home_vacation_participants p set status = 'accepted', responded_at = pg_catalog.now()
+            where p.id = v_participant.id;
+          perform private.vacation_event(v_vacation.id, 'accepted', v_user_id, v_user_id,
+            v_participant.starts_on, v_participant.ends_on);
+        when 'decline' then
+          update private.home_vacation_participants p set status = 'declined', responded_at = pg_catalog.now()
+            where p.id = v_participant.id;
+          perform private.vacation_event(v_vacation.id, 'declined', v_user_id, v_user_id);
+        when 'withdraw', 'remove', 'cancel_invitation' then
+          update private.home_vacation_participants p
+            set status = 'withdrawn', ended_by = v_user_id,
+              ended_reason = case when v_self then 'self' when v_manage then 'manager' else 'creator' end,
+              responded_at = coalesce(p.responded_at, pg_catalog.now())
+            where p.id = v_participant.id;
+          update private.home_vacation_date_proposals d set status = 'withdrawn', decided_at = pg_catalog.now()
+            where d.participant_id = v_participant.id and d.status = 'pending';
+          perform private.vacation_event(v_vacation.id,
+            case p_action when 'withdraw' then 'withdrawn' when 'remove' then 'removed'
+              else 'invitation_withdrawn' end,
+            v_user_id, v_participant.user_id);
+        when 'change_dates' then
+          update private.home_vacation_participants p set starts_on = p_starts_on, ends_on = p_ends_on
+            where p.id = v_participant.id;
+          update private.home_vacation_date_proposals d set status = 'superseded', decided_at = pg_catalog.now()
+            where d.participant_id = v_participant.id and d.status = 'pending';
+          perform private.vacation_event(v_vacation.id, 'dates_changed', v_user_id, v_participant.user_id,
+            p_starts_on, p_ends_on);
+        when 'propose_dates' then
+          update private.home_vacation_date_proposals d set status = 'superseded', decided_at = pg_catalog.now()
+            where d.participant_id = v_participant.id and d.status = 'pending';
+          insert into private.home_vacation_date_proposals (id, participant_id, vacation_id, home_id, starts_on,
+            ends_on, proposed_by)
+            values (gen_random_uuid(), v_participant.id, v_vacation.id, v_home, p_starts_on, p_ends_on, v_user_id)
+            returning * into v_proposal;
+          perform private.vacation_event(v_vacation.id, 'dates_proposed', v_user_id, v_participant.user_id,
+            p_starts_on, p_ends_on);
+          perform private.notify_user(
+            v_participant.user_id, v_home, 'chores', 'vacation.dates_proposed',
+            pg_catalog.jsonb_build_object('homeId', v_home, 'vacationId', v_vacation.id,
+              'startsOn', p_starts_on, 'endsOn', p_ends_on),
+            'vacation-dates-proposed:' || v_proposal.id::text, true);
+      end case;
+      update private.home_vacation_participants p set revision = p.revision + 1
+        where p.id = v_participant.id
+        returning * into v_participant;
+      perform private.refresh_vacation_envelope(v_vacation.id);
+      update private.home_vacations v set updated_by = v_user_id, updated_at = pg_catalog.now()
+        where v.id = v_vacation.id
+        returning * into v_vacation;
+      v_changes := private.reconcile_chore_vacations(v_home, null);
+      v_impact := private.vacation_impact(v_vacation, v_changes, v_user_id);
+      perform private.schedule_vacation_reminder(v_vacation);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, p_expected_revision;
+        return;
+    end;
+    perform private.audit_vacation('home_vacation.participation_' || p_action, v_home, 'home_vacation',
+      v_vacation.id, pg_catalog.jsonb_build_object('participant', v_participant.id,
+        'changes', pg_catalog.jsonb_array_length(v_changes)));
+    return query select 'saved', v_impact, v_participant.revision;
+  end
+  $$;
+
+-- Answers a date proposal: 'accept' or 'decline' (its participant), 'withdraw' (its proposer or a
+-- chore manager), while it waits. Accepting re-checks the dates against today ('stale' when they can
+-- no longer apply) and the participation (still accepted). p_dry_run: the same work, rolled back.
+-- Outcomes: 'saved', 'preview', 'not_open', 'stale', 'cancelled', 'not_permitted', 'not_found'.
+create function public.answer_vacation_date_proposal(p_proposal_id uuid, p_action text, p_dry_run boolean)
+returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_home uuid;
+    v_vacation private.home_vacations;
+    v_participant private.home_vacation_participants;
+    v_proposal private.home_vacation_date_proposals;
+    v_today date;
+    v_manage boolean;
+    v_changes jsonb := '[]'::jsonb;
+    v_impact jsonb;
+  begin
+    if p_proposal_id is null or p_dry_run is null or p_action is null
+       or p_action not in ('accept', 'decline', 'withdraw') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select d.home_id into v_home from private.home_vacation_date_proposals d where d.id = p_proposal_id;
+    if v_home is null or not private.is_home_member(v_home, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    perform private.lock_home_vacations(v_home);
+    select * into v_proposal from private.home_vacation_date_proposals d where d.id = p_proposal_id for update;
+    select * into v_vacation from private.home_vacations v where v.id = v_proposal.vacation_id for update;
+    select * into v_participant from private.home_vacation_participants p where p.id = v_proposal.participant_id
+      for update;
+    v_today := private.task_today(v_home, null);
+    v_manage := private.can_manage_chores(v_home, v_user_id);
+    if not (case p_action
+        when 'withdraw' then v_proposal.proposed_by = v_user_id or v_manage
+        else v_participant.user_id = v_user_id end) then
+      return query select case when v_participant.user_id = v_user_id or v_manage
+          or v_proposal.proposed_by = v_user_id then 'not_permitted' else 'not_found' end,
+        null::jsonb, null::integer;
+      return;
+    end if;
+    if v_proposal.status <> 'pending' then
+      return query select 'not_open', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_vacation.cancelled_at is not null then
+      return query select 'cancelled', null::jsonb, null::integer;
+      return;
+    end if;
+    if p_action = 'accept' and (v_participant.status <> 'accepted'
+        or (v_participant.starts_on < v_today and v_proposal.starts_on <> v_participant.starts_on)
+        or not private.valid_vacation_stay(v_proposal.starts_on, v_proposal.ends_on, v_today,
+          v_participant.starts_on)) then
+      return query select 'stale', null::jsonb, null::integer;
+      return;
+    end if;
+
+    begin
+      update private.home_vacation_date_proposals d
+        set status = case p_action when 'accept' then 'accepted' when 'decline' then 'declined' else 'withdrawn' end,
+          decided_at = pg_catalog.now()
+        where d.id = v_proposal.id;
+      perform private.vacation_event(v_vacation.id, 'proposal_' || case p_action when 'accept' then 'accepted'
+          when 'decline' then 'declined' else 'withdrawn' end,
+        v_user_id, v_participant.user_id, v_proposal.starts_on, v_proposal.ends_on);
+      if p_action = 'accept' then
+        update private.home_vacation_participants p
+          set starts_on = v_proposal.starts_on, ends_on = v_proposal.ends_on, revision = p.revision + 1
+          where p.id = v_participant.id;
+        perform private.refresh_vacation_envelope(v_vacation.id);
+        update private.home_vacations v set updated_by = v_user_id, updated_at = pg_catalog.now()
+          where v.id = v_vacation.id
+          returning * into v_vacation;
+        v_changes := private.reconcile_chore_vacations(v_home, null);
+        perform private.schedule_vacation_reminder(v_vacation);
+      end if;
+      v_impact := private.vacation_impact(v_vacation, v_changes, v_user_id);
+      if p_dry_run then
+        raise exception 'dry run' using errcode = 'MD001';
+      end if;
+    exception
+      when sqlstate 'MD001' then
+        return query select 'preview', v_impact, null::integer;
+        return;
+    end;
+    perform private.audit_vacation('home_vacation.proposal_' || p_action, v_home, 'home_vacation',
+      v_vacation.id, pg_catalog.jsonb_build_object('changes', pg_catalog.jsonb_array_length(v_changes)));
+    return query select 'saved', v_impact, null::integer;
+  end
+  $$;
+
+-- Decisions on reviewed occurrences -------------------------------------------------------------------------
+
+-- A chore manager's decision on one occurrence listed by a vacation or an absence (p_source_kind
+-- 'vacation' or 'absence'), on the occurrence revision they saw:
+--   'keep' (it stays as it is; a vacation review flag ends), 'skip' (the S20 skip: no points),
+--   'reassign' (p_member, any current member; one away on the due date needs p_confirm_away, the
+--     per-occurrence override: 'member_away' otherwise), 'reschedule' (one-off chores; p_due_date
+--     from today on).
+-- Recorded once per occurrence and source: the occurrence is then left alone by the vacation rules
+-- and never asked about again for that source. Pending approval and Needs rework are protected.
+-- Outcomes: 'decided', 'already_decided', 'protected', 'occurrence_closed', 'conflict' (with the
+-- current revision), 'nobody_assigned', 'not_one_off', 'invalid_dates', 'member_away' (impact.away),
+-- 'invalid_assignee', 'cancelled', 'not_permitted', 'not_found'.
+create function public.decide_chore_vacation_item(
+  p_source_kind text, p_source_id uuid, p_occurrence_id uuid, p_expected_revision integer,
+  p_decision text, p_member uuid default null, p_due_date date default null,
+  p_confirm_away boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_home uuid;
+    v_cancelled boolean := false;
+    v_occurrence private.chore_occurrences;
+    v_row record;
+    v_to uuid;
+    v_today date;
+  begin
+    if p_source_kind is null or p_source_kind not in ('vacation', 'absence') or p_source_id is null
+       or p_occurrence_id is null or p_expected_revision is null or p_confirm_away is null
+       or p_decision is null or p_decision not in ('keep', 'skip', 'reassign', 'reschedule')
+       or (p_decision = 'reassign') <> (p_member is not null)
+       or (p_decision = 'reschedule') <> (p_due_date is not null)
+       or (p_source_kind = 'absence' and p_decision = 'reschedule') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_source_kind = 'vacation' then
+      select v.home_id, v.cancelled_at is not null into v_home, v_cancelled
+        from private.home_vacations v where v.id = p_source_id;
+    else
+      select b.home_id into v_home from private.chore_absences b where b.id = p_source_id;
+    end if;
+    if v_home is null or not private.is_home_member(v_home, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_home, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_cancelled then
+      return query select 'cancelled', null::jsonb, null::integer;
+      return;
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null or v_occurrence.home_id <> v_home then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if exists (select 1 from private.chore_vacation_decisions d where d.occurrence_id = v_occurrence.id
+        and d.source_kind = p_source_kind and d.source_id = p_source_id) then
+      return query select 'already_decided', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.status = 'pending_approval' or v_occurrence.in_rework then
+      return query select 'protected', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.status <> 'open' then
+      return query select 'occurrence_closed', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    v_today := private.task_today(v_home, null);
+    case p_decision
+      when 'keep' then
+        if not exists (select 1 from private.chore_occurrence_assignees a where a.occurrence_id = v_occurrence.id) then
+          return query select 'nobody_assigned', null::jsonb, v_occurrence.revision;
+          return;
+        end if;
+      when 'skip' then
+        select * into v_row from public.skip_chore_occurrence(v_occurrence.id, null);
+        if v_row.outcome <> 'skipped' then
+          return query select v_row.outcome, null::jsonb, v_row.revision;
+          return;
+        end if;
+      when 'reassign' then
+        select * into v_row from public.update_chore_occurrence(v_occurrence.id, p_expected_revision, false,
+          p_assignee_ids => array[p_member], p_confirm_away => p_confirm_away);
+        if v_row.outcome <> 'saved' then
+          return query select v_row.outcome, v_row.impact, v_row.revision;
+          return;
+        end if;
+        select m.user_id into v_to from public.home_memberships m where m.home_id = v_home and m.id = p_member;
+      when 'reschedule' then
+        if v_occurrence.schedule_id is not null then
+          return query select 'not_one_off', null::jsonb, v_occurrence.revision;
+          return;
+        end if;
+        if p_due_date < v_today or p_due_date > v_today + private.vacation_limit('ahead') then
+          return query select 'invalid_dates', null::jsonb, v_occurrence.revision;
+          return;
+        end if;
+        select * into v_row from public.update_chore_occurrence(v_occurrence.id, p_expected_revision, false,
+          p_due_date => p_due_date, p_confirm_release => true);
+        if v_row.outcome <> 'saved' then
+          return query select v_row.outcome, v_row.impact, v_row.revision;
+          return;
+        end if;
+    end case;
+    insert into private.chore_vacation_decisions (occurrence_id, home_id, source_kind, source_id, decision,
+      to_user, new_date, decided_by)
+      values (v_occurrence.id, v_home, p_source_kind, p_source_id, p_decision, v_to, p_due_date, v_user_id);
+    perform private.apply_chore_vacation(v_occurrence.id, v_today);
+    perform private.audit_vacation('chore_vacation.decided', v_home, 'chore_occurrence', v_occurrence.id,
+      pg_catalog.jsonb_build_object('source', p_source_kind, 'decision', p_decision));
+    return query select 'decided', null::jsonb,
+      (select o.revision from private.chore_occurrences o where o.id = v_occurrence.id);
+  end
+  $$;
+
+-- Absences ----------------------------------------------------------------------------------------------------
+
+-- Creates (p_expected_revision null) or changes an absence. A member registers their own; a chore
+-- manager anyone's (p_member: a membership id; it cannot change later). Dates as vacation stays; one
+-- under way keeps its start. The reason is optional (1–200 characters) and private to the member and
+-- chore managers. Nothing changes on its own. Outcomes: 'created', 'saved', 'unchanged', 'exists',
+-- 'conflict' (with the current revision), 'invalid_member', 'invalid_dates', 'not_permitted',
+-- 'not_found'.
+create function public.save_chore_absence(
+  p_id uuid, p_home_id uuid, p_member uuid, p_starts_on date, p_ends_on date,
+  p_reason text default null, p_expected_revision integer default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_member_user uuid;
+    v_existing private.chore_absences;
+    v_manage boolean;
+    v_today date;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null or p_member is null or p_starts_on is null or p_ends_on is null
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.vacation_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform private.lock_home_vacations(p_home_id);
+    v_manage := private.can_manage_chores(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    select m.user_id into v_member_user from public.home_memberships m where m.home_id = p_home_id and m.id = p_member;
+    select * into v_existing from private.chore_absences b where b.id = p_id for update;
+    if p_expected_revision is null then
+      if v_existing.id is not null then
+        return query select 'exists', case when v_existing.home_id = p_home_id
+          and (v_existing.user_id = v_user_id or v_manage) then v_existing.revision end;
+        return;
+      end if;
+      if v_member_user is null then
+        return query select 'invalid_member', null::integer;
+        return;
+      end if;
+      if v_member_user <> v_user_id and not v_manage then
+        return query select 'not_permitted', null::integer;
+        return;
+      end if;
+      if not private.valid_vacation_stay(p_starts_on, p_ends_on, v_today, v_today) then
+        return query select 'invalid_dates', null::integer;
+        return;
+      end if;
+      insert into private.chore_absences (id, home_id, user_id, starts_on, ends_on, reason, created_by, updated_by)
+        values (p_id, p_home_id, v_member_user, p_starts_on, p_ends_on, v_reason, v_user_id, v_user_id);
+      perform private.audit_vacation('chore_absence.created', p_home_id, 'chore_absence', p_id,
+        pg_catalog.jsonb_build_object('own', v_member_user = v_user_id));
+      return query select 'created', 1;
+      return;
+    end if;
+    if v_existing.id is null or v_existing.home_id <> p_home_id
+       or not (v_existing.user_id = v_user_id or v_manage) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if v_member_user is distinct from v_existing.user_id then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if v_existing.revision <> p_expected_revision then
+      return query select 'conflict', v_existing.revision;
+      return;
+    end if;
+    if (v_existing.starts_on < v_today and p_starts_on <> v_existing.starts_on)
+       or not private.valid_vacation_stay(p_starts_on, p_ends_on, v_today, v_existing.starts_on) then
+      return query select 'invalid_dates', v_existing.revision;
+      return;
+    end if;
+    if p_starts_on = v_existing.starts_on and p_ends_on = v_existing.ends_on
+       and v_reason is not distinct from v_existing.reason then
+      return query select 'unchanged', v_existing.revision;
+      return;
+    end if;
+    update private.chore_absences b
+      set starts_on = p_starts_on, ends_on = p_ends_on, reason = v_reason, revision = b.revision + 1,
+        updated_by = v_user_id, updated_at = pg_catalog.now()
+      where b.id = p_id
+      returning * into v_existing;
+    perform private.audit_vacation('chore_absence.updated', p_home_id, 'chore_absence', p_id);
+    return query select 'saved', v_existing.revision;
+  end
+  $$;
+
+-- Removes an absence (its member or a chore manager). Decisions taken stay. Outcomes: 'deleted',
+-- 'conflict', 'not_found'.
+create function public.delete_chore_absence(p_id uuid, p_expected_revision integer)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.chore_absences;
+  begin
+    if p_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_existing from private.chore_absences b where b.id = p_id;
+    if v_existing.id is null or not private.is_home_member(v_existing.home_id, v_user_id)
+       or not (v_existing.user_id = v_user_id or private.can_manage_chores(v_existing.home_id, v_user_id)) then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    perform private.lock_home_vacations(v_existing.home_id);
+    select * into v_existing from private.chore_absences b where b.id = p_id for update;
+    if v_existing.revision <> p_expected_revision then
+      return query select 'conflict', v_existing.revision;
+      return;
+    end if;
+    delete from private.chore_absences b where b.id = p_id;
+    perform private.audit_vacation('chore_absence.deleted', v_existing.home_id, 'chore_absence', p_id);
+    return query select 'deleted', null::integer;
+  end
+  $$;
+
+-- The absences the caller may see in a Home (their own; chore managers every one), current and
+-- upcoming first, with how many listed occurrences still wait for a decision. 42501 for a Home they
+-- are not in.
+create function public.list_chore_absences(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_manage boolean;
+    v_today date;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_manage := private.can_manage_chores(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    return pg_catalog.jsonb_build_object(
+      'today', v_today,
+      'canManage', v_manage,
+      'absences', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', b.id, 'member', private.chore_person(p_home_id, b.user_id, v_user_id),
+          'startsOn', b.starts_on, 'endsOn', b.ends_on, 'reason', b.reason,
+          'status', case when v_today < b.starts_on then 'upcoming' when v_today <= b.ends_on then 'active'
+            else 'ended' end,
+          'revision', b.revision,
+          'undecided', (select count(*)::integer from pg_catalog.jsonb_array_elements(
+              private.absence_review_items(b, v_user_id)) e
+            where e -> 'decision' = 'null'::jsonb and not (e ->> 'protected')::boolean))
+          order by b.ends_on < v_today, b.starts_on, b.id)
+        from (select * from private.chore_absences x
+          where x.home_id = p_home_id and (x.user_id = v_user_id or v_manage)
+          order by x.ends_on < v_today, x.starts_on desc
+          limit private.vacation_limit('absences')) b), '[]'::jsonb));
+  end
+  $$;
+
+-- An absence's review (its member and chore managers): listed occurrences, planned dates of their
+-- recurring chores, and whether the caller decides. Null when it is not theirs to see.
+create function public.list_absence_review(p_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_absence private.chore_absences;
+    v_manage boolean;
+    v_today date;
+  begin
+    if p_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_absence from private.chore_absences b where b.id = p_id;
+    if v_absence.id is null or not private.is_home_member(v_absence.home_id, v_user_id) then
+      return null;
+    end if;
+    v_manage := private.can_manage_chores(v_absence.home_id, v_user_id);
+    if v_absence.user_id <> v_user_id and not v_manage then
+      return null;
+    end if;
+    v_today := private.task_today(v_absence.home_id, null);
+    return pg_catalog.jsonb_build_object(
+      'id', v_absence.id, 'homeId', v_absence.home_id, 'today', v_today,
+      'member', private.chore_person(v_absence.home_id, v_absence.user_id, v_user_id),
+      'startsOn', v_absence.starts_on, 'endsOn', v_absence.ends_on, 'reason', v_absence.reason,
+      'revision', v_absence.revision, 'canDecide', v_manage,
+      'items', private.absence_review_items(v_absence, v_user_id),
+      'planned', private.chore_planned_for(v_absence.home_id, v_absence.user_id,
+        greatest(v_absence.starts_on, v_today), v_absence.ends_on, true, private.vacation_limit('planned')));
+  end
+  $$;
+
+-- Reading vacations ------------------------------------------------------------------------------------------
+
+-- A vacation as listed: dates, status, name (every member of the Home sees it), the accepted
+-- participants with their own dates, and whether it pauses the Home's chores.
+create function private.vacation_summary(p_vacation private.home_vacations, p_viewer uuid, p_today date)
+returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'id', p_vacation.id, 'name', p_vacation.name, 'status', private.vacation_status(p_vacation, p_today),
+    'startsOn', p_vacation.starts_on, 'endsOn', p_vacation.ends_on, 'revision', p_vacation.revision,
+    'createdBy', private.chore_person(p_vacation.home_id, p_vacation.created_by, p_viewer),
+    'participants', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'member', private.chore_person(p.home_id, p.user_id, p_viewer),
+        'startsOn', p.starts_on, 'endsOn', p.ends_on) order by p.starts_on, p.id)
+      from private.home_vacation_participants p
+      where p.vacation_id = p_vacation.id and p.status = 'accepted'), '[]'::jsonb),
+    'memberCount', (select count(*)::integer from public.home_memberships m where m.home_id = p_vacation.home_id),
+    'me', exists (select 1 from private.home_vacation_participants p
+      where p.vacation_id = p_vacation.id and p.status = 'accepted' and p.user_id = p_viewer),
+    'pauseDates', private.vacation_ranges_json(private.vacation_pause_dates(p_vacation)));
+  $$;
+
+-- The caller's Home vacations: current and upcoming ones (active first), recent history, their own
+-- pending invitations and date proposals, and whether the Home's chores are paused today. 42501 for a
+-- Home they are not in.
+create function public.list_home_vacations(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    return pg_catalog.jsonb_build_object(
+      'today', v_today,
+      'canManage', private.can_manage_chores(p_home_id, v_user_id),
+      'pausedToday', private.home_chores_paused_on(p_home_id, v_today),
+      'current', coalesce((select pg_catalog.jsonb_agg(private.vacation_summary(v, v_user_id, v_today)
+          order by v.starts_on > v_today, v.starts_on, v.id)
+        from private.home_vacations v
+        where v.home_id = p_home_id and v.cancelled_at is null and v.ends_on >= v_today), '[]'::jsonb),
+      'history', coalesce((select pg_catalog.jsonb_agg(private.vacation_summary(v, v_user_id, v_today)
+          order by v.ends_on desc, v.id)
+        from (select * from private.home_vacations x
+          where x.home_id = p_home_id and (x.cancelled_at is not null or x.ends_on < v_today)
+          order by x.ends_on desc, x.id limit private.vacation_limit('history')) v), '[]'::jsonb),
+      'invitations', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'participantId', p.id, 'vacationId', v.id, 'name', v.name, 'startsOn', p.starts_on,
+          'endsOn', p.ends_on, 'deadline', p.starts_on, 'revision', p.revision,
+          'invitedBy', private.chore_person(p_home_id, p.invited_by, v_user_id)) order by p.starts_on, p.id)
+        from private.home_vacation_participants p
+        join private.home_vacations v on v.id = p.vacation_id
+        where p.home_id = p_home_id and p.user_id = v_user_id and v.cancelled_at is null
+          and private.vacation_participant_status(p, v_today) = 'pending'), '[]'::jsonb),
+      'proposals', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'proposalId', d.id, 'vacationId', v.id, 'name', v.name, 'startsOn', d.starts_on, 'endsOn', d.ends_on,
+          'currentStartsOn', p.starts_on, 'currentEndsOn', p.ends_on,
+          'proposedBy', private.chore_person(p_home_id, d.proposed_by, v_user_id)) order by d.created_at, d.id)
+        from private.home_vacation_date_proposals d
+        join private.home_vacation_participants p on p.id = d.participant_id
+        join private.home_vacations v on v.id = d.vacation_id
+        where d.home_id = p_home_id and p.user_id = v_user_id and d.status = 'pending'
+          and v.cancelled_at is null), '[]'::jsonb));
+  end
+  $$;
+
+-- One vacation with what the caller may see and do, or null when it is not theirs to see. Every
+-- member sees accepted participants; pending, declined, withdrawn and expired participations, and
+-- waiting proposals, are seen by that participant, the creator and chore managers; the history by
+-- the creator and chore managers.
+create function public.get_home_vacation(p_vacation_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_vacation private.home_vacations;
+    v_today date;
+    v_manage boolean;
+    v_creator boolean;
+    v_status text;
+    v_open boolean;
+  begin
+    if p_vacation_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_vacation from private.home_vacations v where v.id = p_vacation_id;
+    if not found or not private.is_home_member(v_vacation.home_id, v_user_id) then
+      return null;
+    end if;
+    v_today := private.task_today(v_vacation.home_id, null);
+    v_manage := private.can_manage_chores(v_vacation.home_id, v_user_id);
+    v_creator := v_vacation.created_by = v_user_id;
+    v_status := private.vacation_status(v_vacation, v_today);
+    v_open := v_status in ('upcoming', 'active');
+    return private.vacation_summary(v_vacation, v_user_id, v_today) || pg_catalog.jsonb_build_object(
+      'homeId', v_vacation.home_id,
+      'today', v_today,
+      'createdAt', v_vacation.created_at,
+      'cancelledAt', v_vacation.cancelled_at,
+      'cancelledBy', private.chore_person(v_vacation.home_id, v_vacation.cancelled_by, v_user_id),
+      'reminderDays', case when v_manage or v_creator then v_vacation.reminder_days end,
+      'homePause', pg_catalog.jsonb_build_object(
+        'confirmed', case when v_vacation.home_pause_dates is not null
+          then private.vacation_ranges_json(v_vacation.home_pause_dates) end,
+        'effective', private.vacation_ranges_json(private.vacation_pause_dates(v_vacation)),
+        'available', private.vacation_ranges_json(
+          private.vacation_full_dates(v_vacation, v_today) - coalesce(v_vacation.home_pause_dates, '{}'::datemultirange)),
+        'by', private.chore_person(v_vacation.home_id, v_vacation.home_pause_by, v_user_id),
+        'at', v_vacation.home_pause_at),
+      'people', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', p.id, 'member', private.chore_person(p.home_id, p.user_id, v_user_id),
+          'status', private.vacation_participant_status(p, v_today),
+          'startsOn', p.starts_on, 'endsOn', p.ends_on, 'direct', p.direct,
+          'invitedBy', private.chore_person(p.home_id, p.invited_by, v_user_id),
+          'createdAt', p.created_at, 'respondedAt', p.responded_at, 'endedReason', p.ended_reason,
+          'revision', p.revision,
+          'proposal', (select pg_catalog.jsonb_build_object('id', d.id, 'startsOn', d.starts_on,
+              'endsOn', d.ends_on, 'createdAt', d.created_at,
+              'proposedBy', private.chore_person(d.home_id, d.proposed_by, v_user_id),
+              'mine', d.proposed_by = v_user_id)
+            from private.home_vacation_date_proposals d where d.participant_id = p.id and d.status = 'pending'
+              and (p.user_id = v_user_id or d.proposed_by = v_user_id or v_manage)),
+          'can', pg_catalog.jsonb_build_object(
+            'answer', v_open and p.user_id = v_user_id
+              and private.vacation_participant_status(p, v_today) = 'pending',
+            'withdraw', v_open and p.user_id = v_user_id and p.status = 'accepted',
+            'remove', v_open and v_manage and private.vacation_participant_status(p, v_today) in ('pending', 'accepted'),
+            'cancelInvitation', v_open and (v_manage or v_creator)
+              and private.vacation_participant_status(p, v_today) = 'pending',
+            'changeDates', v_open and p.status = 'accepted' and (p.user_id = v_user_id or (v_manage and p.direct)),
+            'proposeDates', v_open and p.status = 'accepted' and p.user_id <> v_user_id
+              and (v_manage or v_creator) and not (v_manage and p.direct)))
+          order by p.status <> 'accepted', p.starts_on, p.created_at, p.id)
+        from private.home_vacation_participants p
+        where p.vacation_id = v_vacation.id
+          and (p.status = 'accepted' or p.user_id = v_user_id or v_manage or v_creator)), '[]'::jsonb),
+      'history', case when v_manage or v_creator then coalesce((select pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object('kind', e.kind, 'at', e.created_at,
+            'by', private.chore_person(v_vacation.home_id, e.actor_id, v_user_id),
+            'subject', private.chore_person(v_vacation.home_id, e.subject_id, v_user_id),
+            'startsOn', e.starts_on, 'endsOn', e.ends_on) order by e.id desc)
+        from (select * from private.home_vacation_events x where x.vacation_id = v_vacation.id
+          order by x.id desc limit private.vacation_limit('events')) e), '[]'::jsonb) end,
+      'can', pg_catalog.jsonb_build_object(
+        'rename', v_status <> 'cancelled' and (v_manage or v_creator),
+        'reminder', v_status = 'upcoming' and v_manage,
+        'shorten', v_open and v_manage,
+        'cancel', v_open and (v_manage or (v_creator and not exists (
+          select 1 from private.home_vacation_participants p
+          where p.vacation_id = v_vacation.id and p.status = 'accepted' and p.user_id <> v_user_id))),
+        'pause', v_open and v_manage,
+        'invite', v_open and (v_manage or v_creator),
+        'addDirectly', v_open and v_manage,
+        'decide', v_status <> 'cancelled' and v_manage));
+  end
+  $$;
+
+-- A vacation's review (every member of the Home sees it; chore managers decide): listed occurrences,
+-- and planned dates of fixed chores of its participants during their stays. Null when not visible.
+create function public.list_vacation_review(p_vacation_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_vacation private.home_vacations;
+    v_today date;
+  begin
+    if p_vacation_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_vacation from private.home_vacations v where v.id = p_vacation_id;
+    if not found or not private.is_home_member(v_vacation.home_id, v_user_id) then
+      return null;
+    end if;
+    v_today := private.task_today(v_vacation.home_id, null);
+    return pg_catalog.jsonb_build_object(
+      'vacationId', v_vacation.id, 'homeId', v_vacation.home_id, 'today', v_today,
+      'canDecide', v_vacation.cancelled_at is null and private.can_manage_chores(v_vacation.home_id, v_user_id),
+      'items', private.vacation_review_items(v_vacation, v_user_id),
+      'planned', case when v_vacation.cancelled_at is null then coalesce((select pg_catalog.jsonb_agg(x.e)
+        from (select pg_catalog.jsonb_array_elements(private.chore_planned_for(v_vacation.home_id, p.user_id,
+            greatest(p.starts_on, v_today), p.ends_on, false, private.vacation_limit('planned'))) as e
+          from private.home_vacation_participants p
+          where p.vacation_id = v_vacation.id and p.status = 'accepted' and p.user_id is not null
+            and p.ends_on >= v_today
+          limit private.vacation_limit('planned')) x), '[]'::jsonb) else '[]'::jsonb end);
+  end
+  $$;
+
+-- The Home vacation widget: the active vacation (the earliest started), else the next upcoming one,
+-- with its dates, a scope for the label (everyone, only the viewer, or a number of members), whether
+-- the viewer is away, and the dates its Home-wide pause covers. 42501 for a Home the caller is not in.
+create function public.get_home_vacation_widget(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+    v_vacation private.home_vacations;
+    v_accepted integer;
+    v_members integer;
+    v_me boolean;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_today := private.task_today(p_home_id, null);
+    select * into v_vacation from private.home_vacations v
+      where v.home_id = p_home_id and v.cancelled_at is null and v.ends_on >= v_today
+      order by v.starts_on > v_today, v.starts_on, v.id
+      limit 1;
+    if not found then
+      return pg_catalog.jsonb_build_object('today', v_today, 'vacation', null, 'others', 0,
+        'pausedToday', false);
+    end if;
+    select count(distinct p.user_id)::integer, coalesce(bool_or(p.user_id = v_user_id), false)
+      into v_accepted, v_me
+      from private.home_vacation_participants p
+      where p.vacation_id = v_vacation.id and p.status = 'accepted' and p.user_id is not null;
+    select count(*)::integer into v_members from public.home_memberships m where m.home_id = p_home_id;
+    return pg_catalog.jsonb_build_object(
+      'today', v_today,
+      'pausedToday', private.home_chores_paused_on(p_home_id, v_today),
+      'others', (select count(*)::integer from private.home_vacations v
+        where v.home_id = p_home_id and v.cancelled_at is null and v.ends_on >= v_today and v.id <> v_vacation.id),
+      'vacation', pg_catalog.jsonb_build_object(
+        'id', v_vacation.id, 'name', v_vacation.name,
+        'status', private.vacation_status(v_vacation, v_today),
+        'startsOn', v_vacation.starts_on, 'endsOn', v_vacation.ends_on,
+        'scope', case when v_accepted >= v_members and v_members > 0 then 'everyone'
+          when v_accepted = 1 and v_me then 'me' else 'members' end,
+        'awayCount', v_accepted, 'me', v_me,
+        'pauseDates', private.vacation_ranges_json(private.vacation_pause_dates(v_vacation))));
+  end
+  $$;
+
+-- Vacation days for the chores calendar (at most 42 days): per day with something to show, whether
+-- the Home's chores are paused, how many members are away and whether the caller is; and the
+-- vacations overlapping the range. 42501 for a Home the caller is not in.
+create function public.list_home_vacation_days(p_home_id uuid, p_from date, p_to date) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_today date;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_from is null or p_to is null or p_to < p_from
+       or p_to - p_from >= private.vacation_limit('calendar_days') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_today := private.task_today(p_home_id, null);
+    return pg_catalog.jsonb_build_object(
+      'days', coalesce((select pg_catalog.jsonb_agg(x.day order by x.d) from (
+          select g.d::date as d, pg_catalog.jsonb_build_object(
+              'date', g.d::date,
+              'paused', private.home_chores_paused_on(p_home_id, g.d::date),
+              'away', (select count(distinct p.user_id)::integer from private.home_vacation_participants p
+                join private.home_vacations v on v.id = p.vacation_id
+                where p.home_id = p_home_id and p.status = 'accepted' and v.cancelled_at is null
+                  and g.d::date between p.starts_on and p.ends_on),
+              'me', private.vacation_away(p_home_id, v_user_id, g.d::date)) as day
+          from pg_catalog.generate_series(p_from::timestamp, p_to::timestamp, interval '1 day') g (d)) x
+        where (x.day ->> 'away')::integer > 0), '[]'::jsonb),
+      'vacations', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', v.id, 'name', v.name, 'startsOn', v.starts_on, 'endsOn', v.ends_on,
+          'status', private.vacation_status(v, v_today)) order by v.starts_on, v.id)
+        from private.home_vacations v
+        where v.home_id = p_home_id and v.cancelled_at is null and v.starts_on <= p_to and v.ends_on >= p_from),
+        '[]'::jsonb));
+  end
+  $$;
+
+-- An occurrence's vacation details for its page: how a vacation rule left it (substitute for whom,
+-- no substitute, paused), whether it waits for a vacation review, which assignees are away on its due
+-- date (vacations; absences only for chore managers and the absent member) and the decisions taken
+-- on it (chore managers). Null when it is not the caller's to see.
+create function public.get_chore_vacation_state(p_occurrence_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_manage boolean;
+  begin
+    if p_occurrence_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_occurrence from private.chore_occurrences o where o.id = p_occurrence_id and o.deleted_at is null;
+    if not found or not private.is_home_member(v_occurrence.home_id, v_user_id) then
+      return null;
+    end if;
+    v_manage := private.can_manage_chores(v_occurrence.home_id, v_user_id);
+    return pg_catalog.jsonb_build_object(
+      'state', v_occurrence.vacation_state,
+      'substituteFor', private.chore_person(v_occurrence.home_id, v_occurrence.substitute_for, v_user_id),
+      'review', v_occurrence.vacation_review,
+      'pausedAt', v_occurrence.paused_at,
+      'away', coalesce((select pg_catalog.jsonb_agg(private.chore_person(a.home_id, a.user_id, v_user_id)
+          order by a.user_id)
+        from private.chore_occurrence_assignees a
+        where a.occurrence_id = v_occurrence.id
+          and private.vacation_away(a.home_id, a.user_id, v_occurrence.due_date)), '[]'::jsonb),
+      'absent', coalesce((select pg_catalog.jsonb_agg(private.chore_person(a.home_id, a.user_id, v_user_id)
+          order by a.user_id)
+        from private.chore_occurrence_assignees a
+        where a.occurrence_id = v_occurrence.id and (v_manage or a.user_id = v_user_id)
+          and exists (select 1 from private.chore_absences b where b.home_id = a.home_id and b.user_id = a.user_id
+            and v_occurrence.due_date between b.starts_on and b.ends_on)), '[]'::jsonb),
+      'decisions', case when v_manage then coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'sourceKind', d.source_kind, 'sourceId', d.source_id, 'decision', d.decision, 'at', d.decided_at,
+          'by', private.chore_person(d.home_id, d.decided_by, v_user_id)) order by d.id)
+        from private.chore_vacation_decisions d where d.occurrence_id = v_occurrence.id), '[]'::jsonb)
+        else '[]'::jsonb end);
+  end
+  $$;
+
+-- Departure -------------------------------------------------------------------------------------------------
+
+-- A departing member's pending and accepted participations end ('departure', kept in the history),
+-- their waiting proposals are withdrawn and the envelopes follow. Their absences end with the
+-- membership. Chore pages then re-apply the rules (advance_chores).
+create function private.vacation_member_left() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_row record;
+  begin
+    for v_row in
+      update private.home_vacation_participants p
+        set status = 'withdrawn', ended_reason = 'departure',
+          responded_at = coalesce(p.responded_at, pg_catalog.now()), revision = p.revision + 1
+        where p.home_id = old.home_id and p.user_id = old.user_id and p.status in ('pending', 'accepted')
+        returning p.id, p.vacation_id
+    loop
+      update private.home_vacation_date_proposals d set status = 'withdrawn', decided_at = pg_catalog.now()
+        where d.participant_id = v_row.id and d.status = 'pending';
+      perform private.vacation_event(v_row.vacation_id, 'left_home', null, old.user_id);
+      perform private.refresh_vacation_envelope(v_row.vacation_id);
+    end loop;
+    return old;
+  end
+  $$;
+
+create trigger home_memberships_vacations before delete on public.home_memberships
+  for each row execute function private.vacation_member_left();
+
+-- Grants -------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'advance_chores', 'update_chore_series', 'complete_chore_occurrence', 'skip_chore_occurrence',
+      'reopen_chore_occurrence', 'list_chore_pool', 'update_chore_occurrence', 'create_home_vacation',
+      'update_home_vacation', 'add_vacation_participants', 'change_vacation_participation',
+      'answer_vacation_date_proposal', 'decide_chore_vacation_item', 'save_chore_absence',
+      'delete_chore_absence', 'list_chore_absences', 'list_absence_review', 'list_home_vacations',
+      'get_home_vacation', 'list_vacation_review', 'get_home_vacation_widget', 'list_home_vacation_days',
+      'get_chore_vacation_state'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- The job: the service role only.
+  execute 'revoke all on function public.deliver_vacation_reminder(uuid, date, integer) from public, anon, authenticated';
+  execute 'grant execute on function public.deliver_vacation_reminder(uuid, date, integer) to service_role';
+
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and (p.proname like '%chore%' or p.proname like '%vacation%'
+      or p.proname like '%absence%')
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261105090000_points_rewards.sql
+-- ============================================================================
+-- S23: points and rewards (brief plans/steps/S23-brief.md; ADR 0030; spec "Confirmed uniform base
+-- chore points across eligible members", "Confirmed per-occurrence chore reward value
+-- preservation", "Confirmed reward timing for delayed chore approvals", "Confirmed late completion
+-- rewards for overdue chores", "Confirmed correction and reversal of completed chores", "Confirmed
+-- reward balance privacy and optional Home leaderboard", "Confirmed manual reward point bonuses and
+-- adjustments", "Confirmed Home reward points on membership departure", "Confirmed reward points
+-- never expire", "Confirmed optional approval for reward redemption", "Confirmed independent reviewer
+-- for reward redemptions", "Confirmed cancellation of pending reward redemptions", "Confirmed reward
+-- availability and redemption limits", "Confirmed reward fulfillment tracking", "Confirmed
+-- unable-to-fulfill reward resolution", "Confirmed individual Home leaderboard opt-out", "Confirmed
+-- Home leaderboard tie-breaking", "Confirmed Home leaderboard ranking periods", "Confirmed optional
+-- personal weekly chore point targets", "Confirmed optional shared Home weekly chore points
+-- overview", "Confirmed optional Ora-led chore points notifications"). Builds on the chore
+-- migrations; like them, nothing is exposed as a table.
+--
+-- Chore points. Each chore has one base value (0-1000) and a late policy (full, reduced to a fixed
+-- amount, or zero). Every occurrence snapshots them when it is created (a trigger, so every path
+-- that creates occurrences is covered); a later change to the chore applies to occurrences created
+-- after it. A completion is late when the Home-local date of its reported completion time is after
+-- the occurrence's due date; the review time never counts.
+--
+-- The ledger. private.point_entries is append-only: one row per change to one member's Home
+-- account (private.point_accounts, one per Home and account, kept when the membership ends, so
+-- rejoining restores it and another Home never sees it). An account caches its balance (the sum of
+-- its entries) and its reserved points (the sum of its pending approval-required requests);
+-- available = balance - reserved. Earned points are chore awards, chore reversals, bonuses,
+-- corrections and reversals of manual entries; spent points are redemptions less refunds.
+--
+-- Chore awards are reconciled, never edited: after any change to an occurrence's state, contributor,
+-- completion time, deletion, due date or points snapshot, private.reconcile_chore_points computes the
+-- award the occurrence should carry and, when it differs from the one it carries, posts a reversal of
+-- the old one and the new award. Retries, replays and concurrent approvals therefore never pay twice.
+--
+-- Balances never become spendable below zero through a manual debit or a redemption
+-- ('insufficient_points', nothing partial). A chore reversal is posted in full so the ledger stays
+-- true; it never touches reserved points or fulfilled rewards, and an account it leaves below zero
+-- shows as owed until later points or a manager's correction cover it.
+--
+-- Rewards and redemptions. A reward is immediate (the default) or approval-required. Redeeming or
+-- requesting checks membership, the enabled state, the availability window, total and per-member
+-- capacity (pending and redeemed count) and available points atomically, under the reward's lock and
+-- then the account's. A pending request reserves its cost and its capacity; approval (a different
+-- current member with approveHomeRewards: never the requester) turns the reservation into one
+-- redemption entry; rejection or cancellation releases it once. Fulfillment (Pending, Fulfilled,
+-- Unable to fulfill) is tracked apart; Unable to fulfill is resolved explicitly by a refund (one
+-- linked entry) or a replacement (never charged again). Leaving or being removed cancels pending
+-- requests and releases their reservations once.
+--
+-- Who may do what (defaults picked in the brief): every current member sees their own balance and
+-- ledger, the enabled catalog, redeems and requests, cancels their own pending request, sees the
+-- leaderboard when it is on and sets their own participation and weekly target. Three delegable
+-- capabilities (Owner always): manageHomeRewards (catalog, limits, leaderboard settings, fulfillment
+-- and resolutions, cancelling someone else's request), approveHomeRewards (approving or rejecting
+-- someone else's request), manageHomePoints (every member's balance and ledger, bonuses, corrections,
+-- reversals, and together with manageHomeChores any correction or reopen that changes awarded points).
+--
+-- Lock order: rewards and manual adjustments take the Home row first (private.lock_points_home), then
+-- reward -> redemption -> account, like leaving and removal. Chore paths keep the chore modules'
+-- order (chore -> occurrence) and take the Home row and the account afterwards (ADR 0030).
+
+-- Capabilities, audit subjects, events, notification categories ----------------------------------------
+
+-- packages/domain delegableCapabilities lists the same names.
+create or replace function private.is_delegable_capability(p_capability text) returns boolean
+  language sql immutable security definer set search_path = '' as $$
+  select p_capability in (
+    'manageHomeSettings', 'manageInvitations', 'removeMembers', 'manageHomeDashboard',
+    'manageHomeTasks', 'manageHomeChores', 'approveHomeChores', 'manageHomeRewards',
+    'approveHomeRewards', 'manageHomePoints'
+  );
+  $$;
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template', 'chore_reassignment', 'chore_proposal', 'chore_volunteer_request',
+    'home_vacation', 'chore_absence', 'point_account', 'point_entry', 'reward', 'reward_redemption',
+    'point_settings'
+  ));
+
+alter table private.chore_occurrence_events drop constraint chore_occurrence_events_kind_check;
+alter table private.chore_occurrence_events add constraint chore_occurrence_events_kind_check
+  check (kind in ('completed', 'skipped', 'reopened', 'submitted', 'approved', 'rejected',
+    'withdrawn', 'corrected', 'claimed', 'released', 'expired', 'reassigned', 'volunteered',
+    'assignment_corrected', 'vacation_paused', 'vacation_resumed', 'vacation_substituted',
+    'vacation_restored', 'points_corrected'));
+
+-- A 'points_corrected' event: the snapshot points after and before.
+alter table private.chore_occurrence_events
+  add column points integer,
+  add column previous_points integer;
+
+-- 'points' (chore points awarded or reversed): optional and opt-in, so in-app is off until the
+-- person turns it on. 'rewards' (requests, decisions, fulfillment, manual adjustments): optional,
+-- in-app on, email opt-in.
+create or replace function private.notification_category_essential(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_category
+    when 'security' then true when 'storage' then true
+    when 'invitations' then false when 'reminders' then false when 'approvals' then false
+    when 'chores' then false when 'points' then false when 'rewards' then false
+  end;
+  $$;
+
+alter table public.notifications drop constraint notifications_category_check;
+alter table public.notifications add constraint notifications_category_check
+  check (category in ('security', 'invitations', 'storage', 'reminders', 'approvals', 'chores',
+    'points', 'rewards'));
+
+alter table public.notification_preferences drop constraint notification_preferences_category_check;
+alter table public.notification_preferences add constraint notification_preferences_category_check
+  check (category in ('invitations', 'reminders', 'approvals', 'chores', 'points', 'rewards'));
+
+-- packages/domain optionalNotificationCategories lists the same.
+create or replace function private.notification_category_optional(p_category text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_category in ('invitations', 'reminders', 'approvals', 'chores', 'points', 'rewards'),
+    false);
+  $$;
+
+-- The built-in default: in-app on, email off, except 'points', which is opt-in on every channel.
+create or replace function private.effective_notification_channel(
+  p_user_id uuid, p_home_id uuid, p_category text, p_channel text
+) returns boolean
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_value boolean;
+  begin
+    if private.notification_category_essential(p_category) then
+      return true;
+    end if;
+    if p_home_id is not null then
+      select p.enabled into v_value from public.notification_preferences p
+        where p.user_id = p_user_id and p.home_id = p_home_id
+          and p.category = p_category and p.channel = p_channel;
+      if found then
+        return v_value;
+      end if;
+    end if;
+    select p.enabled into v_value from public.notification_preferences p
+      where p.user_id = p_user_id and p.home_id is null
+        and p.category = p_category and p.channel = p_channel;
+    if found then
+      return v_value;
+    end if;
+    return p_channel = 'in_app' and p_category <> 'points';
+  end
+  $$;
+
+create or replace function public.get_notification_settings()
+returns table (home_id uuid, category text, channel text, enabled boolean, overridden boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select s.home_id, c.category, ch.channel,
+        private.effective_notification_channel(v_user_id, s.home_id, c.category, ch.channel),
+        exists (
+          select 1 from public.notification_preferences p
+          where p.user_id = v_user_id and p.home_id is not distinct from s.home_id
+            and p.category = c.category and p.channel = ch.channel
+        )
+      from (
+        select null::uuid as home_id
+        union all
+        select m.home_id from public.home_memberships m where m.user_id = v_user_id
+      ) s
+      cross join (values ('invitations'), ('reminders'), ('approvals'), ('chores'), ('points'),
+        ('rewards')) c (category)
+      cross join (values ('in_app'), ('email')) ch (channel)
+      order by s.home_id nulls first, c.category, ch.channel;
+  end
+  $$;
+
+-- Limits (apps/web/src/points/schema.ts uses the same numbers).
+create function private.points_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'chore_points' then 1000      -- base points of one chore
+    when 'adjustment' then 100000      -- largest manual bonus or correction
+    when 'cost' then 100000            -- largest reward cost
+    when 'reason' then 300             -- adjustment, cancellation, rejection and fulfillment notes
+    when 'reason_min' then 3           -- a meaningful reason
+    when 'reward_name' then 80
+    when 'reward_description' then 500
+    when 'replacement' then 200
+    when 'total_limit' then 10000
+    when 'member_limit' then 100
+    when 'rewards' then 200            -- active (not archived) rewards per Home
+    when 'target' then 100000          -- largest weekly target
+    when 'page' then 50                -- ledger entries one read returns
+    when 'redemptions_page' then 100
+  end;
+  $$;
+
+-- Chore points ------------------------------------------------------------------------------------------
+
+alter table private.chores
+  add column points integer not null default 0,
+  add column late_policy text not null default 'full',
+  add column late_points integer;
+alter table private.chores
+  add constraint chores_points_check check (points between 0 and 1000),
+  add constraint chores_late_policy_check check (
+    late_policy in ('full', 'reduced', 'zero')
+    and (late_policy = 'reduced') = (late_points is not null)
+    and (late_points is null or late_points between 0 and points));
+
+-- The snapshot each occurrence keeps from its creation (spec: never the series' current value).
+alter table private.chore_occurrences
+  add column points integer not null default 0,
+  add column late_policy text not null default 'full',
+  add column late_points integer;
+alter table private.chore_occurrences
+  add constraint chore_occurrences_points_check check (points between 0 and 1000),
+  add constraint chore_occurrences_late_policy_check check (
+    late_policy in ('full', 'reduced', 'zero')
+    and (late_policy = 'reduced') = (late_points is not null)
+    and (late_points is null or late_points between 0 and points));
+
+-- Suggested points of a template (copied into the new-chore form like its other fields).
+alter table private.chore_templates
+  add column points integer not null default 0,
+  add column late_policy text not null default 'full',
+  add column late_points integer;
+alter table private.chore_templates
+  add constraint chore_templates_points_check check (points between 0 and 1000),
+  add constraint chore_templates_late_policy_check check (
+    late_policy in ('full', 'reduced', 'zero')
+    and (late_policy = 'reduced') = (late_points is not null)
+    and (late_points is null or late_points between 0 and points));
+
+create function private.snapshot_chore_points() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    select c.points, c.late_policy, c.late_points into new.points, new.late_policy, new.late_points
+      from private.chores c where c.id = new.chore_id;
+    return new;
+  end
+  $$;
+
+create trigger chore_occurrences_snapshot_points before insert on private.chore_occurrences
+  for each row execute function private.snapshot_chore_points();
+
+-- Whether a points setting is valid: points 0-1000; a reduced policy names an amount up to points.
+create function private.valid_chore_points(p_points integer, p_policy text, p_late_points integer)
+returns boolean
+  language sql immutable set search_path = '' as $$
+  select coalesce(p_points between 0 and private.points_limit('chore_points')
+    and p_policy in ('full', 'reduced', 'zero')
+    and (p_policy = 'reduced') = (p_late_points is not null)
+    and (p_late_points is null or p_late_points between 0 and p_points), false);
+  $$;
+
+-- The points a completion earns: the snapshot when on time; when late, the policy's amount.
+create function private.chore_award(p_points integer, p_policy text, p_late_points integer, p_late boolean)
+returns integer
+  language sql immutable set search_path = '' as $$
+  select case
+    when not coalesce(p_late, false) or p_policy = 'full' then p_points
+    when p_policy = 'reduced' then least(coalesce(p_late_points, 0), p_points)
+    else 0
+  end;
+  $$;
+
+-- Whether a completion at p_at is late for an occurrence due on p_due in the Home's timezone.
+create function private.chore_late(p_home_id uuid, p_due date, p_at timestamptz) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_at is not null and (p_at at time zone private.home_zone(p_home_id))::date > p_due;
+  $$;
+
+-- Tables ---------------------------------------------------------------------------------------------------
+
+-- One member's points in one Home. Kept when the membership ends (spec: preserved, restored on
+-- rejoining with the same account); user_id becomes null only when the account itself is deleted.
+create table private.point_accounts (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  user_id uuid references auth.users (id) on delete set null,
+  -- The sum of the account's entries.
+  balance integer not null default 0,
+  -- The sum of its pending approval-required requests.
+  reserved integer not null default 0 constraint point_accounts_reserved_check check (reserved >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint point_accounts_home_user_key unique (home_id, user_id),
+  constraint point_accounts_id_home_key unique (id, home_id)
+);
+
+create table private.rewards (
+  id uuid primary key,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  name text not null constraint rewards_name_check check (private.is_visible_name(name, 80)),
+  description text constraint rewards_description_check
+    check (description is null or private.is_plain_text(description, 500)),
+  cost integer not null constraint rewards_cost_check check (cost between 1 and 100000),
+  requires_approval boolean not null default false,
+  enabled boolean not null default true,
+  -- Inclusive first and last day it can be redeemed, in the Home's timezone (null: open-ended).
+  available_from date,
+  available_until date,
+  -- At most this many pending and redeemed requests in total (null: unlimited).
+  total_limit integer constraint rewards_total_limit_check check (total_limit between 1 and 10000),
+  -- At most member_limit pending and redeemed requests per member per period.
+  member_limit integer constraint rewards_member_limit_check check (member_limit between 1 and 100),
+  member_period text constraint rewards_member_period_check
+    check (member_period in ('week', 'month', 'year', 'ever')),
+  archived_at timestamptz,
+  archived_by uuid references auth.users (id) on delete set null,
+  revision integer not null default 1 constraint rewards_revision_check check (revision >= 1),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint rewards_id_home_key unique (id, home_id),
+  constraint rewards_window_check check (
+    available_from is null or available_until is null or available_until >= available_from),
+  constraint rewards_member_check check ((member_limit is null) = (member_period is null))
+);
+
+create index rewards_home_idx on private.rewards (home_id) where archived_at is null;
+
+-- One redemption or request. Never deleted; its events are append-only.
+create table private.reward_redemptions (
+  id uuid primary key,
+  seq bigint generated always as identity,
+  home_id uuid not null,
+  reward_id uuid not null,
+  account_id uuid not null,
+  requested_by uuid references auth.users (id) on delete set null,
+  -- What it cost and was called when requested (a later edit never changes it).
+  cost integer not null constraint reward_redemptions_cost_check check (cost between 1 and 100000),
+  reward_name text not null,
+  status text not null constraint reward_redemptions_status_check
+    check (status in ('pending', 'redeemed', 'rejected', 'cancelled')),
+  requested_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid references auth.users (id) on delete set null,
+  -- A rejection's optional reason, or a manager's cancellation reason ('departed' never shows here).
+  decision_reason text,
+  -- Cancelled because the requester left the Home.
+  departed boolean not null default false,
+  redeemed_at timestamptz,
+  fulfillment text constraint reward_redemptions_fulfillment_check
+    check (fulfillment in ('pending', 'fulfilled', 'unable')),
+  fulfillment_at timestamptz,
+  fulfillment_by uuid references auth.users (id) on delete set null,
+  fulfillment_note text,
+  -- How an Unable-to-fulfill reward was resolved.
+  resolution text constraint reward_redemptions_resolution_check
+    check (resolution in ('refund', 'replacement')),
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users (id) on delete set null,
+  resolution_note text,
+  replacement text,
+  replacement_responsible uuid references auth.users (id) on delete set null,
+  replacement_status text constraint reward_redemptions_replacement_status_check
+    check (replacement_status in ('pending', 'fulfilled', 'unable')),
+  revision integer not null default 1 constraint reward_redemptions_revision_check check (revision >= 1),
+  foreign key (reward_id, home_id) references private.rewards (id, home_id) on delete cascade,
+  foreign key (account_id, home_id) references private.point_accounts (id, home_id) on delete cascade,
+  constraint reward_redemptions_state_check check (
+    (status = 'redeemed') = (redeemed_at is not null)
+    and (status = 'redeemed') = (fulfillment is not null)
+    and (status = 'pending') = (decided_at is null)
+    and (resolution is null or fulfillment = 'unable')
+    and (resolution = 'replacement') = (replacement is not null)
+    and (resolution = 'replacement') = (replacement_status is not null))
+);
+
+create index reward_redemptions_reward_idx on private.reward_redemptions (reward_id, status);
+create index reward_redemptions_account_idx on private.reward_redemptions (account_id, requested_at desc);
+create index reward_redemptions_home_pending_idx on private.reward_redemptions (home_id, seq)
+  where status = 'pending';
+create index reward_redemptions_home_fulfillment_idx on private.reward_redemptions (home_id, seq)
+  where status = 'redeemed';
+
+create table private.point_entries (
+  id uuid primary key,
+  -- Order of posting across every Home.
+  seq bigint generated always as identity,
+  home_id uuid not null,
+  account_id uuid not null,
+  kind text not null constraint point_entries_kind_check check (kind in (
+    'chore_award', 'chore_reversal', 'bonus', 'correction', 'manual_reversal', 'redemption', 'refund')),
+  amount integer not null constraint point_entries_amount_check check (amount <> 0),
+  -- When the points count for periods: the completion time for chore entries (the original's for a
+  -- reversal), otherwise the posting time.
+  attributed_at timestamptz not null,
+  occurrence_id uuid references private.chore_occurrences (id) on delete set null,
+  redemption_id uuid references private.reward_redemptions (id) on delete set null,
+  reverses_id uuid references private.point_entries (id) on delete set null,
+  -- A chore award: whether the completion was late.
+  late boolean,
+  reason text,
+  actor_id uuid references auth.users (id) on delete set null,
+  available_before integer not null,
+  available_after integer not null,
+  reserved_after integer not null,
+  created_at timestamptz not null default now(),
+  foreign key (account_id, home_id) references private.point_accounts (id, home_id) on delete cascade,
+  constraint point_entries_sign_check check (
+    (kind in ('chore_award', 'bonus', 'refund') and amount > 0)
+    or (kind in ('chore_reversal', 'redemption') and amount < 0)
+    or kind in ('correction', 'manual_reversal')),
+  constraint point_entries_links_check check (
+    (kind = 'chore_award') = (late is not null)
+    and (kind in ('chore_reversal', 'manual_reversal')) = (reverses_id is not null)
+    and (kind in ('redemption', 'refund')) = (redemption_id is not null))
+);
+
+create index point_entries_account_idx on private.point_entries (account_id, seq desc);
+create index point_entries_home_attributed_idx on private.point_entries (home_id, attributed_at);
+create index point_entries_occurrence_idx on private.point_entries (occurrence_id)
+  where occurrence_id is not null;
+-- An entry is reversed at most once; a redemption is charged and refunded at most once.
+create unique index point_entries_one_reversal on private.point_entries (reverses_id)
+  where reverses_id is not null;
+create unique index point_entries_one_redemption on private.point_entries (redemption_id)
+  where kind = 'redemption';
+create unique index point_entries_one_refund on private.point_entries (redemption_id)
+  where kind = 'refund';
+
+create table private.reward_redemption_events (
+  id bigint generated always as identity primary key,
+  redemption_id uuid not null references private.reward_redemptions (id) on delete cascade,
+  kind text not null constraint reward_redemption_events_kind_check check (kind in (
+    'requested', 'redeemed', 'approved', 'rejected', 'cancelled', 'fulfilled', 'unable',
+    'fulfillment_corrected', 'refunded', 'replacement', 'replacement_fulfilled',
+    'replacement_unable')),
+  actor_id uuid references auth.users (id) on delete set null,
+  note text,
+  -- fulfillment_corrected: the state before and after; cancelled: whether the requester left.
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index reward_redemption_events_redemption_idx on private.reward_redemption_events (redemption_id, id);
+
+-- A member's own choices in one Home, kept when the membership ends (spec: the opt-out survives
+-- ordinary membership changes).
+create table private.point_preferences (
+  home_id uuid not null references public.homes (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  -- Appears on the leaderboard and in the shared weekly overview.
+  participates boolean not null default true,
+  -- Weekly chore-point target; null or 0: none.
+  target integer constraint point_preferences_target_check check (target between 0 and 100000),
+  target_paused boolean not null default false,
+  -- Others see the target in the shared weekly overview.
+  share_target boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (home_id, user_id)
+);
+
+-- The Home's leaderboard (rewards managers).
+create table private.point_settings (
+  home_id uuid primary key references public.homes (id) on delete cascade,
+  leaderboard_enabled boolean not null default false,
+  default_period text not null default 'month'
+    constraint point_settings_period_check check (default_period in ('week', 'month', 'all')),
+  revision integer not null default 1 constraint point_settings_revision_check check (revision >= 1),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+alter table private.point_accounts enable row level security;
+alter table private.rewards enable row level security;
+alter table private.reward_redemptions enable row level security;
+alter table private.point_entries enable row level security;
+alter table private.reward_redemption_events enable row level security;
+alter table private.point_preferences enable row level security;
+alter table private.point_settings enable row level security;
+
+revoke all on private.point_accounts, private.rewards, private.reward_redemptions,
+  private.point_entries, private.reward_redemption_events, private.point_preferences,
+  private.point_settings from public, anon, authenticated;
+
+-- Permissions -----------------------------------------------------------------------------------------------
+
+create function private.can_manage_rewards(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and private.has_home_capability(p_home_id, p_user_id, 'manageHomeRewards');
+  $$;
+
+create function private.can_approve_rewards(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and private.has_home_capability(p_home_id, p_user_id, 'approveHomeRewards');
+  $$;
+
+create function private.can_manage_points(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and private.has_home_capability(p_home_id, p_user_id, 'manageHomePoints');
+  $$;
+
+-- Whether p_user may read an account: its own holder while a member, or a points manager.
+create function private.can_view_point_account(p_account private.point_accounts, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_account.id is not null and (
+    (p_account.user_id = p_user_id and private.is_home_member(p_account.home_id, p_user_id))
+    or private.can_manage_points(p_account.home_id, p_user_id));
+  $$;
+
+-- Ledger primitives ---------------------------------------------------------------------------------------
+
+-- Takes the Home row's key-share lock first. Leaving and removal lock the Home row for update and
+-- then rewards, redemptions and accounts, and every ledger write takes a key-share lock on the Home
+-- row (its foreign key). Taking it before any other lock keeps one order (Home first) everywhere, so
+-- a change racing a departure waits instead of deadlocking.
+create function private.lock_points_home(p_home_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    perform 1 from public.homes h where h.id = p_home_id for key share;
+  end
+  $$;
+
+-- The account of p_user in p_home, created when missing, locked.
+create function private.lock_point_account(p_home_id uuid, p_user_id uuid) returns private.point_accounts
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_account private.point_accounts;
+  begin
+    perform private.lock_points_home(p_home_id);
+    insert into private.point_accounts (home_id, user_id) values (p_home_id, p_user_id)
+      on conflict (home_id, user_id) do nothing;
+    select * into v_account from private.point_accounts a
+      where a.home_id = p_home_id and a.user_id = p_user_id for update;
+    return v_account;
+  end
+  $$;
+
+-- Posts one entry to a locked account and moves its balance. Records available points before and
+-- after and the reserved points after.
+create function private.post_point_entry(
+  p_account_id uuid, p_kind text, p_amount integer, p_attributed_at timestamptz,
+  p_occurrence_id uuid, p_redemption_id uuid, p_reverses_id uuid, p_reason text, p_actor uuid,
+  p_late boolean, p_id uuid default null
+) returns private.point_entries
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_account private.point_accounts;
+    v_entry private.point_entries;
+  begin
+    update private.point_accounts a set balance = a.balance + p_amount, updated_at = pg_catalog.now()
+      where a.id = p_account_id
+      returning * into v_account;
+    insert into private.point_entries (
+      id, home_id, account_id, kind, amount, attributed_at, occurrence_id, redemption_id, reverses_id,
+      late, reason, actor_id, available_before, available_after, reserved_after
+    ) values (
+      coalesce(p_id, gen_random_uuid()), v_account.home_id, v_account.id, p_kind, p_amount,
+      coalesce(p_attributed_at, pg_catalog.now()), p_occurrence_id, p_redemption_id, p_reverses_id,
+      p_late, p_reason, p_actor, v_account.balance - p_amount - v_account.reserved,
+      v_account.balance - v_account.reserved, v_account.reserved
+    ) returning * into v_entry;
+    return v_entry;
+  end
+  $$;
+
+-- Moves a locked account's reserved points.
+create function private.change_reserved(p_account_id uuid, p_delta integer) returns void
+  language sql volatile security definer set search_path = '' as $$
+  update private.point_accounts a set reserved = a.reserved + p_delta, updated_at = pg_catalog.now()
+    where a.id = p_account_id;
+  $$;
+
+-- Tells the account holder about a chore award or reversal (category 'points', opt-in). One notice
+-- per entry, so retries never repeat it. Ids and numbers only.
+create function private.notify_chore_points(p_entry private.point_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user uuid;
+  begin
+    select a.user_id into v_user from private.point_accounts a where a.id = p_entry.account_id;
+    if v_user is null then
+      return;
+    end if;
+    perform private.notify_user(v_user, p_entry.home_id, 'points',
+      case p_entry.kind when 'chore_award' then 'points.awarded' else 'points.reversed' end,
+      pg_catalog.jsonb_build_object('homeId', p_entry.home_id, 'occurrenceId', p_entry.occurrence_id,
+        'amount', abs(p_entry.amount), 'available', p_entry.available_after,
+        'late', coalesce(p_entry.late, false)),
+      'points:' || p_entry.id::text, true);
+  end
+  $$;
+
+-- Tells the account holder about a manual adjustment or its reversal (category 'rewards').
+create function private.notify_point_adjustment(p_entry private.point_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user uuid;
+  begin
+    select a.user_id into v_user from private.point_accounts a where a.id = p_entry.account_id;
+    if v_user is null then
+      return;
+    end if;
+    perform private.notify_user(v_user, p_entry.home_id, 'rewards',
+      case p_entry.kind when 'bonus' then 'points.bonus' when 'correction' then 'points.corrected'
+        else 'points.adjustment_reversed' end,
+      pg_catalog.jsonb_build_object('homeId', p_entry.home_id, 'amount', p_entry.amount,
+        'available', p_entry.available_after),
+      'points:' || p_entry.id::text, true);
+  end
+  $$;
+
+-- The live (not reversed) award an occurrence carries, if any.
+create function private.live_chore_award(p_occurrence_id uuid) returns private.point_entries
+  language sql stable security definer set search_path = '' as $$
+  select e.* from private.point_entries e
+  where e.occurrence_id = p_occurrence_id and e.kind = 'chore_award'
+    and not exists (select 1 from private.point_entries r where r.reverses_id = e.id)
+  order by e.seq desc limit 1;
+  $$;
+
+-- The award an occurrence in this state should carry: (contributor, amount, late), amount 0 for none.
+create function private.desired_chore_award(p_occurrence private.chore_occurrences)
+returns table (user_id uuid, amount integer, late boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_late boolean;
+  begin
+    if p_occurrence.status <> 'completed' or p_occurrence.deleted_at is not null
+       or p_occurrence.contributor_id is null then
+      return query select null::uuid, 0, false;
+      return;
+    end if;
+    v_late := private.chore_late(p_occurrence.home_id, p_occurrence.due_date, p_occurrence.completed_at);
+    return query select p_occurrence.contributor_id,
+      private.chore_award(p_occurrence.points, p_occurrence.late_policy, p_occurrence.late_points, v_late),
+      v_late;
+  end
+  $$;
+
+-- Brings an occurrence's award in line with its state (see the header). Callers hold its chore's
+-- lock or its row (every change to an occurrence does), so two reconciliations of one occurrence
+-- never run at once.
+create function private.reconcile_chore_points(p_occurrence private.chore_occurrences) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_live private.point_entries;
+    v_live_user uuid;
+    v_want record;
+    v_account private.point_accounts;
+    v_entry private.point_entries;
+    v_actor uuid := auth.uid();
+  begin
+    select * into v_want from private.desired_chore_award(p_occurrence);
+    v_live := private.live_chore_award(p_occurrence.id);
+    if v_live.id is not null then
+      select a.user_id into v_live_user from private.point_accounts a where a.id = v_live.account_id;
+      if v_want.amount > 0 and v_live_user = v_want.user_id and v_live.amount = v_want.amount
+         and v_live.attributed_at = p_occurrence.completed_at and v_live.late = v_want.late then
+        return;
+      end if;
+      perform 1 from private.point_accounts a where a.id = v_live.account_id for update;
+      v_entry := private.post_point_entry(v_live.account_id, 'chore_reversal', -v_live.amount,
+        v_live.attributed_at, p_occurrence.id, null, v_live.id, null, v_actor, null);
+      perform private.notify_chore_points(v_entry);
+    end if;
+    if v_want.amount > 0 then
+      v_account := private.lock_point_account(p_occurrence.home_id, v_want.user_id);
+      v_entry := private.post_point_entry(v_account.id, 'chore_award', v_want.amount,
+        p_occurrence.completed_at, p_occurrence.id, null, null, null, v_actor, v_want.late);
+      perform private.notify_chore_points(v_entry);
+    end if;
+  end
+  $$;
+
+create function private.chore_occurrence_points_changed() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    -- Deleting the contributor's account clears the contributor: the ledger keeps what was earned.
+    if new.contributor_id is null and old.contributor_id is not null and new.status = old.status
+       and new.completed_at is not distinct from old.completed_at
+       and new.deleted_at is not distinct from old.deleted_at then
+      return new;
+    end if;
+    perform private.reconcile_chore_points(new);
+    return new;
+  end
+  $$;
+
+create trigger chore_occurrences_points after update on private.chore_occurrences
+  for each row when (
+    old.status is distinct from new.status or old.contributor_id is distinct from new.contributor_id
+    or old.completed_at is distinct from new.completed_at or old.deleted_at is distinct from new.deleted_at
+    or old.due_date is distinct from new.due_date or old.points is distinct from new.points
+    or old.late_policy is distinct from new.late_policy or old.late_points is distinct from new.late_points)
+  execute function private.chore_occurrence_points_changed();
+
+-- Chore functions with points ---------------------------------------------------------------------------
+
+-- Creating a chore takes its points (chore managers already create chores; spec: points are edited by
+-- authorized chore managers). The chore and its first occurrences are new, so they take the values.
+alter function public.create_chore(uuid, uuid, text, jsonb, jsonb, text, uuid, integer, date, text,
+  integer, date, smallint[], date, integer, boolean) set schema private;
+alter function private.create_chore(uuid, uuid, text, jsonb, jsonb, text, uuid, integer, date, text,
+  integer, date, smallint[], date, integer, boolean) rename to create_chore_before_points;
+
+create function public.create_chore(
+  p_id uuid, p_home_id uuid, p_title text, p_assignment jsonb, p_steps jsonb default '[]'::jsonb,
+  p_instructions text default null, p_category_id uuid default null, p_minutes integer default null,
+  p_due_date date default null,
+  p_frequency text default null, p_interval integer default null, p_starts_on date default null,
+  p_weekdays smallint[] default null, p_ends_on date default null, p_max_count integer default null,
+  p_requires_approval boolean default false,
+  p_points integer default 0, p_late_policy text default 'full', p_late_points integer default null
+) returns table (outcome text, occurrence_id uuid, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_row record;
+  begin
+    if not private.valid_chore_points(p_points, p_late_policy, p_late_points) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_row from private.create_chore_before_points(p_id, p_home_id, p_title, p_assignment,
+      p_steps, p_instructions, p_category_id, p_minutes, p_due_date, p_frequency, p_interval,
+      p_starts_on, p_weekdays, p_ends_on, p_max_count, p_requires_approval) x;
+    if v_row.outcome = 'created' and (p_points <> 0 or p_late_policy <> 'full') then
+      update private.chores c set points = p_points, late_policy = p_late_policy, late_points = p_late_points
+        where c.id = p_id;
+      update private.chore_occurrences o
+        set points = p_points, late_policy = p_late_policy, late_points = p_late_points
+        where o.chore_id = p_id;
+    end if;
+    return query select v_row.outcome, v_row.occurrence_id, v_row.revision;
+  end
+  $$;
+
+-- Changing a chore's points (chore managers): prospective. Occurrences created afterwards take the
+-- new values; those already created keep theirs (spec), unless a points correction changes one.
+-- p_points null keeps the setting; given, p_late_policy is required.
+alter function public.update_chore(uuid, integer, text, text, uuid, boolean) set schema private;
+alter function private.update_chore(uuid, integer, text, text, uuid, boolean)
+  rename to update_chore_before_points;
+
+create function public.update_chore(
+  p_chore_id uuid, p_expected_revision integer, p_title text, p_instructions text default null,
+  p_category_id uuid default null, p_requires_approval boolean default null,
+  p_points integer default null, p_late_policy text default null, p_late_points integer default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_row record;
+    v_chore private.chores;
+  begin
+    if (p_points is null) <> (p_late_policy is null)
+       or (p_points is not null and not private.valid_chore_points(p_points, p_late_policy, p_late_points))
+       or (p_points is null and p_late_points is not null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_row from private.update_chore_before_points(p_chore_id, p_expected_revision, p_title,
+      p_instructions, p_category_id, p_requires_approval) x;
+    if v_row.outcome = 'saved' and p_points is not null then
+      select * into v_chore from private.chores c where c.id = p_chore_id;
+      if v_chore.points <> p_points or v_chore.late_policy <> p_late_policy
+         or v_chore.late_points is distinct from p_late_points then
+        update private.chores c set points = p_points, late_policy = p_late_policy,
+          late_points = p_late_points
+          where c.id = p_chore_id;
+        perform private.audit_chore('chore.points_changed', v_chore.home_id, 'chore', v_chore.id,
+          pg_catalog.jsonb_build_object('points', p_points, 'previous', v_chore.points,
+            'policy', p_late_policy));
+      end if;
+    end if;
+    return query select v_row.outcome, v_row.revision;
+  end
+  $$;
+
+-- Templates carry suggested points.
+alter function public.create_chore_template(uuid, uuid, text, text, uuid, integer, jsonb) set schema private;
+alter function private.create_chore_template(uuid, uuid, text, text, uuid, integer, jsonb)
+  rename to create_chore_template_before_points;
+
+create function public.create_chore_template(
+  p_id uuid, p_home_id uuid, p_title text, p_instructions text default null,
+  p_category_id uuid default null, p_minutes integer default null, p_steps jsonb default '[]'::jsonb,
+  p_points integer default 0, p_late_policy text default 'full', p_late_points integer default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_row record;
+  begin
+    if not private.valid_chore_points(p_points, p_late_policy, p_late_points) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_row from private.create_chore_template_before_points(p_id, p_home_id, p_title,
+      p_instructions, p_category_id, p_minutes, p_steps) x;
+    if v_row.outcome = 'created' then
+      update private.chore_templates t
+        set points = p_points, late_policy = p_late_policy, late_points = p_late_points
+        where t.id = p_id;
+    end if;
+    return query select v_row.outcome, v_row.revision;
+  end
+  $$;
+
+alter function public.update_chore_template(uuid, integer, text, text, uuid, integer, jsonb, boolean)
+  set schema private;
+alter function private.update_chore_template(uuid, integer, text, text, uuid, integer, jsonb, boolean)
+  rename to update_chore_template_before_points;
+
+create function public.update_chore_template(
+  p_id uuid, p_expected_revision integer, p_title text, p_instructions text default null,
+  p_category_id uuid default null, p_minutes integer default null, p_steps jsonb default '[]'::jsonb,
+  p_retired boolean default null,
+  p_points integer default null, p_late_policy text default null, p_late_points integer default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_row record;
+  begin
+    if (p_points is null) <> (p_late_policy is null)
+       or (p_points is not null and not private.valid_chore_points(p_points, p_late_policy, p_late_points))
+       or (p_points is null and p_late_points is not null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_row from private.update_chore_template_before_points(p_id, p_expected_revision,
+      p_title, p_instructions, p_category_id, p_minutes, p_steps, p_retired) x;
+    if v_row.outcome = 'saved' and p_points is not null then
+      update private.chore_templates t
+        set points = p_points, late_policy = p_late_policy, late_points = p_late_points
+        where t.id = p_id;
+    end if;
+    return query select v_row.outcome, v_row.revision;
+  end
+  $$;
+
+alter function public.list_chore_templates(uuid, boolean) set schema private;
+alter function private.list_chore_templates(uuid, boolean) rename to list_chore_templates_before_points;
+
+create function public.list_chore_templates(p_home_id uuid, p_include_retired boolean default false)
+returns table (
+  id uuid, title text, instructions text, category_id uuid, category_name text, category_color text,
+  category_archived boolean, minutes integer, steps jsonb, retired boolean, revision integer,
+  points integer, late_policy text, late_points integer
+)
+  language sql stable security definer set search_path = '' as $$
+  select l.id, l.title, l.instructions, l.category_id, l.category_name, l.category_color,
+    l.category_archived, l.minutes, l.steps, l.retired, l.revision, t.points, t.late_policy, t.late_points
+  from private.list_chore_templates_before_points(p_home_id, p_include_retired) l
+  join private.chore_templates t on t.id = l.id;
+  $$;
+
+-- What a reopen or a completion correction would do to awarded points, or null when nothing. The
+-- new state of the occurrence is given as a whole row.
+create function private.chore_points_change(
+  p_before private.chore_occurrences, p_after private.chore_occurrences
+) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_live private.point_entries;
+    v_live_user uuid;
+    v_want record;
+  begin
+    v_live := private.live_chore_award(p_before.id);
+    select * into v_want from private.desired_chore_award(p_after);
+    if v_live.id is not null then
+      select a.user_id into v_live_user from private.point_accounts a where a.id = v_live.account_id;
+    end if;
+    if (v_live.id is null and v_want.amount = 0)
+       or (v_live.id is not null and v_want.amount > 0 and v_live_user = v_want.user_id
+         and v_live.amount = v_want.amount and v_live.attributed_at = p_after.completed_at
+         and v_live.late = v_want.late) then
+      return null;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'fromUser', v_live_user, 'fromAmount', coalesce(v_live.amount, 0),
+      'toUser', v_want.user_id, 'toAmount', v_want.amount, 'late', v_want.late);
+  end
+  $$;
+
+-- The change as a viewer may see it: members by membership id, and the resulting available points
+-- of each affected account only for points managers.
+create function private.chore_points_change_view(p_home_id uuid, p_change jsonb, p_viewer uuid)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_balances boolean := private.can_manage_points(p_home_id, p_viewer);
+    v_from uuid := (p_change ->> 'fromUser')::uuid;
+    v_to uuid := (p_change ->> 'toUser')::uuid;
+    v_affected jsonb := '[]'::jsonb;
+    v_user uuid;
+    v_delta integer;
+    v_account private.point_accounts;
+  begin
+    if p_change is null then
+      return null;
+    end if;
+    for v_user in select distinct u from unnest(array[v_from, v_to]) u where u is not null loop
+      v_delta := case when v_user = v_to then (p_change ->> 'toAmount')::integer else 0 end
+        - case when v_user = v_from then (p_change ->> 'fromAmount')::integer else 0 end;
+      if v_delta = 0 then
+        continue;
+      end if;
+      select * into v_account from private.point_accounts a where a.home_id = p_home_id and a.user_id = v_user;
+      v_affected := v_affected || pg_catalog.jsonb_build_object(
+        'person', private.chore_person(p_home_id, v_user, p_viewer),
+        'change', v_delta,
+        'availableAfter', case when v_balances
+          then coalesce(v_account.balance - v_account.reserved, 0) + v_delta end);
+    end loop;
+    return pg_catalog.jsonb_build_object(
+      'from', private.chore_person(p_home_id, v_from, p_viewer),
+      'fromAmount', (p_change ->> 'fromAmount')::integer,
+      'to', private.chore_person(p_home_id, v_to, p_viewer),
+      'toAmount', (p_change ->> 'toAmount')::integer,
+      'late', (p_change ->> 'late')::boolean,
+      'affected', v_affected);
+  end
+  $$;
+
+-- Reopening a completed occurrence that carries points also needs manageHomePoints (spec: "chore-
+-- management and reward-adjustment permissions"). Outcome 'points_not_permitted' otherwise.
+alter function public.reopen_chore_occurrence(uuid) set schema private;
+alter function private.reopen_chore_occurrence(uuid) rename to reopen_chore_occurrence_before_points;
+
+create function public.reopen_chore_occurrence(p_occurrence_id uuid)
+returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+  begin
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is not null and private.can_manage_chores(v_occurrence.home_id, v_user_id)
+       and (private.live_chore_award(v_occurrence.id)).id is not null
+       and not private.can_manage_points(v_occurrence.home_id, v_user_id) then
+      return query select 'points_not_permitted', v_occurrence.revision;
+      return;
+    end if;
+    return query select * from private.reopen_chore_occurrence_before_points(p_occurrence_id);
+  end
+  $$;
+
+alter function public.correct_chore_completion(uuid, integer, uuid, timestamptz, boolean, text, text)
+  set schema private;
+alter function private.correct_chore_completion(uuid, integer, uuid, timestamptz, boolean, text, text)
+  rename to correct_chore_completion_before_points;
+
+create function public.correct_chore_completion(
+  p_occurrence_id uuid, p_expected_revision integer, p_contributor uuid default null,
+  p_completed_at timestamptz default null, p_set_note boolean default false, p_note text default null,
+  p_reason text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_after private.chore_occurrences;
+  begin
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is not null and private.can_manage_chores(v_occurrence.home_id, v_user_id)
+       and v_occurrence.status = 'completed' and v_occurrence.revision = p_expected_revision
+       and not private.can_manage_points(v_occurrence.home_id, v_user_id) then
+      v_after := v_occurrence;
+      if p_contributor is not null then
+        select m.user_id into v_after.contributor_id from public.home_memberships m
+          where m.home_id = v_occurrence.home_id and m.id = p_contributor;
+      end if;
+      if p_completed_at is not null and p_completed_at <= pg_catalog.now() + interval '5 minutes' then
+        v_after.completed_at := least(p_completed_at, pg_catalog.now());
+      end if;
+      if v_after.contributor_id is not null
+         and private.chore_points_change(v_occurrence, v_after) is not null then
+        return query select 'points_not_permitted', v_occurrence.revision;
+        return;
+      end if;
+    end if;
+    return query select * from private.correct_chore_completion_before_points(p_occurrence_id,
+      p_expected_revision, p_contributor, p_completed_at, p_set_note, p_note, p_reason);
+  end
+  $$;
+
+-- The point impact of reopening or correcting a completed occurrence, for the confirmation step:
+-- p_action 'reopen' or 'correct' (with the correction's contributor, a membership id, and time;
+-- null keeps each). Null when it changes no points. Chore managers only; balances after the change
+-- only for points managers. 42501 for an occurrence the caller may not see.
+create function public.preview_chore_points_change(
+  p_occurrence_id uuid, p_action text, p_contributor uuid default null,
+  p_completed_at timestamptz default null
+) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_after private.chore_occurrences;
+    v_change jsonb;
+  begin
+    if p_occurrence_id is null or p_action is null or p_action not in ('reopen', 'correct')
+       or (p_action = 'reopen' and (p_contributor is not null or p_completed_at is not null)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_occurrence from private.chore_occurrences o
+      where o.id = p_occurrence_id and o.deleted_at is null;
+    if not found or not private.can_manage_chores(v_occurrence.home_id, v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    v_after := v_occurrence;
+    if p_action = 'reopen' then
+      v_after.status := 'open';
+      v_after.contributor_id := null;
+      v_after.completed_at := null;
+    else
+      if v_occurrence.status <> 'completed' then
+        return null;
+      end if;
+      if p_contributor is not null then
+        select m.user_id into v_after.contributor_id from public.home_memberships m
+          where m.home_id = v_occurrence.home_id and m.id = p_contributor;
+        if v_after.contributor_id is null then
+          return null;
+        end if;
+      end if;
+      if p_completed_at is not null then
+        v_after.completed_at := least(p_completed_at, pg_catalog.now());
+      end if;
+    end if;
+    v_change := private.chore_points_change(v_occurrence, v_after);
+    if v_change is null then
+      return null;
+    end if;
+    return private.chore_points_change_view(v_occurrence.home_id, v_change, v_user_id)
+      || pg_catalog.jsonb_build_object('permitted', private.can_manage_points(v_occurrence.home_id, v_user_id));
+  end
+  $$;
+
+-- Corrects one occurrence's points snapshot (spec: "unless an authorized user explicitly corrects an
+-- eligible occurrence"). Open, pending and claimed occurrences: chore managers. A completed one
+-- also needs manageHomePoints and a reason, and its award is reconciled (preview first). Skipped,
+-- expired and paused ones earn nothing and are not eligible. p_dry_run returns the impact only.
+-- Outcomes: 'preview' and 'saved' (with impact), 'unchanged', 'conflict' (with the current revision),
+-- 'not_eligible', 'reason_required', 'points_not_permitted', 'not_found', 'not_permitted'.
+create function public.set_chore_occurrence_points(
+  p_occurrence_id uuid, p_expected_revision integer, p_points integer, p_late_policy text,
+  p_late_points integer default null, p_reason text default null, p_dry_run boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_occurrence private.chore_occurrences;
+    v_after private.chore_occurrences;
+    v_change jsonb;
+    v_impact jsonb;
+  begin
+    if p_occurrence_id is null or p_expected_revision is null or p_dry_run is null
+       or not private.valid_chore_points(p_points, p_late_policy, p_late_points)
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.points_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_occurrence := private.lock_chore_occurrence(p_occurrence_id, v_user_id);
+    if v_occurrence.id is null then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_chores(v_occurrence.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_occurrence.status not in ('open', 'pending_approval', 'completed') then
+      return query select 'not_eligible', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.points = p_points and v_occurrence.late_policy = p_late_policy
+       and v_occurrence.late_points is not distinct from p_late_points then
+      return query select 'unchanged', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    v_after := v_occurrence;
+    v_after.points := p_points;
+    v_after.late_policy := p_late_policy;
+    v_after.late_points := p_late_points;
+    v_change := private.chore_points_change(v_occurrence, v_after);
+    if v_change is not null and not private.can_manage_points(v_occurrence.home_id, v_user_id) then
+      return query select 'points_not_permitted', null::jsonb, v_occurrence.revision;
+      return;
+    end if;
+    v_impact := pg_catalog.jsonb_build_object('points', p_points, 'previousPoints', v_occurrence.points,
+      'change', private.chore_points_change_view(v_occurrence.home_id, v_change, v_user_id));
+    if p_dry_run then
+      return query select 'preview', v_impact, v_occurrence.revision;
+      return;
+    end if;
+    if v_occurrence.status = 'completed' and v_reason is null then
+      return query select 'reason_required', v_impact, v_occurrence.revision;
+      return;
+    end if;
+    update private.chore_occurrences o
+      set points = p_points, late_policy = p_late_policy, late_points = p_late_points,
+        revision = o.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where o.id = v_occurrence.id
+      returning * into v_occurrence;
+    insert into private.chore_occurrence_events (occurrence_id, kind, actor_id, reason, points, previous_points)
+      values (v_occurrence.id, 'points_corrected', v_user_id, v_reason, p_points,
+        (v_impact ->> 'previousPoints')::integer);
+    perform private.audit_chore('chore_occurrence.points_corrected', v_occurrence.home_id,
+      'chore_occurrence', v_occurrence.id, pg_catalog.jsonb_build_object(
+        'points', p_points, 'previous', (v_impact ->> 'previousPoints')::integer,
+        'awardChanged', v_change is not null));
+    return query select 'saved', v_impact, v_occurrence.revision;
+  end
+  $$;
+
+-- An occurrence's points as a member of its Home sees them: the base value and policy, the chore's
+-- current setting (with how many created open occurrences keep a different value), what completing
+-- now would earn, the pending award of a submission waiting for review, the live award, and its
+-- ledger lines (amount, kind, member, late; never balances). Null when the caller may not see it.
+create function public.get_chore_points(p_occurrence_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_occurrence private.chore_occurrences;
+    v_chore private.chores;
+    v_submission private.chore_submissions;
+    v_live private.point_entries;
+    v_live_user uuid;
+    v_today date;
+    v_late_now boolean;
+    v_manage boolean;
+  begin
+    if p_occurrence_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_occurrence from private.chore_occurrences o
+      where o.id = p_occurrence_id and o.deleted_at is null;
+    if not found or not private.is_home_member(v_occurrence.home_id, v_user_id) then
+      return null;
+    end if;
+    select * into v_chore from private.chores c where c.id = v_occurrence.chore_id and c.deleted_at is null;
+    if not found then
+      return null;
+    end if;
+    v_manage := private.can_manage_chores(v_occurrence.home_id, v_user_id);
+    v_today := private.task_today(v_occurrence.home_id, null);
+    v_late_now := v_today > v_occurrence.due_date;
+    select * into v_submission from private.chore_submissions s
+      where s.occurrence_id = v_occurrence.id and s.status = 'pending';
+    v_live := private.live_chore_award(v_occurrence.id);
+    if v_live.id is not null then
+      select a.user_id into v_live_user from private.point_accounts a where a.id = v_live.account_id;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'points', v_occurrence.points,
+      'latePolicy', v_occurrence.late_policy,
+      'latePoints', v_occurrence.late_points,
+      'lateNow', v_late_now and v_occurrence.status = 'open',
+      'expectedNow', private.chore_award(v_occurrence.points, v_occurrence.late_policy,
+        v_occurrence.late_points, v_late_now),
+      'chore', pg_catalog.jsonb_build_object(
+        'points', v_chore.points, 'latePolicy', v_chore.late_policy, 'latePoints', v_chore.late_points,
+        'revision', v_chore.revision,
+        'scheduledOther', case when v_manage then (select count(*)::integer
+          from private.chore_occurrences o2 where o2.chore_id = v_chore.id and o2.deleted_at is null
+            and o2.status = 'open' and (o2.points <> v_chore.points
+              or o2.late_policy <> v_chore.late_policy
+              or o2.late_points is distinct from v_chore.late_points)) end),
+      'pending', case when v_submission.id is not null then pg_catalog.jsonb_build_object(
+        'person', private.chore_person(v_occurrence.home_id, v_submission.contributor_id, v_user_id),
+        'amount', private.chore_award(v_occurrence.points, v_occurrence.late_policy,
+          v_occurrence.late_points, private.chore_late(v_occurrence.home_id, v_occurrence.due_date,
+            v_submission.submitted_at)),
+        'late', private.chore_late(v_occurrence.home_id, v_occurrence.due_date, v_submission.submitted_at))
+        end,
+      'awarded', case when v_live.id is not null then pg_catalog.jsonb_build_object(
+        'person', private.chore_person(v_occurrence.home_id, v_live_user, v_user_id),
+        'amount', v_live.amount, 'late', v_live.late, 'at', v_live.attributed_at) end,
+      'entries', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'kind', e.kind, 'amount', e.amount, 'late', e.late, 'createdAt', e.created_at,
+          'person', private.chore_person(v_occurrence.home_id, a.user_id, v_user_id))
+          order by e.seq)
+        from private.point_entries e join private.point_accounts a on a.id = e.account_id
+        where e.occurrence_id = v_occurrence.id), '[]'::jsonb),
+      'canCorrect', v_manage and v_occurrence.status in ('open', 'pending_approval', 'completed'),
+      'canCorrectAwarded', v_manage and private.can_manage_points(v_occurrence.home_id, v_user_id));
+  end
+  $$;
+
+-- Points of many occurrences of one Home at once (cards, the pool, the schedule): base value,
+-- policy, and the award each completed one carries. Ids outside the Home are left out.
+create function public.list_chore_points(p_home_id uuid, p_occurrence_ids uuid[])
+returns table (occurrence_id uuid, points integer, late_policy text, late_points integer, awarded integer)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_occurrence_ids is null or cardinality(p_occurrence_ids) > 500 then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    return query
+      select o.id, o.points, o.late_policy, o.late_points, (private.live_chore_award(o.id)).amount
+      from private.chore_occurrences o
+      where o.home_id = p_home_id and o.id = any (p_occurrence_ids) and o.deleted_at is null;
+  end
+  $$;
+
+-- Periods -----------------------------------------------------------------------------------------------
+
+-- The Home-local bounds of a period holding p_today: 'week' (the Home's chore week), 'month', 'year',
+-- 'all' (every time). Ends exclusive.
+create function private.point_period(p_home_id uuid, p_period text, p_today date)
+returns table (starts_on date, ends_on date, starts_at timestamptz, ends_at timestamptz)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_zone text := private.home_zone(p_home_id);
+    v_start date;
+    v_end date;
+  begin
+    if p_period = 'week' then
+      v_start := private.chore_week_start((private.chore_settings(p_home_id)).week_start, p_today);
+      v_end := v_start + 7;
+    elsif p_period = 'month' then
+      v_start := pg_catalog.date_trunc('month', p_today::timestamp)::date;
+      v_end := (v_start + interval '1 month')::date;
+    elsif p_period = 'year' then
+      v_start := pg_catalog.date_trunc('year', p_today::timestamp)::date;
+      v_end := (v_start + interval '1 year')::date;
+    else
+      return query select null::date, null::date, '-infinity'::timestamptz, 'infinity'::timestamptz;
+      return;
+    end if;
+    return query select v_start, v_end, (v_start::timestamp at time zone v_zone),
+      (v_end::timestamp at time zone v_zone);
+  end
+  $$;
+
+-- Points summaries ----------------------------------------------------------------------------------------
+
+-- Totals of one account: available, reserved, balance, earned, spent; owed when available < 0.
+create function private.point_totals(p_account private.point_accounts) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'available', coalesce(p_account.balance - p_account.reserved, 0),
+    'reserved', coalesce(p_account.reserved, 0),
+    'balance', coalesce(p_account.balance, 0),
+    'earned', coalesce((select sum(e.amount) from private.point_entries e where e.account_id = p_account.id
+      and e.kind in ('chore_award', 'chore_reversal', 'bonus', 'correction', 'manual_reversal')), 0),
+    'spent', coalesce((select -sum(e.amount) from private.point_entries e where e.account_id = p_account.id
+      and e.kind in ('redemption', 'refund')), 0),
+    'owed', coalesce(p_account.balance - p_account.reserved, 0) < 0);
+  $$;
+
+-- Chore points of one member in a period: earned (awards less reversals attributed in it), pending
+-- (submissions waiting for review, reported in it, as they would be awarded) and possible (their open
+-- assigned occurrences due in it, on time).
+create function private.chore_points_in(p_home_id uuid, p_user_id uuid, p_starts_on date, p_ends_on date)
+returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'earned', coalesce((select sum(e.amount) from private.point_entries e
+      join private.point_accounts a on a.id = e.account_id
+      where a.home_id = p_home_id and a.user_id = p_user_id
+        and e.kind in ('chore_award', 'chore_reversal')
+        and e.attributed_at >= (p_starts_on::timestamp at time zone private.home_zone(p_home_id))
+        and e.attributed_at < (p_ends_on::timestamp at time zone private.home_zone(p_home_id))), 0),
+    'pending', coalesce((select sum(private.chore_award(o.points, o.late_policy, o.late_points,
+        private.chore_late(o.home_id, o.due_date, s.submitted_at)))
+      from private.chore_submissions s join private.chore_occurrences o on o.id = s.occurrence_id
+      join private.chores c on c.id = o.chore_id
+      where s.home_id = p_home_id and s.status = 'pending' and s.contributor_id = p_user_id
+        and o.deleted_at is null and c.deleted_at is null
+        and (s.submitted_at at time zone private.home_zone(p_home_id))::date >= p_starts_on
+        and (s.submitted_at at time zone private.home_zone(p_home_id))::date < p_ends_on), 0),
+    'possible', coalesce((select sum(o.points) from private.chore_occurrences o
+      join private.chores c on c.id = o.chore_id
+      join private.chore_occurrence_assignees x on x.occurrence_id = o.id and x.user_id = p_user_id
+      where o.home_id = p_home_id and o.status = 'open' and o.deleted_at is null and c.deleted_at is null
+        and o.due_date >= p_starts_on and o.due_date < p_ends_on), 0));
+  $$;
+
+-- The caller's points in one Home: totals, this week's chore points, their target, participation,
+-- what they may do, and counts of work waiting for them. 42501 for a Home the caller is not in.
+create function public.get_point_summary(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_account private.point_accounts;
+    v_prefs private.point_preferences;
+    v_settings private.point_settings;
+    v_week record;
+    v_rewards boolean;
+    v_approve boolean;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    select * into v_account from private.point_accounts a where a.home_id = p_home_id and a.user_id = v_user_id;
+    select * into v_prefs from private.point_preferences p where p.home_id = p_home_id and p.user_id = v_user_id;
+    select * into v_settings from private.point_settings s where s.home_id = p_home_id;
+    select * into v_week from private.point_period(p_home_id, 'week', private.task_today(p_home_id, null));
+    v_rewards := private.can_manage_rewards(p_home_id, v_user_id);
+    v_approve := private.can_approve_rewards(p_home_id, v_user_id);
+    return pg_catalog.jsonb_build_object(
+      'accountId', v_account.id,
+      'totals', private.point_totals(v_account),
+      'week', pg_catalog.jsonb_build_object('startsOn', v_week.starts_on, 'endsOn', v_week.ends_on - 1)
+        || private.chore_points_in(p_home_id, v_user_id, v_week.starts_on, v_week.ends_on),
+      'participates', coalesce(v_prefs.participates, true),
+      'target', v_prefs.target,
+      'targetPaused', coalesce(v_prefs.target_paused, false),
+      'shareTarget', coalesce(v_prefs.share_target, false),
+      'leaderboardEnabled', coalesce(v_settings.leaderboard_enabled, false),
+      'defaultPeriod', coalesce(v_settings.default_period, 'month'),
+      'canManagePoints', private.can_manage_points(p_home_id, v_user_id),
+      'canManageRewards', v_rewards,
+      'canApproveRewards', v_approve,
+      'pendingApprovals', case when v_approve then (select count(*)::integer
+        from private.reward_redemptions r where r.home_id = p_home_id and r.status = 'pending'
+          and r.requested_by is distinct from v_user_id) else 0 end,
+      'openFulfillment', case when v_rewards then (select count(*)::integer
+        from private.reward_redemptions r where r.home_id = p_home_id and r.status = 'redeemed'
+          and (r.fulfillment = 'pending' or (r.fulfillment = 'unable' and (r.resolution is null
+            or (r.resolution = 'replacement' and r.replacement_status in ('pending', 'unable'))))))
+        else 0 end,
+      'myPendingRequests', (select count(*)::integer from private.reward_redemptions r
+        where r.account_id = v_account.id and r.status = 'pending'));
+  end
+  $$;
+
+-- One page of an account's ledger, newest first (p_before: a seq from the previous page). p_account
+-- null: the caller's own. Another account: points managers only. Reasons are shown to the account's
+-- holder and to points managers (both may read the account). 42501 when the caller may not read it.
+create function public.list_point_entries(
+  p_home_id uuid, p_account_id uuid default null, p_before bigint default null,
+  p_limit integer default 50
+) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_account private.point_accounts;
+    v_limit integer := least(greatest(coalesce(p_limit, 50), 1), private.points_limit('page'));
+    v_manage boolean;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_account_id is null then
+      select * into v_account from private.point_accounts a where a.home_id = p_home_id and a.user_id = v_user_id;
+      if not found then
+        return pg_catalog.jsonb_build_object('account', null, 'entries', '[]'::jsonb, 'next', null);
+      end if;
+    else
+      select * into v_account from private.point_accounts a where a.id = p_account_id and a.home_id = p_home_id;
+      if not found or not private.can_view_point_account(v_account, v_user_id) then
+        raise exception 'not permitted' using errcode = '42501';
+      end if;
+    end if;
+    v_manage := private.can_manage_points(p_home_id, v_user_id);
+    return (
+      with page as (
+        select e.* from private.point_entries e
+        where e.account_id = v_account.id and (p_before is null or e.seq < p_before)
+        order by e.seq desc limit v_limit + 1
+      )
+      select pg_catalog.jsonb_build_object(
+        'account', pg_catalog.jsonb_build_object('id', v_account.id,
+          'person', private.chore_person(p_home_id, v_account.user_id, v_user_id),
+          'former', v_account.user_id is null or not private.is_home_member(p_home_id, v_account.user_id))
+          || private.point_totals(v_account),
+        'entries', coalesce((select pg_catalog.jsonb_agg(x.item order by x.seq desc) from (
+          select p.seq, pg_catalog.jsonb_build_object(
+            'id', p.id, 'seq', p.seq, 'kind', p.kind, 'amount', p.amount, 'late', p.late,
+            'attributedAt', p.attributed_at, 'createdAt', p.created_at, 'reason', p.reason,
+            'actor', private.chore_person(p_home_id, p.actor_id, v_user_id),
+            'availableBefore', p.available_before, 'availableAfter', p.available_after,
+            'reservedAfter', p.reserved_after,
+            'occurrence', case when p.occurrence_id is not null then (
+              select pg_catalog.jsonb_build_object('id', o.id,
+                'title', coalesce(o.closed_title, c.title), 'scheduledDate', o.scheduled_date)
+              from private.chore_occurrences o join private.chores c on c.id = o.chore_id
+              where o.id = p.occurrence_id) end,
+            'redemption', case when p.redemption_id is not null then (
+              select pg_catalog.jsonb_build_object('id', r.id, 'rewardName', r.reward_name)
+              from private.reward_redemptions r where r.id = p.redemption_id) end,
+            'reverses', p.reverses_id,
+            'reversed', exists (select 1 from private.point_entries r where r.reverses_id = p.id),
+            'canReverse', v_manage and p.kind in ('bonus', 'correction')
+              and not exists (select 1 from private.point_entries r where r.reverses_id = p.id)
+          ) as item
+          from page p order by p.seq desc limit v_limit
+        ) x), '[]'::jsonb),
+        'next', case when (select count(*) from page) > v_limit
+          then (select min(q.seq) from (select p.seq from page p order by p.seq desc limit v_limit) q) end));
+  end
+  $$;
+
+-- Every account of the Home with its totals (points managers only), current members first; former
+-- members' preserved accounts follow without a name. 42501 otherwise.
+create function public.list_point_accounts(p_home_id uuid)
+returns table (account_id uuid, member_id uuid, former boolean, totals jsonb)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if not private.can_manage_points(p_home_id, v_user_id) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    return query
+      select a.id, m.id, m.id is null, private.point_totals(a)
+      from private.point_accounts a
+      left join public.home_memberships m on m.home_id = a.home_id and m.user_id = a.user_id
+      where a.home_id = p_home_id
+      union all
+      -- Members without an account yet show zero totals.
+      select null::uuid, m.id, false, private.point_totals(null::private.point_accounts)
+      from public.home_memberships m
+      where m.home_id = p_home_id and not exists (
+        select 1 from private.point_accounts a where a.home_id = m.home_id and a.user_id = m.user_id)
+      order by 3, 2;
+  end
+  $$;
+
+-- Manual adjustments ----------------------------------------------------------------------------------------
+
+-- A bonus (positive) or correction (either sign) to a current member's account (points managers;
+-- spec "Confirmed manual reward point bonuses and adjustments"). p_id comes from the client, so a
+-- retry returns 'exists'. A meaningful reason (3-300 characters) is required. A debit never takes
+-- available points below zero and never touches reserved points ('insufficient_points', nothing
+-- applied). p_dry_run returns the preview: the member, the change, available and reserved now and
+-- available after. Outcomes: 'preview', 'posted', 'exists', 'insufficient_points',
+-- 'member_unavailable', 'not_permitted'.
+create function public.adjust_points(
+  p_id uuid, p_home_id uuid, p_member uuid, p_kind text, p_amount integer, p_reason text,
+  p_dry_run boolean default false
+) returns table (outcome text, preview jsonb, entry_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_target uuid;
+    v_account private.point_accounts;
+    v_existing private.point_entries;
+    v_entry private.point_entries;
+    v_preview jsonb;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null or p_member is null or p_kind is null or p_kind not in ('bonus', 'correction')
+       or p_amount is null or p_amount = 0 or abs(p_amount) > private.points_limit('adjustment')
+       or (p_kind = 'bonus' and p_amount < 0) or p_dry_run is null
+       or v_reason is null or pg_catalog.char_length(v_reason) < private.points_limit('reason_min')
+       or not private.is_plain_text(v_reason, private.points_limit('reason')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.can_manage_points(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::uuid;
+      return;
+    end if;
+    select * into v_existing from private.point_entries e where e.id = p_id;
+    if found then
+      if v_existing.home_id <> p_home_id then
+        raise exception 'invalid request' using errcode = '22023';
+      end if;
+      return query select 'exists', null::jsonb, v_existing.id;
+      return;
+    end if;
+    select m.user_id into v_target from public.home_memberships m where m.home_id = p_home_id and m.id = p_member;
+    if v_target is null then
+      return query select 'member_unavailable', null::jsonb, null::uuid;
+      return;
+    end if;
+    v_account := private.lock_point_account(p_home_id, v_target);
+    v_preview := pg_catalog.jsonb_build_object(
+      'person', private.chore_person(p_home_id, v_target, v_user_id), 'kind', p_kind, 'amount', p_amount,
+      'available', v_account.balance - v_account.reserved, 'reserved', v_account.reserved,
+      'availableAfter', v_account.balance - v_account.reserved + p_amount);
+    if p_amount < 0 and v_account.balance - v_account.reserved + p_amount < 0 then
+      return query select 'insufficient_points', v_preview, null::uuid;
+      return;
+    end if;
+    if p_dry_run then
+      return query select 'preview', v_preview, null::uuid;
+      return;
+    end if;
+    v_entry := private.post_point_entry(v_account.id, p_kind, p_amount, null, null, null, null, v_reason,
+      v_user_id, null, p_id);
+    perform private.notify_point_adjustment(v_entry);
+    perform private.audit('point_entry.adjusted', p_home_id, 'point_entry', v_entry.id,
+      pg_catalog.jsonb_build_object('kind', p_kind, 'amount', p_amount));
+    return query select 'posted', v_preview, v_entry.id;
+  end
+  $$;
+
+-- Reverses one bonus or correction with a new linked entry (points managers), once. The reversal
+-- follows the same rule as a debit. Outcomes: 'preview', 'reversed', 'already_reversed',
+-- 'not_reversible', 'insufficient_points', 'member_unavailable', 'not_found', 'not_permitted'.
+create function public.reverse_point_entry(
+  p_entry_id uuid, p_reason text, p_dry_run boolean default false
+) returns table (outcome text, preview jsonb, entry_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_original private.point_entries;
+    v_account private.point_accounts;
+    v_reversal private.point_entries;
+    v_entry private.point_entries;
+    v_preview jsonb;
+  begin
+    if p_entry_id is null or p_dry_run is null or v_reason is null
+       or pg_catalog.char_length(v_reason) < private.points_limit('reason_min')
+       or not private.is_plain_text(v_reason, private.points_limit('reason')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_original from private.point_entries e where e.id = p_entry_id;
+    if not found or not private.is_home_member(v_original.home_id, v_user_id) then
+      return query select 'not_found', null::jsonb, null::uuid;
+      return;
+    end if;
+    if not private.can_manage_points(v_original.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::uuid;
+      return;
+    end if;
+    if v_original.kind not in ('bonus', 'correction') then
+      return query select 'not_reversible', null::jsonb, null::uuid;
+      return;
+    end if;
+    perform private.lock_points_home(v_original.home_id);
+    select * into v_account from private.point_accounts a where a.id = v_original.account_id for update;
+    if v_account.user_id is null or not private.is_home_member(v_account.home_id, v_account.user_id) then
+      return query select 'member_unavailable', null::jsonb, null::uuid;
+      return;
+    end if;
+    select * into v_reversal from private.point_entries e where e.reverses_id = v_original.id;
+    if found then
+      return query select 'already_reversed', null::jsonb, v_reversal.id;
+      return;
+    end if;
+    v_preview := pg_catalog.jsonb_build_object(
+      'person', private.chore_person(v_account.home_id, v_account.user_id, v_user_id),
+      'kind', 'manual_reversal', 'amount', -v_original.amount,
+      'available', v_account.balance - v_account.reserved, 'reserved', v_account.reserved,
+      'availableAfter', v_account.balance - v_account.reserved - v_original.amount);
+    if v_original.amount > 0 and v_account.balance - v_account.reserved - v_original.amount < 0 then
+      return query select 'insufficient_points', v_preview, null::uuid;
+      return;
+    end if;
+    if p_dry_run then
+      return query select 'preview', v_preview, null::uuid;
+      return;
+    end if;
+    v_entry := private.post_point_entry(v_account.id, 'manual_reversal', -v_original.amount,
+      v_original.attributed_at, null, null, v_original.id, v_reason, v_user_id, null);
+    perform private.notify_point_adjustment(v_entry);
+    perform private.audit('point_entry.reversed', v_account.home_id, 'point_entry', v_entry.id,
+      pg_catalog.jsonb_build_object('reverses', v_original.id, 'amount', -v_original.amount));
+    return query select 'reversed', v_preview, v_entry.id;
+  end
+  $$;
+
+-- Preferences, settings, leaderboard, weekly overview -------------------------------------------------------
+
+-- The caller's own choices in one Home (any member; spec: no manager may impose or override them).
+-- Each part is optional: p_participates, p_set_target with p_target (null or 0 removes it),
+-- p_target_paused, p_share_target. Outcome 'saved'.
+create function public.update_point_preferences(
+  p_home_id uuid, p_participates boolean default null, p_set_target boolean default false,
+  p_target integer default null, p_target_paused boolean default null, p_share_target boolean default null
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_set_target is null or (not p_set_target and p_target is not null)
+       or (p_target is not null and p_target not between 0 and private.points_limit('target')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    insert into private.point_preferences (home_id, user_id) values (p_home_id, v_user_id)
+      on conflict (home_id, user_id) do nothing;
+    update private.point_preferences p
+      set participates = coalesce(p_participates, p.participates),
+        target = case when p_set_target then nullif(p_target, 0) else p.target end,
+        target_paused = case when p_set_target and nullif(p_target, 0) is null then false
+          else coalesce(p_target_paused, p.target_paused) end,
+        share_target = coalesce(p_share_target, p.share_target),
+        updated_at = pg_catalog.now()
+      where p.home_id = p_home_id and p.user_id = v_user_id;
+    return 'saved';
+  end
+  $$;
+
+-- The Home's leaderboard settings (rewards managers): on/off and the default period, set to state
+-- (a retry or two managers saving at once leave the last choice). Every member reads them through
+-- get_point_summary. Outcomes: 'saved', 'not_permitted'.
+create function public.update_point_settings(
+  p_home_id uuid, p_leaderboard_enabled boolean, p_default_period text
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_leaderboard_enabled is null or p_default_period is null
+       or p_default_period not in ('week', 'month', 'all') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.can_manage_rewards(p_home_id, v_user_id) then
+      return 'not_permitted';
+    end if;
+    insert into private.point_settings (home_id, leaderboard_enabled, default_period, updated_by)
+      values (p_home_id, p_leaderboard_enabled, p_default_period, v_user_id)
+      on conflict (home_id) do update
+        set leaderboard_enabled = excluded.leaderboard_enabled, default_period = excluded.default_period,
+          revision = private.point_settings.revision + 1, updated_by = excluded.updated_by,
+          updated_at = pg_catalog.now();
+    perform private.audit('point_settings.changed', p_home_id, 'point_settings', p_home_id,
+      pg_catalog.jsonb_build_object('leaderboard', p_leaderboard_enabled, 'period', p_default_period));
+    return 'saved';
+  end
+  $$;
+
+-- The leaderboard for a period (null: the Home's default), when the Home turned it on: every current
+-- member who participates, ranked by earned points attributed in the period, then by completed
+-- occurrences in it (as actual contributor, by completion time), then sharing a rank (1, 1, 3).
+-- Nobody who opted out appears or is counted. Never balances, reservations or reasons. 42501 for a
+-- Home the caller is not in.
+create function public.get_point_leaderboard(p_home_id uuid, p_period text default null) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_settings private.point_settings;
+    v_period text;
+    v_bounds record;
+    v_first timestamptz;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_period is not null and p_period not in ('week', 'month', 'all') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_settings from private.point_settings s where s.home_id = p_home_id;
+    v_period := coalesce(p_period, v_settings.default_period, 'month');
+    if not coalesce(v_settings.leaderboard_enabled, false) then
+      return pg_catalog.jsonb_build_object('enabled', false, 'period', v_period,
+        'defaultPeriod', coalesce(v_settings.default_period, 'month'), 'rows', '[]'::jsonb);
+    end if;
+    select * into v_bounds from private.point_period(p_home_id, v_period, private.task_today(p_home_id, null));
+    if v_period = 'all' then
+      select min(e.attributed_at) into v_first from private.point_entries e where e.home_id = p_home_id;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'enabled', true, 'period', v_period,
+      'defaultPeriod', v_settings.default_period,
+      'startsOn', case when v_period = 'all'
+        then (v_first at time zone private.home_zone(p_home_id))::date else v_bounds.starts_on end,
+      'endsOn', case when v_period = 'all' then null else v_bounds.ends_on - 1 end,
+      'participates', coalesce((select p.participates from private.point_preferences p
+        where p.home_id = p_home_id and p.user_id = v_user_id), true),
+      'rows', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'member', r.member_id, 'me', r.user_id = v_user_id, 'earned', r.earned,
+          'completed', r.completed, 'rank', r.rank) order by r.rank, r.member_id)
+        from (
+          select s.*, rank() over (order by s.earned desc, s.completed desc)::integer as rank
+          from (
+            select m.id as member_id, m.user_id,
+              coalesce((select sum(e.amount) from private.point_entries e
+                join private.point_accounts a on a.id = e.account_id
+                where a.home_id = p_home_id and a.user_id = m.user_id
+                  and e.kind in ('chore_award', 'chore_reversal', 'bonus', 'correction', 'manual_reversal')
+                  and e.attributed_at >= v_bounds.starts_at and e.attributed_at < v_bounds.ends_at), 0)::integer
+                as earned,
+              (select count(*) from private.chore_occurrences o join private.chores c on c.id = o.chore_id
+                where o.home_id = p_home_id and o.status = 'completed' and o.deleted_at is null
+                  and c.deleted_at is null and o.contributor_id = m.user_id
+                  and o.completed_at >= v_bounds.starts_at and o.completed_at < v_bounds.ends_at)::integer
+                as completed
+            from public.home_memberships m
+            where m.home_id = p_home_id and coalesce((select p.participates from private.point_preferences p
+              where p.home_id = m.home_id and p.user_id = m.user_id), true)
+          ) s
+        ) r), '[]'::jsonb));
+  end
+  $$;
+
+-- The weekly points overview of a Home's current week (or the week holding p_date): the caller's own
+-- earned, pending and possible chore points and target; with p_shared, every participating current
+-- member's earned, pending and possible points (targets only when shared), and the possible points
+-- of unassigned open occurrences as a separate total. Never a ranking. 42501 for a Home the caller
+-- is not in.
+create function public.get_weekly_points(p_home_id uuid, p_shared boolean default false, p_date date default null)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_week record;
+    v_prefs private.point_preferences;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_shared is null or (p_date is not null and p_date not between date '2000-01-01' and date '2199-12-31') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_week from private.point_period(p_home_id, 'week',
+      coalesce(p_date, private.task_today(p_home_id, null)));
+    select * into v_prefs from private.point_preferences p where p.home_id = p_home_id and p.user_id = v_user_id;
+    return pg_catalog.jsonb_build_object(
+      'startsOn', v_week.starts_on, 'endsOn', v_week.ends_on - 1,
+      'me', private.chore_points_in(p_home_id, v_user_id, v_week.starts_on, v_week.ends_on)
+        || pg_catalog.jsonb_build_object('target', case when not coalesce(v_prefs.target_paused, false)
+          then v_prefs.target end),
+      'members', case when p_shared then coalesce((select pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object('member', m.id, 'me', m.user_id = v_user_id,
+            'target', case when (m.user_id = v_user_id or coalesce(p.share_target, false))
+              and not coalesce(p.target_paused, false) then p.target end)
+          || private.chore_points_in(p_home_id, m.user_id, v_week.starts_on, v_week.ends_on)
+          order by m.id)
+        from public.home_memberships m
+        left join private.point_preferences p on p.home_id = m.home_id and p.user_id = m.user_id
+        where m.home_id = p_home_id and coalesce(p.participates, true)), '[]'::jsonb) end,
+      'unassignedPossible', case when p_shared then coalesce((select sum(o.points)
+        from private.chore_occurrences o join private.chores c on c.id = o.chore_id
+        where o.home_id = p_home_id and o.status = 'open' and o.deleted_at is null and c.deleted_at is null
+          and o.due_date >= v_week.starts_on and o.due_date < v_week.ends_on
+          and not exists (select 1 from private.chore_occurrence_assignees x where x.occurrence_id = o.id)), 0)
+        end);
+  end
+  $$;
+
+-- Rewards -------------------------------------------------------------------------------------------------
+
+-- The first day of the per-member period holding p_today (null for 'ever'), and of the next one.
+create function private.reward_period_start(p_home_id uuid, p_period text, p_today date) returns date
+  language sql stable security definer set search_path = '' as $$
+  select case when p_period = 'ever' then null
+    else (select x.starts_on from private.point_period(p_home_id, p_period, p_today) x) end;
+  $$;
+
+create function private.reward_period_next(p_home_id uuid, p_period text, p_today date) returns date
+  language sql stable security definer set search_path = '' as $$
+  select case when p_period = 'ever' then null
+    else (select x.ends_on from private.point_period(p_home_id, p_period, p_today) x) end;
+  $$;
+
+-- How many requests count against the reward's total, and against one account in the current period.
+create function private.reward_total_used(p_reward_id uuid) returns integer
+  language sql stable security definer set search_path = '' as $$
+  select count(*)::integer from private.reward_redemptions r
+  where r.reward_id = p_reward_id and r.status in ('pending', 'redeemed');
+  $$;
+
+create function private.reward_member_used(p_reward private.rewards, p_account_id uuid, p_today date)
+returns integer
+  language sql stable security definer set search_path = '' as $$
+  select count(*)::integer from private.reward_redemptions r
+  where r.reward_id = p_reward.id and r.account_id = p_account_id and r.status in ('pending', 'redeemed')
+    and (p_reward.member_period = 'ever'
+      or (r.requested_at at time zone private.home_zone(p_reward.home_id))::date
+        >= private.reward_period_start(p_reward.home_id, p_reward.member_period, p_today));
+  $$;
+
+-- Why p_account cannot redeem the reward now, or null: 'archived', 'disabled', 'not_started',
+-- 'ended', 'sold_out', 'member_limit'.
+create function private.reward_block(p_reward private.rewards, p_account_id uuid, p_today date) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_reward.archived_at is not null then 'archived'
+    when not p_reward.enabled then 'disabled'
+    when p_reward.available_from is not null and p_today < p_reward.available_from then 'not_started'
+    when p_reward.available_until is not null and p_today > p_reward.available_until then 'ended'
+    when p_reward.total_limit is not null and private.reward_total_used(p_reward.id) >= p_reward.total_limit
+      then 'sold_out'
+    when p_reward.member_limit is not null and p_account_id is not null
+      and private.reward_member_used(p_reward, p_account_id, p_today) >= p_reward.member_limit
+      then 'member_limit'
+  end;
+  $$;
+
+-- A reward as p_viewer sees it.
+create function private.reward_json(p_reward private.rewards, p_viewer uuid, p_manage boolean) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_today date := private.task_today(p_reward.home_id, null);
+    v_account private.point_accounts;
+    v_block text;
+    v_used integer;
+  begin
+    select * into v_account from private.point_accounts a
+      where a.home_id = p_reward.home_id and a.user_id = p_viewer;
+    v_block := private.reward_block(p_reward, v_account.id, v_today);
+    v_used := case when p_reward.member_limit is not null and v_account.id is not null
+      then private.reward_member_used(p_reward, v_account.id, v_today) else 0 end;
+    return pg_catalog.jsonb_build_object(
+      'id', p_reward.id, 'name', p_reward.name, 'description', p_reward.description,
+      'cost', p_reward.cost, 'requiresApproval', p_reward.requires_approval, 'enabled', p_reward.enabled,
+      'availableFrom', p_reward.available_from, 'availableUntil', p_reward.available_until,
+      'totalLimit', p_reward.total_limit, 'memberLimit', p_reward.member_limit,
+      'memberPeriod', p_reward.member_period, 'archived', p_reward.archived_at is not null,
+      'revision', p_reward.revision,
+      'block', v_block,
+      'remaining', case when p_reward.total_limit is not null
+        then greatest(p_reward.total_limit - private.reward_total_used(p_reward.id), 0) end,
+      'myUsed', v_used,
+      'nextEligibleOn', case when v_block = 'member_limit'
+        then private.reward_period_next(p_reward.home_id, p_reward.member_period, v_today) end,
+      'canAfford', coalesce(v_account.balance - v_account.reserved, 0) >= p_reward.cost,
+      'pendingCount', case when p_manage then (select count(*)::integer from private.reward_redemptions r
+        where r.reward_id = p_reward.id and r.status = 'pending') end,
+      'redeemedCount', case when p_manage then (select count(*)::integer from private.reward_redemptions r
+        where r.reward_id = p_reward.id and r.status = 'redeemed') end);
+  end
+  $$;
+
+-- The Home's rewards: the enabled, not archived catalog for every member; every reward (archived
+-- ones when asked) for rewards managers. By cost, then name. 42501 for a Home the caller is not in.
+create function public.list_rewards(p_home_id uuid, p_include_archived boolean default false) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_manage boolean;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    v_manage := private.can_manage_rewards(p_home_id, v_user_id);
+    return coalesce((select pg_catalog.jsonb_agg(private.reward_json(r, v_user_id, v_manage)
+        order by r.cost, private.task_name_key(r.name), r.id)
+      from private.rewards r
+      where r.home_id = p_home_id
+        and (v_manage or (r.enabled and r.archived_at is null))
+        and (r.archived_at is null or (v_manage and coalesce(p_include_archived, false)))), '[]'::jsonb);
+  end
+  $$;
+
+-- Validates reward fields (22023 when invalid).
+create function private.check_reward_fields(
+  p_name text, p_description text, p_cost integer, p_requires_approval boolean, p_enabled boolean,
+  p_available_from date, p_available_until date, p_total_limit integer, p_member_limit integer,
+  p_member_period text
+) returns void
+  language plpgsql immutable set search_path = '' as $$
+  begin
+    if p_name is null or not private.is_visible_name(p_name, private.points_limit('reward_name'))
+       or (p_description is not null
+         and not private.is_plain_text(p_description, private.points_limit('reward_description')))
+       or p_cost is null or p_cost not between 1 and private.points_limit('cost')
+       or p_requires_approval is null or p_enabled is null
+       or (p_available_from is not null and p_available_from not between date '2000-01-01' and date '2199-12-31')
+       or (p_available_until is not null and p_available_until not between date '2000-01-01' and date '2199-12-31')
+       or p_available_until < p_available_from
+       or (p_total_limit is not null and p_total_limit not between 1 and private.points_limit('total_limit'))
+       or (p_member_limit is null) <> (p_member_period is null)
+       or (p_member_limit is not null and p_member_limit not between 1 and private.points_limit('member_limit'))
+       or (p_member_period is not null and p_member_period not in ('week', 'month', 'year', 'ever')) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+  end
+  $$;
+
+-- Creates a reward (rewards managers). p_id comes from the client, so a retry returns 'exists'.
+-- Outcomes: 'created', 'exists', 'limit_reached', 'not_permitted'.
+create function public.create_reward(
+  p_id uuid, p_home_id uuid, p_name text, p_cost integer, p_description text default null,
+  p_requires_approval boolean default false, p_enabled boolean default true,
+  p_available_from date default null, p_available_until date default null,
+  p_total_limit integer default null, p_member_limit integer default null, p_member_period text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_description text := nullif(pg_catalog.btrim(p_description, E' \t\r\n'), '');
+    v_existing private.rewards;
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform private.check_reward_fields(p_name, v_description, p_cost, p_requires_approval, p_enabled,
+      p_available_from, p_available_until, p_total_limit, p_member_limit, p_member_period);
+    if not private.can_manage_rewards(p_home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    select * into v_existing from private.rewards r where r.id = p_id;
+    if found then
+      if v_existing.home_id <> p_home_id then
+        raise exception 'invalid request' using errcode = '22023';
+      end if;
+      return query select 'exists', v_existing.revision;
+      return;
+    end if;
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('rewards:' || p_home_id::text, 0));
+    if (select count(*) from private.rewards r where r.home_id = p_home_id and r.archived_at is null)
+       >= private.points_limit('rewards') then
+      return query select 'limit_reached', null::integer;
+      return;
+    end if;
+    insert into private.rewards (
+      id, home_id, name, description, cost, requires_approval, enabled, available_from, available_until,
+      total_limit, member_limit, member_period, created_by, updated_by
+    ) values (
+      p_id, p_home_id, p_name, v_description, p_cost, p_requires_approval, p_enabled, p_available_from,
+      p_available_until, p_total_limit, p_member_limit, p_member_period, v_user_id, v_user_id
+    );
+    perform private.audit('rewards.created', p_home_id, 'reward', p_id,
+      pg_catalog.jsonb_build_object('cost', p_cost, 'approval', p_requires_approval));
+    return query select 'created', 1;
+  end
+  $$;
+
+-- Changes a reward (rewards managers): every field at once, as the form shows them. Pending requests
+-- keep their cost and reservation; completed redemptions never change; a lower limit applies to new
+-- requests only. p_dry_run returns the impact: pending and redeemed counts, and whether the new
+-- limits are already reached. Outcomes: 'preview', 'saved' (with impact), 'conflict' (with the
+-- current revision), 'archived', 'not_found', 'not_permitted'.
+create function public.update_reward(
+  p_reward_id uuid, p_expected_revision integer, p_name text, p_cost integer,
+  p_description text default null, p_requires_approval boolean default false, p_enabled boolean default true,
+  p_available_from date default null, p_available_until date default null,
+  p_total_limit integer default null, p_member_limit integer default null, p_member_period text default null,
+  p_dry_run boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_description text := nullif(pg_catalog.btrim(p_description, E' \t\r\n'), '');
+    v_reward private.rewards;
+    v_impact jsonb;
+    v_used integer;
+  begin
+    if p_reward_id is null or p_expected_revision is null or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform private.check_reward_fields(p_name, v_description, p_cost, p_requires_approval, p_enabled,
+      p_available_from, p_available_until, p_total_limit, p_member_limit, p_member_period);
+    perform private.lock_points_home((select r.home_id from private.rewards r where r.id = p_reward_id));
+    select * into v_reward from private.rewards r where r.id = p_reward_id for update;
+    if not found or not private.is_home_member(v_reward.home_id, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_rewards(v_reward.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_reward.archived_at is not null then
+      return query select 'archived', null::jsonb, v_reward.revision;
+      return;
+    end if;
+    if v_reward.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_reward.revision;
+      return;
+    end if;
+    v_used := private.reward_total_used(v_reward.id);
+    v_impact := pg_catalog.jsonb_build_object(
+      'pending', (select count(*)::integer from private.reward_redemptions r
+        where r.reward_id = v_reward.id and r.status = 'pending'),
+      'redeemed', (select count(*)::integer from private.reward_redemptions r
+        where r.reward_id = v_reward.id and r.status = 'redeemed'),
+      'costChanged', p_cost <> v_reward.cost,
+      'totalReached', p_total_limit is not null and v_used >= p_total_limit,
+      'approvalChanged', p_requires_approval <> v_reward.requires_approval);
+    if p_dry_run then
+      return query select 'preview', v_impact, v_reward.revision;
+      return;
+    end if;
+    update private.rewards r
+      set name = p_name, description = v_description, cost = p_cost,
+        requires_approval = p_requires_approval, enabled = p_enabled, available_from = p_available_from,
+        available_until = p_available_until, total_limit = p_total_limit, member_limit = p_member_limit,
+        member_period = p_member_period, revision = r.revision + 1, updated_by = v_user_id,
+        updated_at = pg_catalog.now()
+      where r.id = v_reward.id
+      returning * into v_reward;
+    perform private.audit('rewards.updated', v_reward.home_id, 'reward', v_reward.id,
+      pg_catalog.jsonb_build_object('cost', v_reward.cost, 'enabled', v_reward.enabled,
+        'approval', v_reward.requires_approval));
+    return query select 'saved', v_impact, v_reward.revision;
+  end
+  $$;
+
+-- Archives a reward (it leaves the catalog; pending requests, outstanding fulfillment and history
+-- stay) or brings it back (rewards managers). Outcomes: 'saved' (with impact: pending, outstanding),
+-- 'unchanged', 'conflict', 'limit_reached', 'not_found', 'not_permitted'.
+create function public.archive_reward(p_reward_id uuid, p_expected_revision integer, p_archived boolean)
+returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reward private.rewards;
+    v_impact jsonb;
+  begin
+    if p_reward_id is null or p_expected_revision is null or p_archived is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform private.lock_points_home((select r.home_id from private.rewards r where r.id = p_reward_id));
+    select * into v_reward from private.rewards r where r.id = p_reward_id for update;
+    if not found or not private.is_home_member(v_reward.home_id, v_user_id) then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_rewards(v_reward.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_reward.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_reward.revision;
+      return;
+    end if;
+    if (v_reward.archived_at is not null) = p_archived then
+      return query select 'unchanged', null::jsonb, v_reward.revision;
+      return;
+    end if;
+    if not p_archived then
+      perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('rewards:' || v_reward.home_id::text, 0));
+      if (select count(*) from private.rewards r where r.home_id = v_reward.home_id and r.archived_at is null)
+         >= private.points_limit('rewards') then
+        return query select 'limit_reached', null::jsonb, v_reward.revision;
+        return;
+      end if;
+    end if;
+    v_impact := pg_catalog.jsonb_build_object(
+      'pending', (select count(*)::integer from private.reward_redemptions r
+        where r.reward_id = v_reward.id and r.status = 'pending'),
+      'outstanding', (select count(*)::integer from private.reward_redemptions r
+        where r.reward_id = v_reward.id and r.status = 'redeemed' and r.fulfillment <> 'fulfilled'
+          and (r.resolution is null or r.replacement_status in ('pending', 'unable'))));
+    update private.rewards r
+      set archived_at = case when p_archived then pg_catalog.now() end,
+        archived_by = case when p_archived then v_user_id end,
+        revision = r.revision + 1, updated_by = v_user_id, updated_at = pg_catalog.now()
+      where r.id = v_reward.id
+      returning * into v_reward;
+    perform private.audit(case when p_archived then 'rewards.archived' else 'rewards.restored' end,
+      v_reward.home_id, 'reward', v_reward.id, v_impact);
+    return query select 'saved', v_impact, v_reward.revision;
+  end
+  $$;
+
+-- Redemptions -------------------------------------------------------------------------------------------
+
+create function private.redemption_event(p_redemption_id uuid, p_kind text, p_actor uuid, p_note text,
+  p_details jsonb default '{}'::jsonb) returns void
+  language sql volatile security definer set search_path = '' as $$
+  insert into private.reward_redemption_events (redemption_id, kind, actor_id, note, details)
+    values (p_redemption_id, p_kind, p_actor, p_note, p_details);
+  $$;
+
+-- Tells a redemption's requester what happened (category 'rewards'), once per event.
+create function private.notify_requester(p_redemption private.reward_redemptions, p_kind text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_redemption.requested_by is null then
+      return;
+    end if;
+    perform private.notify_user(p_redemption.requested_by, p_redemption.home_id, 'rewards', p_kind,
+      pg_catalog.jsonb_build_object('homeId', p_redemption.home_id, 'redemptionId', p_redemption.id),
+      p_kind || ':' || p_redemption.id::text || ':'
+        || (select max(e.id) from private.reward_redemption_events e where e.redemption_id = p_redemption.id)::text,
+      true);
+  end
+  $$;
+
+-- Whether anyone other than the requester could approve the request now.
+create function private.reward_reviewer_available(p_home_id uuid, p_requester uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.home_memberships m
+    where m.home_id = p_home_id and m.user_id is distinct from p_requester
+      and private.can_approve_rewards(p_home_id, m.user_id));
+  $$;
+
+-- Redeems a reward immediately, or requests an approval-required one (any current member, for
+-- themselves; spec "Confirmed optional approval for reward redemption"). p_id comes from the client,
+-- so a retry returns 'exists' with the redemption as it is. p_expected_cost is the cost the member
+-- saw: a changed cost answers 'cost_changed' so they confirm the new one. Everything is checked
+-- under the reward's lock, then the account's: availability, total and per-member capacity, and
+-- available points. An immediate redemption deducts the cost once and enters Pending fulfillment;
+-- a request reserves the cost and its capacity and tells the reviewers. p_dry_run returns the
+-- preview: cost, available now and after, mode. Outcomes: 'preview', 'redeemed', 'requested',
+-- 'exists', 'cost_changed', 'insufficient_points', 'archived', 'disabled', 'not_started', 'ended',
+-- 'sold_out', 'member_limit' (with nextEligibleOn), 'not_found'.
+create function public.redeem_reward(
+  p_id uuid, p_reward_id uuid, p_expected_cost integer, p_dry_run boolean default false
+) returns table (outcome text, detail jsonb)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reward private.rewards;
+    v_existing private.reward_redemptions;
+    v_account private.point_accounts;
+    v_today date;
+    v_block text;
+    v_detail jsonb;
+    v_redemption private.reward_redemptions;
+    v_reviewer uuid;
+  begin
+    if p_id is null or p_reward_id is null or p_expected_cost is null or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    perform private.lock_points_home((select r.home_id from private.rewards r where r.id = p_reward_id));
+    select * into v_reward from private.rewards r where r.id = p_reward_id for update;
+    if not found or not private.is_home_member(v_reward.home_id, v_user_id) then
+      return query select 'not_found', null::jsonb;
+      return;
+    end if;
+    select * into v_existing from private.reward_redemptions r where r.id = p_id;
+    if found then
+      if v_existing.requested_by is distinct from v_user_id or v_existing.reward_id <> p_reward_id then
+        raise exception 'invalid request' using errcode = '22023';
+      end if;
+      return query select 'exists', pg_catalog.jsonb_build_object('id', v_existing.id, 'status', v_existing.status);
+      return;
+    end if;
+    v_account := private.lock_point_account(v_reward.home_id, v_user_id);
+    v_today := private.task_today(v_reward.home_id, null);
+    v_block := private.reward_block(v_reward, v_account.id, v_today);
+    if v_block is not null then
+      return query select v_block, case when v_block = 'member_limit' then pg_catalog.jsonb_build_object(
+        'nextEligibleOn', private.reward_period_next(v_reward.home_id, v_reward.member_period, v_today)) end;
+      return;
+    end if;
+    v_detail := pg_catalog.jsonb_build_object('cost', v_reward.cost, 'requiresApproval', v_reward.requires_approval,
+      'available', v_account.balance - v_account.reserved,
+      'availableAfter', v_account.balance - v_account.reserved - v_reward.cost,
+      'reviewerAvailable', not v_reward.requires_approval
+        or private.reward_reviewer_available(v_reward.home_id, v_user_id));
+    if v_reward.cost <> p_expected_cost then
+      return query select 'cost_changed', v_detail;
+      return;
+    end if;
+    if v_account.balance - v_account.reserved < v_reward.cost then
+      return query select 'insufficient_points', v_detail;
+      return;
+    end if;
+    if p_dry_run then
+      return query select 'preview', v_detail;
+      return;
+    end if;
+    insert into private.reward_redemptions (
+      id, home_id, reward_id, account_id, requested_by, cost, reward_name, status, redeemed_at,
+      fulfillment, decided_at
+    ) values (
+      p_id, v_reward.home_id, v_reward.id, v_account.id, v_user_id, v_reward.cost, v_reward.name,
+      case when v_reward.requires_approval then 'pending' else 'redeemed' end,
+      case when v_reward.requires_approval then null else pg_catalog.now() end,
+      case when v_reward.requires_approval then null else 'pending' end,
+      case when v_reward.requires_approval then null else pg_catalog.now() end
+    ) returning * into v_redemption;
+    perform private.redemption_event(v_redemption.id, 'requested', v_user_id, null);
+    if v_reward.requires_approval then
+      perform private.change_reserved(v_account.id, v_reward.cost);
+      for v_reviewer in
+        select m.user_id from public.home_memberships m
+        where m.home_id = v_reward.home_id and m.user_id <> v_user_id
+          and private.can_approve_rewards(v_reward.home_id, m.user_id)
+        order by m.user_id
+      loop
+        perform private.notify_user(v_reviewer, v_reward.home_id, 'rewards', 'reward.requested',
+          pg_catalog.jsonb_build_object('homeId', v_reward.home_id, 'redemptionId', v_redemption.id),
+          'reward.requested:' || v_redemption.id::text, true);
+      end loop;
+    else
+      perform private.post_point_entry(v_account.id, 'redemption', -v_reward.cost, null, null,
+        v_redemption.id, null, null, v_user_id, null);
+      perform private.redemption_event(v_redemption.id, 'redeemed', v_user_id, null);
+    end if;
+    perform private.audit(case when v_reward.requires_approval then 'rewards.requested' else 'rewards.redeemed' end,
+      v_reward.home_id, 'reward_redemption', v_redemption.id,
+      pg_catalog.jsonb_build_object('reward', v_reward.id, 'cost', v_reward.cost));
+    return query select case when v_reward.requires_approval then 'requested' else 'redeemed' end,
+      v_detail || pg_catalog.jsonb_build_object('id', v_redemption.id);
+  end
+  $$;
+
+-- A redemption locked for a change: its reward first, then the row. Null when missing or not in a
+-- Home the caller belongs to.
+create function private.lock_redemption(p_redemption_id uuid, p_user_id uuid) returns private.reward_redemptions
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_redemption private.reward_redemptions;
+  begin
+    perform private.lock_points_home(
+      (select r.home_id from private.reward_redemptions r where r.id = p_redemption_id));
+    perform 1 from private.rewards w
+      where w.id = (select r.reward_id from private.reward_redemptions r where r.id = p_redemption_id)
+      for update;
+    select * into v_redemption from private.reward_redemptions r where r.id = p_redemption_id for update;
+    if not found or not private.is_home_member(v_redemption.home_id, p_user_id) then
+      return null;
+    end if;
+    return v_redemption;
+  end
+  $$;
+
+-- Approves or rejects someone else's pending request (approveHomeRewards; spec "Confirmed independent
+-- reviewer for reward redemptions": never the requester, whatever their role). Approval needs the
+-- requester to be a current member; a reward archived, disabled or outside its window since the
+-- request needs p_confirm ('reward_unavailable' otherwise, with the reason). Approval turns the
+-- reservation into one redemption entry and starts fulfillment; rejection (optional reason)
+-- releases it. Outcomes: 'approved', 'rejected', 'own_request', 'not_pending', 'conflict',
+-- 'reward_unavailable', 'requester_unavailable', 'not_found', 'not_permitted'.
+create function public.review_reward_redemption(
+  p_redemption_id uuid, p_expected_revision integer, p_decision text, p_reason text default null,
+  p_confirm boolean default false
+) returns table (outcome text, detail jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_redemption private.reward_redemptions;
+    v_reward private.rewards;
+    v_block text;
+  begin
+    if p_redemption_id is null or p_expected_revision is null or p_decision is null
+       or p_decision not in ('approve', 'reject') or p_confirm is null
+       or (p_decision = 'approve' and v_reason is not null)
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.points_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_redemption := private.lock_redemption(p_redemption_id, v_user_id);
+    if v_redemption.id is null then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_approve_rewards(v_redemption.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_redemption.requested_by = v_user_id then
+      return query select 'own_request', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.status <> 'pending' then
+      return query select 'not_pending', pg_catalog.jsonb_build_object('status', v_redemption.status),
+        v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    perform 1 from private.point_accounts a where a.id = v_redemption.account_id for update;
+    if p_decision = 'approve' then
+      if v_redemption.requested_by is null
+         or not private.is_home_member(v_redemption.home_id, v_redemption.requested_by) then
+        return query select 'requester_unavailable', null::jsonb, v_redemption.revision;
+        return;
+      end if;
+      select * into v_reward from private.rewards w where w.id = v_redemption.reward_id;
+      v_block := case
+        when v_reward.archived_at is not null then 'archived'
+        when not v_reward.enabled then 'disabled'
+        when v_reward.available_until is not null
+          and private.task_today(v_reward.home_id, null) > v_reward.available_until then 'ended'
+      end;
+      if v_block is not null and not p_confirm then
+        return query select 'reward_unavailable', pg_catalog.jsonb_build_object('reason', v_block),
+          v_redemption.revision;
+        return;
+      end if;
+      perform private.change_reserved(v_redemption.account_id, -v_redemption.cost);
+      perform private.post_point_entry(v_redemption.account_id, 'redemption', -v_redemption.cost,
+        null, null, v_redemption.id, null, null, v_user_id, null);
+      update private.reward_redemptions r
+        set status = 'redeemed', decided_at = pg_catalog.now(), decided_by = v_user_id,
+          redeemed_at = pg_catalog.now(), fulfillment = 'pending', revision = r.revision + 1
+        where r.id = v_redemption.id
+        returning * into v_redemption;
+      perform private.redemption_event(v_redemption.id, 'approved', v_user_id, null,
+        case when v_block is not null then pg_catalog.jsonb_build_object('confirmedUnavailable', v_block)
+          else '{}'::jsonb end);
+      perform private.notify_requester(v_redemption, 'reward.approved');
+      perform private.audit('rewards.approved', v_redemption.home_id, 'reward_redemption', v_redemption.id,
+        pg_catalog.jsonb_build_object('cost', v_redemption.cost));
+      return query select 'approved', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    perform private.change_reserved(v_redemption.account_id, -v_redemption.cost);
+    update private.reward_redemptions r
+      set status = 'rejected', decided_at = pg_catalog.now(), decided_by = v_user_id,
+        decision_reason = v_reason, revision = r.revision + 1
+      where r.id = v_redemption.id
+      returning * into v_redemption;
+    perform private.redemption_event(v_redemption.id, 'rejected', v_user_id, v_reason);
+    perform private.notify_requester(v_redemption, 'reward.rejected');
+    perform private.audit('rewards.rejected', v_redemption.home_id, 'reward_redemption', v_redemption.id);
+    return query select 'rejected', null::jsonb, v_redemption.revision;
+  end
+  $$;
+
+-- Cancels a pending request (spec "Confirmed cancellation of pending reward redemptions"): the
+-- requester their own (no reason needed), or a rewards manager anyone's with a reason (3-300; the
+-- requester is told). Releases the reservation once. Outcomes: 'cancelled', 'not_pending',
+-- 'conflict', 'reason_required', 'not_found', 'not_permitted'.
+create function public.cancel_reward_redemption(
+  p_redemption_id uuid, p_expected_revision integer, p_reason text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_reason text := private.chore_short_text(p_reason);
+    v_redemption private.reward_redemptions;
+    v_own boolean;
+  begin
+    if p_redemption_id is null or p_expected_revision is null
+       or (v_reason is not null and not private.is_plain_text(v_reason, private.points_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_redemption := private.lock_redemption(p_redemption_id, v_user_id);
+    if v_redemption.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    v_own := v_redemption.requested_by = v_user_id;
+    if not v_own and not private.can_manage_rewards(v_redemption.home_id, v_user_id) then
+      return query select case when private.can_approve_rewards(v_redemption.home_id, v_user_id)
+        then 'not_permitted' else 'not_found' end, null::integer;
+      return;
+    end if;
+    if v_redemption.status <> 'pending' then
+      return query select 'not_pending', v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.revision <> p_expected_revision then
+      return query select 'conflict', v_redemption.revision;
+      return;
+    end if;
+    if not v_own and (v_reason is null or pg_catalog.char_length(v_reason) < private.points_limit('reason_min')) then
+      return query select 'reason_required', v_redemption.revision;
+      return;
+    end if;
+    perform 1 from private.point_accounts a where a.id = v_redemption.account_id for update;
+    perform private.change_reserved(v_redemption.account_id, -v_redemption.cost);
+    update private.reward_redemptions r
+      set status = 'cancelled', decided_at = pg_catalog.now(), decided_by = v_user_id,
+        decision_reason = case when v_own then null else v_reason end, revision = r.revision + 1
+      where r.id = v_redemption.id
+      returning * into v_redemption;
+    perform private.redemption_event(v_redemption.id, 'cancelled', v_user_id,
+      case when v_own then null else v_reason end, pg_catalog.jsonb_build_object('own', v_own));
+    if not v_own then
+      perform private.notify_requester(v_redemption, 'reward.cancelled');
+    end if;
+    perform private.audit('rewards.cancelled', v_redemption.home_id, 'reward_redemption', v_redemption.id,
+      pg_catalog.jsonb_build_object('own', v_own));
+    return query select 'cancelled', v_redemption.revision;
+  end
+  $$;
+
+-- Sets the fulfillment of a redeemed reward (rewards managers; spec "Confirmed reward fulfillment
+-- tracking"): 'fulfilled' or 'unable' from Pending, with an optional note; a correction of a
+-- mistaken state (back to 'pending', or between the two) needs a reason and is only possible before
+-- an Unable-to-fulfill case is resolved. Points never move here. Outcomes: 'saved', 'unchanged',
+-- 'reason_required', 'resolved', 'not_redeemed', 'conflict', 'not_found', 'not_permitted'.
+create function public.set_reward_fulfillment(
+  p_redemption_id uuid, p_expected_revision integer, p_state text, p_note text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_note text := private.chore_short_text(p_note);
+    v_redemption private.reward_redemptions;
+    v_before text;
+    v_correction boolean;
+  begin
+    if p_redemption_id is null or p_expected_revision is null or p_state is null
+       or p_state not in ('pending', 'fulfilled', 'unable')
+       or (v_note is not null and not private.is_plain_text(v_note, private.points_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_redemption := private.lock_redemption(p_redemption_id, v_user_id);
+    if v_redemption.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_rewards(v_redemption.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_redemption.status <> 'redeemed' then
+      return query select 'not_redeemed', v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.revision <> p_expected_revision then
+      return query select 'conflict', v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.fulfillment = p_state then
+      return query select 'unchanged', v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.resolution is not null then
+      return query select 'resolved', v_redemption.revision;
+      return;
+    end if;
+    v_before := v_redemption.fulfillment;
+    v_correction := v_before <> 'pending';
+    if v_correction and (v_note is null or pg_catalog.char_length(v_note) < private.points_limit('reason_min')) then
+      return query select 'reason_required', v_redemption.revision;
+      return;
+    end if;
+    update private.reward_redemptions r
+      set fulfillment = p_state, fulfillment_at = pg_catalog.now(), fulfillment_by = v_user_id,
+        fulfillment_note = v_note, revision = r.revision + 1
+      where r.id = v_redemption.id
+      returning * into v_redemption;
+    perform private.redemption_event(v_redemption.id,
+      case when v_correction then 'fulfillment_corrected' else p_state end, v_user_id, v_note,
+      pg_catalog.jsonb_build_object('from', v_before, 'to', p_state));
+    if p_state in ('fulfilled', 'unable') then
+      perform private.notify_requester(v_redemption,
+        case p_state when 'fulfilled' then 'reward.fulfilled' else 'reward.unable' end);
+    end if;
+    perform private.audit('rewards.fulfillment', v_redemption.home_id, 'reward_redemption', v_redemption.id,
+      pg_catalog.jsonb_build_object('from', v_before, 'to', p_state));
+    return query select 'saved', v_redemption.revision;
+  end
+  $$;
+
+-- Resolves an Unable-to-fulfill reward (rewards managers; spec "Confirmed unable-to-fulfill reward
+-- resolution"), also after a replacement could not be fulfilled: 'refund' credits the original cost
+-- back to the original account once (a linked entry; the account's holder need not still be a
+-- member: the points stay in the preserved ledger), 'replacement' records what was agreed
+-- (p_replacement, 1-200) and who is responsible (p_responsible, a current member's membership id),
+-- never charging again. Optional note. p_dry_run returns the impact. Outcomes: 'preview', 'resolved',
+-- 'not_unable', 'already_resolved', 'account_unavailable', 'invalid_responsible', 'conflict',
+-- 'not_found', 'not_permitted'.
+create function public.resolve_reward_redemption(
+  p_redemption_id uuid, p_expected_revision integer, p_resolution text, p_note text default null,
+  p_replacement text default null, p_responsible uuid default null, p_dry_run boolean default false
+) returns table (outcome text, impact jsonb, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_note text := private.chore_short_text(p_note);
+    v_replacement text := private.chore_short_text(p_replacement);
+    v_redemption private.reward_redemptions;
+    v_account private.point_accounts;
+    v_responsible uuid;
+    v_impact jsonb;
+  begin
+    if p_redemption_id is null or p_expected_revision is null or p_dry_run is null
+       or p_resolution is null or p_resolution not in ('refund', 'replacement')
+       or (v_note is not null and not private.is_plain_text(v_note, private.points_limit('reason')))
+       or (p_resolution = 'replacement' and (v_replacement is null or p_responsible is null
+         or not private.is_plain_text(v_replacement, private.points_limit('replacement'))))
+       or (p_resolution = 'refund' and (p_replacement is not null or p_responsible is not null)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_redemption := private.lock_redemption(p_redemption_id, v_user_id);
+    if v_redemption.id is null then
+      return query select 'not_found', null::jsonb, null::integer;
+      return;
+    end if;
+    if not private.can_manage_rewards(v_redemption.home_id, v_user_id) then
+      return query select 'not_permitted', null::jsonb, null::integer;
+      return;
+    end if;
+    if v_redemption.status <> 'redeemed' or v_redemption.fulfillment <> 'unable' then
+      return query select 'not_unable', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.resolution = 'refund'
+       or (v_redemption.resolution = 'replacement' and v_redemption.replacement_status <> 'unable') then
+      return query select 'already_resolved', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.revision <> p_expected_revision then
+      return query select 'conflict', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    select * into v_account from private.point_accounts a where a.id = v_redemption.account_id for update;
+    if p_resolution = 'refund' and v_account.user_id is null then
+      return query select 'account_unavailable', null::jsonb, v_redemption.revision;
+      return;
+    end if;
+    if p_resolution = 'replacement' then
+      select m.user_id into v_responsible from public.home_memberships m
+        where m.home_id = v_redemption.home_id and m.id = p_responsible;
+      if v_responsible is null then
+        return query select 'invalid_responsible', null::jsonb, v_redemption.revision;
+        return;
+      end if;
+    end if;
+    v_impact := pg_catalog.jsonb_build_object('resolution', p_resolution, 'cost', v_redemption.cost,
+      'person', private.chore_person(v_redemption.home_id, v_account.user_id, v_user_id),
+      'availableAfter', case when p_resolution = 'refund' and private.can_manage_points(v_redemption.home_id, v_user_id)
+        then v_account.balance - v_account.reserved + v_redemption.cost end);
+    if p_dry_run then
+      return query select 'preview', v_impact, v_redemption.revision;
+      return;
+    end if;
+    if p_resolution = 'refund' then
+      perform private.post_point_entry(v_account.id, 'refund', v_redemption.cost, null, null,
+        v_redemption.id, null, v_note, v_user_id, null);
+    end if;
+    update private.reward_redemptions r
+      set resolution = p_resolution, resolved_at = pg_catalog.now(), resolved_by = v_user_id,
+        resolution_note = v_note,
+        replacement = case when p_resolution = 'replacement' then v_replacement end,
+        replacement_responsible = case when p_resolution = 'replacement' then v_responsible end,
+        replacement_status = case when p_resolution = 'replacement' then 'pending' end,
+        revision = r.revision + 1
+      where r.id = v_redemption.id
+      returning * into v_redemption;
+    perform private.redemption_event(v_redemption.id,
+      case p_resolution when 'refund' then 'refunded' else 'replacement' end, v_user_id, v_note,
+      case when p_resolution = 'replacement' then pg_catalog.jsonb_build_object('replacement', v_replacement)
+        else pg_catalog.jsonb_build_object('amount', v_redemption.cost) end);
+    perform private.notify_requester(v_redemption,
+      case p_resolution when 'refund' then 'reward.refunded' else 'reward.replacement' end);
+    perform private.audit('rewards.resolved', v_redemption.home_id, 'reward_redemption', v_redemption.id,
+      pg_catalog.jsonb_build_object('resolution', p_resolution));
+    return query select 'resolved', v_impact, v_redemption.revision;
+  end
+  $$;
+
+-- Records a replacement's outcome (rewards managers): 'fulfilled' or 'unable' (the case can then be
+-- resolved again). Outcomes: 'saved', 'not_replacement', 'conflict', 'not_found', 'not_permitted'.
+create function public.set_replacement_outcome(
+  p_redemption_id uuid, p_expected_revision integer, p_state text, p_note text default null
+) returns table (outcome text, revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_note text := private.chore_short_text(p_note);
+    v_redemption private.reward_redemptions;
+  begin
+    if p_redemption_id is null or p_expected_revision is null or p_state is null
+       or p_state not in ('fulfilled', 'unable')
+       or (v_note is not null and not private.is_plain_text(v_note, private.points_limit('reason'))) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_redemption := private.lock_redemption(p_redemption_id, v_user_id);
+    if v_redemption.id is null then
+      return query select 'not_found', null::integer;
+      return;
+    end if;
+    if not private.can_manage_rewards(v_redemption.home_id, v_user_id) then
+      return query select 'not_permitted', null::integer;
+      return;
+    end if;
+    if v_redemption.resolution is distinct from 'replacement' or v_redemption.replacement_status <> 'pending' then
+      return query select 'not_replacement', v_redemption.revision;
+      return;
+    end if;
+    if v_redemption.revision <> p_expected_revision then
+      return query select 'conflict', v_redemption.revision;
+      return;
+    end if;
+    update private.reward_redemptions r
+      set replacement_status = p_state, revision = r.revision + 1
+      where r.id = v_redemption.id
+      returning * into v_redemption;
+    perform private.redemption_event(v_redemption.id, 'replacement_' || p_state, v_user_id, v_note);
+    perform private.notify_requester(v_redemption,
+      case p_state when 'fulfilled' then 'reward.fulfilled' else 'reward.unable' end);
+    perform private.audit('rewards.replacement', v_redemption.home_id, 'reward_redemption', v_redemption.id,
+      pg_catalog.jsonb_build_object('state', p_state));
+    return query select 'saved', v_redemption.revision;
+  end
+  $$;
+
+-- A redemption as p_viewer sees it, with what they may do.
+create function private.redemption_json(p_redemption private.reward_redemptions, p_viewer uuid,
+  p_events boolean default false) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_manage boolean := private.can_manage_rewards(p_redemption.home_id, p_viewer);
+    v_approve boolean := private.can_approve_rewards(p_redemption.home_id, p_viewer);
+    v_own boolean := p_redemption.requested_by = p_viewer;
+    v_open_unable boolean := p_redemption.status = 'redeemed' and p_redemption.fulfillment = 'unable'
+      and (p_redemption.resolution is null
+        or (p_redemption.resolution = 'replacement' and p_redemption.replacement_status = 'unable'));
+  begin
+    return pg_catalog.jsonb_build_object(
+      'id', p_redemption.id, 'rewardId', p_redemption.reward_id, 'rewardName', p_redemption.reward_name,
+      'cost', p_redemption.cost, 'status', p_redemption.status,
+      'requester', private.chore_person(p_redemption.home_id, p_redemption.requested_by, p_viewer),
+      'requestedAt', p_redemption.requested_at, 'decidedAt', p_redemption.decided_at,
+      'decidedBy', private.chore_person(p_redemption.home_id, p_redemption.decided_by, p_viewer),
+      'decisionReason', p_redemption.decision_reason, 'departed', p_redemption.departed,
+      'redeemedAt', p_redemption.redeemed_at, 'fulfillment', p_redemption.fulfillment,
+      'fulfillmentAt', p_redemption.fulfillment_at,
+      'fulfillmentBy', private.chore_person(p_redemption.home_id, p_redemption.fulfillment_by, p_viewer),
+      'fulfillmentNote', p_redemption.fulfillment_note,
+      'resolution', p_redemption.resolution, 'resolvedAt', p_redemption.resolved_at,
+      'resolutionNote', p_redemption.resolution_note, 'replacement', p_redemption.replacement,
+      'replacementResponsible', private.chore_person(p_redemption.home_id,
+        p_redemption.replacement_responsible, p_viewer),
+      'replacementStatus', p_redemption.replacement_status, 'revision', p_redemption.revision,
+      'canApprove', coalesce(p_redemption.status = 'pending' and v_approve and not v_own, false),
+      'canCancel', coalesce(p_redemption.status = 'pending' and (v_own or v_manage), false),
+      'canFulfil', coalesce(p_redemption.status = 'redeemed' and v_manage
+        and p_redemption.resolution is null, false),
+      'canResolve', coalesce(v_manage and v_open_unable, false),
+      'canSetReplacement', coalesce(v_manage and p_redemption.resolution = 'replacement'
+        and p_redemption.replacement_status = 'pending', false),
+      'blocker', case when p_redemption.status = 'pending' then case
+        when v_own and v_approve then 'own_request'
+        when not private.reward_reviewer_available(p_redemption.home_id, p_redemption.requested_by)
+          then 'no_reviewer' end end,
+      'events', case when p_events then coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'kind', e.kind, 'at', e.created_at, 'note', e.note, 'details', e.details,
+          'actor', private.chore_person(p_redemption.home_id, e.actor_id, p_viewer)) order by e.id)
+        from private.reward_redemption_events e where e.redemption_id = p_redemption.id), '[]'::jsonb) end);
+  end
+  $$;
+
+-- Whether p_viewer may see a redemption: its requester, rewards managers, and reviewers while it is
+-- pending.
+create function private.can_see_redemption(p_redemption private.reward_redemptions, p_viewer uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select private.is_home_member(p_redemption.home_id, p_viewer) and (
+    p_redemption.requested_by = p_viewer
+    or private.can_manage_rewards(p_redemption.home_id, p_viewer)
+    or (p_redemption.status = 'pending' and private.can_approve_rewards(p_redemption.home_id, p_viewer)));
+  $$;
+
+-- Redemptions of one Home by view: 'mine' (the caller's own), 'approvals' (pending, reviewers),
+-- 'fulfillment' (redeemed and not settled: pending fulfillment, unresolved Unable to fulfill, a
+-- replacement pending or unable; rewards managers), 'all' (rewards managers). Newest first, at most
+-- 100. 42501 for a Home the caller is not in.
+create function public.list_reward_redemptions(p_home_id uuid, p_view text) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    perform private.require_chore_home(p_home_id, v_user_id);
+    if p_view is null or p_view not in ('mine', 'approvals', 'fulfillment', 'all') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if (p_view = 'approvals' and not private.can_approve_rewards(p_home_id, v_user_id))
+       or (p_view in ('fulfillment', 'all') and not private.can_manage_rewards(p_home_id, v_user_id)) then
+      return '[]'::jsonb;
+    end if;
+    return coalesce((select pg_catalog.jsonb_agg(private.redemption_json(r, v_user_id) order by r.seq desc)
+      from (
+        select * from private.reward_redemptions r
+        where r.home_id = p_home_id and case p_view
+          when 'mine' then r.requested_by = v_user_id
+          when 'approvals' then r.status = 'pending'
+          when 'fulfillment' then r.status = 'redeemed' and (r.fulfillment = 'pending'
+            or (r.fulfillment = 'unable' and (r.resolution is null
+              or (r.resolution = 'replacement' and r.replacement_status in ('pending', 'unable')))))
+          else true end
+        order by r.seq desc limit private.points_limit('redemptions_page')
+      ) r), '[]'::jsonb);
+  end
+  $$;
+
+-- One redemption with its history, or null when the caller may not see it.
+create function public.get_reward_redemption(p_redemption_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_redemption private.reward_redemptions;
+  begin
+    if p_redemption_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_redemption from private.reward_redemptions r where r.id = p_redemption_id;
+    if not found or not private.can_see_redemption(v_redemption, v_user_id) then
+      return null;
+    end if;
+    return private.redemption_json(v_redemption, v_user_id, true);
+  end
+  $$;
+
+-- Departure -------------------------------------------------------------------------------------------------
+
+-- Leaving or being removed (spec "Confirmed Home reward points on membership departure"): pending
+-- requests are cancelled and their reservations released once (each under its reward's lock, then
+-- its own, then the account's, like every other change); the account, its balance and history stay
+-- for a rejoin with the same account. Fulfillment obligations stay with the rewards managers.
+create function private.points_member_left() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+    v_redemption private.reward_redemptions;
+  begin
+    for v_id in
+      select r.id from private.reward_redemptions r
+      join private.point_accounts a on a.id = r.account_id
+      where a.home_id = old.home_id and a.user_id = old.user_id and r.status = 'pending'
+      order by r.seq
+    loop
+      perform 1 from private.rewards w
+        where w.id = (select r.reward_id from private.reward_redemptions r where r.id = v_id) for update;
+      select * into v_redemption from private.reward_redemptions r where r.id = v_id for update;
+      if v_redemption.status <> 'pending' then
+        continue;
+      end if;
+      perform 1 from private.point_accounts a where a.id = v_redemption.account_id for update;
+      perform private.change_reserved(v_redemption.account_id, -v_redemption.cost);
+      update private.reward_redemptions r
+        set status = 'cancelled', decided_at = pg_catalog.now(), departed = true, revision = r.revision + 1
+        where r.id = v_id;
+      perform private.redemption_event(v_id, 'cancelled', null, null,
+        pg_catalog.jsonb_build_object('departed', true));
+    end loop;
+    return old;
+  end
+  $$;
+
+create trigger home_memberships_points before delete on public.home_memberships
+  for each row execute function private.points_member_left();
+
+-- Grants -------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'get_notification_settings', 'create_chore', 'update_chore', 'create_chore_template',
+      'update_chore_template', 'list_chore_templates', 'reopen_chore_occurrence',
+      'correct_chore_completion', 'preview_chore_points_change', 'set_chore_occurrence_points',
+      'get_chore_points', 'list_chore_points', 'get_point_summary', 'list_point_entries',
+      'list_point_accounts', 'adjust_points', 'reverse_point_entry', 'update_point_preferences',
+      'update_point_settings', 'get_point_leaderboard', 'get_weekly_points', 'list_rewards',
+      'create_reward', 'update_reward', 'archive_reward', 'redeem_reward', 'review_reward_redemption',
+      'cancel_reward_redemption', 'set_reward_fulfillment', 'resolve_reward_redemption',
+      'set_replacement_outcome', 'list_reward_redemptions', 'get_reward_redemption'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and (p.proname like '%chore%' or p.proname like '%point%'
+      or p.proname like '%reward%' or p.proname like '%redemption%' or p.proname = 'change_reserved'
+      or p.proname = 'notify_requester')
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
 ```
 
 ## Destructive reset: remove these migrations from the database
@@ -22884,7 +28229,7 @@ begin
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
-      and p.proname = any (array['abandon_my_upload', 'accept_ownership_recovery', 'add_subtask', 'add_task_comment', 'advance_chores', 'advance_reminder_series', 'advance_task_series', 'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'appeal_ownership_recovery', 'attach_task_file', 'authorize_file_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'bulk_chore_occurrences', 'bulk_update_tasks', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'change_chore_volunteer_request', 'change_home_member_role', 'claim_chore_occurrence', 'claim_job_outbox', 'claim_my_upload', 'complete_chore_occurrence', 'complete_job_outbox', 'complete_storage_object_deletion', 'correct_chore_completion', 'correct_chore_volunteer_assignment', 'count_pending_join_requests', 'create_chore', 'create_chore_category', 'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_home', 'create_home_invitation', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_upload_intent', 'decide_join_request', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_chore_reminder', 'deliver_recovery_ready', 'deliver_task_reminder', 'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_upload', 'finish_job_execution', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_volunteer_state', 'get_dashboard', 'get_invitation_email', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_pool', 'list_chore_proposals', 'list_chore_reassignment_requests', 'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_dashboard_templates', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests', 'list_my_join_requests', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'mark_notifications_read', 'move_task', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage', 'object_to_ownership_recovery', 'preview_home_invitation', 'propose_chore', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'remove_chore_reminder', 'remove_home_member', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_subtask', 'renew_home_invitation', 'reopen_chore_occurrence', 'reorder_chore_categories', 'reorder_subtasks', 'reorder_task_lists', 'request_chore_reassignment', 'request_ownership_recovery', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'respond_to_ownership_transfer', 'restore_trash_entries', 'review_chore_proposal', 'review_chore_submission', 'review_task_reminder', 'revoke_home_invitation', 'save_dashboard', 'send_chore_summaries', 'set_administrator_capabilities', 'set_chore_claim_policy', 'set_chore_paused', 'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_my_avatar', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'share_dashboard_template', 'skip_chore_occurrence', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_ownership_transfer', 'storage_stats', 'task_attachment_scope_impact', 'task_reminder_titles', 'trash_stats', 'undo_dashboard_change', 'unshare_dashboard_template', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'])
+      and p.proname = any (array['abandon_my_upload', 'accept_ownership_recovery', 'add_subtask', 'add_task_comment', 'add_vacation_participants', 'adjust_points', 'advance_chores', 'advance_reminder_series', 'advance_task_series', 'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'archive_reward', 'attach_task_file', 'authorize_file_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'bulk_chore_occurrences', 'bulk_update_tasks', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_home_member_role', 'change_vacation_participation', 'claim_chore_occurrence', 'claim_job_outbox', 'claim_my_upload', 'complete_chore_occurrence', 'complete_job_outbox', 'complete_storage_object_deletion', 'correct_chore_completion', 'correct_chore_volunteer_assignment', 'count_pending_join_requests', 'create_chore', 'create_chore_category', 'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_home', 'create_home_invitation', 'create_home_vacation', 'create_reward', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_upload_intent', 'decide_chore_vacation_item', 'decide_join_request', 'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_chore_reminder', 'deliver_recovery_ready', 'deliver_task_reminder', 'deliver_vacation_reminder', 'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_upload', 'finish_job_execution', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence', 'get_chore_points', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_vacation_state', 'get_chore_volunteer_state', 'get_dashboard', 'get_home_vacation', 'get_home_vacation_widget', 'get_invitation_email', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_point_leaderboard', 'get_point_summary', 'get_reward_redemption', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template', 'get_weekly_points', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_absence_review', 'list_chore_absences', 'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_points', 'list_chore_pool', 'list_chore_proposals', 'list_chore_reassignment_requests', 'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_dashboard_templates', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests', 'list_home_vacation_days', 'list_home_vacations', 'list_my_join_requests', 'list_point_accounts', 'list_point_entries', 'list_reward_redemptions', 'list_rewards', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'list_vacation_review', 'mark_notifications_read', 'move_task', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage', 'object_to_ownership_recovery', 'preview_chore_points_change', 'preview_home_invitation', 'propose_chore', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'redeem_reward', 'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'remove_chore_reminder', 'remove_home_member', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_subtask', 'renew_home_invitation', 'reopen_chore_occurrence', 'reorder_chore_categories', 'reorder_subtasks', 'reorder_task_lists', 'request_chore_reassignment', 'request_ownership_recovery', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'resolve_reward_redemption', 'respond_to_ownership_transfer', 'restore_trash_entries', 'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission', 'review_reward_redemption', 'review_task_reminder', 'revoke_home_invitation', 'save_chore_absence', 'save_dashboard', 'send_chore_summaries', 'set_administrator_capabilities', 'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused', 'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_my_avatar', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_replacement_outcome', 'set_reward_fulfillment', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'share_dashboard_template', 'skip_chore_occurrence', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_ownership_transfer', 'storage_stats', 'task_attachment_scope_impact', 'task_reminder_titles', 'trash_stats', 'undo_dashboard_change', 'unshare_dashboard_template', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_home_vacation', 'update_point_preferences', 'update_point_settings', 'update_reward', 'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'])
   loop
     execute format('drop function if exists %s cascade', routine.signature);
   end loop;
@@ -22911,7 +28256,7 @@ begin
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute
       'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000']::text[];
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000']::text[];
   end if;
 end
 $reset$;

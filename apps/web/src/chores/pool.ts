@@ -3,7 +3,7 @@ import type { ChorePoolRow } from "./api";
 /**
  * The pool's filters and sort (S21; spec "unassigned chore pool filtering and sorting"). Client-safe
  * and pure: they only choose what this person sees. Claiming always re-checks everything in the
- * database, so a filter can never make a chore claimable. Points (filter and sort) come with S23.
+ * database, so a filter can never make a chore claimable. Sorting by points came with S23.
  */
 export const poolDurations = ["any", "none", "15", "30", "60", "more"] as const;
 export type PoolDuration = (typeof poolDurations)[number];
@@ -15,7 +15,8 @@ export interface PoolFilter {
   readonly from: string;
   readonly to: string;
   readonly duration: PoolDuration;
-  readonly sort: "asc" | "desc";
+  /** Due date either way, or most points first (S23). */
+  readonly sort: "asc" | "desc" | "points";
   readonly onlyClaimable: boolean;
 }
 
@@ -52,7 +53,10 @@ function durationMatches(minutes: number | null, duration: PoolDuration): boolea
   }
 }
 
-/** The rows that match, in due-date order (either direction), ties by title then id. */
+/**
+ * The rows that match, in due-date order (either direction) or by points (most first, then the
+ * earliest due), ties by title then id.
+ */
 export function filterPool(
   rows: readonly ChorePoolRow[],
   filter: PoolFilter,
@@ -73,6 +77,7 @@ export function filterPool(
     )
     .sort(
       (a, b) =>
+        (filter.sort === "points" ? (b.points ?? 0) - (a.points ?? 0) : 0) ||
         direction * a.dueDate.localeCompare(b.dueDate) ||
         collator.compare(a.title, b.title) ||
         a.id.localeCompare(b.id),

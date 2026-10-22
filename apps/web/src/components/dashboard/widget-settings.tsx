@@ -8,9 +8,12 @@ import type { DashboardWidget } from "@/dashboard/layout";
 import {
   choreScheduleLayouts,
   choreScheduleLimits,
+  leaderboardWidgetCounts,
+  leaderboardWidgetPeriods,
   notificationCounts,
   parseConfig,
   defaultConfig,
+  weeklyPointsViews,
   widgetRegistry,
 } from "@/dashboard/widgets";
 
@@ -74,7 +77,49 @@ export function WidgetSettings({
       );
     case "quick-actions":
     case "home-vacation":
+    case "my-points":
       return <p className="text-helper text-fg-muted">{t("settingsNone")}</p>;
+    case "weekly-points":
+      return (
+        <SelectField
+          label={t("settingPointsView")}
+          value={String(config.view)}
+          options={weeklyPointsViews.map((view) => ({
+            value: view,
+            label: t(`settingPointsView_${view}`),
+          }))}
+          onChange={(event) => {
+            set("view", event.currentTarget.value);
+          }}
+        />
+      );
+    case "points-leaderboard":
+      return (
+        <div className="flex flex-col gap-3">
+          <SelectField
+            label={t("settingLeaderboardPeriod")}
+            value={String(config.period)}
+            options={leaderboardWidgetPeriods.map((period) => ({
+              value: period,
+              label: t(`settingLeaderboardPeriod_${period}`),
+            }))}
+            onChange={(event) => {
+              set("period", event.currentTarget.value);
+            }}
+          />
+          <SelectField
+            label={t("settingCount")}
+            value={String(config.count)}
+            options={leaderboardWidgetCounts.map((count) => ({
+              value: String(count),
+              label: t("settingCountOption", { count }),
+            }))}
+            onChange={(event) => {
+              set("count", Number(event.currentTarget.value));
+            }}
+          />
+        </div>
+      );
     case "tasks": {
       const parsed = widgetRegistry.tasks.config.safeParse(widget.config);
       const tasks = parsed.success ? parsed.data : widgetRegistry.tasks.config.parse({});

@@ -28,6 +28,7 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261102090000_chore_proposals_volunteers.sql`        | S21  | `chore_proposals_table` is not `NULL`                  |
 | `supabase/migrations/20261103090000_chore_overview_reminders.sql`          | S21  | `chore_reminders_table` is not `NULL`                  |
 | `supabase/migrations/20261104090000_home_vacations.sql`                    | S22  | `home_vacations_table` is not `NULL`                   |
+| `supabase/migrations/20261105090000_points_rewards.sql`                    | S23  | `point_accounts_table` is not `NULL`                   |
 
 Check query (read-only, safe to run any time):
 
@@ -50,7 +51,8 @@ select
   to_regclass('private.chore_reassignment_requests') as chore_requests_table,
   to_regclass('private.chore_proposals') as chore_proposals_table,
   to_regclass('private.chore_reminders') as chore_reminders_table,
-  to_regclass('private.home_vacations') as home_vacations_table;
+  to_regclass('private.home_vacations') as home_vacations_table,
+  to_regclass('private.point_accounts') as point_accounts_table;
 ```
 
 ## Apply a migration
@@ -448,6 +450,30 @@ From here a Home has **Vacations** (with invitations, a Home-wide chore pause an
    It must show both tables, **false** for `members_can_read_vacations` and `members_can_deliver_reminders` (only the jobs worker delivers), and **true** for `members_can_list_call`.
 
 2. In the app the Home page and the Chores page have **Vacations**, and the Chores page has **Absences**. On a Home dashboard, **Customize** offers **Home vacation**.
+
+## Check S23 (`20261105090000_points_rewards.sql`)
+
+From here chores can carry **points**, members earn them by completing chores, and a Home has **Points**, **Rewards** and an optional **Leaderboard**. Existing chores and templates get 0 points (late policy "full"), so nobody earns anything until a chore manager sets points. Apply it after the S22 file. No new background job: points and rewards notifications are written by the database functions.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.point_accounts') as accounts_table,
+     to_regclass('private.point_entries') as entries_table,
+     to_regclass('private.rewards') as rewards_table,
+     to_regclass('private.reward_redemptions') as redemptions_table,
+     has_table_privilege('authenticated', 'private.point_entries', 'select')
+       as members_can_read_ledger,
+     has_function_privilege('authenticated', 'public.get_point_summary(uuid)', 'execute')
+       as members_can_read_own_summary,
+     has_function_privilege('anon', 'public.list_point_accounts(uuid)', 'execute')
+       as anonymous_can_list_accounts;
+   ```
+
+   It must show the four tables, **false** for `members_can_read_ledger` and `anonymous_can_list_accounts`, and **true** for `members_can_read_own_summary`.
+
+2. In the app the Chores page links to **Points** and **Rewards**, and the chore form has **Points**. An Administrator's capabilities (Home members, Manage) include **Manage Home rewards**, **Approve reward requests** and **Manage member points**. On a Home dashboard, **Customize** offers **Weekly points**, **Leaderboard** and **My points**.
 
 ## If a migration file changed after you applied it
 

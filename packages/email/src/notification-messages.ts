@@ -45,6 +45,19 @@ export const notificationKinds = [
   "vacation.invited",
   "vacation.dates_proposed",
   "vacation.reminder",
+  "points.awarded",
+  "points.reversed",
+  "points.bonus",
+  "points.corrected",
+  "points.adjustment_reversed",
+  "reward.requested",
+  "reward.approved",
+  "reward.rejected",
+  "reward.cancelled",
+  "reward.fulfilled",
+  "reward.unable",
+  "reward.refunded",
+  "reward.replacement",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -333,6 +346,97 @@ const en: Catalogue = {
     body: "A vacation in {home} starts soon. Open Madeora to check the chores it affects and decide what happens to them.",
     button: "Open the vacation",
   },
+  "points.awarded": {
+    subject: "You earned chore points in {home}",
+    preview: "Open Madeora to see them.",
+    heading: "You earned chore points",
+    body: "A chore you did in {home} earned points. Open Madeora to see how many and your balance.",
+    button: "Open my points",
+  },
+  "points.reversed": {
+    subject: "Chore points in {home} were changed",
+    preview: "Open Madeora to see why.",
+    heading: "Your chore points were changed",
+    body: "A chore completion in {home} was reopened or corrected, so points it earned you were taken back or moved. Open Madeora to see your points as they are now.",
+    button: "Open my points",
+  },
+  "points.bonus": {
+    subject: "You received bonus points in {home}",
+    preview: "Open Madeora to see them.",
+    heading: "You received bonus points",
+    body: "Someone who manages points in {home} gave you bonus points. Open Madeora to see how many, the reason and your balance.",
+    button: "Open my points",
+  },
+  "points.corrected": {
+    subject: "Your points in {home} were corrected",
+    preview: "Open Madeora to see the correction.",
+    heading: "Your points were corrected",
+    body: "Someone who manages points in {home} corrected your point balance. Open Madeora to see the change and the reason.",
+    button: "Open my points",
+  },
+  "points.adjustment_reversed": {
+    subject: "A points adjustment in {home} was reversed",
+    preview: "Open Madeora to see the change.",
+    heading: "A points adjustment was reversed",
+    body: "An earlier bonus or correction of your points in {home} was reversed. Open Madeora to see the change and the reason.",
+    button: "Open my points",
+  },
+  "reward.requested": {
+    subject: "A reward request in {home} waits for your review",
+    preview: "Open Madeora to approve or reject it.",
+    heading: "A reward request waits for review",
+    body: "A member of {home} asked for a reward that needs approval. Open Madeora to approve or reject it.",
+    button: "Review requests",
+  },
+  "reward.approved": {
+    subject: "Your reward request in {home} was approved",
+    preview: "Open Madeora to see it.",
+    heading: "Your reward request was approved",
+    body: "Your request for a reward in {home} was approved. Open Madeora to follow when it is given.",
+    button: "Open my rewards",
+  },
+  "reward.rejected": {
+    subject: "Your reward request in {home} was not approved",
+    preview: "Your reserved points are available again.",
+    heading: "Your reward request was not approved",
+    body: "Your request for a reward in {home} was not approved, and the points it reserved are available again. Open Madeora to see the details.",
+    button: "Open my rewards",
+  },
+  "reward.cancelled": {
+    subject: "Your reward request in {home} was cancelled",
+    preview: "Your reserved points are available again.",
+    heading: "Your reward request was cancelled",
+    body: "Someone who manages rewards in {home} cancelled your pending request, and the points it reserved are available again. Open Madeora to see the reason.",
+    button: "Open my rewards",
+  },
+  "reward.fulfilled": {
+    subject: "Your reward in {home} was marked as given",
+    preview: "Open Madeora to see it.",
+    heading: "Your reward was marked as given",
+    body: "A reward you redeemed in {home} was marked as given. Open Madeora to see it.",
+    button: "Open my rewards",
+  },
+  "reward.unable": {
+    subject: "A reward in {home} could not be given",
+    preview: "Open Madeora to see what happens next.",
+    heading: "A reward could not be given",
+    body: "A reward you redeemed in {home} could not be given. Nothing changes to your points by itself; someone who manages rewards will refund it or arrange a replacement. Open Madeora to follow it.",
+    button: "Open my rewards",
+  },
+  "reward.refunded": {
+    subject: "Points for a reward in {home} were refunded",
+    preview: "Open Madeora to see your balance.",
+    heading: "Your points were refunded",
+    body: "A reward you redeemed in {home} could not be given, so its points were refunded. Open Madeora to see your balance.",
+    button: "Open my rewards",
+  },
+  "reward.replacement": {
+    subject: "A replacement was arranged for your reward in {home}",
+    preview: "Open Madeora to see it.",
+    heading: "A replacement was arranged",
+    body: "A reward you redeemed in {home} could not be given, so a replacement was arranged at no extra cost. Open Madeora to see it.",
+    button: "Open my rewards",
+  },
 };
 
 const nl: Catalogue = {
@@ -609,6 +713,97 @@ const nl: Catalogue = {
     body: "Een vakantie in {home} begint binnenkort. Open Madeora om de klusjes te bekijken waarop ze invloed heeft en te beslissen wat ermee gebeurt.",
     button: "Open de vakantie",
   },
+  "points.awarded": {
+    subject: "Je verdiende klusjespunten in {home}",
+    preview: "Open Madeora om ze te zien.",
+    heading: "Je verdiende klusjespunten",
+    body: "Een klusje dat je in {home} deed, leverde punten op. Open Madeora om te zien hoeveel en wat je saldo is.",
+    button: "Open mijn punten",
+  },
+  "points.reversed": {
+    subject: "Klusjespunten in {home} zijn gewijzigd",
+    preview: "Open Madeora om te zien waarom.",
+    heading: "Je klusjespunten zijn gewijzigd",
+    body: "Een afgerond klusje in {home} werd heropend of gecorrigeerd, waardoor punten die het je opleverde zijn teruggenomen of verplaatst. Open Madeora om je punten te zien zoals ze nu zijn.",
+    button: "Open mijn punten",
+  },
+  "points.bonus": {
+    subject: "Je kreeg bonuspunten in {home}",
+    preview: "Open Madeora om ze te zien.",
+    heading: "Je kreeg bonuspunten",
+    body: "Iemand die punten beheert in {home} gaf je bonuspunten. Open Madeora om te zien hoeveel, waarom en wat je saldo is.",
+    button: "Open mijn punten",
+  },
+  "points.corrected": {
+    subject: "Je punten in {home} zijn gecorrigeerd",
+    preview: "Open Madeora om de correctie te zien.",
+    heading: "Je punten zijn gecorrigeerd",
+    body: "Iemand die punten beheert in {home} corrigeerde je puntensaldo. Open Madeora om de wijziging en de reden te zien.",
+    button: "Open mijn punten",
+  },
+  "points.adjustment_reversed": {
+    subject: "Een puntenaanpassing in {home} is teruggedraaid",
+    preview: "Open Madeora om de wijziging te zien.",
+    heading: "Een puntenaanpassing is teruggedraaid",
+    body: "Een eerdere bonus of correctie van je punten in {home} is teruggedraaid. Open Madeora om de wijziging en de reden te zien.",
+    button: "Open mijn punten",
+  },
+  "reward.requested": {
+    subject: "Een beloningsaanvraag in {home} wacht op je beoordeling",
+    preview: "Open Madeora om ze goed te keuren of af te wijzen.",
+    heading: "Een beloningsaanvraag wacht op beoordeling",
+    body: "Een lid van {home} vroeg een beloning aan die goedkeuring vraagt. Open Madeora om ze goed te keuren of af te wijzen.",
+    button: "Aanvragen beoordelen",
+  },
+  "reward.approved": {
+    subject: "Je beloningsaanvraag in {home} is goedgekeurd",
+    preview: "Open Madeora om ze te zien.",
+    heading: "Je beloningsaanvraag is goedgekeurd",
+    body: "Je aanvraag voor een beloning in {home} is goedgekeurd. Open Madeora om te volgen wanneer je ze krijgt.",
+    button: "Open mijn beloningen",
+  },
+  "reward.rejected": {
+    subject: "Je beloningsaanvraag in {home} is niet goedgekeurd",
+    preview: "Je gereserveerde punten zijn weer beschikbaar.",
+    heading: "Je beloningsaanvraag is niet goedgekeurd",
+    body: "Je aanvraag voor een beloning in {home} is niet goedgekeurd, en de punten die ze reserveerde zijn weer beschikbaar. Open Madeora voor de details.",
+    button: "Open mijn beloningen",
+  },
+  "reward.cancelled": {
+    subject: "Je beloningsaanvraag in {home} is geannuleerd",
+    preview: "Je gereserveerde punten zijn weer beschikbaar.",
+    heading: "Je beloningsaanvraag is geannuleerd",
+    body: "Iemand die beloningen beheert in {home} annuleerde je openstaande aanvraag, en de punten die ze reserveerde zijn weer beschikbaar. Open Madeora om de reden te zien.",
+    button: "Open mijn beloningen",
+  },
+  "reward.fulfilled": {
+    subject: "Je beloning in {home} is als gegeven gemarkeerd",
+    preview: "Open Madeora om ze te zien.",
+    heading: "Je beloning is als gegeven gemarkeerd",
+    body: "Een beloning die je in {home} inwisselde, is als gegeven gemarkeerd. Open Madeora om ze te zien.",
+    button: "Open mijn beloningen",
+  },
+  "reward.unable": {
+    subject: "Een beloning in {home} kon niet gegeven worden",
+    preview: "Open Madeora om te zien wat er nu gebeurt.",
+    heading: "Een beloning kon niet gegeven worden",
+    body: "Een beloning die je in {home} inwisselde, kon niet gegeven worden. Aan je punten verandert niets vanzelf; iemand die beloningen beheert, betaalt ze terug of regelt een vervanging. Open Madeora om het te volgen.",
+    button: "Open mijn beloningen",
+  },
+  "reward.refunded": {
+    subject: "Punten voor een beloning in {home} zijn terugbetaald",
+    preview: "Open Madeora om je saldo te zien.",
+    heading: "Je punten zijn terugbetaald",
+    body: "Een beloning die je in {home} inwisselde, kon niet gegeven worden, dus zijn de punten ervoor terugbetaald. Open Madeora om je saldo te zien.",
+    button: "Open mijn beloningen",
+  },
+  "reward.replacement": {
+    subject: "Er is een vervanging geregeld voor je beloning in {home}",
+    preview: "Open Madeora om ze te zien.",
+    heading: "Er is een vervanging geregeld",
+    body: "Een beloning die je in {home} inwisselde, kon niet gegeven worden, dus is er zonder extra kosten een vervanging geregeld. Open Madeora om ze te zien.",
+    button: "Open mijn beloningen",
+  },
 };
 
 export const notificationMessages = {
@@ -647,6 +842,8 @@ export function isOptionalNotificationKind(kind: NotificationEmailKind): boolean
   return (
     kind.startsWith("join_request.") ||
     kind.startsWith("task.reminder.") ||
-    kind === "chore.approval_requested"
+    kind === "chore.approval_requested" ||
+    kind.startsWith("points.") ||
+    kind.startsWith("reward.")
   );
 }

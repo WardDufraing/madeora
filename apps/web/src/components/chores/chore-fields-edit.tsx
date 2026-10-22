@@ -3,10 +3,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import {
+  chorePointsDraftSchema,
+  noPointsDraft,
+  PointsFields,
+  pointsDraft,
+} from "@/components/points/points-fields";
 import { HydrationGate } from "@/components/tasks/hydration-gate";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,6 +38,7 @@ const formSchema = z.object({
   instructions: instructionsSchema,
   categoryId: z.string(),
   requiresApproval: z.boolean(),
+  points: chorePointsDraftSchema,
 });
 type FormInput = z.input<typeof formSchema>;
 type FormOutput = z.output<typeof formSchema>;
@@ -40,6 +47,12 @@ export interface ChoreFieldsEditProps {
   readonly chore: ChoreOccurrenceDetail["chore"];
   /** Active categories; an archived one the chore has stays offered. */
   readonly categories: readonly { readonly id: string; readonly name: string }[];
+  /** The chore's points setting (S23); new occurrences take it. */
+  readonly points?: {
+    readonly points: number;
+    readonly latePolicy: "full" | "reduced" | "zero";
+    readonly latePoints: number | null;
+  };
 }
 
 /**
@@ -48,7 +61,7 @@ export interface ChoreFieldsEditProps {
  * completions submitted after the change). Open occurrences show the change at once; completed and skipped ones
  * keep what they were closed under.
  */
-export function ChoreFieldsEdit({ chore, categories }: ChoreFieldsEditProps) {
+export function ChoreFieldsEdit({ chore, categories, points }: ChoreFieldsEditProps) {
   const t = useTranslations("Chores");
   const texts = useChoreTexts(noMembers);
   const message = useChoreFieldMessage();
@@ -62,8 +75,10 @@ export function ChoreFieldsEdit({ chore, categories }: ChoreFieldsEditProps) {
       instructions: chore.instructions ?? "",
       categoryId: chore.category?.id ?? "",
       requiresApproval: chore.requiresApproval,
+      points: points ? pointsDraft(points) : noPointsDraft,
     },
   });
+  const latePolicy = useWatch({ control: form.control, name: "points.latePolicy" });
   const mutation = useChoreMutation(
     `chore:${chore.id}`,
     (input: FormOutput) =>
@@ -73,6 +88,8 @@ export function ChoreFieldsEdit({ chore, categories }: ChoreFieldsEditProps) {
         instructions: input.instructions,
         categoryId: input.categoryId === "" ? null : input.categoryId,
         requiresApproval: input.requiresApproval,
+        // Without the current setting (it could not be read) the points are left as they are.
+        ...(points ? { points: input.points } : {}),
       }),
     () => {
       announce(t("announceSaved"));
@@ -143,6 +160,21 @@ export function ChoreFieldsEdit({ chore, categories }: ChoreFieldsEditProps) {
             data-testid="chore-requires-approval"
             {...form.register("requiresApproval")}
           />
+          {points ? (
+            <PointsFields
+              register={{
+                points: form.register("points.points"),
+                latePolicy: form.register("points.latePolicy"),
+                latePoints: form.register("points.latePoints"),
+              }}
+              policy={latePolicy}
+              errors={{
+                points: form.formState.errors.points?.points,
+                latePoints: form.formState.errors.points?.latePoints,
+              }}
+              help={t("pointsEditHelp")}
+            />
+          ) : null}
           {mutation.error ? (
             <FormAlert tone="error" announce>
               {texts.failure(mutation.error.failure)}

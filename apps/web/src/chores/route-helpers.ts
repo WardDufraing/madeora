@@ -223,6 +223,11 @@ export function outcomeAnswer(
       return failure(409, "not-whole-home");
     case "stale":
       return failure(409, "stale");
+    // S23: a change of awarded points without manageHomePoints; a completed record's points need a reason.
+    case "points_not_permitted":
+      return failure(403, "points-not-permitted", revision === undefined ? {} : { revision });
+    case "reason_required":
+      return failure(409, "reason-required", revision === undefined ? {} : { revision });
     case "invalid_dates":
       return failure(400, "invalid", { fields: ["dates"] });
     case "invalid_date":

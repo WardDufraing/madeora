@@ -9,6 +9,7 @@ import {
   readChoreMutation,
 } from "@/chores/route-helpers";
 import { updateTemplateSchema } from "@/chores/schema";
+import { chorePointsArgs } from "@/points/chore-points";
 
 interface TemplateRouteContext {
   readonly params: Promise<{ readonly templateId: string }>;
@@ -34,6 +35,7 @@ export async function PATCH(request: Request, { params }: TemplateRouteContext):
     ...(change.minutes === null ? {} : { p_minutes: change.minutes }),
     p_steps: change.steps,
     ...(change.retired === undefined ? {} : { p_retired: change.retired }),
+    ...(change.points === undefined ? {} : chorePointsArgs(change.points)),
   });
   if (error) return databaseFailure("chores.template_update_failed", error);
   const row = data[0];

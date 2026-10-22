@@ -22,6 +22,8 @@ import { choresPath } from "@/chores/format";
 import { parseOverviewQuery, parsePoolWeek } from "@/chores/schema";
 import { addDays, startOfWeek } from "@/tasks/calendar";
 import { getDateTimeFormats } from "@/invitations/server";
+import { listChorePoints } from "@/points/data";
+import { pointsPath, rewardsPath } from "@/points/format";
 import { listTaskMembers } from "@/tasks/data";
 import { formatTaskDate, memberNames, personName } from "@/tasks/format";
 import { getVacationWidget } from "@/vacations/data";
@@ -153,6 +155,13 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
   // Claimable chores show in the pool; the groups below keep everything else.
   const inPool = new Set(pool.value.rows.map((row) => row.id));
   const listed = page.value.occurrences.filter((row) => !inPool.has(row.id));
+  // S23: base points of what is shown (none shown when they cannot be read).
+  const points = await listChorePoints(home.id, [
+    ...page.value.occurrences.map((row) => row.id),
+    ...pool.value.rows.map((row) => row.id),
+  ]);
+  const pointsOf = (id: string) =>
+    points.status === "ok" ? (points.value.get(id)?.points ?? null) : null;
   const activeCategories = categories.value.filter((category) => !category.archived);
 
   return (
@@ -205,6 +214,22 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link href={`${base}/history`} className="font-medium text-accent-fg underline">
           {t("homeHistoryLink")}
+        </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={pointsPath(home.id)}
+          className="font-medium text-accent-fg underline"
+          data-testid="chores-points-link"
+        >
+          {t("pointsLink")}
+        </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={rewardsPath(home.id)}
+          className="font-medium text-accent-fg underline"
+          data-testid="chores-rewards-link"
+        >
+          {t("rewardsLink")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
@@ -269,7 +294,10 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         ) : null}
         <ChorePool
           homeId={home.id}
-          pool={pool.value}
+          pool={{
+            ...pool.value,
+            rows: pool.value.rows.map((row) => ({ ...row, points: pointsOf(row.id) })),
+          }}
           week={{
             start: shownWeek,
             current: shownWeek === currentWeek,
@@ -388,6 +416,11 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
                             ) : null}
                             {row.minutes !== null ? (
                               <span>{t("minutes", { count: row.minutes })}</span>
+                            ) : null}
+                            {pointsOf(row.id) ? (
+                              <span className="font-medium" data-testid="chore-row-points">
+                                {t("pointsMark", { count: pointsOf(row.id) ?? 0 })}
+                              </span>
                             ) : null}
                             {row.kind === "recurring" ? <span>{t("repeats")}</span> : null}
                             {row.needsReassignment ? (

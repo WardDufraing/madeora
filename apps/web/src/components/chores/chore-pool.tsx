@@ -55,7 +55,7 @@ export interface ChorePoolProps {
  * Uncategorized), due dates and duration (with Not set), the due-date direction and "only what I
  * can claim" change this person's view only, with matching and total counts and one reset. Every
  * eligible row has one-tap Claim with a short Undo; a restricted chore says only that the viewer is
- * not eligible, never who is. Points come with S23.
+ * not eligible, never who is. Each row shows its points and the pool sorts by them (S23).
  */
 export function ChorePool({ homeId, pool, week, today, categories, formats }: ChorePoolProps) {
   const t = useTranslations("Chores");
@@ -175,11 +175,13 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
               label={t("poolSort")}
               value={filter.sort}
               onChange={(event) => {
-                set("sort", event.target.value === "desc" ? "desc" : "asc");
+                const value = event.target.value;
+                set("sort", value === "desc" || value === "points" ? value : "asc");
               }}
               options={[
                 { value: "asc", label: t("poolSortEarliest") },
                 { value: "desc", label: t("poolSortLatest") },
+                { value: "points", label: t("poolSortPoints") },
               ]}
             />
             <Checkbox
@@ -293,6 +295,11 @@ function PoolRow({
           <span>
             {row.minutes !== null ? t("minutes", { count: row.minutes }) : t("noEstimate")}
           </span>
+          {row.points ? (
+            <span className="font-medium" data-testid="pool-points">
+              {t("pointsMark", { count: row.points })}
+            </span>
+          ) : null}
           {row.kind === "recurring" ? <span>{t("repeats")}</span> : null}
           {row.requiresApproval ? <span>{t("approvalMark")}</span> : null}
           {lastDay ? <span>{t("poolClosesAfter", { date: lastDay })}</span> : null}

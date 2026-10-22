@@ -13,6 +13,11 @@ import {
   repeatSchema,
   type RepeatError,
 } from "@/components/tasks/repeat-fields";
+import {
+  chorePointsDraftSchema,
+  noPointsDraft,
+  PointsFields,
+} from "@/components/points/points-fields";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/ui/select-field";
@@ -30,6 +35,7 @@ import {
   type ChoreFieldError,
   type StepInput,
 } from "@/chores/schema";
+import type { ChorePointsInput } from "@/points/chore-points";
 import type { DateFormat } from "@/preferences/schema";
 import type { MemberOption } from "@/tasks/format";
 import { dateOnlySchema, type RecurrenceInput } from "@/tasks/schema";
@@ -100,6 +106,7 @@ const formSchema = z
     assignment: assignmentDraftSchema,
     steps: stepDraftsSchema,
     requiresApproval: z.boolean(),
+    points: chorePointsDraftSchema,
   })
   .refine((chore) => chore.date !== "", {
     message: "dateRequired" satisfies FormError,
@@ -127,6 +134,7 @@ export interface ChoreFormOutput {
   readonly dueDate: string | null;
   readonly recurrence: RecurrenceInput | null;
   readonly requiresApproval: boolean;
+  readonly points: ChorePointsInput;
 }
 
 function outputOf(values: ChoreFormParsed): ChoreFormOutput {
@@ -140,6 +148,7 @@ function outputOf(values: ChoreFormParsed): ChoreFormOutput {
     dueDate: values.repeat === null ? values.date : null,
     recurrence: values.repeat === null ? null : { ...values.repeat, startsOn: values.date },
     requiresApproval: values.requiresApproval,
+    points: values.points,
   };
 }
 
@@ -153,6 +162,7 @@ export const emptyChore = (today: string): ChoreFormInput => ({
   assignment: { mode: "none", members: [] },
   steps: [] as StepDraft[],
   requiresApproval: false,
+  points: noPointsDraft,
 });
 
 const fieldErrorKey = {
@@ -230,6 +240,7 @@ export function ChoreForm({
   const date = useWatch({ control: form.control, name: "date" });
   const repeat = useWatch({ control: form.control, name: "repeat" });
   const assignment = useWatch({ control: form.control, name: "assignment" });
+  const latePolicy = useWatch({ control: form.control, name: "points.latePolicy" });
   const recurring = repeat.frequency !== "none";
   useEffect(() => {
     form.setFocus("title");
@@ -297,6 +308,15 @@ export function ChoreForm({
         description={t("fieldRequiresApprovalHelp")}
         data-testid="chore-requires-approval"
         {...form.register("requiresApproval")}
+      />
+      <PointsFields
+        register={{
+          points: form.register("points.points"),
+          latePolicy: form.register("points.latePolicy"),
+          latePoints: form.register("points.latePoints"),
+        }}
+        policy={latePolicy}
+        errors={{ points: errors.points?.points, latePoints: errors.points?.latePoints }}
       />
       <TextField
         type="date"

@@ -123,6 +123,9 @@ describe("creating a chore", () => {
       p_category_id: CATEGORY,
       p_minutes: 15,
       p_requires_approval: false,
+      // S23: no points given means none, paid in full when late.
+      p_points: 0,
+      p_late_policy: "full",
       p_frequency: "weekly",
       p_interval: 1,
       p_starts_on: "2026-10-19",
@@ -827,6 +830,8 @@ describe("templates", () => {
       p_title: "Bathroom",
       p_minutes: 30,
       p_steps: [{ label: "Mirror", mandatory: false }],
+      p_points: 0,
+      p_late_policy: "full",
     });
   });
 
@@ -881,6 +886,9 @@ describe("templates", () => {
           steps: [{ label: "Mirror", mandatory: true }],
           retired: false,
           revision: 2,
+          points: 8,
+          late_policy: "reduced",
+          late_points: 3,
         },
       ],
     });
@@ -899,6 +907,7 @@ describe("templates", () => {
           steps: [{ label: "Mirror", mandatory: true }],
           retired: false,
           revision: 2,
+          points: { points: 8, latePolicy: "reduced", latePoints: 3 },
         },
       ],
     });
