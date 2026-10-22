@@ -7,6 +7,7 @@ import Link from "next/link";
 import { requireIdentity } from "@/auth/identity";
 import { ChoreReview } from "@/components/chores/chore-review";
 import { ChoreScheduleWidget } from "@/components/chores/chore-schedule-widget";
+import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
 import { QuickComplete } from "@/components/chores/quick-complete";
 import { messageKeyFor } from "@/components/notifications/notification-list";
 import { MemberAvatar } from "@/components/members/member-avatar";
@@ -765,6 +766,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "home-chores": t("widgetHomeChores"),
     "chore-approvals": t("widgetChoreApprovals"),
     "chore-schedule": t("widgetChoreSchedule"),
+    "home-vacation": t("widgetHomeVacation"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -854,6 +856,24 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: t("widgetHomeTasks"), home: isolate(home.name) }),
         sourceName: home.name,
         body: <TasksBody homeId={home.id} config={tasksConfig(widget)} formats={scope.formats} />,
+        unavailable: false,
+      };
+    }
+    case "home-vacation": {
+      // Home-only, like chores: the Home's own dashboard, or one the viewer belongs to now.
+      const home =
+        scope.kind === "home"
+          ? null
+          : scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (scope.kind !== "home" && !home) return unavailable;
+      const homeId = scope.kind === "home" ? scope.home.id : (home?.id ?? "");
+      return {
+        id: widget.id,
+        title: home
+          ? t("widgetFromHome", { widget: titles["home-vacation"], home: isolate(home.name) })
+          : titles["home-vacation"],
+        sourceName: home?.name ?? null,
+        body: <HomeVacationWidget homeId={homeId} formats={scope.formats} />,
         unavailable: false,
       };
     }

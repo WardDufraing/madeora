@@ -27,6 +27,7 @@ The app's tables are defined by the files in `supabase/migrations/`. Locally and
 | `supabase/migrations/20261101090000_chore_pool_claims.sql`                 | S21  | `chore_requests_table` is not `NULL`                   |
 | `supabase/migrations/20261102090000_chore_proposals_volunteers.sql`        | S21  | `chore_proposals_table` is not `NULL`                  |
 | `supabase/migrations/20261103090000_chore_overview_reminders.sql`          | S21  | `chore_reminders_table` is not `NULL`                  |
+| `supabase/migrations/20261104090000_home_vacations.sql`                    | S22  | `home_vacations_table` is not `NULL`                   |
 
 Check query (read-only, safe to run any time):
 
@@ -48,7 +49,8 @@ select
   to_regclass('private.chore_templates') as chore_templates_table,
   to_regclass('private.chore_reassignment_requests') as chore_requests_table,
   to_regclass('private.chore_proposals') as chore_proposals_table,
-  to_regclass('private.chore_reminders') as chore_reminders_table;
+  to_regclass('private.chore_reminders') as chore_reminders_table,
+  to_regclass('private.home_vacations') as home_vacations_table;
 ```
 
 ## Apply a migration
@@ -424,6 +426,28 @@ From here the Chores page has a **Calendar** where chore managers move one occur
    It must show both tables, **false** for `members_can_read_reminders` and `members_can_send_summaries` (only the jobs worker sends), and **true** for `members_can_read_schedule_call`.
 
 2. In the app the Chores page has **Calendar** and, for chore managers, **Daily summary**. An occurrence assigned to you has **Your reminder**. On a Home dashboard, **Customize** offers **Chore schedule**.
+
+## Check S22 (`20261104090000_home_vacations.sql`)
+
+From here a Home has **Vacations** (with invitations, a Home-wide chore pause and a review of affected chores) and the Chores page has **Absences**. Existing chores do not change until someone records a vacation. Apply it after the S21c file, and deploy the Trigger.dev tasks from the same commit (`docs/trigger-setup.md`, step 4): the optional pre-vacation reminder is delivered by `vacation-reminder`.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.home_vacations') as vacations_table,
+     to_regclass('private.chore_absences') as absences_table,
+     has_table_privilege('authenticated', 'private.home_vacations', 'select')
+       as members_can_read_vacations,
+     has_function_privilege('authenticated', 'public.list_home_vacations(uuid)', 'execute')
+       as members_can_list_call,
+     has_function_privilege('authenticated', 'public.deliver_vacation_reminder(uuid, date, integer)', 'execute')
+       as members_can_deliver_reminders;
+   ```
+
+   It must show both tables, **false** for `members_can_read_vacations` and `members_can_deliver_reminders` (only the jobs worker delivers), and **true** for `members_can_list_call`.
+
+2. In the app the Home page and the Chores page have **Vacations**, and the Chores page has **Absences**. On a Home dashboard, **Customize** offers **Home vacation**.
 
 ## If a migration file changed after you applied it
 

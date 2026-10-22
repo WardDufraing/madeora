@@ -42,6 +42,14 @@ export interface ChoreCalendarBoardProps {
   readonly weekdays: readonly string[];
   readonly weekdaysLong: readonly string[];
   readonly title: string;
+  /** S22: days with members away on a Home vacation, and whether chores are paused. */
+  readonly vacationDays?: readonly VacationDay[];
+}
+
+export interface VacationDay {
+  readonly date: string;
+  readonly paused: boolean;
+  readonly away: number;
 }
 
 export const stateKey = {
@@ -51,6 +59,7 @@ export const stateKey = {
   completed: "calendarStateCompleted",
   skipped: "calendarStateSkipped",
   expired: "calendarStateExpired",
+  paused: "calendarStatePaused",
   review: "calendarStateReview",
   awaiting: "calendarStateAwaiting",
   planned: "calendarStatePlanned",
@@ -76,8 +85,17 @@ export function ChoreCalendarBoard({
   weekdays,
   weekdaysLong,
   title,
+  vacationDays = [],
 }: ChoreCalendarBoardProps) {
   const t = useTranslations("Chores");
+  const vacationOn = new Map(vacationDays.map((day) => [day.date, day]));
+  const vacationText = (date: string): string | null => {
+    const day = vacationOn.get(date);
+    if (!day) return null;
+    return day.paused
+      ? t("calendarVacationPaused")
+      : t("calendarVacationAway", { count: day.away });
+  };
   const texts = useChoreTexts(memberNames(members));
   const [moving, setMoving] = useState<{
     readonly item: ChoreAgendaItem;
@@ -256,6 +274,7 @@ export function ChoreCalendarBoard({
                           dateText(date),
                           date === today ? t("calendarToday") : null,
                           date === selected ? t("calendarSelected") : null,
+                          vacationText(date),
                           t("calendarDayCount", { count: entries.length }),
                         ]
                           .filter(Boolean)
@@ -270,6 +289,15 @@ export function ChoreCalendarBoard({
                       >
                         {Number(date.slice(8, 10))}
                       </Link>
+                      {vacationText(date) ? (
+                        <p
+                          className="text-helper font-medium text-fg-muted"
+                          aria-hidden="true"
+                          data-testid="chore-calendar-vacation"
+                        >
+                          {vacationText(date)}
+                        </p>
+                      ) : null}
                       {shown.length > 0 ? (
                         <ul
                           className="mt-1 flex flex-col gap-0.5"
@@ -307,6 +335,11 @@ export function ChoreCalendarBoard({
             {dateText(selected)}
             {selected === today ? ` · ${t("calendarToday")}` : ""}
           </h2>
+          {vacationText(selected) ? (
+            <p className="text-body text-fg" data-testid="chore-calendar-panel-vacation">
+              {vacationText(selected)}
+            </p>
+          ) : null}
           {selectedItems.length === 0 ? (
             <p className="text-body text-fg-muted">{t("calendarDayEmpty")}</p>
           ) : (

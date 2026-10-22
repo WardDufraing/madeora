@@ -116,6 +116,7 @@ export type ChoreItemState =
   | "completed"
   | "skipped"
   | "expired"
+  | "paused"
   | "review"
   | "awaiting"
   | "planned";
@@ -127,6 +128,7 @@ export function itemStates(item: ChoreAgendaItem): ChoreItemState[] {
   if (item.status === "completed") states.push("completed");
   if (item.status === "skipped") states.push("skipped");
   if (item.status === "expired") states.push("expired");
+  if (item.status === "paused") states.push("paused");
   if (item.status === "open" && item.inRework) states.push("rework");
   if (item.overdue) states.push("overdue");
   if (item.awaitingVolunteer) states.push("awaiting");

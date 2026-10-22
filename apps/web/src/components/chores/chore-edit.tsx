@@ -293,11 +293,17 @@ export function ChoreEdit({ occurrence, members, dateFormat }: ChoreEditProps) {
   }
   function run(dryRun: boolean) {
     const previewed = preview?.body;
-    // A new due date that releases a claim at once was in the preview the person confirms.
+    // A new due date that releases a claim at once, and assigning a member away on a Home vacation
+    // (S22), were in the preview the person confirms.
+    const occurrenceImpact = preview?.kind === "occurrence" ? preview.impact : null;
     const body = dryRun
       ? bodyOf()
-      : previewed && preview.kind === "occurrence" && preview.impact.releaseNow
-        ? { ...previewed, confirmRelease: true }
+      : previewed && occurrenceImpact
+        ? {
+            ...previewed,
+            ...(occurrenceImpact.releaseNow ? { confirmRelease: true } : {}),
+            ...((occurrenceImpact.away?.length ?? 0) > 0 ? { confirmAway: true } : {}),
+          }
         : previewed;
     if (!body) return;
     if (scope === "occurrence") occurrenceMutation.mutate({ body, dryRun });
@@ -543,6 +549,13 @@ export function ChoreEdit({ occurrence, members, dateFormat }: ChoreEditProps) {
                     newlyMandatory: preview.impact.newlyMandatory,
                   })}
                   {preview.impact.releaseNow ? ` ${t("moveReleaseNow")}` : null}
+                  {(preview.impact.away?.length ?? 0) > 0 ? (
+                    <span className="mt-1 block font-semibold" data-testid="chore-edit-away">
+                      {t("assignAwayWarning", {
+                        names: (preview.impact.away ?? []).map((id) => texts.member(id)).join(", "),
+                      })}
+                    </span>
+                  ) : null}
                 </p>
               ) : (
                 <>

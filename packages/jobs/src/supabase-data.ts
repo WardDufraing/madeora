@@ -206,6 +206,18 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return outcome;
     },
 
+    async deliverVacationReminder(vacationId, startsOn, days) {
+      const { data, error } = await client.rpc("deliver_vacation_reminder", {
+        p_vacation_id: vacationId,
+        p_starts_on: startsOn,
+        p_days: days,
+      });
+      if (error) throw new JobStoreError("deliver_vacation_reminder", error.code);
+      const outcome = oneOf(reminderOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_vacation_reminder", "unexpected_result");
+      return outcome;
+    },
+
     async sendChoreSummaries(limit) {
       const { data, error } = await client.rpc("send_chore_summaries", { p_limit: limit });
       if (error) throw new JobStoreError("send_chore_summaries", error.code);

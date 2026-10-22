@@ -48,6 +48,8 @@ export class FakeJobData implements JobDataPort {
   readonly claimReleaseCalls: { occurrenceId: string; claim: number }[] = [];
   choreReminderOutcome: TaskReminderOutcome = "notified";
   readonly choreReminderCalls: { occurrenceId: string; userId: string; revision: number }[] = [];
+  vacationReminderOutcome: TaskReminderOutcome = "notified";
+  readonly vacationReminderCalls: { vacationId: string; startsOn: string; days: number }[] = [];
   summariesSent = 0;
   readonly summaryCalls: number[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
@@ -133,6 +135,16 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.choreReminderCalls.push({ occurrenceId, userId, revision });
     return Promise.resolve(this.choreReminderOutcome);
+  }
+
+  deliverVacationReminder(
+    vacationId: string,
+    startsOn: string,
+    days: number,
+  ): Promise<TaskReminderOutcome> {
+    this.check();
+    this.vacationReminderCalls.push({ vacationId, startsOn, days });
+    return Promise.resolve(this.vacationReminderOutcome);
   }
 
   sendChoreSummaries(limit: number): Promise<number> {

@@ -5,7 +5,7 @@ import type { JobEnvelope } from "../definition.ts";
 import { runJob } from "../executor.ts";
 import { fakeServices } from "../testing/fake-services.ts";
 import { FakeJobStore } from "../testing/fake-store.ts";
-import { choreClaimRelease, choreReminder } from "./chores.ts";
+import { choreClaimRelease, choreReminder, vacationReminder } from "./chores.ts";
 
 const CORRELATION = "0b6f3f2e-5d7a-4c1b-9e2f-1a2b3c4d5e6f";
 const OCCURRENCE = "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
@@ -126,5 +126,59 @@ describe("chore-reminder", () => {
       ),
     ).rejects.toThrow();
     expect(ctx.services.data.choreReminderCalls).toEqual([]);
+  });
+});
+
+describe("vacation-reminder", () => {
+  const VACATION = "4f5e6d7c-8b9a-4c0d-9e1f-2a3b4c5d6e7f";
+
+  it("passes the vacation, its start and the lead days and logs only the outcome", async () => {
+    const ctx = setup();
+    await runJob(
+      vacationReminder,
+      envelope(
+        { vacationId: VACATION, startsOn: "2026-12-20", days: 3 },
+        `vacation-reminder:${VACATION}:2026-12-20:3`,
+      ),
+      ctx,
+    );
+    expect(ctx.services.data.vacationReminderCalls).toEqual([
+      { vacationId: VACATION, startsOn: "2026-12-20", days: 3 },
+    ]);
+    expect(ctx.lines.join("\n")).toContain("notified");
+    expect(ctx.lines.join("\n")).not.toContain(VACATION);
+  });
+
+  it("retries a reminder that is not due yet and accepts a stale one", async () => {
+    const early = setup();
+    early.services.data.vacationReminderOutcome = "not_due";
+    await expect(
+      runJob(
+        vacationReminder,
+        envelope({ vacationId: VACATION, startsOn: "2026-12-20", days: 3 }, "vacation:early"),
+        early,
+      ),
+    ).rejects.toThrow("not_due");
+    const stale = setup();
+    stale.services.data.vacationReminderOutcome = "stale";
+    await runJob(
+      vacationReminder,
+      envelope({ vacationId: VACATION, startsOn: "2026-12-20", days: 3 }, "vacation:stale"),
+      stale,
+    );
+    expect(stale.services.data.vacationReminderCalls).toHaveLength(1);
+  });
+
+  it("refuses a payload with a name, a bad date or lead days out of range", async () => {
+    for (const data of [
+      { vacationId: VACATION, startsOn: "2026-12-20", days: 3, name: "Ski" },
+      { vacationId: VACATION, startsOn: "20-12-2026", days: 3 },
+      { vacationId: VACATION, startsOn: "2026-12-20", days: 31 },
+      { vacationId: VACATION, startsOn: "2026-12-20", days: 0 },
+    ]) {
+      const ctx = setup();
+      await expect(runJob(vacationReminder, envelope(data, "vacation:bad"), ctx)).rejects.toThrow();
+      expect(ctx.services.data.vacationReminderCalls).toEqual([]);
+    }
   });
 });

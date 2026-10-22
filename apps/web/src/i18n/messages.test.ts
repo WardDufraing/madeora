@@ -15,6 +15,9 @@ import nl from "./messages/nl.json";
 type Tree = { readonly [key: string]: string | Tree };
 const dictionaries: Record<(typeof locales)[number], Tree> = { en, nl };
 
+const withPrefix = (prefix: string, values: readonly string[]) =>
+  values.map((value) => prefix + value);
+
 /** Every message as `Namespace.key` → text. */
 function flatten(tree: Tree, prefix = ""): Map<string, string> {
   const result = new Map<string, string>();
@@ -139,6 +142,58 @@ describe("message dictionaries", () => {
       Accent: accentPalette.map((entry) => entry.id),
       // Each recovery state's sentence and staff label, looked up by state (S12b).
       Recovery: [...Object.values(stateKey), ...Object.values(staffStateKey)],
+      // Vacation states, changes, reasons, decisions, events and participant actions, looked up
+      // by the value the database answers (S22).
+      Vacations: [
+        ...withPrefix("status_", ["upcoming", "active", "ended", "cancelled"]),
+        ...withPrefix("absence_", ["upcoming", "active", "ended"]),
+        ...withPrefix("change_", [
+          "paused",
+          "resumed",
+          "substituted",
+          "no_substitute",
+          "restored",
+          "needs_review",
+          "review_cleared",
+        ]),
+        ...withPrefix("participant_", ["pending", "accepted", "declined", "withdrawn", "expired"]),
+        ...withPrefix("ended_", [
+          "self",
+          "manager",
+          "creator",
+          "shortened",
+          "cancelled",
+          "departure",
+        ]),
+        ...withPrefix("reason_", ["away", "no_substitute", "paused_date", "overdue_before"]),
+        ...withPrefix("decided_", ["keep", "skip", "reassign", "reschedule"]),
+        ...withPrefix("stateDecision_", ["keep", "skip", "reassign", "reschedule"]),
+        ...withPrefix("event_", [
+          "created",
+          "renamed",
+          "invited",
+          "added",
+          "accepted",
+          "declined",
+          "withdrawn",
+          "removed",
+          "invitation_withdrawn",
+          "dates_changed",
+          "dates_proposed",
+          "proposal_accepted",
+          "proposal_declined",
+          "proposal_withdrawn",
+          "shortened",
+          "cancelled",
+          "home_pause_confirmed",
+          "home_pause_removed",
+          "reminder_changed",
+          "left_home",
+        ]),
+        ...["withdraw", "remove", "cancelInvitation"].flatMap((action) =>
+          ["Action", "Named", "Title", "Body", "Confirm", "Announce"].map((part) => action + part),
+        ),
+      ],
     };
     expect(unusedKeys([...english.keys()], sources, dynamic)).toEqual([]);
   });

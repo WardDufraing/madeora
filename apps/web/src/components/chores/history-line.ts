@@ -39,6 +39,8 @@ export function useHistoryLine(names: MemberNames, formats: DateTimeFormats) {
         });
       case "expired":
         return t("historyLineExpired");
+      case "paused":
+        return t("historyLinePaused");
       case "missed":
         return t("historyLineMissed");
       case "due_today":

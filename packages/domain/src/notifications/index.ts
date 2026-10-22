@@ -69,6 +69,9 @@ export const notificationKinds = [
   "chore.assignment_corrected",
   "chore.reminder",
   "chore.manager_summary",
+  "vacation.invited",
+  "vacation.dates_proposed",
+  "vacation.reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -102,6 +105,14 @@ export function notificationPath(
   if (kind === "chore.approval_requested") return `${home}/chores/approvals`;
   if (kind === "chore.proposal_decided") return `${home}/chores/proposals`;
   if (kind === "chore.manager_summary") return `${home}/chores/summary`;
+  // S22: invitations and date proposals are answered on the Vacations page; the reminder leads to
+  // the vacation and its affected chores.
+  if (kind === "vacation.invited" || kind === "vacation.dates_proposed") return `${home}/vacations`;
+  if (kind === "vacation.reminder") {
+    const vacationId =
+      typeof params.vacationId === "string" ? encodeURIComponent(params.vacationId) : null;
+    return vacationId ? `${home}/vacations/${vacationId}` : `${home}/vacations`;
+  }
   if (kind.startsWith("chore.")) {
     // Claims, reassignment and volunteer requests and reminders (S21) lead to their occurrence.
     const occurrenceId =

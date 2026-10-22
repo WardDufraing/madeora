@@ -88,8 +88,9 @@ function MoveDialog({
       sendChoreRequest<MoveAnswer>("PATCH", `${CHORE_OCCURRENCES_ENDPOINT}/${occurrenceId}`, {
         expectedRevision: revision,
         dryRun: input.dryRun,
-        // Confirming the preview confirms the immediate release it named.
+        // Confirming the preview confirms the immediate release and the members away (S22) it named.
         ...(!input.dryRun && preview?.impact?.releaseNow ? { confirmRelease: true } : {}),
+        ...(!input.dryRun && (preview?.impact?.away?.length ?? 0) > 0 ? { confirmAway: true } : {}),
         ...(date !== item.date ? { dueDate: date } : {}),
         ...(assignee !== KEEP ? { assigneeIds: [assignee] } : {}),
       }),
@@ -117,6 +118,9 @@ function MoveDialog({
     if (impact.handoverEnded) effects.push(t("moveHandoverEnded"));
     if (impact.volunteerEnded) effects.push(t("moveVolunteerEnded"));
     if (impact.releaseNow) effects.push(t("moveReleaseNow"));
+    if (impact.away && impact.away.length > 0) {
+      effects.push(t("assignAwayWarning", { names: who(impact.away) }));
+    }
   }
 
   return (

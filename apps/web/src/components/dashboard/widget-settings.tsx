@@ -73,6 +73,7 @@ export function WidgetSettings({
         />
       );
     case "quick-actions":
+    case "home-vacation":
       return <p className="text-helper text-fg-muted">{t("settingsNone")}</p>;
     case "tasks": {
       const parsed = widgetRegistry.tasks.config.safeParse(widget.config);

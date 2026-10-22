@@ -308,6 +308,48 @@ describe("moving an occurrence", () => {
     });
   });
 
+  it("names a member away on a Home vacation and confirms assigning them (S22)", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json({
+          outcome: "preview",
+          revision: 3,
+          impact: {
+            overdue: false,
+            remindersMoved: 0,
+            remindersEnded: 0,
+            handoverEnded: false,
+            volunteerEnded: false,
+            releaseNow: false,
+            away: [BEA],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ outcome: "saved", revision: 4, impact: null }));
+    renderWithQuery(
+      <ChoreMove
+        item={item()}
+        targetDate="2026-10-20"
+        members={members}
+        formats={formats}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByTestId("chore-move-preview"));
+    expect(await screen.findByTestId("chore-move-summary")).toHaveTextContent(
+      "Away on a Home vacation on the due date: Bea",
+    );
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).not.toHaveProperty("confirmAway");
+    await user.click(screen.getByTestId("chore-move-confirm"));
+    await waitFor(() => {
+      expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toMatchObject({
+        dryRun: false,
+        confirmAway: true,
+      });
+    });
+  });
+
   it("asks for a change before previewing nothing", async () => {
     const user = userEvent.setup();
     renderWithQuery(

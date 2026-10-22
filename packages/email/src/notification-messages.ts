@@ -42,6 +42,9 @@ export const notificationKinds = [
   "chore.assignment_corrected",
   "chore.reminder",
   "chore.manager_summary",
+  "vacation.invited",
+  "vacation.dates_proposed",
+  "vacation.reminder",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -309,6 +312,27 @@ const en: Catalogue = {
     body: "Some chores in {home} are overdue, waiting for review, in rework, need someone assigned or will soon be released automatically. Open the summary to see them as they are now.",
     button: "Open the summary",
   },
+  "vacation.invited": {
+    subject: "You are invited to a vacation in {home}",
+    preview: "Accept or decline before it starts.",
+    heading: "You are invited to a vacation",
+    body: "A member of {home} suggests that you take part in a vacation. Your dates count only once you accept; the invitation ends when the vacation starts. Open Madeora to see what changes for your chores and to accept or decline.",
+    button: "Open vacations",
+  },
+  "vacation.dates_proposed": {
+    subject: "New dates are proposed for your vacation in {home}",
+    preview: "Your current dates stay until you accept.",
+    heading: "New vacation dates are proposed",
+    body: "Someone in {home} proposes new dates for your part in a vacation. Your current dates stay in force until you accept. Open Madeora to accept or decline.",
+    button: "Open vacations",
+  },
+  "vacation.reminder": {
+    subject: "A vacation in {home} starts soon",
+    preview: "Check the chores it affects.",
+    heading: "A vacation in {home} starts soon",
+    body: "A vacation in {home} starts soon. Open Madeora to check the chores it affects and decide what happens to them.",
+    button: "Open the vacation",
+  },
 };
 
 const nl: Catalogue = {
@@ -563,6 +587,27 @@ const nl: Catalogue = {
     heading: "Klusjes in {home} vragen aandacht",
     body: "Sommige klusjes in {home} zijn te laat, wachten op beoordeling, moeten opnieuw, hebben nog niemand of worden binnenkort automatisch vrijgegeven. Open het overzicht om ze te zien zoals ze nu zijn.",
     button: "Open het overzicht",
+  },
+  "vacation.invited": {
+    subject: "Je bent uitgenodigd voor een vakantie in {home}",
+    preview: "Aanvaard of weiger voor ze begint.",
+    heading: "Je bent uitgenodigd voor een vakantie",
+    body: "Een lid van {home} stelt voor dat jij meedoet aan een vakantie. Je data tellen pas als je aanvaardt; de uitnodiging vervalt wanneer de vakantie begint. Open Madeora om te zien wat er voor je klusjes verandert en om te aanvaarden of te weigeren.",
+    button: "Open vakanties",
+  },
+  "vacation.dates_proposed": {
+    subject: "Er zijn nieuwe data voorgesteld voor je vakantie in {home}",
+    preview: "Je huidige data blijven tot je aanvaardt.",
+    heading: "Nieuwe vakantiedata voorgesteld",
+    body: "Iemand in {home} stelt nieuwe data voor voor jouw deel van een vakantie. Je huidige data blijven gelden tot je aanvaardt. Open Madeora om te aanvaarden of te weigeren.",
+    button: "Open vakanties",
+  },
+  "vacation.reminder": {
+    subject: "Een vakantie in {home} begint binnenkort",
+    preview: "Bekijk de klusjes waarop ze invloed heeft.",
+    heading: "Een vakantie in {home} begint binnenkort",
+    body: "Een vakantie in {home} begint binnenkort. Open Madeora om de klusjes te bekijken waarop ze invloed heeft en te beslissen wat ermee gebeurt.",
+    button: "Open de vakantie",
   },
 };
 
