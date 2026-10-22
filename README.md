@@ -26,7 +26,7 @@ The repository currently contains working code for the application shell and the
 - Personal dashboards and configurable dashboard templates/widgets.
 - Home creation and membership, invitations and join flows, member profiles, role and ownership management, and ownership recovery.
 - Tasks, task calendars, recurrence, reminders, templates, bulk actions and attachments.
-- Chores, templates, history and approval workflows.
+- Chores, templates, history, approval workflows, a live unassigned chore pool with claims and reassignment requests, member proposals and volunteer requests, a chores calendar and schedule widget, personal chore reminders and daily summaries.
 - Notifications and notification preferences.
 - Private file storage, trash and recovery.
 
