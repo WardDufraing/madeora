@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 22 October 2026
+**Last reviewed:** 23 October 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
@@ -212,6 +212,18 @@ As a Home member, I want completed chores to earn points that I can spend on the
 - Limits, the availability window and an archived or disabled reward are enforced by the server; my points stay with my membership in that Home only and never expire.
 - The leaderboard is optional for the Home and for each member; the weekly points and leaderboard widgets show only what I may see.
 
+### US-023 — Plan chores around vacations and temporary absences
+
+As a Home member, I want vacations and temporary absences reflected in chore planning so work remains fair while people are away.
+
+**Acceptance checks**
+
+- I can see vacations for a Home where I am a current member; invitations, participation changes and date proposals are available only to the people and chore managers allowed to act on them.
+- Accepted vacation dates affect only the intended Home: rotating chores pass to an available member, and a chore manager can preview and confirm a Home-wide pause without silently combining separate vacations.
+- A chore manager can review affected occurrences and choose the supported keep, skip, reassign or one-off reschedule action; assigning someone who is away requires an explicit confirmation.
+- I can register my own temporary chore absence, while a chore manager can register one for another member. Its optional reason stays private to that member and chore managers, and the absence does not change chores automatically.
+- Vacation and absence actions preserve occurrence history, concurrency safeguards and cross-Home boundaries; the optional reminder and dashboard widget reveal only the scope allowed by their workflow.
+
 ## 6. Notifications
 
 ### US-015 — Review and configure notifications
@@ -267,9 +279,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore workflows
+## Implementation evidence for chore, vacation, points and rewards workflows
 
-The additional chore stories are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), and the corresponding migrations in `supabase/migrations/`. These tests verify selected end-to-end paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 
