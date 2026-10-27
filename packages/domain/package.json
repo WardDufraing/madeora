@@ -9,7 +9,8 @@
     "./tasks": "./src/tasks/index.ts",
     "./chores": "./src/chores/index.ts",
     "./vacations": "./src/vacations/index.ts",
-    "./points": "./src/points/index.ts"
+    "./points": "./src/points/index.ts",
+    "./recipes": "./src/recipes/index.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

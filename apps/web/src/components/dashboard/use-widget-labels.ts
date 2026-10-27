@@ -27,6 +27,7 @@ export function useWidgetLabels(): {
     "weekly-points": t("widgetWeeklyPoints"),
     "points-leaderboard": t("widgetPointsLeaderboard"),
     "my-points": t("widgetMyPoints"),
+    recipes: t("widgetRecipes"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -42,9 +43,11 @@ export function useWidgetLabels(): {
     "weekly-points": t("widgetWeeklyPointsDescription"),
     "points-leaderboard": t("widgetPointsLeaderboardDescription"),
     "my-points": t("widgetMyPointsDescription"),
+    recipes: t("widgetRecipesDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),
+    recipes: t("widgetPersonalRecipes"),
   };
   return {
     name: (type) => names[type],

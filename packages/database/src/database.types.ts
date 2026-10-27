@@ -330,6 +330,16 @@ export type Database = {
         Args: { p_home_id: string; p_recovery_id: string };
         Returns: string;
       };
+      acquire_recipe_lock: {
+        Args: { p_recipe_id: string; p_take_over?: boolean; p_token: string };
+        Returns: {
+          expires_at: string;
+          held_by_me: boolean;
+          held_by_member: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       add_subtask: {
         Args: { p_id: string; p_task_id: string; p_title: string };
         Returns: {
@@ -715,6 +725,29 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_recipe: {
+        Args: { p_content: Json; p_home_id?: string; p_id: string; p_publish?: boolean };
+        Returns: {
+          outcome: string;
+          revision: number;
+          status: string;
+        }[];
+      };
+      create_recipe_cover_intent: {
+        Args: {
+          p_content_type: string;
+          p_lock_token?: string;
+          p_recipe_id?: string;
+          p_request_id: string;
+          p_size: number;
+        };
+        Returns: {
+          expires_at: string;
+          file_id: string;
+          outcome: string;
+          upload_key: string;
+        }[];
+      };
       create_reward: {
         Args: {
           p_available_from?: string;
@@ -902,6 +935,13 @@ export type Database = {
         }[];
       };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
+      delete_recipe: {
+        Args: { p_recipe_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       delete_subtask: { Args: { p_id: string }; Returns: string };
       delete_task: {
         Args: { p_task_id: string };
@@ -1081,6 +1121,14 @@ export type Database = {
       };
       get_point_leaderboard: { Args: { p_home_id: string; p_period?: string }; Returns: Json };
       get_point_summary: { Args: { p_home_id: string }; Returns: Json };
+      get_recipe: { Args: { p_recipe_id: string }; Returns: Json };
+      get_recipe_context: {
+        Args: { p_home_id?: string };
+        Returns: {
+          can_create: boolean;
+          can_manage: boolean;
+        }[];
+      };
       get_reward_redemption: { Args: { p_redemption_id: string }; Returns: Json };
       get_storage_object_deletion: {
         Args: { p_deletion_id: string };
@@ -1523,6 +1571,19 @@ export type Database = {
           state: string;
         }[];
       };
+      list_my_recipe_drafts: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          cover_file_id: string;
+          destination_home_id: string;
+          destination_home_name: string;
+          destination_lost: boolean;
+          id: string;
+          name: string;
+          revision: number;
+          updated_at: string;
+        }[];
+      };
       list_point_accounts: {
         Args: { p_home_id: string };
         Returns: {
@@ -1535,6 +1596,42 @@ export type Database = {
       list_point_entries: {
         Args: { p_account_id?: string; p_before?: number; p_home_id: string; p_limit?: number };
         Returns: Json;
+      };
+      list_recipe_tags: {
+        Args: { p_home_id?: string };
+        Returns: {
+          recipe_count: number;
+          tag: string;
+        }[];
+      };
+      list_recipes: {
+        Args: {
+          p_favorites?: boolean;
+          p_home_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_query?: string;
+          p_sort?: string;
+          p_tags?: string[];
+        };
+        Returns: {
+          cook_minutes: number;
+          cover_file_id: string;
+          favorite: boolean;
+          id: string;
+          matched_ingredient: string;
+          my_rating: number;
+          name: string;
+          prep_minutes: number;
+          published_at: string;
+          rating_average: number;
+          rating_count: number;
+          revision: number;
+          servings: number;
+          tags: string[];
+          total_count: number;
+          updated_at: string;
+        }[];
       };
       list_reward_redemptions: { Args: { p_home_id: string; p_view: string }; Returns: Json };
       list_rewards: { Args: { p_home_id: string; p_include_archived?: boolean }; Returns: Json };
@@ -1757,6 +1854,18 @@ export type Database = {
           revision: number;
         }[];
       };
+      publish_recipe: {
+        Args: {
+          p_expected_revision: number;
+          p_home_id?: string;
+          p_recipe_id: string;
+          p_request_id: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       purge_expired_trash_entry: { Args: { p_entry_id: string }; Returns: string };
       purge_stored_file: { Args: { p_file_id: string }; Returns: string };
       purge_trash_entries: {
@@ -1764,6 +1873,17 @@ export type Database = {
         Returns: {
           entry_id: string;
           outcome: string;
+        }[];
+      };
+      recipe_widget: {
+        Args: { p_home_id?: string; p_limit?: number; p_mode?: string; p_seed?: string };
+        Returns: {
+          available: number;
+          cover_file_id: string;
+          id: string;
+          name: string;
+          rating_average: number;
+          rating_count: number;
         }[];
       };
       record_invitation_email: {
@@ -1795,6 +1915,7 @@ export type Database = {
         Args: { p_claim: number; p_occurrence_id: string };
         Returns: string;
       };
+      release_recipe_lock: { Args: { p_recipe_id: string; p_token: string }; Returns: boolean };
       remove_chore_reminder: {
         Args: { p_expected_revision: number; p_occurrence_id: string };
         Returns: {
@@ -1841,6 +1962,13 @@ export type Database = {
       };
       renew_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
+        Returns: {
+          expires_at: string;
+          outcome: string;
+        }[];
+      };
+      renew_recipe_lock: {
+        Args: { p_recipe_id: string; p_token: string };
         Returns: {
           expires_at: string;
           outcome: string;
@@ -2127,6 +2255,16 @@ export type Database = {
           p_time_zone: string;
         };
         Returns: string;
+      };
+      set_recipe_favorite: { Args: { p_favorite: boolean; p_recipe_id: string }; Returns: string };
+      set_recipe_rating: {
+        Args: { p_recipe_id: string; p_stars?: number };
+        Returns: {
+          average: number;
+          mine: number;
+          outcome: string;
+          rating_count: number;
+        }[];
       };
       set_replacement_outcome: {
         Args: {
@@ -2463,6 +2601,19 @@ export type Database = {
       update_point_settings: {
         Args: { p_default_period: string; p_home_id: string; p_leaderboard_enabled: boolean };
         Returns: string;
+      };
+      update_recipe: {
+        Args: {
+          p_content: Json;
+          p_draft_home_id?: string;
+          p_expected_revision: number;
+          p_lock_token?: string;
+          p_recipe_id: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       update_reward: {
         Args: {

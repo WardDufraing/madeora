@@ -36,6 +36,7 @@ export const delegableCapabilities = [
   "manageHomeRewards",
   "approveHomeRewards",
   "manageHomePoints",
+  "manageHomeRecipes",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -71,6 +72,9 @@ export const homeActions = [
   "home.points.manage",
   "home.rewards.manage",
   "home.rewards.approve",
+  "home.recipes.view",
+  "home.recipes.create",
+  "home.recipes.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -195,6 +199,15 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.points.manage": { roles: ["owner"], delegatedThrough: "manageHomePoints" },
   "home.rewards.manage": { roles: ["owner"], delegatedThrough: "manageHomeRewards" },
   "home.rewards.approve": { roles: ["owner"], delegatedThrough: "approveHomeRewards" },
+  // Recipes (S24; default picked in the S24 brief, the per-module matrix is open in the spec):
+  // every current member sees the Home's published recipes, searches, scales and cooks them, keeps
+  // their own favorites and ratings, and creates and publishes recipes into the Home; a recipe's
+  // creator (while a member) and recipe managers (the Owner, Administrators granted
+  // manageHomeRecipes) edit it under the exclusive lock and delete it to the trash. Drafts are never
+  // a Home's: only their creator sees them (./recipes.ts). SQL: private.can_manage_recipes.
+  "home.recipes.view": { roles: ["owner", "administrator", "member"] },
+  "home.recipes.create": { roles: ["owner", "administrator", "member"] },
+  "home.recipes.manage": { roles: ["owner"], delegatedThrough: "manageHomeRecipes" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -260,6 +273,9 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.points.manage": can("home.points.manage"),
     "home.rewards.manage": can("home.rewards.manage"),
     "home.rewards.approve": can("home.rewards.approve"),
+    "home.recipes.view": can("home.recipes.view"),
+    "home.recipes.create": can("home.recipes.create"),
+    "home.recipes.manage": can("home.recipes.manage"),
   };
 }
 

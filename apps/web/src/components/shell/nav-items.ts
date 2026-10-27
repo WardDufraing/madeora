@@ -44,7 +44,8 @@ export const primaryNav: readonly NavItem[] = [
   { id: "calendar", href: "/calendar", icon: CalendarIcon },
   { id: "tasks", href: "/tasks", icon: TasksIcon },
   { id: "chores", href: "/chores", icon: ChoresIcon },
-  { id: "meals", href: "/meals", icon: MealsIcon },
+  // S24: Meals opens Recipes until the meal planner (S27) adds its own page to the section.
+  { id: "meals", href: "/recipes", icon: MealsIcon },
   { id: "shopping", href: "/shopping", icon: ShoppingIcon },
   { id: "habits", href: "/habits", icon: HabitsIcon },
   { id: "pets", href: "/pets", icon: PetsIcon },
@@ -64,7 +65,6 @@ export const secondaryNav: readonly NavItem[] = [
  */
 export const unbuiltSections: ReadonlySet<NavId> = new Set([
   "calendar",
-  "meals",
   "shopping",
   "habits",
   "pets",
@@ -90,12 +90,14 @@ export function homeIdFromPath(pathname: string): string | null {
  * Where an item leads in the current context: Dashboard opens the Home's dashboard while a Home is
  * open (S09), the personal dashboard otherwise; Tasks opens the Home's tasks (S18), Chores the Home's
  * chores (S20). Other sections
- * are not Home-aware yet; each module's step decides when it adds its pages.
+ * are not Home-aware yet; each module's step decides when it adds its pages. Meals opens the
+ * Home's recipes (S24).
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
   if (item.id === "tasks" || item.id === "chores") {
     return homeId !== null ? `/homes/${homeId}/${item.id}` : item.href;
   }
+  if (item.id === "meals") return homeId !== null ? `/homes/${homeId}/recipes` : item.href;
   if (item.id !== "dashboard") return item.href;
   // In Personal, Dashboard says so, so a Home remembered from earlier cannot pull the person back.
   return homeId !== null ? `/homes/${homeId}` : "/?context=personal";

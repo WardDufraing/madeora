@@ -66,6 +66,7 @@ const itemTypeKey = {
   chore: "itemTypeChore",
   chore_occurrence: "itemTypeChoreOccurrence",
   chore_removal: "itemTypeChoreRemoval",
+  recipe: "itemTypeRecipe",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -89,6 +90,8 @@ function conflictMessage(kind: string) {
       return "conflictChoreUnavailable";
     case "chore_limit":
       return "conflictChoreLimit";
+    case "recipe_limit":
+      return "conflictRecipeLimit";
     default:
       return "conflictOther";
   }

@@ -1,6 +1,8 @@
 import { StorageUnavailableError } from "@madeora/storage";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
+import { processCover } from "@/recipes/cover-image";
+import { isCoverType } from "@/recipes/schema";
 import type { AttachmentImpact, FinalizeResponse } from "@/storage/api";
 import { processAvatar } from "@/storage/avatar-image";
 import { checkAttachment } from "@/tasks/attachment-file";
@@ -50,6 +52,10 @@ async function removeQuietly(storage: Storage, keys: readonly string[]): Promise
  * same format without metadata, other files kept as uploaded), stored under the object key, and
  * then attached to its task with the person's own session (`attach_task_file`, which re-checks
  * the task and their rights now), to this occurrence or, with `scope`, to following or all.
+ *
+ * A recipe cover (S24) is processed like an avatar but only scaled down to fit 1600 px, and stays
+ * unattached: the recipe's next save applies it (`adopt_recipe_cover`), and the expiry job retires
+ * a cover no save adopted.
  */
 export async function POST(request: Request, { params }: FileRouteContext): Promise<Response> {
   const input = await readStorageMutation(request, attachmentFinalizeSchema, MAX_BODY_BYTES);
@@ -66,17 +72,24 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
   const upload = data[0];
   if (!upload) return failure(404, "not-found");
   const isAttachment = upload.purpose === "task_attachment";
+  const isCover = upload.purpose === "recipe_cover";
   const scope: AttachmentScope = input.data.scope ?? "this";
   const done: FinalizeResponse = { file: { id: fileId.data } };
   const finish = () =>
     isAttachment ? attach(supabase, fileId.data, scope, done) : Promise.resolve(json(200, done));
   if (upload.status === "ready") return finish();
   if (upload.status === "expired") return failure(410, "expired");
-  if (upload.status !== "pending" || (upload.purpose !== "avatar" && !isAttachment)) {
+  if (upload.status !== "pending" || (upload.purpose !== "avatar" && !isAttachment && !isCover)) {
     return failure(404, "not-found");
   }
   const declaredType = upload.declared_type;
-  if (isAttachment ? !isAttachmentType(declaredType) : !isAvatarUploadType(declaredType)) {
+  if (
+    isAttachment
+      ? !isAttachmentType(declaredType)
+      : isCover
+        ? !isCoverType(declaredType)
+        : !isAvatarUploadType(declaredType)
+  ) {
     return failure(500, "failed");
   }
 
@@ -143,9 +156,11 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
     const processed =
       isAttachment && isAttachmentType(declaredType)
         ? await checkAttachment(read.bytes, declaredType)
-        : !isAttachment && isAvatarUploadType(declaredType)
-          ? await processAvatar(read.bytes, declaredType)
-          : null;
+        : isCover && isCoverType(declaredType)
+          ? await processCover(read.bytes, declaredType)
+          : !isAttachment && !isCover && isAvatarUploadType(declaredType)
+            ? await processAvatar(read.bytes, declaredType)
+            : null;
     if (!processed) return failure(500, "failed");
     if (!processed.ok) return await abandon(processed.reason);
 
