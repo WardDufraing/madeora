@@ -23,7 +23,8 @@ const state = vi.hoisted((): State => ({
 
 const HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
 const RECIPE = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0020";
-const TOKEN = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0030";
+// The edit lock's per-session id (synthetic).
+const EDIT_SESSION = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0030";
 const MEMBER = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0040";
 const REQUEST = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0050";
 
@@ -128,7 +129,7 @@ describe("every recipe mutation", () => {
       "lock",
       (h) =>
         acquire(
-          request(`/recipes/${RECIPE}/lock`, "POST", { token: TOKEN, takeOver: false }, h),
+          request(`/recipes/${RECIPE}/lock`, "POST", { token: EDIT_SESSION, takeOver: false }, h),
           params(RECIPE),
         ),
     ],
@@ -237,7 +238,7 @@ describe("creating and saving", () => {
       request(`/recipes/${RECIPE}`, "PATCH", {
         revision: 2,
         content,
-        lockToken: TOKEN,
+        lockToken: EDIT_SESSION,
         draftHomeId: null,
       }),
       params(RECIPE),
@@ -246,7 +247,7 @@ describe("creating and saving", () => {
     expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({
       p_recipe_id: RECIPE,
       p_expected_revision: 2,
-      p_lock_token: TOKEN,
+      p_lock_token: EDIT_SESSION,
     });
   });
 
@@ -265,7 +266,7 @@ describe("creating and saving", () => {
       request(`/recipes/${RECIPE}`, "PATCH", {
         revision: 2,
         content,
-        lockToken: TOKEN,
+        lockToken: EDIT_SESSION,
         draftHomeId: null,
       }),
       params(RECIPE),
@@ -321,7 +322,7 @@ describe("the editing lock", () => {
       ],
     });
     const response = await acquire(
-      request(`/recipes/${RECIPE}/lock`, "POST", { token: TOKEN, takeOver: true }),
+      request(`/recipes/${RECIPE}/lock`, "POST", { token: EDIT_SESSION, takeOver: true }),
       params(RECIPE),
     );
     expect(response.status).toBe(409);
@@ -345,7 +346,7 @@ describe("the editing lock", () => {
       ],
     });
     const response = await acquire(
-      request(`/recipes/${RECIPE}/lock`, "POST", { token: TOKEN, takeOver: false }),
+      request(`/recipes/${RECIPE}/lock`, "POST", { token: EDIT_SESSION, takeOver: false }),
       params(RECIPE),
     );
     expect(response.status).toBe(200);
@@ -358,7 +359,7 @@ describe("the editing lock", () => {
   it("reports a lost lock on the heartbeat", async () => {
     answers({ renew_recipe_lock: [{ outcome: "lock_lost", expires_at: null }] });
     const response = await renew(
-      request(`/recipes/${RECIPE}/lock`, "PATCH", { token: TOKEN }),
+      request(`/recipes/${RECIPE}/lock`, "PATCH", { token: EDIT_SESSION }),
       params(RECIPE),
     );
     expect(response.status).toBe(409);
@@ -367,7 +368,7 @@ describe("the editing lock", () => {
   it("releases quietly, even a lock already gone", async () => {
     answers({ release_recipe_lock: false });
     const response = await release(
-      request(`/recipes/${RECIPE}/lock`, "DELETE", { token: TOKEN }),
+      request(`/recipes/${RECIPE}/lock`, "DELETE", { token: EDIT_SESSION }),
       params(RECIPE),
     );
     expect(response.status).toBe(200);
@@ -482,7 +483,7 @@ describe("cover uploads", () => {
     size: 1000,
     requestId: REQUEST,
     recipeId: RECIPE,
-    lockToken: TOKEN,
+    lockToken: EDIT_SESSION,
   };
 
   it("answers 503 while storage is not configured", async () => {

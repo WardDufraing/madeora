@@ -34,3 +34,7 @@ e8cd6f18910893ab62c66bfa7c35fea9c46ee296:packages/config/src/env/email.test.ts:g
 # local S3 stand-in example of docs/development.md. Not credentials.
 0fc5b90dacb196a91c80a7ae03c3b6c106e1ce6a:apps/web/src/storage/config.test.ts:generic-api-key:5
 0fc5b90dacb196a91c80a7ae03c3b6c106e1ce6a:docs/development.md:generic-api-key:174
+#
+# S24 recipe route tests: a synthetic UUID named TOKEN (the edit lock's per-session id) in the
+# first S24 commit; renamed EDIT_SESSION in the next commit. Not a credential.
+3db54cc6c8fa48c6f743160554f52659c7c4dddd:apps/web/src/app/api/v1/recipes/route.test.ts:generic-api-key:26
