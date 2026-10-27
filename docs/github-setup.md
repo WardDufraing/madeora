@@ -49,7 +49,7 @@ Dependabot alerts are free for private repositories. They warn you about vulnera
 2. Next to **Dependabot alerts**, click **Enable**.
 3. Leave **Dependabot security updates** and **Dependabot version updates** off for now. They open pull requests automatically, and each pull request uses Actions minutes.
 
-**Check it worked:** the **Security** tab of the repository now shows **Dependabot alerts**. Today it may list the `braces` advisory, which has a recorded exception until 31 December 2026 (`tools/repo-checks/audit-exceptions.json`).
+**Check it worked:** the **Security** tab of the repository now shows **Dependabot alerts**.
 
 ### A4. Make sure Actions can never charge you
 
