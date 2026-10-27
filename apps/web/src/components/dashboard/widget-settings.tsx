@@ -11,6 +11,8 @@ import {
   leaderboardWidgetCounts,
   leaderboardWidgetPeriods,
   notificationCounts,
+  recipeWidgetCounts,
+  recipeWidgetModes,
   parseConfig,
   defaultConfig,
   weeklyPointsViews,
@@ -174,6 +176,39 @@ export function WidgetSettings({
           />
         </div>
       );
+    case "recipes": {
+      const random = config.mode === "random";
+      return (
+        <div className="flex flex-col gap-3">
+          <SelectField
+            label={t("settingRecipeMode")}
+            value={String(config.mode)}
+            options={recipeWidgetModes.map((mode) => ({
+              value: mode,
+              label: t(`settingRecipeMode_${mode}`),
+            }))}
+            onChange={(event) => {
+              const mode = event.currentTarget.value;
+              // Random shows one recipe at a time (with Show another).
+              onChange({ ...config, mode, ...(mode === "random" ? { count: 1 } : {}) });
+            }}
+          />
+          <SelectField
+            label={t("settingRecipeCount")}
+            value={String(random ? 1 : config.count)}
+            disabled={random}
+            {...(random ? { description: t("settingRecipeCountRandom") } : {})}
+            options={recipeWidgetCounts.map((count) => ({
+              value: String(count),
+              label: t("settingRecipeCountOption", { count }),
+            }))}
+            onChange={(event) => {
+              set("count", Number(event.currentTarget.value));
+            }}
+          />
+        </div>
+      );
+    }
     case "chore-approvals": {
       const parsed = widgetRegistry["chore-approvals"].config.safeParse(widget.config);
       return (

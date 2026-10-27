@@ -147,6 +147,8 @@ describe("message dictionaries", () => {
       Dashboard: [
         ...withPrefix("settingPointsView_", ["mine", "shared"]),
         ...withPrefix("settingLeaderboardPeriod_", ["default", "week", "month", "all"]),
+        // The Recipes widget's modes (S24).
+        ...withPrefix("settingRecipeMode_", ["favorites", "recent", "top_rated", "random"]),
       ],
       Points: [
         ...withPrefix("latePolicy_", ["full", "reduced", "zero"]),
