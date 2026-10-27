@@ -224,7 +224,21 @@ As a Home member, I want vacations and temporary absences reflected in chore pla
 - I can register my own temporary chore absence, while a chore manager can register one for another member. Its optional reason stays private to that member and chore managers, and the absence does not change chores automatically.
 - Vacation and absence actions preserve occurrence history, concurrency safeguards and cross-Home boundaries; the optional reminder and dashboard widget reveal only the scope allowed by their workflow.
 
-## 6. Notifications
+## 6. Recipes
+
+### US-024 — Keep, share and cook from recipes
+
+As a person or Home member, I want to keep recipes in my Personal space or a Home and cook from them, so the household shares one trusted version of each recipe.
+
+**Acceptance checks**
+
+- I can save a recipe as a draft that only I can see, anywhere, even when it is meant for a Home; it appears only in My drafts until I publish it, and publishing names who will see it.
+- A published recipe belongs to its Personal space or Home; the Home's current members can find it by name, ingredient and tags, favorite it, rate it and see the average of current members' ratings, never who rated what.
+- Only the creator, the Owner and Administrators allowed to manage Home recipes can edit or delete it; while one person edits, everyone else sees who is editing and cannot save over them. An abandoned edit frees itself within minutes, and a lost edit never overwrites newer content.
+- I can scale the ingredients to another number of servings with exact amounts, and follow the steps one at a time in cooking mode, which tells me when the recipe changes or is no longer available.
+- A recipe can carry one cover photo, and a dashboard widget shows my favorites, recent, highest rated or a random recipe from the context I may see.
+
+## 7. Notifications
 
 ### US-015 — Review and configure notifications
 
@@ -236,7 +250,7 @@ As a person using Madeora, I want to review notifications and set my notificatio
 - I can manage supported notification preferences.
 - Notifications respect account and Home access boundaries.
 
-## 7. Files, trash, and recovery
+## 8. Files, trash, and recovery
 
 ### US-016 — Store and access private files
 
@@ -268,7 +282,7 @@ As a person responsible for a Home, I want a safeguarded ownership-recovery proc
 - The recovery record identifies the affected Home and status.
 - Applying a recovery does not silently change unrelated Home memberships or ownership.
 
-## 8. Cross-cutting expectations
+## 9. Cross-cutting expectations
 
 These checks apply to every story above:
 
@@ -279,9 +293,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points and rewards workflows
+## Implementation evidence for chore, vacation, points, rewards and recipe workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 

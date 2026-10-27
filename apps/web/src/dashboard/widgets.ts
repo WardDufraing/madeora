@@ -186,6 +186,19 @@ const pointsSizes = sizes(
   { h: 3, minH: 2, maxH: 8 },
 );
 
+/**
+ * The Recipes widget (S24; spec "Confirmed configurable recipe dashboard widgets"): the viewer's
+ * favorites, recently added, highest rated or one random recipe of its context (Personal space,
+ * the Home, or a source Home), as 1, 3 or 5 cards (Random: one, with Show another). Drafts never
+ * appear; the cards are read with the viewer's session.
+ */
+export const recipeWidgetModes = ["favorites", "recent", "top_rated", "random"] as const;
+export const recipeWidgetCounts = [1, 3, 5] as const;
+const recipesConfig = z.strictObject({
+  mode: z.enum(recipeWidgetModes).default("favorites"),
+  count: z.union([z.literal(1), z.literal(3), z.literal(5)]).default(3),
+});
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -286,6 +299,15 @@ export const widgetRegistry = {
     sizes: pointsSizes,
     config: myPointsConfig,
   },
+  recipes: {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: sizes(
+      { w: 6, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 8 },
+      { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 8 },
+      { h: 5, minH: 3, maxH: 10 },
+    ),
+    config: recipesConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -307,6 +329,7 @@ export interface WidgetConfigs {
   readonly "weekly-points": WidgetConfig<"weekly-points">;
   readonly "points-leaderboard": WidgetConfig<"points-leaderboard">;
   readonly "my-points": WidgetConfig<"my-points">;
+  readonly recipes: WidgetConfig<"recipes">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

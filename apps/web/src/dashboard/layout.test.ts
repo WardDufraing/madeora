@@ -68,6 +68,8 @@ describe("widget registry", () => {
       { type: "weekly-points", needsSource: true },
       { type: "points-leaderboard", needsSource: true },
       { type: "my-points", needsSource: true },
+      { type: "recipes", needsSource: false },
+      { type: "recipes", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
@@ -82,6 +84,7 @@ describe("widget registry", () => {
       "weekly-points",
       "points-leaderboard",
       "my-points",
+      "recipes",
     ]);
   });
 

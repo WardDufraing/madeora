@@ -475,6 +475,29 @@ From here chores can carry **points**, members earn them by completing chores, a
 
 2. In the app the Chores page links to **Points** and **Rewards**, and the chore form has **Points**. An Administrator's capabilities (Home members, Manage) include **Manage Home rewards**, **Approve reward requests** and **Manage member points**. On a Home dashboard, **Customize** offers **Weekly points**, **Leaderboard** and **My points**.
 
+## Check S24 (`20261106090000_recipes.sql`)
+
+From here everyone has **Recipes**: a Personal recipe library, one per Home, private drafts, an exclusive editing lock, ratings, favorites, cooking mode with serving scaling, a cover photo and a **Recipes** dashboard widget. Nothing changes for existing data. Apply it after the S23 file. No new background job: unsaved cover uploads are retired by the existing upload expiry job.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.recipes') as recipes_table,
+     to_regclass('private.recipe_edit_locks') as locks_table,
+     to_regclass('private.recipe_ratings') as ratings_table,
+     has_table_privilege('authenticated', 'private.recipes', 'select')
+       as members_can_read_recipes_table,
+     has_function_privilege('authenticated', 'public.list_recipes(uuid, text, text[], boolean, text, integer, integer)', 'execute')
+       as members_can_list_recipes,
+     has_function_privilege('anon', 'public.get_recipe(uuid)', 'execute')
+       as anonymous_can_read_recipe;
+   ```
+
+   It must show the three tables, **false** for `members_can_read_recipes_table` and `anonymous_can_read_recipe`, and **true** for `members_can_list_recipes`.
+
+2. In the app the sidebar's **Meals** opens **Recipes**, with **New recipe** and **My drafts**. An Administrator's capabilities (Home members, Manage) include **Manage Home recipes**. On a dashboard, **Customize** offers **Recipes**.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

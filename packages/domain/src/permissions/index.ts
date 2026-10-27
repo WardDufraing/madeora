@@ -39,3 +39,11 @@ export {
   type ChoreFacts,
   type ChorePermissionProjection,
 } from "./chores";
+export {
+  decideRecipeAction,
+  recipeActions,
+  recipePermissions,
+  type RecipeAction,
+  type RecipeFacts,
+  type RecipePermissionProjection,
+} from "./recipes";

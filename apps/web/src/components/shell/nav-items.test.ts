@@ -35,6 +35,14 @@ describe("navigation items", () => {
     expect(unbuiltSections.has("settings")).toBe(false);
   });
 
+  it("opens recipes from Meals, in the open Home or the Personal space (S24)", () => {
+    const meals = primaryNav.find((item) => item.id === "meals");
+    if (!meals) throw new Error("Meals is missing");
+    expect(contextHref(meals, null)).toBe("/recipes");
+    expect(contextHref(meals, HOME)).toBe(`/homes/${HOME}/recipes`);
+    expect(isUnbuiltSection("meals")).toBe(false);
+  });
+
   it("keeps Trash out of the sidebar (spec: reached from settings)", () => {
     expect([...primaryNav, ...secondaryNav].map((item) => item.href)).not.toContain("/trash");
   });
