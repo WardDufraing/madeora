@@ -18,3 +18,7 @@ overrides:
   # which has GHSA-96hv-2xvq-fx4p (high) and GHSA-58qx-3vcg-4xpx. Same major version; current
   # engine.io-client releases use ~8.21.0 themselves. Remove once the SDK no longer pulls it in.
   engine.io-client>ws: 8.21.3
+  # 2026-10-27: jsdom (test-only DOM for Vitest) pulls undici 8.11.2, which has GHSA-xjj6-f33q-929c
+  # (high) and two moderate advisories. Same major version; patched in 8.12.2. Remove once jsdom
+  # requires 8.12.2 or later itself.
+  jsdom>undici: 8.12.2
