@@ -45,6 +45,14 @@ export function RecipeCard({ recipe, homeId }: RecipeCardProps) {
           {recipe.favorite ? (
             <span className="text-helper font-medium text-accent-fg">{t("favoriteBadge")}</span>
           ) : null}
+          {recipe.sharedIn ? (
+            <span
+              className="text-helper font-medium text-fg-muted"
+              data-testid="recipe-shared-badge"
+            >
+              {t("sharedBadge")}
+            </span>
+          ) : null}
         </p>
         {recipe.tags.length > 0 ? (
           <ul aria-label={t("tagsLabel")} className="flex flex-wrap gap-1">

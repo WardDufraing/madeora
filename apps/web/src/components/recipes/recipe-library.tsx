@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/shell/page-header";
 import { TaskNotice } from "@/components/tasks/task-notice";
 import { ErrorState } from "@/components/ui/states";
 import { getRecipeContext, listRecipes, listRecipeTags } from "@/recipes/data";
-import { DRAFTS_PATH, newRecipePath, recipesPath } from "@/recipes/format";
+import { DRAFTS_PATH, importRecipePath, newRecipePath, recipesPath } from "@/recipes/format";
 import { parseRecipeQuery, recipeQueryString } from "@/recipes/schema";
 
-import { primaryLinkClass } from "./link-styles";
+import { primaryLinkClass, secondaryLinkClass } from "./link-styles";
 import { RecipeFilters } from "./recipe-filters";
 import { RecipeResults } from "./recipe-results";
 
@@ -38,7 +38,8 @@ export async function RecipeLibrary({ userId, home, searchParams }: RecipeLibrar
   }
   const base = recipesPath(homeId);
   const filtered = query.q.trim() !== "" || query.tags.length > 0 || query.favorites;
-  const notice = searchParams.deleted === "1" ? "deleted" : null;
+  const notice =
+    searchParams.deleted === "1" ? "deleted" : searchParams.unshared === "1" ? "unshared" : null;
 
   return (
     <>
@@ -61,15 +62,23 @@ export async function RecipeLibrary({ userId, home, searchParams }: RecipeLibrar
           </Link>
         </TaskNotice>
       ) : null}
+      {notice === "unshared" ? <TaskNotice>{t("unsharedNotice")}</TaskNotice> : null}
       <div className="flex flex-col gap-5">
         {context.value.canCreate ? (
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Link
               href={newRecipePath(homeId)}
               className={primaryLinkClass}
               data-testid="new-recipe"
             >
               {t("newRecipe")}
+            </Link>
+            <Link
+              href={importRecipePath(homeId)}
+              className={secondaryLinkClass}
+              data-testid="import-recipe"
+            >
+              {t("importRecipe")}
             </Link>
           </div>
         ) : null}

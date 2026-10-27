@@ -22,13 +22,16 @@ export interface RecipeEditSessionProps {
   readonly revision: number;
   readonly initial: RecipeFormValues;
   readonly members: readonly MemberOption[];
+  /** Shared with other Homes, or seen from one it is shared with (S25): a save changes it everywhere. */
+  readonly shared: boolean;
 }
 
 /**
  * Editing a published recipe (S24): the editor opens only under the exclusive lock. Someone else's
  * lock shows who holds it (or "another tab or device" for the person's own, with Take over); a
  * lock that lapsed keeps the changes on the page with a way to continue; a recipe changed in the
- * meantime is reloaded before editing, never overwritten.
+ * meantime is reloaded before editing, never overwritten. A shared recipe says that saving
+ * changes it in every Home it is shared with (S25).
  */
 export function RecipeEditSession({
   recipeId,
@@ -36,11 +39,12 @@ export function RecipeEditSession({
   revision,
   initial,
   members,
+  shared,
 }: RecipeEditSessionProps) {
   const t = useTranslations("Recipes");
   const router = useRouter();
   const failureText = useRecipeFailure();
-  const lock = useRecipeLock(recipeId);
+  const lock = useRecipeLock(recipeId, homeId);
   const names = useMemo(() => memberNames(members), [members]);
   const back = recipePath(homeId, recipeId);
   const state = lock.state;
@@ -61,14 +65,16 @@ export function RecipeEditSession({
         <FormAlert tone="info">
           {state.mine
             ? t("lockedByYou")
-            : t("lockedBy", {
-                person:
-                  person.kind === "member"
-                    ? person.name
-                    : person.kind === "unnamed"
-                      ? t("personUnnamed")
-                      : t("personFormer"),
-              })}
+            : state.member === null
+              ? t("lockedBySomeone")
+              : t("lockedBy", {
+                  person:
+                    person.kind === "member"
+                      ? person.name
+                      : person.kind === "unnamed"
+                        ? t("personUnnamed")
+                        : t("personFormer"),
+                })}
         </FormAlert>
         <div className="flex flex-wrap gap-2">
           {state.mine ? (
@@ -103,6 +109,11 @@ export function RecipeEditSession({
 
   return (
     <div className="flex flex-col gap-4">
+      {shared ? (
+        <div data-testid="recipe-shared-warning">
+          <FormAlert tone="info">{t("sharedEditWarning")}</FormAlert>
+        </div>
+      ) : null}
       {lock.warning ? (
         <FormAlert tone="info" announce>
           {t("inactivityWarning")}{" "}

@@ -30,6 +30,7 @@ import {
   type RecipeContent,
   type RecipeFieldError,
   type RecipeFormValues,
+  type RecipeSource,
 } from "@/recipes/schema";
 
 import { CoverField } from "./cover-field";
@@ -66,6 +67,8 @@ export type RecipeEditorProps = EditorBase &
         /** A new recipe; `homeId` is the context it was started from (the default destination). */
         readonly mode: "new";
         readonly homeId: string | null;
+        /** Where an imported recipe came from (S25), kept with it when it is first saved. */
+        readonly source?: RecipeSource | null;
       }
     | {
         /** The person's own draft, with its intended destination (null: Personal). */
@@ -205,6 +208,10 @@ export function RecipeEditor(props: RecipeEditorProps) {
     }
   }
 
+  // An imported recipe's source travels with its creation only; later saves never change it.
+  const source = props.mode === "new" ? (props.source ?? null) : null;
+  const withSource = (body: RecipeContent) => (source ? { ...body, source } : body);
+
   /** Saves privately: creates the draft once, then saves it by revision. */
   async function saveDraft(body: RecipeContent): Promise<number> {
     const homeId = destination === "" ? null : destination;
@@ -213,7 +220,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
         id: props.recipeId,
         homeId,
         publish: false,
-        content: body,
+        content: withSource(body),
       });
       created.current = true;
       return answer.revision;
@@ -258,7 +265,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
           id: props.recipeId,
           homeId,
           publish: true,
-          content: body,
+          content: withSource(body),
         });
       } else {
         // A draft: save what is on screen, then publish that revision.

@@ -62,6 +62,11 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
     id: RECIPE,
     status: "published",
     homeId: HOME,
+    contextHomeId: HOME,
+    sharedIn: false,
+    source: null,
+    isShared: false,
+    shareCount: 0,
     draftHomeId: null,
     destinationLost: false,
     name: "Pancakes",
@@ -83,7 +88,15 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
     favorite: false,
     rating: { mine: null, average: null, count: 0 },
     lock: null,
-    can: { edit: true, delete: true, rate: true, favorite: true, publish: false },
+    can: {
+      edit: true,
+      delete: true,
+      rate: true,
+      favorite: true,
+      publish: false,
+      share: false,
+      unshareHere: false,
+    },
     ...overrides,
   };
 }
@@ -141,7 +154,11 @@ describe("rating and favorites", () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(jsonResponse(200, { mine: 4, average: 3.5, count: 2 }));
     const { container } = renderWithQuery(
-      <RecipeRating recipeId={RECIPE} rating={{ mine: null, average: 3, count: 1 }} />,
+      <RecipeRating
+        recipeId={RECIPE}
+        homeId={null}
+        rating={{ mine: null, average: 3, count: 1 }}
+      />,
     );
     await user.click(screen.getByRole("radio", { name: "4 stars" }));
     await waitFor(() => {
@@ -154,7 +171,7 @@ describe("rating and favorites", () => {
   it("puts the favorite back when the server refuses", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(jsonResponse(404, { error: "not-found" }));
-    renderWithQuery(<RecipeFavorite recipeId={RECIPE} favorite={false} />);
+    renderWithQuery(<RecipeFavorite recipeId={RECIPE} homeId={null} favorite={false} />);
     const toggle = screen.getByTestId("recipe-favorite");
     await user.click(toggle);
     await waitFor(() => {
@@ -266,6 +283,7 @@ describe("editing under the lock", () => {
         recipeId={RECIPE}
         homeId={HOME}
         revision={3}
+        shared={false}
         initial={emptyRecipeForm()}
         members={[{ id: MEMBER, name: "Sam", isSelf: false }]}
       />,
@@ -287,6 +305,7 @@ describe("editing under the lock", () => {
         recipeId={RECIPE}
         homeId={null}
         revision={3}
+        shared={false}
         initial={emptyRecipeForm()}
         members={[]}
       />,
@@ -306,6 +325,7 @@ describe("editing under the lock", () => {
         recipeId={RECIPE}
         homeId={null}
         revision={3}
+        shared={false}
         initial={{ ...emptyRecipeForm(), name: "Soup", steps: [{ text: "Boil." }] }}
         members={[]}
       />,

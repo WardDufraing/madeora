@@ -56,6 +56,8 @@ describe("decideRecipeAction", () => {
           "recipe.rate": true,
           "recipe.favorite": true,
           "recipe.publish": false,
+          "recipe.share": true,
+          "recipe.unshare": true,
         });
       });
     }
@@ -68,6 +70,8 @@ describe("decideRecipeAction", () => {
           "recipe.rate": true,
           "recipe.favorite": true,
           "recipe.publish": false,
+          "recipe.share": false,
+          "recipe.unshare": false,
         });
       });
     }
@@ -111,6 +115,8 @@ describe("decideRecipeAction", () => {
       "recipe.rate": false,
       "recipe.favorite": false,
       "recipe.publish": true,
+      "recipe.share": false,
+      "recipe.unshare": false,
     });
   });
 
@@ -124,9 +130,68 @@ describe("decideRecipeAction", () => {
       "recipe.rate": true,
       "recipe.favorite": true,
       "recipe.publish": false,
+      "recipe.share": true,
+      "recipe.unshare": true,
     });
     for (const action of recipeActions) {
       expect(decideRecipeAction(theirs, membership("owner"), action).allowed).toBe(false);
+    }
+  });
+});
+
+describe("shared recipes (S25)", () => {
+  const sharedIn = (shareAllowsEdit: boolean): RecipeFacts => ({
+    status: "published",
+    context: "sharedIn",
+    homeId: HOME,
+    shareAllowsEdit,
+  });
+
+  it("a creator who is not a recipe manager may no longer delete a shared recipe", () => {
+    const facts: RecipeFacts = {
+      status: "published",
+      context: "home",
+      homeId: HOME,
+      createdByMe: true,
+      shared: true,
+    };
+    expect(decideRecipeAction(facts, membership("member"), "recipe.delete").allowed).toBe(false);
+    expect(decideRecipeAction(facts, membership("member"), "recipe.edit").allowed).toBe(true);
+    expect(decideRecipeAction(facts, membership("owner"), "recipe.delete").allowed).toBe(true);
+  });
+
+  it("in a destination, members view, rate and favorite; nobody deletes or shares onward", () => {
+    for (const shareAllowsEdit of [true, false]) {
+      for (const facts of [membership("member"), membership("owner")]) {
+        const can = recipePermissions(sharedIn(shareAllowsEdit), facts);
+        expect(can["recipe.view"] && can["recipe.rate"] && can["recipe.favorite"]).toBe(true);
+        expect(can["recipe.delete"] || can["recipe.share"] || can["recipe.publish"]).toBe(false);
+      }
+    }
+  });
+
+  it("a destination's recipe managers edit only when the share allows it, and may remove it", () => {
+    const manager = membership("administrator", ["manageHomeRecipes"]);
+    expect(decideRecipeAction(sharedIn(true), manager, "recipe.edit").allowed).toBe(true);
+    expect(decideRecipeAction(sharedIn(false), manager, "recipe.edit").allowed).toBe(false);
+    expect(decideRecipeAction(sharedIn(true), membership("member"), "recipe.edit").allowed).toBe(
+      false,
+    );
+    expect(decideRecipeAction(sharedIn(false), manager, "recipe.unshare").allowed).toBe(true);
+    expect(
+      decideRecipeAction(sharedIn(false), membership("member"), "recipe.unshare").allowed,
+    ).toBe(false);
+  });
+
+  it("someone outside the destination sees nothing of it", () => {
+    for (const action of recipeActions) {
+      expect(decideRecipeAction(sharedIn(true), null, action)).toEqual({
+        allowed: false,
+        reason: "not-member",
+      });
+      expect(
+        decideRecipeAction(sharedIn(true), membership("owner", [], OTHER_HOME), action).allowed,
+      ).toBe(false);
     }
   });
 });

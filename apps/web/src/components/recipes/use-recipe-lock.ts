@@ -18,7 +18,10 @@ export const INACTIVE_MS = 15 * 60_000;
 export type LockState =
   | { readonly kind: "acquiring" }
   | { readonly kind: "held"; readonly revision: number }
-  /** Someone holds it: the person themselves elsewhere (`mine`), or a member of the Home. */
+  /**
+   * Someone holds it: the person themselves elsewhere (`mine`), a member of the Home it is seen
+   * from, or (member null) someone the person may not know (S25: an editor in another Home).
+   */
   | { readonly kind: "locked"; readonly mine: boolean; readonly member: string | null }
   /** The lock ended (inactivity, a lost connection, or the person lost access). */
   | { readonly kind: "lapsed"; readonly reason: "inactive" | "lost" }
@@ -30,7 +33,7 @@ export type LockState =
  * minutes without input and lets it lapse at 15, and releases it when the page goes away. The
  * database decides every step; this only keeps it alive while someone is really editing.
  */
-export function useRecipeLock(recipeId: string) {
+export function useRecipeLock(recipeId: string, homeId: string | null = null) {
   const [token] = useState(() => crypto.randomUUID());
   const [state, setState] = useState<LockState>({ kind: "acquiring" });
   const [warning, setWarning] = useState(false);
@@ -46,10 +49,7 @@ export function useRecipeLock(recipeId: string) {
         const answer = await sendRecipeRequest<LockAcquired>(
           "POST",
           recipeEndpoint(recipeId, "lock"),
-          {
-            token,
-            takeOver,
-          },
+          { token, takeOver, ...(homeId ? { homeId } : {}) },
         );
         setState({ kind: "held", revision: answer.revision });
       } catch (error) {
@@ -62,7 +62,7 @@ export function useRecipeLock(recipeId: string) {
         );
       }
     },
-    [recipeId, token],
+    [recipeId, token, homeId],
   );
 
   const release = useCallback(

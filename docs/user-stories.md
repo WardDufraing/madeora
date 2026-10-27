@@ -238,6 +238,18 @@ As a person or Home member, I want to keep recipes in my Personal space or a Hom
 - I can scale the ingredients to another number of servings with exact amounts, and follow the steps one at a time in cooking mode, which tells me when the recipe changes or is no longer available.
 - A recipe can carry one cover photo, and a dashboard widget shows my favorites, recent, highest rated or a random recipe from the context I may see.
 
+### US-025 — Share recipes between Homes and import them from the web
+
+As a recipe manager, I want to share a recipe with another Home I belong to and import recipes from websites, so households use one trusted version without retyping or copying.
+
+**Acceptance checks**
+
+- I can share a published recipe with another Home I belong to, view only or letting that Home's recipe managers edit it; it stays one recipe, so a saved change shows everywhere it is shared, and the share can be removed or changed at any time.
+- Members of a Home it is shared with see it marked as shared, without the origin, its members or other Homes being named; they rate and favorite it in their own Home, and cannot delete or share it onward.
+- Deleting a shared recipe first lists the Homes it is shared with, its favorites and whether someone is editing; a change in the meantime asks me to look again, and after a restore the shares stay paused until I turn them back on.
+- I can paste a recipe's web address and get an editable preview with its source, what is missing or uncertain and possible duplicates; nothing is saved until I save or publish, and the recipe keeps its source link.
+- An address that is private, local, too slow, too large, not a web page or without recipe data is refused with the reason and a way to enter the recipe myself.
+
 ## 7. Notifications
 
 ### US-015 — Review and configure notifications

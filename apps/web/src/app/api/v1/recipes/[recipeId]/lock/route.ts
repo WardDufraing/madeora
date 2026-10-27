@@ -18,8 +18,9 @@ interface RecipeRouteContext {
 /**
  * Takes the exclusive editing lock of a published recipe for this editor (`token`, one per edit
  * session), or takes over the person's own lock from another tab or device (`takeOver`). Someone
- * else's lock answers `409 locked` with whether it is the person's own and, in a Home, which
- * member holds it; nobody can take over another person's lock.
+ * else's lock answers `409 locked` with whether it is the person's own and, when they both belong
+ * to the Home it is seen from (`homeId`, S25), which member holds it; nobody can take over another
+ * person's lock.
  */
 export async function POST(request: Request, { params }: RecipeRouteContext): Promise<Response> {
   const input = await readRecipeMutation(request, acquireLockSchema);
@@ -31,6 +32,7 @@ export async function POST(request: Request, { params }: RecipeRouteContext): Pr
     p_recipe_id: recipeId,
     p_token: input.data.token,
     p_take_over: input.data.takeOver,
+    ...(input.data.homeId ? { p_home_id: input.data.homeId } : {}),
   });
   if (error) return databaseFailure("recipes.lock_failed", error);
   const row = data[0];

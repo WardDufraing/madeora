@@ -95,13 +95,16 @@ export function CookingMode({ recipe, homeId, initialServings }: CookingModeProp
 
   const check = useCallback(async () => {
     try {
-      const current = await sendRecipeRequest<RecipeDetail>("GET", recipeEndpoint(recipe.id));
+      const current = await sendRecipeRequest<RecipeDetail>(
+        "GET",
+        `${recipeEndpoint(recipe.id)}${homeId ? `?homeId=${encodeURIComponent(homeId)}` : ""}`,
+      );
       setRemote(current.revision === recipe.revision ? "same" : "changed");
     } catch (error) {
       if (error instanceof RecipeRequestError && error.failure === "notFound") setRemote("gone");
       // A failed check (offline) says nothing about the recipe: keep what is shown.
     }
-  }, [recipe.id, recipe.revision]);
+  }, [recipe.id, recipe.revision, homeId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {

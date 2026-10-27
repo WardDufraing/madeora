@@ -10,11 +10,11 @@ export function recipesPath(homeId: string | null): string {
   return homeId ? `/homes/${homeId}/recipes` : "/recipes";
 }
 
-/** A published recipe's page, or its editor or cooking mode. */
+/** A published recipe's page, or its editor, cooking mode or share panel. */
 export function recipePath(
   homeId: string | null,
   recipeId: string,
-  part?: "edit" | "cook",
+  part?: "edit" | "cook" | "share",
 ): string {
   const base = `${recipesPath(homeId)}/${recipeId}`;
   return part ? `${base}/${part}` : base;
@@ -29,6 +29,11 @@ export function draftPath(draftId: string): string {
 /** Where to open a new recipe; `homeId` is where it is meant to go. */
 export function newRecipePath(homeId: string | null): string {
   return `${recipesPath(homeId)}/new`;
+}
+
+/** Where to import a recipe from a web page (S25); `homeId` is the default destination. */
+export function importRecipePath(homeId: string | null): string {
+  return `${recipesPath(homeId)}/import`;
 }
 
 /**

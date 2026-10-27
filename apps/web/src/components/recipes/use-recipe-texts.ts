@@ -17,6 +17,10 @@ const failureKey = {
   lockLost: "failureLockLost",
   locked: "failureLocked",
   destinationUnavailable: "failureDestinationUnavailable",
+  impactReviewRequired: "failureImpactReviewRequired",
+  staleImpact: "failureStaleImpact",
+  rateLimited: "failureRateLimited",
+  importFailed: "failureImportFailed",
   network: "failureNetwork",
   failed: "failureFailed",
 } as const satisfies Record<RecipeFailure, string>;

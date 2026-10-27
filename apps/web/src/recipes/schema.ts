@@ -167,12 +167,31 @@ export type RecipeContent = z.output<typeof recipeContentSchema>;
 
 const id = z.uuid();
 
-/** `POST /api/v1/recipes`: a draft (publish false; homeId is its destination) or a recipe at once. */
+/** The longest URL an import accepts (and a recipe keeps as its source). */
+export const SOURCE_URL_MAX = 2000;
+
+/**
+ * Where an imported recipe came from (S25): an http(s) URL and the site or author to credit. Set
+ * once, when the recipe is created; saves never change it (`private.valid_recipe_source`).
+ */
+export const recipeSourceSchema = z.strictObject({
+  url: z
+    .string()
+    .max(SOURCE_URL_MAX)
+    .regex(/^https?:\/\/[^\s\p{Cc}]+$/u, "invalid"),
+  name: visibleName(200).nullable(),
+});
+export type RecipeSource = z.output<typeof recipeSourceSchema>;
+
+/**
+ * `POST /api/v1/recipes`: a draft (publish false; homeId is its destination) or a recipe at once,
+ * with the source of an imported recipe.
+ */
 export const createRecipeSchema = z.strictObject({
   id,
   homeId: id.nullable(),
   publish: z.boolean(),
-  content: recipeContentSchema,
+  content: recipeContentSchema.extend({ source: recipeSourceSchema.nullable().optional() }),
 });
 
 /** `PATCH /api/v1/recipes/:id`: a draft (with its destination) or, with the lock token, a recipe. */
@@ -192,9 +211,31 @@ export const publishRecipeSchema = z.strictObject({
 /** A body-less change (DELETE): still same-origin JSON, so CSRF checks apply. */
 export const emptyRecipeBody = z.strictObject({});
 
-export const acquireLockSchema = z.strictObject({ token: id, takeOver: z.boolean() });
+/** The Home a recipe is seen from (S25; absent or null: where it lives). */
+const context = { homeId: id.nullable().optional() };
+
+/** A favorite set or cleared in the context it is seen from. */
+export const recipeContextBody = z.strictObject(context);
+
+export const acquireLockSchema = z.strictObject({ token: id, takeOver: z.boolean(), ...context });
 export const lockTokenSchema = z.strictObject({ token: id });
-export const ratingSchema = z.strictObject({ stars: z.number().int().min(1).max(5) });
+export const ratingSchema = z.strictObject({ stars: z.number().int().min(1).max(5), ...context });
+
+/** `DELETE /api/v1/recipes/:id`: the impact review's token, required once a recipe is shared. */
+export const deleteRecipeSchema = z.strictObject({
+  impactToken: z.string().max(64).nullable().optional(),
+});
+
+/** `PUT /api/v1/recipes/:id/shares`: share with a Home, change what it may do, or reinstate. */
+export const shareRecipeSchema = z.strictObject({ homeId: id, canEdit: z.boolean() });
+/** `DELETE /api/v1/recipes/:id/shares`. */
+export const unshareRecipeSchema = z.strictObject({ homeId: id });
+
+/** `POST /api/v1/recipes/import`: the page and the destination it is meant for. */
+export const importRecipeSchema = z.strictObject({
+  url: z.string().trim().min(1).max(SOURCE_URL_MAX),
+  homeId: id.nullable(),
+});
 
 export const coverIntentSchema = z.strictObject({
   contentType: z.enum(coverTypes),
