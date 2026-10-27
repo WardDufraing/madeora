@@ -1,0 +1,17 @@
+name: Set Neon Staging Marker
+
+on:
+  workflow_dispatch:
+
+jobs:
+  set-marker:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Set database environment
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" \
+            -c 'ALTER DATABASE vowora SET "vowora.environment" TO '\''staging'\'';'
