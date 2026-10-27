@@ -19,7 +19,8 @@ const ORIGIN = "6c1f3d95-8a49-4e66-8b4f-3a7b2f1d3501";
 const DESTINATION = "6c1f3d95-8a49-4e66-8b4f-3a7b2f1d3502";
 const RECIPE = "6c1f3d95-8a49-4e66-8b4f-3a7b2f1d3503";
 const OTHER = "6c1f3d95-8a49-4e66-8b4f-3a7b2f1d3504";
-const TOKEN = "6c1f3d95-8a49-4e66-8b4f-3a7b2f1d35ff";
+// The edit lock's per-session id (synthetic).
+const EDIT_SESSION = "6c1f3d95-8a49-4e66-8b4f-3a7b2f1d35ff";
 const content = `'{"name": "Hutspot", "servings": 4, "servingsLabel": null, "prepMinutes": null,
   "cookMinutes": 40, "notes": null, "tags": [], "ingredients": [], "steps": ["Stamp."],
   "coverFileId": null}'::jsonb`;
@@ -110,13 +111,13 @@ select pg_sleep(0.3);`,
   it("never saves after the editor left the destination, and never deadlocks", async () => {
     const [lock] = await as(
       "bob",
-      `select outcome from public.acquire_recipe_lock('${RECIPE}', '${TOKEN}', false, '${DESTINATION}');`,
+      `select outcome from public.acquire_recipe_lock('${RECIPE}', '${EDIT_SESSION}', false, '${DESTINATION}');`,
     );
     expect(lock).toBe("acquired");
     const [[saved], [left]] = await Promise.all([
       as(
         "bob",
-        `select outcome from public.update_recipe('${RECIPE}', 1, ${content}, '${TOKEN}');
+        `select outcome from public.update_recipe('${RECIPE}', 1, ${content}, '${EDIT_SESSION}');
 select pg_sleep(0.3);`,
       ),
       as("bob", `select public.leave_home('${DESTINATION}');`),

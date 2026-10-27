@@ -38,3 +38,7 @@ e8cd6f18910893ab62c66bfa7c35fea9c46ee296:packages/config/src/env/email.test.ts:g
 # S24 recipe route tests: a synthetic UUID named TOKEN (the edit lock's per-session id) in the
 # first S24 commit; renamed EDIT_SESSION in the next commit. Not a credential.
 3db54cc6c8fa48c6f743160554f52659c7c4dddd:apps/web/src/app/api/v1/recipes/route.test.ts:generic-api-key:26
+#
+# S25 recipe sharing concurrency test: a synthetic UUID named TOKEN (the edit lock's per-session id)
+# in the first S25 commit; renamed EDIT_SESSION in the next commit. Not a credential.
+b2df0a506d3ce66f0bd78b83ae114b2998bf94fc:tests/db/rls/recipe-sharing-concurrency.test.ts:generic-api-key:22
