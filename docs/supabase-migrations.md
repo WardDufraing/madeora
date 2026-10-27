@@ -498,6 +498,28 @@ From here everyone has **Recipes**: a Personal recipe library, one per Home, pri
 
 2. In the app the sidebar's **Meals** opens **Recipes**, with **New recipe** and **My drafts**. An Administrator's capabilities (Home members, Manage) include **Manage Home recipes**. On a dashboard, **Customize** offers **Recipes**.
 
+## Check S25 (`20261107090000_recipe_sharing_import.sql`)
+
+From here a recipe can be **shared with another Home** (one recipe, never a copy), deleting a shared recipe first shows **what it affects**, and recipes can be **imported from a website**. Nothing changes for existing data. Apply it after the S24 file. No new background job and no new provider: the import fetches the page from the app server.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.recipe_shares') as shares_table,
+     to_regclass('private.recipe_import_attempts') as import_attempts_table,
+     has_table_privilege('authenticated', 'private.recipe_shares', 'select')
+       as members_can_read_shares_table,
+     has_function_privilege('authenticated', 'public.share_recipe(uuid, uuid, boolean)', 'execute')
+       as members_can_share,
+     has_function_privilege('anon', 'public.begin_recipe_import()', 'execute')
+       as anonymous_can_import;
+   ```
+
+   It must show both tables, **false** for `members_can_read_shares_table` and `anonymous_can_import`, and **true** for `members_can_share`.
+
+2. In the app a published recipe shows **Share with a Home** to its recipe managers, and the recipe library shows **Import from a website**.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

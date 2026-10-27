@@ -1,13 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
 import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import type { RecipeDetail, RecipePerson } from "@/recipes/api";
-import { getRecipe } from "@/recipes/data";
 import { recipePath, recipesPath, servingsFromParam } from "@/recipes/format";
 import { listTaskMembers } from "@/tasks/data";
 import { memberNames, personName, type MemberNames } from "@/tasks/format";
@@ -15,9 +13,12 @@ import { memberNames, personName, type MemberNames } from "@/tasks/format";
 import { primaryLinkClass, secondaryLinkClass } from "./link-styles";
 import { RecipeCover } from "./recipe-cover";
 import { RecipeDelete } from "./recipe-delete";
+import { loadPublished } from "./recipe-pages";
 import { RecipeTimes } from "./recipe-meta";
 import { RecipeFavorite, RecipeRating } from "./recipe-reactions";
 import { RecipeServings } from "./recipe-servings";
+import { RecipeSource } from "./recipe-source";
+import { RecipeUnshareHere } from "./recipe-unshare-here";
 
 export interface RecipeDetailPageProps {
   readonly recipeId: string;
@@ -30,20 +31,19 @@ export interface RecipeDetailPageProps {
  * One published recipe (S24): cover, times, tags, the ingredients for the selected servings,
  * steps, notes, the viewer's favorite and rating, who added and last changed it, and Edit, Cook
  * and Delete as their rights allow. Read with the viewer's session; a draft is never shown here
- * (drafts live under My drafts, for their creator only).
+ * (drafts live under My drafts, for their creator only). S25: seen from a Home it is shared with,
+ * it says so and names nobody from its origin; its source, if imported; Share and Remove from this
+ * Home for those allowed.
  */
 export async function RecipeDetailPage({ recipeId, homeId, searchParams }: RecipeDetailPageProps) {
-  const [t, formats, recipe] = await Promise.all([
+  const [t, formats, detail] = await Promise.all([
     getTranslations("Recipes"),
     getDateTimeFormats(),
-    getRecipe(recipeId),
+    loadPublished(recipeId, homeId),
   ]);
-  if (recipe.status === "not-found") notFound();
-  if (recipe.status === "unavailable") {
+  if (!detail) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
-  const detail = recipe.value;
-  if (detail.status !== "published" || detail.homeId !== homeId) notFound();
   const members = homeId ? await listTaskMembers(homeId) : ({ status: "ok", value: [] } as const);
   if (members.status !== "ok") {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
@@ -61,6 +61,14 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
       <PageHeader title={detail.name ?? t("untitled")} />
       <div className="flex flex-col gap-6" data-testid="recipe-detail">
         <RecipeCover fileId={detail.coverFileId} size="hero" />
+        {detail.sharedIn ? (
+          <p
+            className="rounded-control border border-line bg-surface-sunken p-3 text-body text-fg"
+            data-testid="recipe-shared-in"
+          >
+            {t("sharedInNotice")}
+          </p>
+        ) : null}
         <LockNotice recipe={detail} names={names} />
         <div className="flex flex-wrap gap-2">
           {detail.steps.length > 0 ? (
@@ -81,8 +89,27 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
               {t("editRecipe")}
             </Link>
           ) : null}
+          {detail.can.share ? (
+            <Link
+              href={recipePath(homeId, detail.id, "share")}
+              className={secondaryLinkClass}
+              data-testid="recipe-share"
+            >
+              {detail.shareCount > 0
+                ? t("shareRecipeCount", { count: detail.shareCount })
+                : t("shareRecipe")}
+            </Link>
+          ) : null}
+          {detail.can.unshareHere && homeId ? (
+            <RecipeUnshareHere recipeId={detail.id} homeId={homeId} />
+          ) : null}
           {detail.can.delete ? (
-            <RecipeDelete recipeId={detail.id} draft={false} after={recipesPath(homeId)} />
+            <RecipeDelete
+              recipeId={detail.id}
+              draft={false}
+              after={recipesPath(homeId)}
+              sharePath={detail.can.share ? recipePath(homeId, detail.id, "share") : null}
+            />
           ) : null}
         </div>
         <RecipeTimes prepMinutes={detail.prepMinutes} cookMinutes={detail.cookMinutes} />
@@ -132,6 +159,7 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
             )}
           </section>
         </div>
+        {detail.source ? <RecipeSource source={detail.source} /> : null}
         {detail.notes ? (
           <section aria-labelledby="notes-heading" className="flex flex-col gap-2">
             <h2 id="notes-heading" className="text-section-title font-semibold text-fg">
@@ -141,18 +169,30 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
           </section>
         ) : null}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-8">
-          <RecipeRating recipeId={detail.id} rating={detail.rating} />
-          <RecipeFavorite recipeId={detail.id} favorite={detail.favorite} />
+          <RecipeRating recipeId={detail.id} rating={detail.rating} homeId={homeId} />
+          <RecipeFavorite recipeId={detail.id} favorite={detail.favorite} homeId={homeId} />
         </div>
         <p className="text-helper text-fg-muted">
-          {t("addedByOn", {
-            person: who(detail.createdBy),
-            date: formatDateTime(detail.publishedAt ?? detail.createdAt, formats),
-          })}{" "}
-          {t("updatedByOn", {
-            person: who(detail.updatedBy),
-            date: formatDateTime(detail.updatedAt, formats),
-          })}
+          {detail.sharedIn ? (
+            // Shared in: dates only, never who in the origin added or changed it.
+            <>
+              {t("addedOn", {
+                date: formatDateTime(detail.publishedAt ?? detail.createdAt, formats),
+              })}{" "}
+              {t("updatedOn", { date: formatDateTime(detail.updatedAt, formats) })}
+            </>
+          ) : (
+            <>
+              {t("addedByOn", {
+                person: who(detail.createdBy),
+                date: formatDateTime(detail.publishedAt ?? detail.createdAt, formats),
+              })}{" "}
+              {t("updatedByOn", {
+                person: who(detail.updatedBy),
+                date: formatDateTime(detail.updatedAt, formats),
+              })}
+            </>
+          )}
         </p>
       </div>
     </>
@@ -192,9 +232,11 @@ async function LockNotice({
   const t = await getTranslations("Recipes");
   const text = recipe.lock.mine
     ? t("lockedByYou")
-    : t("lockedBy", {
-        person: personText({ me: false, member: recipe.lock.member }, names, t),
-      });
+    : recipe.lock.member === null
+      ? t("lockedBySomeone")
+      : t("lockedBy", {
+          person: personText({ me: false, member: recipe.lock.member }, names, t),
+        });
   return (
     <p
       role="status"

@@ -7,9 +7,12 @@ import { isRecipeUnit, quantityStyles } from "@madeora/domain/recipes";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
 import type {
+  RecipeDeleteImpact,
   RecipeDetail,
   RecipeDraftSummary,
+  RecipeDuplicate,
   RecipePage,
+  RecipeShare,
   RecipeTag,
   RecipeWidgetData,
 } from "./api";
@@ -94,6 +97,7 @@ export async function listRecipes(
         publishedAt: row.published_at,
         updatedAt: row.updated_at,
         revision: row.revision,
+        sharedIn: row.shared_in,
       })),
     },
   };
@@ -136,6 +140,11 @@ const detailSchema = z.object({
   id: z.uuid(),
   status: z.enum(["draft", "published"]),
   homeId: z.uuid().nullable(),
+  contextHomeId: z.uuid().nullable(),
+  sharedIn: z.boolean(),
+  source: z.object({ url: z.string(), name: z.string().nullable() }).nullable(),
+  isShared: z.boolean(),
+  shareCount: z.number().int(),
   draftHomeId: z.uuid().nullable(),
   destinationLost: z.boolean(),
   name: z.string().nullable(),
@@ -178,13 +187,25 @@ const detailSchema = z.object({
     rate: z.boolean(),
     favorite: z.boolean(),
     publish: z.boolean(),
+    share: z.boolean(),
+    unshareHere: z.boolean(),
   }),
 });
 
-/** One recipe or draft, or not-found when it is missing, deleted or not the person's to see. */
-export async function getRecipe(recipeId: string): Promise<Read<RecipeDetail>> {
+/**
+ * One recipe or draft seen from a context (S25: `homeId` is the Home it is seen from, which may be
+ * one it is shared with; null: where it lives), or not-found when it is missing, deleted or not the
+ * person's to see from there.
+ */
+export async function getRecipe(
+  recipeId: string,
+  homeId: string | null = null,
+): Promise<Read<RecipeDetail>> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("get_recipe", { p_recipe_id: recipeId });
+  const { data, error } = await supabase.rpc("get_recipe", {
+    p_recipe_id: recipeId,
+    ...homeArg(homeId),
+  });
   if (error) {
     if (error.code === "22023" || error.code === "22P02") return { status: "not-found" };
     return failed("recipes.get_failed", error);
@@ -225,5 +246,73 @@ export async function readRecipeWidget(
         ratingCount: row.rating_count,
       })),
     },
+  };
+}
+
+/** Where a recipe is shared and where it could be (S25), for a recipe manager of its origin. */
+export async function listRecipeShares(recipeId: string): Promise<Read<readonly RecipeShare[]>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("list_recipe_shares", { p_recipe_id: recipeId });
+  if (error) return failed("recipes.shares_failed", error);
+  return {
+    status: "ok",
+    value: data.map((row) => ({
+      homeId: row.home_id,
+      homeName: row.home_name,
+      state: row.state === "active" || row.state === "paused" ? row.state : "available",
+      canEdit: row.can_edit,
+      sharedAt: nullable(row.shared_at),
+    })),
+  };
+}
+
+const impactSchema = z.object({
+  token: z.string(),
+  status: z.enum(["draft", "published"]),
+  homeId: z.uuid().nullable(),
+  shares: z.array(z.object({ homeId: z.uuid(), homeName: z.string(), canEdit: z.boolean() })),
+  favoriteCount: z.number().int(),
+  beingEdited: z.boolean(),
+});
+
+/** What deleting a recipe would affect (S25), for someone who may delete it. */
+export async function getDeleteImpact(
+  recipeId: string,
+): Promise<Read<RecipeDeleteImpact> | { readonly status: "not-permitted" }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("recipe_delete_impact", { p_recipe_id: recipeId });
+  if (error) return failed("recipes.impact_failed", error);
+  const row = data[0];
+  if (row?.outcome === "not_permitted") return { status: "not-permitted" };
+  if (row?.outcome !== "ok") return { status: "not-found" };
+  const parsed = impactSchema.safeParse(row.impact);
+  if (!parsed.success) {
+    logRecipes("recipes.impact_unexpected_shape", "shape");
+    return { status: "unavailable" };
+  }
+  return { status: "ok", value: parsed.data };
+}
+
+/** Recipes an import may duplicate in its destination (S25): same source URL or same name. */
+export async function findDuplicates(
+  homeId: string | null,
+  name: string | null,
+  sourceUrl: string,
+): Promise<Read<readonly RecipeDuplicate[]>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("find_recipe_duplicates", {
+    ...homeArg(homeId),
+    ...(name ? { p_name: name } : {}),
+    p_source_url: sourceUrl,
+  });
+  if (error) return failed("recipes.duplicates_failed", error);
+  return {
+    status: "ok",
+    value: data.map((row) => ({
+      id: row.id,
+      name: nullable(row.name),
+      status: row.status === "draft" ? "draft" : "published",
+      match: row.match === "source" ? "source" : "name",
+    })),
   };
 }

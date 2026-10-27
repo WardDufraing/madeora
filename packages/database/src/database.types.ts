@@ -331,7 +331,7 @@ export type Database = {
         Returns: string;
       };
       acquire_recipe_lock: {
-        Args: { p_recipe_id: string; p_take_over?: boolean; p_token: string };
+        Args: { p_home_id?: string; p_recipe_id: string; p_take_over?: boolean; p_token: string };
         Returns: {
           expires_at: string;
           held_by_me: boolean;
@@ -451,6 +451,7 @@ export type Database = {
           state: string;
         }[];
       };
+      begin_recipe_import: { Args: Record<PropertyKey, never>; Returns: string };
       bulk_chore_occurrences: {
         Args: {
           p_action: string;
@@ -936,7 +937,7 @@ export type Database = {
       };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
       delete_recipe: {
-        Args: { p_recipe_id: string };
+        Args: { p_impact_token?: string; p_recipe_id: string };
         Returns: {
           entry_id: string;
           outcome: string;
@@ -1020,6 +1021,15 @@ export type Database = {
           p_user_id: string;
         };
         Returns: string;
+      };
+      find_recipe_duplicates: {
+        Args: { p_home_id?: string; p_name?: string; p_source_url?: string };
+        Returns: {
+          id: string;
+          match: string;
+          name: string;
+          status: string;
+        }[];
       };
       finish_job_execution: {
         Args: {
@@ -1121,7 +1131,7 @@ export type Database = {
       };
       get_point_leaderboard: { Args: { p_home_id: string; p_period?: string }; Returns: Json };
       get_point_summary: { Args: { p_home_id: string }; Returns: Json };
-      get_recipe: { Args: { p_recipe_id: string }; Returns: Json };
+      get_recipe: { Args: { p_home_id?: string; p_recipe_id: string }; Returns: Json };
       get_recipe_context: {
         Args: { p_home_id?: string };
         Returns: {
@@ -1597,6 +1607,16 @@ export type Database = {
         Args: { p_account_id?: string; p_before?: number; p_home_id: string; p_limit?: number };
         Returns: Json;
       };
+      list_recipe_shares: {
+        Args: { p_recipe_id: string };
+        Returns: {
+          can_edit: boolean;
+          home_id: string;
+          home_name: string;
+          shared_at: string;
+          state: string;
+        }[];
+      };
       list_recipe_tags: {
         Args: { p_home_id?: string };
         Returns: {
@@ -1628,6 +1648,7 @@ export type Database = {
           rating_count: number;
           revision: number;
           servings: number;
+          shared_in: boolean;
           tags: string[];
           total_count: number;
           updated_at: string;
@@ -1872,6 +1893,13 @@ export type Database = {
         Args: { p_entry_ids: string[] };
         Returns: {
           entry_id: string;
+          outcome: string;
+        }[];
+      };
+      recipe_delete_impact: {
+        Args: { p_recipe_id: string };
+        Returns: {
+          impact: Json;
           outcome: string;
         }[];
       };
@@ -2256,9 +2284,12 @@ export type Database = {
         };
         Returns: string;
       };
-      set_recipe_favorite: { Args: { p_favorite: boolean; p_recipe_id: string }; Returns: string };
+      set_recipe_favorite: {
+        Args: { p_favorite: boolean; p_home_id?: string; p_recipe_id: string };
+        Returns: string;
+      };
       set_recipe_rating: {
-        Args: { p_recipe_id: string; p_stars?: number };
+        Args: { p_home_id?: string; p_recipe_id?: string; p_stars?: number };
         Returns: {
           average: number;
           mine: number;
@@ -2352,6 +2383,10 @@ export type Database = {
       };
       share_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
+        Returns: string;
+      };
+      share_recipe: {
+        Args: { p_can_edit: boolean; p_home_id: string; p_recipe_id: string };
         Returns: string;
       };
       skip_chore_occurrence: {
@@ -2464,6 +2499,7 @@ export type Database = {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
       };
+      unshare_recipe: { Args: { p_home_id: string; p_recipe_id: string }; Returns: string };
       update_chore: {
         Args: {
           p_category_id?: string;

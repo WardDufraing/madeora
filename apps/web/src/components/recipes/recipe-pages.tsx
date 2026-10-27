@@ -8,7 +8,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { listMyHomes } from "@/homes/server";
 import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
-import { getRecipe, getRecipeContext, listMyDrafts } from "@/recipes/data";
+import { getRecipe, getRecipeContext, listMyDrafts, listRecipeShares } from "@/recipes/data";
 import {
   DRAFTS_PATH,
   draftPath,
@@ -26,6 +26,8 @@ import { RecipeCover } from "./recipe-cover";
 import { RecipeDelete } from "./recipe-delete";
 import { RecipeEditSession } from "./recipe-edit-session";
 import { RecipeEditor } from "./recipe-editor";
+import { RecipeImport } from "./recipe-import";
+import { RecipeSharePanel } from "./recipe-share-panel";
 
 async function homeOptions() {
   const homes = await listMyHomes();
@@ -72,6 +74,77 @@ function NewRecipeEditor({
       homes={homes}
       initial={emptyRecipeForm()}
     />
+  );
+}
+
+/** Importing a recipe from a web page (S25), started from a context: its default destination. */
+export async function ImportRecipePage({ homeId }: { readonly homeId: string | null }) {
+  const [t, context, homes] = await Promise.all([
+    getTranslations("Recipes"),
+    getRecipeContext(homeId),
+    homeOptions(),
+  ]);
+  if (context.status === "not-found") notFound();
+  if (context.status !== "ok" || homes === null) {
+    return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
+  }
+  return (
+    <>
+      <p className="mb-2">
+        <Link href={recipesPath(homeId)} className="text-body font-medium text-accent-fg underline">
+          {t("backToLibrary")}
+        </Link>
+      </p>
+      <PageHeader title={t("importTitle")} />
+      <RecipeImport homeId={homeId} homes={homes} />
+    </>
+  );
+}
+
+/** Where a recipe is shared (S25): for a recipe manager of its origin, seen from where it lives. */
+export async function ShareRecipePage({
+  recipeId,
+  homeId,
+}: {
+  readonly recipeId: string;
+  readonly homeId: string | null;
+}) {
+  const t = await getTranslations("Recipes");
+  const recipe = await loadPublished(recipeId, homeId);
+  if (!recipe) return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
+  const back = (
+    <p className="mb-2">
+      <Link
+        href={recipePath(homeId, recipe.id)}
+        className="text-body font-medium text-accent-fg underline"
+      >
+        {t("backToRecipe")}
+      </Link>
+    </p>
+  );
+  if (recipe.sharedIn || !recipe.can.share) {
+    return (
+      <>
+        {back}
+        <PageHeader title={recipe.name ?? t("untitled")} />
+        <ErrorState title={t("cannotShareTitle")} description={t("cannotShare")} />
+      </>
+    );
+  }
+  const shares = await listRecipeShares(recipe.id);
+  if (shares.status !== "ok") {
+    return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
+  }
+  return (
+    <>
+      {back}
+      <PageHeader title={t("shareTitle", { name: recipe.name ?? t("untitled") })} />
+      <RecipeSharePanel
+        recipeId={recipe.id}
+        recipeName={recipe.name ?? t("untitled")}
+        shares={shares.value}
+      />
+    </>
   );
 }
 
@@ -203,11 +276,17 @@ export async function DraftPage({ draftId }: { readonly draftId: string }) {
   );
 }
 
-async function loadPublished(recipeId: string, homeId: string | null) {
-  const recipe = await getRecipe(recipeId);
+/**
+ * A published recipe seen from the context the address names: a Home (its own recipes and those
+ * shared with it, S25) or the Personal space (its own only). Anything else is not found here.
+ */
+export async function loadPublished(recipeId: string, homeId: string | null) {
+  const recipe = await getRecipe(recipeId, homeId);
   if (recipe.status === "not-found") notFound();
   if (recipe.status !== "ok") return null;
-  if (recipe.value.status !== "published" || recipe.value.homeId !== homeId) notFound();
+  if (recipe.value.status !== "published" || (homeId === null && recipe.value.homeId !== null)) {
+    notFound();
+  }
   return recipe.value;
 }
 
@@ -250,6 +329,7 @@ export async function EditRecipePage({
         revision={recipe.revision}
         initial={toRecipeForm(recipe)}
         members={members.value}
+        shared={recipe.isShared}
       />
     </>
   );

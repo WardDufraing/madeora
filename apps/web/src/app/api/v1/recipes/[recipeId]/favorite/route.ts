@@ -6,14 +6,14 @@ import {
   pathId,
   readRecipeMutation,
 } from "@/recipes/route-helpers";
-import { emptyRecipeBody } from "@/recipes/schema";
+import { recipeContextBody } from "@/recipes/schema";
 
 interface RecipeRouteContext {
   readonly params: Promise<{ readonly recipeId: string }>;
 }
 
 async function setFavorite(request: Request, context: RecipeRouteContext, favorite: boolean) {
-  const input = await readRecipeMutation(request, emptyRecipeBody);
+  const input = await readRecipeMutation(request, recipeContextBody);
   if (!input.ok) return input.response;
   const recipeId = pathId((await context.params).recipeId);
   if (!recipeId) return failure(404, "not-found");
@@ -21,13 +21,15 @@ async function setFavorite(request: Request, context: RecipeRouteContext, favori
   const { data, error } = await supabase.rpc("set_recipe_favorite", {
     p_recipe_id: recipeId,
     p_favorite: favorite,
+    ...(input.data.homeId ? { p_home_id: input.data.homeId } : {}),
   });
   if (error) return databaseFailure("recipes.favorite_failed", error);
   return outcomeAnswer("recipes.favorite_failed", data, { favorite });
 }
 
 /**
- * Marks a published recipe as one of the person's favorites in its context (S24), or unmarks it.
+ * Marks a published recipe as one of the person's favorites in the context it is seen from (S24;
+ * S25: `homeId`, possibly a Home it is shared with), or unmarks it.
  * Set-to-state: a repeat or a double click changes nothing. A favorite never grants access.
  */
 export function PUT(request: Request, context: RecipeRouteContext): Promise<Response> {

@@ -16,10 +16,12 @@ import { useRecipeMutation } from "./use-recipe-mutation";
 export interface RecipeFavoriteProps {
   readonly recipeId: string;
   readonly favorite: boolean;
+  /** The Home it is seen from (S25; null: where it lives): favorites are per context. */
+  readonly homeId: string | null;
 }
 
-/** The viewer's own favorite mark for this recipe in its context (S24); a toggle button. */
-export function RecipeFavorite({ recipeId, favorite }: RecipeFavoriteProps) {
+/** The viewer's own favorite mark for this recipe in the context it is seen from (S24); a toggle. */
+export function RecipeFavorite({ recipeId, favorite, homeId }: RecipeFavoriteProps) {
   const t = useTranslations("Recipes");
   const failure = useRecipeFailure();
   const { announce, region } = useAnnouncer();
@@ -35,7 +37,7 @@ export function RecipeFavorite({ recipeId, favorite }: RecipeFavoriteProps) {
       sendRecipeRequest<{ favorite: boolean }>(
         next ? "PUT" : "DELETE",
         recipeEndpoint(recipeId, "favorite"),
-        {},
+        homeId ? { homeId } : {},
       ),
     (_result, next) => {
       announce(next ? t("announceFavorited") : t("announceUnfavorited"));
@@ -80,13 +82,15 @@ export interface RecipeRatingProps {
     readonly average: number | null;
     readonly count: number;
   };
+  /** The Home it is seen from (S25; null: where it lives): the average is that context's. */
+  readonly homeId: string | null;
 }
 
 /**
- * The viewer's 1–5 star rating (S24): a radio group, changeable and clearable, with the context's
- * average and count. Never anyone else's own rating or who rated.
+ * The viewer's 1–5 star rating (S24): a radio group, changeable and clearable, with the average and
+ * count of the context it is seen from. Never anyone else's own rating or who rated.
  */
-export function RecipeRating({ recipeId, rating }: RecipeRatingProps) {
+export function RecipeRating({ recipeId, rating, homeId }: RecipeRatingProps) {
   const t = useTranslations("Recipes");
   const failure = useRecipeFailure();
   const { announce, region } = useAnnouncer();
@@ -102,7 +106,7 @@ export function RecipeRating({ recipeId, rating }: RecipeRatingProps) {
       sendRecipeRequest<RatingAnswer>(
         stars === null ? "DELETE" : "PUT",
         recipeEndpoint(recipeId, "rating"),
-        stars === null ? {} : { stars },
+        { ...(stars === null ? {} : { stars }), ...(homeId ? { homeId } : {}) },
       ),
     (answer) => {
       setSummary(answer);

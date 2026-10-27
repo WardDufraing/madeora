@@ -107,6 +107,12 @@ export function outcomeAnswer(
     case "already_published":
     case "acquired":
     case "renewed":
+    case "ok":
+    case "shared":
+    case "updated":
+    case "unchanged":
+    case "unshared":
+    case "not_shared":
       return json(200, body);
     case "conflict":
       return failure(409, "conflict", revision == null ? {} : { revision });
@@ -130,6 +136,10 @@ export function outcomeAnswer(
       return failure(409, "locked");
     case "destination_unavailable":
       return failure(409, "destination-unavailable");
+    case "impact_review_required":
+      return failure(409, "impact-review-required");
+    case "stale_impact":
+      return failure(409, "stale-impact");
     case "rate_limited":
       return failure(429, "rate-limited");
     default:
