@@ -5,13 +5,34 @@ on:
 
 jobs:
   set-marker:
+    name: Set staging database marker
     runs-on: ubuntu-latest
     environment: staging
 
     steps:
-      - name: Set database environment
+      - name: Verify database connection
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is empty"
+            exit 1
+          fi
+
+          echo "DATABASE_URL is available"
+
+      - name: Set Neon environment marker
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           psql "$DATABASE_URL" \
-            -c 'ALTER DATABASE vowora SET "vowora.environment" TO '\''staging'\'';'
+            -v ON_ERROR_STOP=1 \
+            -c "ALTER DATABASE vowora SET \"vowora.environment\" TO 'staging';"
+
+      - name: Verify environment marker
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT current_setting('vowora.environment', true);"
