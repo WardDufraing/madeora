@@ -6,7 +6,14 @@ import { z } from "zod";
  */
 
 /** Each module step adds its own value here and in the database check constraints. */
-export const trashModules = ["sample", "dashboard", "tasks", "chores", "recipes"] as const;
+export const trashModules = [
+  "sample",
+  "dashboard",
+  "tasks",
+  "chores",
+  "recipes",
+  "shopping",
+] as const;
 export type TrashModule = (typeof trashModules)[number];
 export const trashItemTypes = [
   "sample",
@@ -20,6 +27,9 @@ export const trashItemTypes = [
   "chore_occurrence",
   "chore_removal",
   "recipe",
+  "shopping_list",
+  "shopping_item",
+  "shopping_clear",
 ] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 

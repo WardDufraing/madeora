@@ -199,6 +199,30 @@ const recipesConfig = z.strictObject({
   count: z.union([z.literal(1), z.literal(3), z.literal(5)]).default(3),
 });
 
+/**
+ * The Shopping widget (S26; spec "Confirmed shopping widget list selection and quick actions"): one
+ * list, or up to five combined in the order chosen, of its context (Personal space, the Home, or a
+ * source Home), with up to 5, 10 or 15 active items, check-off and quick add to one chosen
+ * destination among the selected lists. A selected list that is archived, deleted or no longer
+ * visible is left out and said so, never replaced.
+ */
+export const shoppingWidgetCounts = [5, 10, 15] as const;
+export const SHOPPING_WIDGET_LISTS = 5;
+const shoppingConfig = z
+  .strictObject({
+    listIds: z
+      .array(z.uuid())
+      .max(SHOPPING_WIDGET_LISTS)
+      .refine((ids) => new Set(ids).size === ids.length)
+      .default([]),
+    count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
+    /** Where quick add puts new items (one of the selected lists; null: no quick add). */
+    quickAddListId: z.uuid().nullable().default(null),
+  })
+  .refine(
+    (config) => config.quickAddListId === null || config.listIds.includes(config.quickAddListId),
+  );
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -308,6 +332,15 @@ export const widgetRegistry = {
     ),
     config: recipesConfig,
   },
+  shopping: {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: sizes(
+      { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
+      { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
+      { h: 5, minH: 3, maxH: 10 },
+    ),
+    config: shoppingConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -330,6 +363,7 @@ export interface WidgetConfigs {
   readonly "points-leaderboard": WidgetConfig<"points-leaderboard">;
   readonly "my-points": WidgetConfig<"my-points">;
   readonly recipes: WidgetConfig<"recipes">;
+  readonly shopping: WidgetConfig<"shopping">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

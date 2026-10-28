@@ -250,7 +250,23 @@ As a recipe manager, I want to share a recipe with another Home I belong to and 
 - I can paste a recipe's web address and get an editable preview with its source, what is missing or uncertain and possible duplicates; nothing is saved until I save or publish, and the recipe keeps its source link.
 - An address that is private, local, too slow, too large, not a web page or without recipe data is refused with the reason and a way to enter the recipe myself.
 
-## 7. Notifications
+## 7. Shopping
+
+### US-026 — Shop together from shared lists
+
+As a person or Home member, I want to keep several shopping lists, add items quickly and check them off together, so everyone in the shop knows what is still needed.
+
+**Acceptance checks**
+
+- I can keep several lists in my Personal space or a Home, with duplicate names told apart by their place, archive them, and delete them to the trash with their items.
+- I can quick add an item by name or review several lines before adding them; a clear quantity and unit are read only when unambiguous, and an item already on the list is flagged so I keep it as a separate item or cancel; nothing is merged.
+- An item can carry a quantity, unit, packaging, notes and one of the list's own categories; I order lists, categories and items with Move up and Move down.
+- When another member checks an item off it moves to Completed on my open page with who did it, without reloading; clearing completed items asks first and can be undone from the trash.
+- I can move or copy an item to another active list of the same Personal space or Home only, keeping or reopening its completion, and undo a move.
+- A repeating item adds itself again on its days only when the last one is no longer active, and missed days never pile up.
+- List managers set whether other members may edit, only check off, or only view a Home list; the Shopping widget shows one list or several combined with each item's list.
+
+## 8. Notifications
 
 ### US-015 — Review and configure notifications
 
@@ -262,7 +278,7 @@ As a person using Madeora, I want to review notifications and set my notificatio
 - I can manage supported notification preferences.
 - Notifications respect account and Home access boundaries.
 
-## 8. Files, trash, and recovery
+## 9. Files, trash, and recovery
 
 ### US-016 — Store and access private files
 
@@ -294,7 +310,7 @@ As a person responsible for a Home, I want a safeguarded ownership-recovery proc
 - The recovery record identifies the affected Home and status.
 - Applying a recovery does not silently change unrelated Home memberships or ownership.
 
-## 9. Cross-cutting expectations
+## 10. Cross-cutting expectations
 
 These checks apply to every story above:
 
@@ -305,9 +321,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points, rewards and recipe workflows
+## Implementation evidence for chore, vacation, points, rewards, recipe and shopping workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 

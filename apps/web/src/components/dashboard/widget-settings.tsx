@@ -19,6 +19,8 @@ import {
   widgetRegistry,
 } from "@/dashboard/widgets";
 
+import { ShoppingWidgetSettings } from "@/components/shopping/shopping-widget-settings";
+
 import { ChoreWidgetSettings } from "./chore-widget-settings";
 import { TaskWidgetSettings } from "./task-widget-settings";
 
@@ -207,6 +209,16 @@ export function WidgetSettings({
             }}
           />
         </div>
+      );
+    }
+    case "shopping": {
+      const parsed = widgetRegistry.shopping.config.safeParse(widget.config);
+      return (
+        <ShoppingWidgetSettings
+          config={parsed.success ? parsed.data : widgetRegistry.shopping.config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
       );
     }
     case "chore-approvals": {

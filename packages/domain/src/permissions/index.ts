@@ -47,3 +47,17 @@ export {
   type RecipeFacts,
   type RecipePermissionProjection,
 } from "./recipes";
+export {
+  accessAllows,
+  decideShoppingAction,
+  shoppingAccess,
+  shoppingAccessLevels,
+  shoppingActions,
+  shoppingMemberAccess,
+  shoppingPermissions,
+  type ShoppingAccess,
+  type ShoppingAction,
+  type ShoppingListFacts,
+  type ShoppingMemberAccess,
+  type ShoppingPermissionProjection,
+} from "./shopping";

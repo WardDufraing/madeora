@@ -10,7 +10,8 @@
     "./chores": "./src/chores/index.ts",
     "./vacations": "./src/vacations/index.ts",
     "./points": "./src/points/index.ts",
-    "./recipes": "./src/recipes/index.ts"
+    "./recipes": "./src/recipes/index.ts",
+    "./shopping": "./src/shopping/index.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

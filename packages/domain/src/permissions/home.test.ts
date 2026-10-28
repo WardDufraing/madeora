@@ -50,6 +50,7 @@ const matrix: readonly {
       ["approveHomeRewards"],
       ["manageHomePoints"],
       ["manageHomeRecipes"],
+      ["manageHomeShopping"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -105,6 +106,10 @@ const matrix: readonly {
           "home.recipes.view": true,
           "home.recipes.create": true,
           "home.recipes.manage": owner || (admin && has("manageHomeRecipes")),
+          // Every member sees the Home's lists and creates lists; shopping managers manage all.
+          "home.shopping.view": true,
+          "home.shopping.create": true,
+          "home.shopping.manage": owner || (admin && has("manageHomeShopping")),
         },
       };
     }),

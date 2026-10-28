@@ -520,6 +520,32 @@ From here a recipe can be **shared with another Home** (one recipe, never a copy
 
 2. In the app a published recipe shows **Share with a Home** to its recipe managers, and the recipe library shows **Import from a website**.
 
+## Check S26 (`20261108090000_shopping_lists.sql`)
+
+From here everyone has **Shopping lists**: several lists per Personal space or Home, with categories, quick add, Add several, check-offs that show live for the other members, moves and copies between lists, and repeating items. Nothing changes for existing data. Apply it after the S25 file. No new background job and no new provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.shopping_lists') as lists_table,
+     to_regclass('public.shopping_signals') as signals_table,
+     exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shopping_signals'
+     ) as signals_are_live,
+     has_table_privilege('authenticated', 'private.shopping_items', 'select')
+       as members_can_read_items_table,
+     has_function_privilege('authenticated', 'public.add_shopping_items(uuid, jsonb)', 'execute')
+       as members_can_add_items,
+     has_function_privilege('anon', 'public.add_shopping_items(uuid, jsonb)', 'execute')
+       as anonymous_can_add_items;
+   ```
+
+   It must show both tables, **true** for `signals_are_live` and `members_can_add_items`, and **false** for `members_can_read_items_table` and `anonymous_can_add_items`.
+
+2. In the app the sidebar's **Shopping** opens the lists, with **New list**. An Administrator's capabilities (Home members, Manage) include **Manage Home shopping lists**. On a dashboard, **Customize** offers **Shopping**.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

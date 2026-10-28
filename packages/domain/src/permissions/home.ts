@@ -37,6 +37,7 @@ export const delegableCapabilities = [
   "approveHomeRewards",
   "manageHomePoints",
   "manageHomeRecipes",
+  "manageHomeShopping",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -75,6 +76,9 @@ export const homeActions = [
   "home.recipes.view",
   "home.recipes.create",
   "home.recipes.manage",
+  "home.shopping.view",
+  "home.shopping.create",
+  "home.shopping.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -208,6 +212,15 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.recipes.view": { roles: ["owner", "administrator", "member"] },
   "home.recipes.create": { roles: ["owner", "administrator", "member"] },
   "home.recipes.manage": { roles: ["owner"], delegatedThrough: "manageHomeRecipes" },
+  // Shopping (S26; default picked in the S26 brief, the per-module matrix is open in the spec):
+  // every current member sees the Home's lists and creates lists; shopping managers (the Owner,
+  // Administrators granted manageHomeShopping) manage every list and the order of the Home's lists.
+  // A list's creator manages their own list while a member, and the list's member access decides
+  // what everyone else may do in it (./shopping.ts). SQL: private.can_manage_shopping,
+  // private.shopping_access.
+  "home.shopping.view": { roles: ["owner", "administrator", "member"] },
+  "home.shopping.create": { roles: ["owner", "administrator", "member"] },
+  "home.shopping.manage": { roles: ["owner"], delegatedThrough: "manageHomeShopping" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -276,6 +289,9 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.recipes.view": can("home.recipes.view"),
     "home.recipes.create": can("home.recipes.create"),
     "home.recipes.manage": can("home.recipes.manage"),
+    "home.shopping.view": can("home.shopping.view"),
+    "home.shopping.create": can("home.shopping.create"),
+    "home.shopping.manage": can("home.shopping.manage"),
   };
 }
 

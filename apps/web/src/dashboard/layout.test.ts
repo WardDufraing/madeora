@@ -14,7 +14,7 @@ import {
   type LayoutContext,
 } from "./layout";
 import { homeStarterLayout, personalStarterLayout } from "./starter";
-import { catalogueFor, defaultConfig, surfaceFor, widgetTypes } from "./widgets";
+import { catalogueFor, defaultConfig, parseConfig, surfaceFor, widgetTypes } from "./widgets";
 
 const HOME = "6f9b1c2e-4a1d-4e7b-9c3a-1b2c3d4e5f60";
 const OTHER_HOME = "7a0c2d3f-5b2e-4f8c-8d4b-2c3d4e5f6071";
@@ -70,6 +70,8 @@ describe("widget registry", () => {
       { type: "my-points", needsSource: true },
       { type: "recipes", needsSource: false },
       { type: "recipes", needsSource: true },
+      { type: "shopping", needsSource: false },
+      { type: "shopping", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
@@ -85,6 +87,7 @@ describe("widget registry", () => {
       "points-leaderboard",
       "my-points",
       "recipes",
+      "shopping",
     ]);
   });
 
@@ -92,6 +95,32 @@ describe("widget registry", () => {
     for (const type of widgetTypes) expect(defaultConfig(type)).toBeTypeOf("object");
     expect(defaultConfig("notifications")).toEqual({ count: 5 });
     expect(defaultConfig("chore-schedule")).toEqual({ layout: "matrix", limit: 3 });
+    expect(defaultConfig("shopping")).toEqual({ listIds: [], count: 5, quickAddListId: null });
+  });
+
+  it("keeps a Shopping widget's quick-add destination among its selected lists (S26)", () => {
+    const a = "00000000-0000-4000-8000-00000000000a";
+    const b = "00000000-0000-4000-8000-00000000000b";
+    expect(parseConfig("shopping", { listIds: [a, b], quickAddListId: b, count: 10 })).toEqual({
+      listIds: [a, b],
+      quickAddListId: b,
+      count: 10,
+    });
+    expect(parseConfig("shopping", { listIds: [a], quickAddListId: b })).toBeNull();
+    expect(parseConfig("shopping", { listIds: [a, a] })).toBeNull();
+    expect(
+      parseConfig("shopping", {
+        listIds: [
+          a,
+          b,
+          a.slice(0, -1) + "c",
+          a.slice(0, -1) + "d",
+          a.slice(0, -1) + "e",
+          a.slice(0, -1) + "f",
+        ],
+      }),
+    ).toBeNull();
+    expect(parseConfig("shopping", { count: 20 })).toBeNull();
   });
 });
 
