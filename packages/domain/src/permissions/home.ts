@@ -38,6 +38,7 @@ export const delegableCapabilities = [
   "manageHomePoints",
   "manageHomeRecipes",
   "manageHomeShopping",
+  "manageHomeMeals",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -79,6 +80,8 @@ export const homeActions = [
   "home.shopping.view",
   "home.shopping.create",
   "home.shopping.manage",
+  "home.meals.view",
+  "home.meals.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -221,6 +224,13 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.shopping.view": { roles: ["owner", "administrator", "member"] },
   "home.shopping.create": { roles: ["owner", "administrator", "member"] },
   "home.shopping.manage": { roles: ["owner"], delegatedThrough: "manageHomeShopping" },
+  // Meal planner (S27; default picked in the S27 brief, the per-module matrix is open in the spec):
+  // every current member sees and prints the Home's plan and plans meals unless a meal manager set
+  // the planner to view only (./meals.ts); meal managers (the Owner, Administrators granted
+  // manageHomeMeals) always plan, configure slots and set that member access. SQL:
+  // private.meal_access.
+  "home.meals.view": { roles: ["owner", "administrator", "member"] },
+  "home.meals.manage": { roles: ["owner"], delegatedThrough: "manageHomeMeals" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -292,6 +302,8 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.shopping.view": can("home.shopping.view"),
     "home.shopping.create": can("home.shopping.create"),
     "home.shopping.manage": can("home.shopping.manage"),
+    "home.meals.view": can("home.meals.view"),
+    "home.meals.manage": can("home.meals.manage"),
   };
 }
 

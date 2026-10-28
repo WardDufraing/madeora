@@ -20,6 +20,7 @@ const moduleKey = {
   chores: "moduleChores",
   recipes: "moduleRecipes",
   shopping: "moduleShopping",
+  meals: "moduleMeals",
 } as const;
 const itemTypeKey = {
   sample: "itemTypeSample",
@@ -36,6 +37,7 @@ const itemTypeKey = {
   shopping_list: "itemTypeShoppingList",
   shopping_item: "itemTypeShoppingItem",
   shopping_clear: "itemTypeShoppingClear",
+  meal_entry: "itemTypeMealEntry",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

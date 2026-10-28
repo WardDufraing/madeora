@@ -225,6 +225,9 @@ export interface RecipeDeleteImpact {
   }[];
   readonly favoriteCount: number;
   readonly beingEdited: boolean;
+  /** Planned meals from today on and repeating meals that refer to it (S27; counts only). */
+  readonly plannedMeals: number;
+  readonly repeatingMeals: number;
 }
 
 export interface RecipeImportIngredient {

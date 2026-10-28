@@ -266,7 +266,24 @@ As a person or Home member, I want to keep several shopping lists, add items qui
 - A repeating item adds itself again on its days only when the last one is no longer active, and missed days never pile up.
 - List managers set whether other members may edit, only check off, or only view a Home list; the Shopping widget shows one list or several combined with each item's list.
 
-## 8. Notifications
+## 8. Meals
+
+### US-027 — Plan the week's meals and shop for them
+
+As a person or Home member, I want to plan meals in slots for each day, repeat the regular ones and send their ingredients to a shopping list, so the household knows what is for dinner and what to buy.
+
+**Acceptance checks**
+
+- My Personal space and each Home have a planner by week or day with Breakfast, Lunch and Dinner from the start; meal managers rename, reorder, add, disable and re-enable slots, and disabling shows what it affects first.
+- I can plan a recipe (with servings) or a custom meal with notes in an empty slot; a taken slot is never overwritten without my explicit choice, and a removed meal goes to the trash.
+- A recipe I can no longer see from the planner's place shows as "Recipe unavailable" without revealing anything of it.
+- A repeating meal (daily, chosen weekdays or weekly, with an optional end) shows its collisions before saving; I can change, move or skip one occurrence, change it from a date on without changing the past, pause, resume and end it.
+- I can copy a week to another week after reviewing each meal, with unavailable recipes, disabled slots and taken slots flagged.
+- I can review the scaled ingredients of the meals in a date range, edit or leave out rows and add them to a list of the same place; they are then checked off like any other item.
+- The print view shows the week without navigation, with notes left out unless I include them; the Meal planner widget shows today, a chosen day or a compact week.
+- Meal managers can make a Home's planner view only for other members.
+
+## 9. Notifications
 
 ### US-015 — Review and configure notifications
 
@@ -278,7 +295,7 @@ As a person using Madeora, I want to review notifications and set my notificatio
 - I can manage supported notification preferences.
 - Notifications respect account and Home access boundaries.
 
-## 9. Files, trash, and recovery
+## 10. Files, trash, and recovery
 
 ### US-016 — Store and access private files
 
@@ -310,7 +327,7 @@ As a person responsible for a Home, I want a safeguarded ownership-recovery proc
 - The recovery record identifies the affected Home and status.
 - Applying a recovery does not silently change unrelated Home memberships or ownership.
 
-## 10. Cross-cutting expectations
+## 11. Cross-cutting expectations
 
 These checks apply to every story above:
 
@@ -321,9 +338,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points, rewards, recipe and shopping workflows
+## Implementation evidence for chore, vacation, points, rewards, recipe, shopping and meal workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 

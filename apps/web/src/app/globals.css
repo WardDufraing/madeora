@@ -91,3 +91,36 @@
 .react-resizable-hide > .react-resizable-handle {
   display: none;
 }
+
+/* The meal plan's print view (S27): only the plan, in the light scheme's text colour on its page
+   colour (black on white), without navigation, buttons or backgrounds, days kept whole and long
+   titles wrapping. Scoped to pages that hold a print view, so printing any other page is unchanged. */
+@media print {
+  body:has([data-print-view]) {
+    color-scheme: light;
+    background: Canvas !important;
+    color: CanvasText !important;
+  }
+  body:has([data-print-view]) aside,
+  body:has([data-print-view]) header,
+  body:has([data-print-view]) [data-print-hide] {
+    display: none !important;
+  }
+  [data-print-view] * {
+    background: transparent !important;
+    color: CanvasText !important;
+    border-color: CanvasText !important;
+    box-shadow: none !important;
+  }
+  [data-print-view] [data-print-day] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  [data-print-view] [data-print-day] + [data-print-day] {
+    break-before: auto;
+  }
+  [data-print-view] bdi,
+  [data-print-view] li {
+    overflow-wrap: anywhere;
+  }
+}

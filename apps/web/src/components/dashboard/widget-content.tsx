@@ -13,6 +13,7 @@ import {
   WeeklyPointsWidget,
 } from "@/components/points/points-widgets";
 import { RecipesWidget } from "@/components/recipes/recipe-widget";
+import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
 import { QuickComplete } from "@/components/chores/quick-complete";
@@ -764,6 +765,12 @@ function shoppingConfig(widget: DashboardWidget): WidgetConfigs["shopping"] {
   return parsed.success ? parsed.data : config.parse({});
 }
 
+function mealPlannerConfig(widget: DashboardWidget): WidgetConfigs["meal-planner"] {
+  const { config } = widgetRegistry["meal-planner"];
+  const parsed = config.safeParse(widget.config);
+  return parsed.success ? parsed.data : config.parse({});
+}
+
 function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals" | "chore-schedule">(
   type: T,
   widget: DashboardWidget,
@@ -791,6 +798,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "my-points": t("widgetMyPoints"),
     recipes: t("widgetRecipes"),
     shopping: t("widgetShopping"),
+    "meal-planner": t("widgetMealPlanner"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -948,6 +956,36 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: titles.shopping, home: isolate(home.name) }),
         sourceName: home.name,
         body: <ShoppingWidget homeId={home.id} config={shoppingConfig(widget)} />,
+        unavailable: false,
+      };
+    }
+    case "meal-planner": {
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles["meal-planner"],
+          sourceName: null,
+          body: <MealWidget home={scope.home} config={mealPlannerConfig(widget)} />,
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: t("widgetPersonalMealPlanner"),
+          sourceName: null,
+          body: <MealWidget home={null} config={mealPlannerConfig(widget)} />,
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles["meal-planner"], home: isolate(home.name) }),
+        sourceName: home.name,
+        body: <MealWidget home={home} config={mealPlannerConfig(widget)} />,
         unavailable: false,
       };
     }

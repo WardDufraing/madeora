@@ -195,6 +195,8 @@ describe("impact-reviewed deletion", () => {
     homeId: HOME,
     shares: [{ homeId: OTHER_HOME, homeName: "Beach house", canEdit: false }],
     favoriteCount: 3,
+    plannedMeals: 0,
+    repeatingMeals: 0,
     beingEdited: false,
   };
 

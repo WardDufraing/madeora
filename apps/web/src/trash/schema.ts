@@ -13,6 +13,7 @@ export const trashModules = [
   "chores",
   "recipes",
   "shopping",
+  "meals",
 ] as const;
 export type TrashModule = (typeof trashModules)[number];
 export const trashItemTypes = [
@@ -30,6 +31,7 @@ export const trashItemTypes = [
   "shopping_list",
   "shopping_item",
   "shopping_clear",
+  "meal_entry",
 ] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 

@@ -29,6 +29,7 @@ export function useWidgetLabels(): {
     "my-points": t("widgetMyPoints"),
     recipes: t("widgetRecipes"),
     shopping: t("widgetShopping"),
+    "meal-planner": t("widgetMealPlanner"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -46,11 +47,13 @@ export function useWidgetLabels(): {
     "my-points": t("widgetMyPointsDescription"),
     recipes: t("widgetRecipesDescription"),
     shopping: t("widgetShoppingDescription"),
+    "meal-planner": t("widgetMealPlannerDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),
     recipes: t("widgetPersonalRecipes"),
     shopping: t("widgetPersonalShopping"),
+    "meal-planner": t("widgetPersonalMealPlanner"),
   };
   return {
     name: (type) => names[type],

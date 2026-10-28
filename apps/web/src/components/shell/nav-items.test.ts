@@ -2,6 +2,7 @@ import {
   contextHref,
   homeIdFromPath,
   isActive,
+  isItemActive,
   isUnbuiltSection,
   primaryNav,
   secondaryNav,
@@ -35,12 +36,17 @@ describe("navigation items", () => {
     expect(unbuiltSections.has("settings")).toBe(false);
   });
 
-  it("opens recipes from Meals, in the open Home or the Personal space (S24)", () => {
+  it("opens the meal planner from Meals, in the open Home or the Personal space (S27)", () => {
     const meals = primaryNav.find((item) => item.id === "meals");
     if (!meals) throw new Error("Meals is missing");
-    expect(contextHref(meals, null)).toBe("/recipes");
-    expect(contextHref(meals, HOME)).toBe(`/homes/${HOME}/recipes`);
+    expect(contextHref(meals, null)).toBe("/meals");
+    expect(contextHref(meals, HOME)).toBe(`/homes/${HOME}/meals`);
     expect(isUnbuiltSection("meals")).toBe(false);
+    // Recipes belong to the Meals section.
+    expect(isItemActive(meals, null, "/recipes/abc")).toBe(true);
+    expect(isItemActive(meals, HOME, `/homes/${HOME}/recipes`)).toBe(true);
+    expect(isItemActive(meals, HOME, `/homes/${HOME}/meals/print`)).toBe(true);
+    expect(isItemActive(meals, null, "/shopping")).toBe(false);
   });
 
   it("keeps Trash out of the sidebar (spec: reached from settings)", () => {

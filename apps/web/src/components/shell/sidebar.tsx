@@ -14,7 +14,7 @@ import { NavLink } from "./nav-link";
 import {
   contextHref,
   homeIdFromPath,
-  isActive,
+  isItemActive,
   primaryNav,
   secondaryNav,
   type NavItem,
@@ -83,7 +83,7 @@ export function Sidebar({ initialState }: SidebarProps) {
             item={item}
             href={contextHref(item, homeId)}
             label={tNav(item.id)}
-            active={isActive(contextHref(item, homeId), pathname)}
+            active={isItemActive(item, homeId, pathname)}
             collapsed={collapsed}
             tooltipHidden={tooltipHidden}
             onPointerEnter={showTooltips}

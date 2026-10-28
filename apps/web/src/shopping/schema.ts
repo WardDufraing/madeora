@@ -116,7 +116,7 @@ export const updateCategorySchema = z.union([
 ]);
 
 /** One row of an add: its own client id, so a retry never adds it twice. */
-const addRowSchema = z
+export const addRowSchema = z
   .strictObject({
     id,
     name: itemNameSchema,

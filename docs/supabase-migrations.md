@@ -546,6 +546,28 @@ From here everyone has **Shopping lists**: several lists per Personal space or H
 
 2. In the app the sidebar's **Shopping** opens the lists, with **New list**. An Administrator's capabilities (Home members, Manage) include **Manage Home shopping lists**. On a dashboard, **Customize** offers **Shopping**.
 
+## Check S27 (`20261109090000_meal_planner.sql`)
+
+From here everyone has the **Meal planner**: meal slots per Personal space or Home, recipe and custom meals, repeating meals, copy week, a print view, a dashboard widget and adding a date range's ingredients to a shopping list. Nothing changes for existing data; shopping items gain an empty `meal_transfer_id` column. Apply it after the S26 file. No new background job and no new provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.meal_entries') as entries_table,
+     to_regclass('private.meal_recurrences') as recurrences_table,
+     has_table_privilege('authenticated', 'private.meal_entries', 'select')
+       as members_can_read_entries_table,
+     has_function_privilege('authenticated', 'public.get_meal_plan(uuid, date, date, date)', 'execute')
+       as members_can_read_plan,
+     has_function_privilege('anon', 'public.get_meal_plan(uuid, date, date, date)', 'execute')
+       as anonymous_can_read_plan;
+   ```
+
+   It must show both tables, **true** for `members_can_read_plan`, and **false** for `members_can_read_entries_table` and `anonymous_can_read_plan`.
+
+2. In the app the sidebar's **Meals** opens the planner with Breakfast, Lunch and Dinner, and a **Recipes** link. An Administrator's capabilities (Home members, Manage) include **Manage the Home meal planner**. On a dashboard, **Customize** offers **Meal planner**.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

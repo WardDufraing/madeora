@@ -205,6 +205,11 @@ function ImpactDetails({
           ? t("impactFavorites", { count: impact.favoriteCount })
           : t("impactNoFavorites")}
       </p>
+      {impact.plannedMeals > 0 || impact.repeatingMeals > 0 ? (
+        <p className="text-body text-fg" data-testid="recipe-impact-meals">
+          {t("impactMeals", { planned: impact.plannedMeals, repeating: impact.repeatingMeals })}
+        </p>
+      ) : null}
       {impact.beingEdited ? (
         <FormAlert tone="info" announce>
           {t("impactBeingEdited")}
