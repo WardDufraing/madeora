@@ -283,7 +283,24 @@ As a person or Home member, I want to plan meals in slots for each day, repeat t
 - The print view shows the week without navigation, with notes left out unless I include them; the Meal planner widget shows today, a chosen day or a compact week.
 - Meal managers can make a Home's planner view only for other members.
 
-## 9. Notifications
+## 9. Habits
+
+### US-028 — Build habits alone or together and keep streaks honest
+
+As a person or Home member, I want to track habits on a schedule, check in today or for a recently missed day, and see streaks and insights that stay correct after corrections, so I can build routines on my own or with my household.
+
+**Acceptance checks**
+
+- I can create a personal habit, and habit managers can create Home habits, with a daily, chosen-weekday or weekly-target schedule, a start date, an optional end date and a description; a personal habit keeps its own timezone and every habit shows its week start.
+- I can complete today or any of the last 7 days that was scheduled, tracked and not paused; a confirmation offers Undo for 10 seconds, and a Home habit's date is completed once, showing who did it.
+- Streaks count consecutive completed opportunities (or reached weeks for weekly habits), skip paused days and weeks, and recalculate after Undo, backdating and manager corrections; the longest streak and milestones at 7, 30 and 100 are kept, with an optional short celebration.
+- Habit managers change a schedule from a later date only, set or change an end date with a preview, pause and resume with an optional resume date, archive, delete to the trash, and reactivate an ended habit with a fresh streak and a reminder review.
+- Insights show the completion rate over 7, 30, 90 or 365 days, a month calendar with every state and a text list, and a 12-week trend with its values as text.
+- Reminders (up to three times on chosen days) are sent only when the day still needs a check-in; from the notification centre I can complete the habit or snooze it for 15, 30 or 60 minutes, never into my quiet hours.
+- During my accepted participation in a Home vacation I can pause chosen personal habits; a Home habit pauses on the vacation's confirmed Home-wide pause days.
+- The Habits and Habit insights widgets show today's habits with Complete and Undo, and one habit's last 30 days; Home members can be set to view only.
+
+## 10. Notifications
 
 ### US-015 — Review and configure notifications
 
@@ -295,7 +312,7 @@ As a person using Madeora, I want to review notifications and set my notificatio
 - I can manage supported notification preferences.
 - Notifications respect account and Home access boundaries.
 
-## 10. Files, trash, and recovery
+## 11. Files, trash, and recovery
 
 ### US-016 — Store and access private files
 
@@ -327,7 +344,7 @@ As a person responsible for a Home, I want a safeguarded ownership-recovery proc
 - The recovery record identifies the affected Home and status.
 - Applying a recovery does not silently change unrelated Home memberships or ownership.
 
-## 11. Cross-cutting expectations
+## 12. Cross-cutting expectations
 
 These checks apply to every story above:
 
@@ -338,9 +355,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points, rewards, recipe, shopping and meal workflows
+## Implementation evidence for chore, vacation, points, rewards, recipe, shopping, meal and habit workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 

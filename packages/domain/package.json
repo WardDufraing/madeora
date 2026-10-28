@@ -12,7 +12,8 @@
     "./points": "./src/points/index.ts",
     "./recipes": "./src/recipes/index.ts",
     "./shopping": "./src/shopping/index.ts",
-    "./meals": "./src/meals/index.ts"
+    "./meals": "./src/meals/index.ts",
+    "./habits": "./src/habits/index.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

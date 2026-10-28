@@ -13,6 +13,7 @@ import {
   WeeklyPointsWidget,
 } from "@/components/points/points-widgets";
 import { RecipesWidget } from "@/components/recipes/recipe-widget";
+import { HabitInsightsWidget, HabitsWidget } from "@/components/habits/habit-widgets";
 import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
@@ -771,6 +772,15 @@ function mealPlannerConfig(widget: DashboardWidget): WidgetConfigs["meal-planner
   return parsed.success ? parsed.data : config.parse({});
 }
 
+function habitWidgetConfig<T extends "habits" | "habit-insights">(
+  type: T,
+  widget: DashboardWidget,
+): WidgetConfigs[T] {
+  const { config } = widgetRegistry[type];
+  const parsed = config.safeParse(widget.config);
+  return (parsed.success ? parsed.data : config.parse({})) as WidgetConfigs[T];
+}
+
 function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals" | "chore-schedule">(
   type: T,
   widget: DashboardWidget,
@@ -799,6 +809,8 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     recipes: t("widgetRecipes"),
     shopping: t("widgetShopping"),
     "meal-planner": t("widgetMealPlanner"),
+    habits: t("widgetHabits"),
+    "habit-insights": t("widgetHabitInsights"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -986,6 +998,44 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: titles["meal-planner"], home: isolate(home.name) }),
         sourceName: home.name,
         body: <MealWidget home={home} config={mealPlannerConfig(widget)} />,
+        unavailable: false,
+      };
+    }
+    case "habits":
+    case "habit-insights": {
+      const type = widget.type;
+      const render = (home: { readonly id: string; readonly name: string } | null) =>
+        type === "habits" ? (
+          <HabitsWidget home={home} config={habitWidgetConfig("habits", widget)} />
+        ) : (
+          <HabitInsightsWidget home={home} config={habitWidgetConfig("habit-insights", widget)} />
+        );
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles[type],
+          sourceName: null,
+          body: render(scope.home),
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: type === "habits" ? t("widgetPersonalHabits") : t("widgetPersonalHabitInsights"),
+          sourceName: null,
+          body: render(null),
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles[type], home: isolate(home.name) }),
+        sourceName: home.name,
+        body: render(home),
         unavailable: false,
       };
     }

@@ -38,6 +38,15 @@ describe("notificationPath", () => {
     expect(notificationPath("task.reminder", null, { taskId: 7 })).toBe("/tasks");
   });
 
+  it("leads a habit notice to its habit, in its Home or the personal space", () => {
+    const habitId = "8e3c5fb7-0c6b-4a88-8d6b-5c9d4b3f5702";
+    for (const kind of ["habit.reminder", "habit.paused", "habit.resumed"]) {
+      expect(notificationPath(kind, "h1", { habitId })).toBe(`/homes/h1/habits/${habitId}`);
+    }
+    expect(notificationPath("habit.reminder", null, { habitId })).toBe(`/habits/${habitId}`);
+    expect(notificationPath("habit.paused", "h1", { habitId: 7 })).toBe("/homes/h1/habits");
+  });
+
   it("leads a claim or reassignment notice to its occurrence, or to the chores page", () => {
     const occurrenceId = "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
     for (const kind of [
@@ -123,7 +132,8 @@ describe("notificationKinds", () => {
           name.endsWith("_chore_proposals_volunteers.sql") ||
           name.endsWith("_chore_overview_reminders.sql") ||
           name.endsWith("_home_vacations.sql") ||
-          name.endsWith("_points_rewards.sql"),
+          name.endsWith("_points_rewards.sql") ||
+          name.endsWith("_habits.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -131,12 +141,14 @@ describe("notificationKinds", () => {
     // notification category count.
     const written = new Set([
       ...[...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((m) => m[1]),
-      ...[...sql.matchAll(/'reminders', '((?:task|chore)\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'reminders', '((?:task|chore|habit)\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'chores', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'(?:chores|reminders)', '(vacation\.[a-z_]+)'/g)].map((m) => m[1]),
       // S23 audit actions use other prefixes (rewards., point_entry.), so these are all notices.
       ...[...sql.matchAll(/'((?:points|reward)\.[a-z_]+)'/g)].map((m) => m[1]),
+      // S28 habit audit actions share the prefix; pause notices go through habit_notify_pause.
+      ...[...sql.matchAll(/habit_notify_pause\(v_habit, '(habit\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });

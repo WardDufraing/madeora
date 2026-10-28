@@ -42,6 +42,16 @@ const trashStatuses = ["trashed", "restored", "purged", "missing"] as const;
 const claimReleaseOutcomes = ["released", "stale", "missing"] as const;
 
 const reminderOutcomes = ["notified", "not_sent", "stale", "not_due"] as const;
+const habitReminderOutcomes = [
+  "notified",
+  "not_needed",
+  "late",
+  "inactive",
+  "stale",
+  "not_due",
+] as const;
+const habitSnoozeOutcomes = ["notified", "cancelled", "stale", "not_due"] as const;
+const habitPauseEndOutcomes = ["notified", "still_paused", "stale", "not_due"] as const;
 
 function fileStatus(operation: string, value: string | null): StoredFileStatus {
   const status = oneOf(fileStatuses, value);
@@ -222,6 +232,45 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       const { data, error } = await client.rpc("send_chore_summaries", { p_limit: limit });
       if (error) throw new JobStoreError("send_chore_summaries", error.code);
       return data;
+    },
+
+    async deliverHabitReminder(habitId, revision, at) {
+      const { data, error } = await client.rpc("deliver_habit_reminder", {
+        p_habit_id: habitId,
+        p_revision: revision,
+        p_at: at,
+      });
+      if (error) throw new JobStoreError("deliver_habit_reminder", error.code);
+      const outcome = oneOf(habitReminderOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_habit_reminder", "unexpected_result");
+      return outcome;
+    },
+
+    async advanceHabitReminders(limit) {
+      const { data, error } = await client.rpc("advance_habit_reminders", { p_limit: limit });
+      if (error) throw new JobStoreError("advance_habit_reminders", error.code);
+      return data;
+    },
+
+    async deliverHabitSnooze(notificationId) {
+      const { data, error } = await client.rpc("deliver_habit_snooze", {
+        p_notification_id: notificationId,
+      });
+      if (error) throw new JobStoreError("deliver_habit_snooze", error.code);
+      const outcome = oneOf(habitSnoozeOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_habit_snooze", "unexpected_result");
+      return outcome;
+    },
+
+    async deliverHabitPauseEnd(pauseId, resumesOn) {
+      const { data, error } = await client.rpc("deliver_habit_pause_end", {
+        p_pause_id: pauseId,
+        p_resumes_on: resumesOn,
+      });
+      if (error) throw new JobStoreError("deliver_habit_pause_end", error.code);
+      const outcome = oneOf(habitPauseEndOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_habit_pause_end", "unexpected_result");
+      return outcome;
     },
 
     async getStorageObjectDeletion(deletionId) {

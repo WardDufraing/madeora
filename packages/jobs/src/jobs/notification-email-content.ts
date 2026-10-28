@@ -44,6 +44,8 @@ const paramsSchema = z.object({
   occurrenceId: z.uuid().optional(),
   taskId: z.uuid().optional(),
   dueDate: z.iso.date().nullable().optional(),
+  resumesOn: z.iso.date().nullable().optional(),
+  automatic: z.boolean().nullable().optional(),
 });
 
 /** The template for a kind whose wording depends on a parameter (the decision, the reason). */
@@ -53,6 +55,9 @@ function emailKind(kind: string, inHome: boolean, params: z.infer<typeof paramsS
     return `${kind}.${inHome ? "home" : "personal"}${params.dueDate ? "_due" : ""}`;
   }
   if (kind === "chore.claim_released" && params.reason) return `${kind}.${params.reason}`;
+  if (kind === "habit.reminder") return `${kind}.${inHome ? "home" : "personal"}`;
+  if (kind === "habit.paused") return `${kind}.${params.resumesOn ? "dated" : "open"}`;
+  if (kind === "habit.resumed") return `${kind}.${params.automatic ? "ended" : "manual"}`;
   if (
     (kind === "chore.reassignment_answered" ||
       kind === "chore.reassignment_decided" ||
@@ -109,7 +114,7 @@ export async function buildNotificationEmail(
     homeName,
     url,
     date: endsAt,
-    day: params.data.dueDate ?? null,
+    day: params.data.dueDate ?? params.data.resumesOn ?? null,
     timeZone,
   });
 }

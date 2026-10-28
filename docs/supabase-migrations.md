@@ -568,6 +568,30 @@ From here everyone has the **Meal planner**: meal slots per Personal space or Ho
 
 2. In the app the sidebar's **Meals** opens the planner with Breakfast, Lunch and Dinner, and a **Recipes** link. An Administrator's capabilities (Home members, Manage) include **Manage the Home meal planner**. On a dashboard, **Customize** offers **Meal planner**.
 
+## Check S28 (`20261110090000_habits.sql`)
+
+From here everyone has **Habits**: personal and Home habits with daily, chosen-day or weekly schedules, check-ins up to 7 days back with Undo and notes, pauses, end dates and reactivation, streaks, milestones, insights, reminders with Snooze, two dashboard widgets and per-vacation pauses of personal habits. Nothing changes for existing data. Apply it after the S27 file. It adds three background jobs (`habit-reminder`, `habit-reminder-snooze`, `habit-pause-end`) to the existing Trigger.dev project and no new schedule or provider; the next worker deploy picks them up.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.habits') as habits_table,
+     to_regclass('private.habit_checkins') as checkins_table,
+     has_table_privilege('authenticated', 'private.habit_checkins', 'select')
+       as members_can_read_checkins_table,
+     has_function_privilege('authenticated', 'public.get_habits(uuid, text, text)', 'execute')
+       as members_can_list_habits,
+     has_function_privilege('anon', 'public.get_habits(uuid, text, text)', 'execute')
+       as anonymous_can_list_habits,
+     has_function_privilege('authenticated', 'public.deliver_habit_reminder(uuid, integer, timestamptz)', 'execute')
+       as members_can_deliver_reminders;
+   ```
+
+   It must show both tables, **true** for `members_can_list_habits`, and **false** for `members_can_read_checkins_table`, `anonymous_can_list_habits` and `members_can_deliver_reminders`.
+
+2. In the app the sidebar's **Habits** opens the habits with **New habit**. An Administrator's capabilities (Home members, Manage) include **Manage Home habits**. On a dashboard, **Customize** offers **Habits** and **Habit insights**. Settings, Notifications lists a **Habit pauses** category, off by default.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

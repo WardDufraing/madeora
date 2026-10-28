@@ -240,8 +240,8 @@ describe("quiet hours", () => {
     renderWithQuery(<NotificationSettings {...props({ quietHours: [quiet] })} />);
     const thuis = within(scope("Thuis"));
     expect(thuis.getByRole("checkbox", { name: "Use quiet hours" })).toBeChecked();
-    // Quiet hours and the six categories (points and rewards since S23).
-    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(7);
+    // Quiet hours and the seven categories (points and rewards since S23, habits since S28).
+    expect(thuis.getAllByText("Inherited from your defaults")).toHaveLength(8);
     expect(thuis.getByTestId("notification-preview")).toHaveTextContent(
       "Quiet hours: 22:00 to 07:00 (Europe/Brussels).",
     );

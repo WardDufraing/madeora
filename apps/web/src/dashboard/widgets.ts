@@ -237,6 +237,23 @@ const mealPlannerConfig = z
   })
   .refine((config) => config.mode !== "day" || config.date !== null);
 
+/** The Habits widget (S28): today's habits of its context, with Complete and Undo where allowed. */
+export const habitWidgetCounts = [5, 10, 15] as const;
+const habitsConfig = z.strictObject({
+  count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(10),
+});
+
+/** The Habit insights widget (S28): one chosen habit's last 30 days (null: not chosen yet). */
+const habitInsightsConfig = z.strictObject({
+  habitId: z.uuid().nullable().default(null),
+});
+
+const habitSizes = sizes(
+  { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
+  { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
+  { h: 5, minH: 3, maxH: 10 },
+);
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -364,6 +381,16 @@ export const widgetRegistry = {
     ),
     config: mealPlannerConfig,
   },
+  habits: {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: habitSizes,
+    config: habitsConfig,
+  },
+  "habit-insights": {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: habitSizes,
+    config: habitInsightsConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -388,6 +415,8 @@ export interface WidgetConfigs {
   readonly recipes: WidgetConfig<"recipes">;
   readonly shopping: WidgetConfig<"shopping">;
   readonly "meal-planner": WidgetConfig<"meal-planner">;
+  readonly habits: WidgetConfig<"habits">;
+  readonly "habit-insights": WidgetConfig<"habit-insights">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

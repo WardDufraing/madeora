@@ -2,6 +2,7 @@ import { notificationKinds } from "@madeora/domain/notifications";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { ToastProvider } from "@/components/ui/toast";
 import type { NotificationView } from "@/notifications/types";
 import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
@@ -45,6 +46,12 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     taskId: null,
     dueDate: null,
     taskTitle: null,
+    habitId: null,
+    habitName: null,
+    onDate: null,
+    weekly: false,
+    resumesOn: null,
+    automatic: false,
     duringQuietHours: false,
     createdAt: "2026-10-15T10:00:00Z",
     readAt: null,
@@ -55,6 +62,16 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
 async function show(items: readonly NotificationView[]) {
   const element = await NotificationList({ items, formats });
   return renderWithQuery(<>{element}</>);
+}
+
+/** Inside the app shell's toast region (S28: a habit reminder's Complete confirms with a toast). */
+async function showWithToasts(items: readonly NotificationView[]) {
+  const element = await NotificationList({ items, formats });
+  return renderWithQuery(
+    <ToastProvider regionLabel="Notifications" dismissLabel="Dismiss">
+      {element}
+    </ToastProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -163,6 +180,39 @@ describe("NotificationList", () => {
       "href",
       `/homes/${HOME_ID}/tasks/${taskId}`,
     );
+  });
+
+  it("names a habit reminder's day, offers Complete and Snooze, and links to the habit", async () => {
+    const habitId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00d1";
+    const { container } = await showWithToasts([
+      item({ kind: "habit.reminder", habitId, habitName: "Walk", onDate: "2026-11-10" }),
+      item({
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00a3",
+        kind: "habit.paused",
+        habitId,
+        habitName: "Walk",
+        resumesOn: "2026-11-20",
+      }),
+      item({
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00a4",
+        kind: "habit.resumed",
+        habitId,
+        automatic: true,
+      }),
+    ]);
+    const [reminder, paused, resumed] = screen.getAllByTestId("notification");
+    expect(reminder).toHaveTextContent("Reminder: \u2068Walk\u2069 for 10/11/2026.");
+    expect(
+      within(reminder as HTMLElement).getByRole("button", { name: "Complete Walk" }),
+    ).toBeInTheDocument();
+    expect(within(reminder as HTMLElement).getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      `/homes/${HOME_ID}/habits/${habitId}`,
+    );
+    expect(paused).toHaveTextContent("is paused and resumes on 20/11/2026.");
+    expect(resumed).toHaveTextContent("The pause of a habit in \u2068Thuis\u2069 has ended.");
+    expect(within(resumed as HTMLElement).queryByRole("button", { name: /Complete/ })).toBeNull();
+    expect(await axeViolations(container)).toEqual([]);
   });
 
   it("words a chore handover notice by its answer and links to the occurrence", async () => {

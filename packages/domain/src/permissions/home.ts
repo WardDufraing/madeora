@@ -39,6 +39,7 @@ export const delegableCapabilities = [
   "manageHomeRecipes",
   "manageHomeShopping",
   "manageHomeMeals",
+  "manageHomeHabits",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -82,6 +83,8 @@ export const homeActions = [
   "home.shopping.manage",
   "home.meals.view",
   "home.meals.manage",
+  "home.habits.view",
+  "home.habits.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -231,6 +234,12 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // private.meal_access.
   "home.meals.view": { roles: ["owner", "administrator", "member"] },
   "home.meals.manage": { roles: ["owner"], delegatedThrough: "manageHomeMeals" },
+  // Habits (S28; default picked in the S28 brief, the per-module matrix is open in the spec): every
+  // current member sees the Home's habits and checks them in unless a habit manager set them to view
+  // only (./habits.ts); habit managers (the Owner, Administrators granted manageHomeHabits) create,
+  // edit, pause, end and archive habits and set that member access. SQL: private.habit_access.
+  "home.habits.view": { roles: ["owner", "administrator", "member"] },
+  "home.habits.manage": { roles: ["owner"], delegatedThrough: "manageHomeHabits" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -304,6 +313,8 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.shopping.manage": can("home.shopping.manage"),
     "home.meals.view": can("home.meals.view"),
     "home.meals.manage": can("home.meals.manage"),
+    "home.habits.view": can("home.habits.view"),
+    "home.habits.manage": can("home.habits.manage"),
   };
 }
 

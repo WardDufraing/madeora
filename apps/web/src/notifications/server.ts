@@ -8,6 +8,7 @@ import { cache } from "react";
 
 import { getVerifiedIdentity } from "@/auth/identity";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
+import { habitNoticeNames } from "@/habits/data";
 
 import {
   notificationDecisions,
@@ -77,7 +78,18 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
     return { status: "unavailable" };
   }
   const items: NotificationView[] = [];
-  const titles = await reminderTitles(supabase, data);
+  const [titles, habitNames] = await Promise.all([
+    reminderTitles(supabase, data),
+    habitNoticeNames(
+      data.flatMap((row) =>
+        row.kind.startsWith("habit.") &&
+        isRecord(row.params) &&
+        typeof row.params.habitId === "string"
+          ? [row.params.habitId]
+          : [],
+      ),
+    ),
+  ]);
   for (const row of data) {
     const params = isRecord(row.params) ? row.params : {};
     const embedded: unknown = row.homes;
@@ -94,6 +106,13 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       taskId: typeof params.taskId === "string" ? params.taskId : null,
       dueDate: typeof params.dueDate === "string" ? params.dueDate : null,
       taskTitle: typeof params.taskId === "string" ? (titles.get(params.taskId) ?? null) : null,
+      habitId: typeof params.habitId === "string" ? params.habitId : null,
+      habitName:
+        typeof params.habitId === "string" ? (habitNames.get(params.habitId) ?? null) : null,
+      onDate: typeof params.onDate === "string" ? params.onDate : null,
+      weekly: params.weekly === true,
+      resumesOn: typeof params.resumesOn === "string" ? params.resumesOn : null,
+      automatic: params.automatic === true,
       duringQuietHours: row.during_quiet_hours,
       createdAt: row.created_at,
       readAt: row.read_at,
