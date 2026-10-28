@@ -632,6 +632,19 @@ export type Database = {
       };
       complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
+      copy_meal_week: {
+        Args: {
+          p_destination: string;
+          p_home_id?: string;
+          p_rows: Json;
+          p_source: string;
+          p_token: string;
+        };
+        Returns: {
+          outcome: string;
+          results: Json;
+        }[];
+      };
       correct_chore_completion: {
         Args: {
           p_completed_at?: string;
@@ -771,6 +784,54 @@ export type Database = {
         };
         Returns: {
           impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_meal_entry: {
+        Args: {
+          p_home_id?: string;
+          p_id: string;
+          p_notes?: string;
+          p_on: string;
+          p_recipe_id?: string;
+          p_replace?: string;
+          p_servings?: number;
+          p_slot_id: string;
+          p_title?: string;
+        };
+        Returns: {
+          occupied: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_meal_series: {
+        Args: {
+          p_cadence: string;
+          p_decisions?: Json;
+          p_end_on?: string;
+          p_home_id?: string;
+          p_id: string;
+          p_notes?: string;
+          p_recipe_id?: string;
+          p_servings?: number;
+          p_slot_id: string;
+          p_start_on: string;
+          p_title?: string;
+          p_today?: string;
+          p_token: string;
+          p_weekdays: number[];
+        };
+        Returns: {
+          collisions: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_meal_slot: {
+        Args: { p_home_id?: string; p_id: string; p_name: string };
+        Returns: {
           outcome: string;
           revision: number;
         }[];
@@ -999,6 +1060,13 @@ export type Database = {
         }[];
       };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
+      delete_meal_entry: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       delete_recipe: {
         Args: { p_impact_token?: string; p_recipe_id: string };
         Returns: {
@@ -1083,6 +1151,25 @@ export type Database = {
       deliver_vacation_reminder: {
         Args: { p_days: number; p_starts_on: string; p_vacation_id: string };
         Returns: string;
+      };
+      edit_meal_occurrence: {
+        Args: {
+          p_entry_id: string;
+          p_new_on: string;
+          p_notes?: string;
+          p_on: string;
+          p_recipe_id?: string;
+          p_recurrence_id: string;
+          p_replace?: string;
+          p_servings?: number;
+          p_slot_id: string;
+          p_title?: string;
+        };
+        Returns: {
+          occupied: Json;
+          outcome: string;
+          revision: number;
+        }[];
       };
       empty_trash: {
         Args: { p_deleted_before?: string; p_home_id?: string };
@@ -1176,6 +1263,10 @@ export type Database = {
           role: string;
           token: string;
         }[];
+      };
+      get_meal_plan: {
+        Args: { p_from?: string; p_home_id?: string; p_to?: string; p_today?: string };
+        Returns: Json;
       };
       get_my_upload: {
         Args: { p_file_id: string };
@@ -1661,6 +1752,14 @@ export type Database = {
         Returns: Json;
       };
       list_home_vacations: { Args: { p_home_id: string }; Returns: Json };
+      list_meal_recipes: {
+        Args: { p_home_id?: string; p_query?: string };
+        Returns: {
+          id: string;
+          name: string;
+          servings: number;
+        }[];
+      };
       list_my_join_requests: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1908,6 +2007,14 @@ export type Database = {
       };
       list_vacation_review: { Args: { p_vacation_id: string }; Returns: Json };
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
+      meal_slot_impact: {
+        Args: { p_slot_id: string; p_today?: string };
+        Returns: {
+          impact: Json;
+          outcome: string;
+        }[];
+      };
+      move_meal_slot: { Args: { p_direction: string; p_slot_id: string }; Returns: string };
       move_shopping_category: { Args: { p_direction: string; p_id: string }; Returns: string };
       move_shopping_item: { Args: { p_direction: string; p_item_id: string }; Returns: string };
       move_shopping_list: { Args: { p_direction: string; p_list_id: string }; Returns: string };
@@ -1967,6 +2074,36 @@ export type Database = {
           outcome: string;
           request_id: string;
           role: string;
+        }[];
+      };
+      preview_meal_copy: {
+        Args: { p_destination: string; p_home_id?: string; p_source: string };
+        Returns: {
+          outcome: string;
+          preview: Json;
+        }[];
+      };
+      preview_meal_ingredients: {
+        Args: { p_from: string; p_home_id?: string; p_to: string };
+        Returns: {
+          outcome: string;
+          preview: Json;
+        }[];
+      };
+      preview_meal_series: {
+        Args: {
+          p_cadence: string;
+          p_end_on?: string;
+          p_home_id?: string;
+          p_series_id?: string;
+          p_slot_id: string;
+          p_start_on: string;
+          p_today?: string;
+          p_weekdays: number[];
+        };
+        Returns: {
+          outcome: string;
+          preview: Json;
         }[];
       };
       propose_chore: {
@@ -2189,6 +2326,13 @@ export type Database = {
       respond_to_ownership_transfer: {
         Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
         Returns: string;
+      };
+      restore_meal_occurrence: {
+        Args: { p_on: string; p_recurrence_id: string };
+        Returns: {
+          occupied: Json;
+          outcome: string;
+        }[];
       };
       restore_trash_entries: {
         Args: { p_entry_ids: string[]; p_resolutions?: Json };
@@ -2534,6 +2678,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      skip_meal_occurrence: { Args: { p_on: string; p_recurrence_id: string }; Returns: string };
       staff_close_recovery_appeal: {
         Args: { p_appeal_id: string; p_notes: string };
         Returns: string;
@@ -2632,6 +2777,21 @@ export type Database = {
         Returns: {
           task_id: string;
           title: string;
+        }[];
+      };
+      transfer_meal_ingredients: {
+        Args: {
+          p_from: string;
+          p_home_id?: string;
+          p_id: string;
+          p_items: Json;
+          p_list_id: string;
+          p_to: string;
+          p_token: string;
+        };
+        Returns: {
+          outcome: string;
+          results: Json;
         }[];
       };
       transfer_shopping_item: {
@@ -2786,6 +2946,70 @@ export type Database = {
           p_name?: string;
           p_reminder_days?: number;
           p_vacation_id: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_meal_entry: {
+        Args: {
+          p_expected_revision: number;
+          p_id: string;
+          p_notes?: string;
+          p_on: string;
+          p_recipe_id?: string;
+          p_replace?: string;
+          p_servings?: number;
+          p_slot_id: string;
+          p_title?: string;
+        };
+        Returns: {
+          occupied: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_meal_series: {
+        Args: {
+          p_action: string;
+          p_cadence?: string;
+          p_decisions?: Json;
+          p_end_on?: string;
+          p_expected_revision: number;
+          p_from?: string;
+          p_id: string;
+          p_notes?: string;
+          p_recipe_id?: string;
+          p_servings?: number;
+          p_slot_id?: string;
+          p_title?: string;
+          p_today?: string;
+          p_token?: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          collisions: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_meal_settings: {
+        Args: { p_expected_revision: number; p_home_id: string; p_member_access: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_meal_slot: {
+        Args: {
+          p_enabled?: boolean;
+          p_expected_revision: number;
+          p_impact_token?: string;
+          p_name?: string;
+          p_slot_id: string;
+          p_today?: string;
         };
         Returns: {
           impact: Json;

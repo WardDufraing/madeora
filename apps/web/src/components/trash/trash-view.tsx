@@ -70,6 +70,7 @@ const itemTypeKey = {
   shopping_list: "itemTypeShoppingList",
   shopping_item: "itemTypeShoppingItem",
   shopping_clear: "itemTypeShoppingClear",
+  meal_entry: "itemTypeMealEntry",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -101,6 +102,8 @@ function conflictMessage(kind: string) {
       return "conflictShoppingListUnavailable";
     case "shopping_item_limit":
       return "conflictShoppingItemLimit";
+    case "meal_slot_occupied":
+      return "conflictMealSlotOccupied";
     default:
       return "conflictOther";
   }

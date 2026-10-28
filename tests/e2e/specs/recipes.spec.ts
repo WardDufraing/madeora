@@ -72,12 +72,14 @@ test("a draft stays private, publishing shares it, the lock, cooking mode and th
   addMember(homeId, bea.account.email, "member");
   const library = `/homes/${homeId}/recipes`;
 
-  // The sidebar's Meals opens the open Home's recipes.
+  // The sidebar's Meals opens the open Home's meal planner (S27), which links to its recipes.
   await page.goto(`/homes/${homeId}`);
   await page
     .getByRole("navigation", { name: /main/i })
     .getByRole("link", { name: "Meals" })
     .click();
+  await expect(page).toHaveURL(new RegExp(`/homes/${homeId}/meals$`));
+  await page.getByRole("link", { name: "Recipes", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${library}$`));
   await expect(page.getByText("No recipes yet")).toBeVisible();
 

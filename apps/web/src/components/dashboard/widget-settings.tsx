@@ -4,12 +4,14 @@ import { useTranslations } from "next-intl";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/ui/select-field";
+import { TextField } from "@/components/ui/text-field";
 import type { DashboardWidget } from "@/dashboard/layout";
 import {
   choreScheduleLayouts,
   choreScheduleLimits,
   leaderboardWidgetCounts,
   leaderboardWidgetPeriods,
+  mealWidgetModes,
   notificationCounts,
   recipeWidgetCounts,
   recipeWidgetModes,
@@ -219,6 +221,43 @@ export function WidgetSettings({
           homeId={contextHomeId}
           onChange={onChange}
         />
+      );
+    }
+    case "meal-planner": {
+      const mode = mealWidgetModes.find((value) => value === config.mode) ?? "today";
+      return (
+        <div className="flex flex-col gap-3">
+          <SelectField
+            label={t("settingMealMode")}
+            value={mode}
+            options={mealWidgetModes.map((value) => ({
+              value,
+              label: {
+                today: t("settingMealMode_today"),
+                day: t("settingMealMode_day"),
+                week: t("settingMealMode_week"),
+              }[value],
+            }))}
+            onChange={(event) => {
+              const next = event.currentTarget.value;
+              onChange({
+                mode: next,
+                date:
+                  next === "day" ? (typeof config.date === "string" ? config.date : null) : null,
+              });
+            }}
+          />
+          {mode === "day" ? (
+            <TextField
+              label={t("settingMealDate")}
+              type="date"
+              value={typeof config.date === "string" ? config.date : ""}
+              onChange={(event) => {
+                set("date", event.currentTarget.value === "" ? null : event.currentTarget.value);
+              }}
+            />
+          ) : null}
+        </div>
       );
     }
     case "chore-approvals": {

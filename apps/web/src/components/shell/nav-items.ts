@@ -44,8 +44,8 @@ export const primaryNav: readonly NavItem[] = [
   { id: "calendar", href: "/calendar", icon: CalendarIcon },
   { id: "tasks", href: "/tasks", icon: TasksIcon },
   { id: "chores", href: "/chores", icon: ChoresIcon },
-  // S24: Meals opens Recipes until the meal planner (S27) adds its own page to the section.
-  { id: "meals", href: "/recipes", icon: MealsIcon },
+  // S27: Meals opens the meal planner; Recipes (S24) belongs to the same section.
+  { id: "meals", href: "/meals", icon: MealsIcon },
   { id: "shopping", href: "/shopping", icon: ShoppingIcon },
   { id: "habits", href: "/habits", icon: HabitsIcon },
   { id: "pets", href: "/pets", icon: PetsIcon },
@@ -90,16 +90,29 @@ export function homeIdFromPath(pathname: string): string | null {
  * open (S09), the personal dashboard otherwise; Tasks opens the Home's tasks (S18), Chores the Home's
  * chores (S20). Other sections
  * are not Home-aware yet; each module's step decides when it adds its pages. Meals opens the
- * Home's recipes (S24), Shopping the Home's shopping lists (S26).
+ * Home's meal planner (S27), Shopping the Home's shopping lists (S26).
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
-  if (item.id === "tasks" || item.id === "chores" || item.id === "shopping") {
+  if (
+    item.id === "tasks" ||
+    item.id === "chores" ||
+    item.id === "shopping" ||
+    item.id === "meals"
+  ) {
     return homeId !== null ? `/homes/${homeId}/${item.id}` : item.href;
   }
-  if (item.id === "meals") return homeId !== null ? `/homes/${homeId}/recipes` : item.href;
   if (item.id !== "dashboard") return item.href;
   // In Personal, Dashboard says so, so a Home remembered from earlier cannot pull the person back.
   return homeId !== null ? `/homes/${homeId}` : "/?context=personal";
+}
+
+/** Whether a navigation item is current: its page, or a page of its section (Meals: also Recipes). */
+export function isItemActive(item: NavItem, homeId: string | null, pathname: string): boolean {
+  if (isActive(contextHref(item, homeId), pathname)) return true;
+  return (
+    item.id === "meals" &&
+    isActive(homeId !== null ? `/homes/${homeId}/recipes` : "/recipes", pathname)
+  );
 }
 
 /** Whether `href` is the current page or a page inside it. */

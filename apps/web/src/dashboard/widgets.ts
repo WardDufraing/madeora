@@ -223,6 +223,20 @@ const shoppingConfig = z
     (config) => config.quickAddListId === null || config.listIds.includes(config.quickAddListId),
   );
 
+/**
+ * The Meal planner widget (S27): today's meals, a chosen day's, or a compact week of its context
+ * (Personal space, the Home, or a source Home), with quick add, edit, move and remove where the
+ * viewer may edit the plan.
+ */
+export const mealWidgetModes = ["today", "day", "week"] as const;
+const mealPlannerConfig = z
+  .strictObject({
+    mode: z.enum(mealWidgetModes).default("today"),
+    /** The day "day" mode shows (YYYY-MM-DD); ignored otherwise. */
+    date: z.iso.date().nullable().default(null),
+  })
+  .refine((config) => config.mode !== "day" || config.date !== null);
+
 const choreSizes = sizes(
   { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 10 },
   { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -341,6 +355,15 @@ export const widgetRegistry = {
     ),
     config: shoppingConfig,
   },
+  "meal-planner": {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: sizes(
+      { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
+      { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
+      { h: 5, minH: 3, maxH: 10 },
+    ),
+    config: mealPlannerConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -364,6 +387,7 @@ export interface WidgetConfigs {
   readonly "my-points": WidgetConfig<"my-points">;
   readonly recipes: WidgetConfig<"recipes">;
   readonly shopping: WidgetConfig<"shopping">;
+  readonly "meal-planner": WidgetConfig<"meal-planner">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

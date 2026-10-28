@@ -273,6 +273,8 @@ const impactSchema = z.object({
   shares: z.array(z.object({ homeId: z.uuid(), homeName: z.string(), canEdit: z.boolean() })),
   favoriteCount: z.number().int(),
   beingEdited: z.boolean(),
+  plannedMeals: z.number().int(),
+  repeatingMeals: z.number().int(),
 });
 
 /** What deleting a recipe would affect (S25), for someone who may delete it. */

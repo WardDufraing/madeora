@@ -61,3 +61,17 @@ export {
   type ShoppingMemberAccess,
   type ShoppingPermissionProjection,
 } from "./shopping";
+export {
+  decideMealAction,
+  mealAccess,
+  mealAccessAllows,
+  mealAccessLevels,
+  mealActions,
+  mealMemberAccess,
+  mealPermissions,
+  type MealAccess,
+  type MealAction,
+  type MealContextFacts,
+  type MealMemberAccess,
+  type MealPermissionProjection,
+} from "./meals";
