@@ -124,6 +124,8 @@ In Vercel project `madeora` → **Settings → Environment Variables**, ensure v
 
 Do not set `EMAIL_FROM`, `RESEND_API_KEY`, Trigger.dev tokens, database passwords, Turnstile secret keys, or Google OAuth client secrets in Vercel. Do not expose the Supabase secret key using a `NEXT_PUBLIC_` name.
 
+Leave `NODE_USE_ENV_PROXY` unset. Recipe URL import validates and pins a public destination address itself; enabling Node's environment-proxy support could bypass that SSRF control.
+
 Check the environment scope for each Supabase variable: Preview values point to `madeora-preview`, while Production values point to `madeora-production`. Existing production variables take effect only in a new deployment.
 
 ## 10. Apply the database migrations
