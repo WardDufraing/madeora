@@ -124,11 +124,36 @@ This brief does not write them. The implementation step adds the next ADR after 
 ## Progress
 
 - [x] Brief
-- [ ] Domain and migration
-- [ ] Database tests
-- [ ] API and data layer
-- [ ] Interface
-- [ ] Playwright
-- [ ] Docs (ADR, development.md, supabase-migrations.md, production-migrations.md, user stories)
-- [ ] Full suite
-- [ ] Independent review
+- [x] Domain and migration
+- [x] Database tests
+- [x] API and data layer
+- [x] Interface
+- [x] Playwright
+- [x] Docs (ADR, development.md, supabase-migrations.md, production-migrations.md, user stories)
+- [x] Full suite
+- [x] Independent review (PASS, no BLOCKER/HIGH; `reviews/steps/S28b-review.md`)
+
+## Build notes (2026-10-28)
+
+Branch `feat/personal-points-rewards`; migration `20261111090000_personal_points_rewards.sql` (the name was free); ADR 0036. Choices made while building, all open to Ward's correction:
+
+1. **No notifications (deviates from default 6).** Every change on this ledger is made by its only reader, and the codebase never notifies the actor of their own change (S28: "Bob, who did it, is not told"). A notice would repeat the confirmation the owner just saw. Adding them later is a small change if Ward wants an account-level notice anyway.
+2. **No audit events.** Like personal habits, personal changes write no Home `audit_events`; the redemption events table keeps the fulfillment history the owner sees.
+3. **Replacement is a final note.** Resolving Unable to fulfill with a replacement stores a short note of what the owner chose instead and closes the redemption. No separate replacement status to fulfil again.
+4. **Reversal needs a reason** (3–300 characters), like a credit or correction.
+5. **No sidebar entry.** `/points` and `/rewards` link to each other and are reached from the personal dashboard widget; the Home side has no sidebar entry either.
+6. **Today and week start come from the app** (the account's effective timezone date and regional week start); the database accepts a date only within a day of UTC's.
+7. **Ids are scoped per account** (composite keys `(user_id, id)`), so another account reusing an id never collides and never learns it exists.
+
+### Test results (full run before review)
+
+- Prettier, ESLint (14 workspaces), typecheck (with placeholder public env; turbo does not pass env through), production build: pass.
+- Unit: all workspaces pass (web 2435/2435; one unrelated tasks recurrence test failed once under parallel load and passed on rerun).
+- Database (local PostgreSQL 16 fallback, all migrations and seed): 28 files, 133/133, including `personal-points-rewards.test.sql` and the 4 concurrency races.
+- Playwright (fallback stack): full suite 180/181; the one failure (`preferences.spec.ts`, display name saved) is unrelated and passed on rerun together with this step's spec (14/14).
+
+### Review follow-up
+
+- MEDIUM 1 fixed: entries and redemptions are now numbered per account under the account lock instead of a shared identity counter, so the page cursor shows nothing about other accounts. New SQL assertion; DB suite 133/133 again; Playwright spec rerun passes.
+- LOW fixed: ADR wording on the append-only trigger and on `canUsePersonalLedger`.
+- Left for Ward (not fixed): notifications dropped (default 6); self-posted credits as the only earning rule (default 1); whether a refund should free a reward's limit (today it does not, like the Home side); balance has no upper cap beyond the integer range; redemption history shows the latest 100.

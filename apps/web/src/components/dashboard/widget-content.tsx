@@ -12,6 +12,7 @@ import {
   MyPointsWidget,
   WeeklyPointsWidget,
 } from "@/components/points/points-widgets";
+import { PersonalPointsWidget } from "@/components/personal-points/personal-points-widget";
 import { RecipesWidget } from "@/components/recipes/recipe-widget";
 import { HabitInsightsWidget, HabitsWidget } from "@/components/habits/habit-widgets";
 import { MealWidget } from "@/components/meals/meal-widget";
@@ -806,6 +807,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "weekly-points": t("widgetWeeklyPoints"),
     "points-leaderboard": t("widgetPointsLeaderboard"),
     "my-points": t("widgetMyPoints"),
+    "personal-points": t("widgetPersonalPoints"),
     recipes: t("widgetRecipes"),
     shopping: t("widgetShopping"),
     "meal-planner": t("widgetMealPlanner"),
@@ -1097,6 +1099,16 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         unavailable: false,
       };
     }
+    case "personal-points":
+      // S28b: the viewer's own personal ledger, on their personal dashboard only.
+      if (scope.kind !== "personal" || widget.source) return unavailable;
+      return {
+        id: widget.id,
+        title: titles["personal-points"],
+        sourceName: null,
+        body: <PersonalPointsWidget />,
+        unavailable: false,
+      };
     case "my-chores":
     case "home-chores":
     case "chore-approvals":

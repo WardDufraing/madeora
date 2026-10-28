@@ -592,6 +592,31 @@ From here everyone has **Habits**: personal and Home habits with daily, chosen-d
 
 2. In the app the sidebar's **Habits** opens the habits with **New habit**. An Administrator's capabilities (Home members, Manage) include **Manage Home habits**. On a dashboard, **Customize** offers **Habits** and **Habit insights**. Settings, Notifications lists a **Habit pauses** category, off by default.
 
+## Check S28b (`20261111090000_personal_points_rewards.sql`)
+
+From here everyone has **personal points and rewards** in the Personal context, with or without Homes: a personal balance and ledger, self-defined rewards, immediate redemption with fulfillment and a one-time refund or replacement, and a **Personal points** widget on the personal dashboard. Nothing changes for existing data or for Home points. Apply it after the S28 file. It adds no background job, schedule, notification category or provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.personal_point_accounts') as accounts_table,
+     to_regclass('private.personal_point_entries') as entries_table,
+     has_table_privilege('authenticated', 'private.personal_point_entries', 'select')
+       as members_can_read_entries_table,
+     has_function_privilege('authenticated', 'public.get_personal_points(bigint, integer)', 'execute')
+       as members_can_read_own_points,
+     has_function_privilege('anon', 'public.get_personal_points(bigint, integer)', 'execute')
+       as anonymous_can_read_points,
+     (select count(*) from information_schema.columns
+       where table_schema = 'private' and table_name like 'personal_%' and column_name = 'home_id')
+       as personal_home_columns;
+   ```
+
+   It must show both tables, **true** for `members_can_read_own_points`, **false** for `members_can_read_entries_table` and `anonymous_can_read_points`, and **0** for `personal_home_columns`.
+
+2. In the app, open `/points` in the Personal context: it shows **My personal points** with **Add points or correct**, and links to **My personal rewards**. On the personal dashboard, **Customize** offers **Personal points**; a Home dashboard does not.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

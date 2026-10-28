@@ -185,6 +185,12 @@ describe("message dictionaries", () => {
           ["For", "Title", "Body", "dAnnounce"].map((part) => action + part),
         ),
       ],
+      // Personal points and rewards (S28b): entry kinds and limit periods, by the database's value.
+      PersonalPoints: [
+        ...withPrefix("kind_", ["credit", "correction", "manual_reversal", "redemption", "refund"]),
+        ...withPrefix("period_", ["week", "month", "year", "ever"]),
+        ...withPrefix("periodLimitLine_", ["week", "month", "year", "ever"]),
+      ],
       // Vacation states, changes, reasons, decisions, events and participant actions, looked up
       // by the value the database answers (S22).
       // The shopping repeat frequencies and list access modes (S26).

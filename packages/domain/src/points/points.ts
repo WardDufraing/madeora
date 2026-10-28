@@ -130,3 +130,45 @@ export function canOnRedemption(
   if (action === "cancel") return redemption.own || viewer.manageRewards;
   return viewer.approveRewards && !redemption.own;
 }
+
+/**
+ * Personal points and rewards (S28b; ADR 0036): one ledger per account, independent of every Home.
+ * The database decides every right again (`supabase/migrations/*_personal_points_rewards.sql`); these
+ * names and rules only guide forms, labels and the permission matrix.
+ */
+export const personalEntryKinds = [
+  "credit",
+  "correction",
+  "manual_reversal",
+  "redemption",
+  "refund",
+] as const;
+export type PersonalEntryKind = (typeof personalEntryKinds)[number];
+
+/** Why a personal reward cannot be redeemed now, as `private.personal_reward_block` reports it. */
+export const personalRewardBlocks = [
+  "archived",
+  "disabled",
+  "not_started",
+  "ended",
+  "sold_out",
+  "period_limit",
+] as const;
+export type PersonalRewardBlock = (typeof personalRewardBlocks)[number];
+
+/** Who asks for a personal ledger. Home roles, capabilities and staff status are deliberately absent. */
+export interface PersonalLedgerViewer {
+  /** The verified session's account, or null when signed out. */
+  readonly userId: string | null;
+  /** A person's own session, or a Household Display session (post-S43). */
+  readonly session: "account" | "household-display";
+}
+
+/**
+ * Whether the viewer may read or change the personal ledger of `ownerId`: only the owner, in their
+ * own account session (Ward, 2026-10-28). No Home role or capability, no staff function, no
+ * guardian and no Household Display reaches it, so none of those is even an input here.
+ */
+export function canUsePersonalLedger(viewer: PersonalLedgerViewer, ownerId: string): boolean {
+  return viewer.session === "account" && viewer.userId !== null && viewer.userId === ownerId;
+}

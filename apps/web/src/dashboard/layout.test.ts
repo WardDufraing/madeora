@@ -68,6 +68,7 @@ describe("widget registry", () => {
       { type: "weekly-points", needsSource: true },
       { type: "points-leaderboard", needsSource: true },
       { type: "my-points", needsSource: true },
+      { type: "personal-points", needsSource: false },
       { type: "recipes", needsSource: false },
       { type: "recipes", needsSource: true },
       { type: "shopping", needsSource: false },

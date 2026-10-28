@@ -406,6 +406,20 @@ export type Database = {
           revision: number;
         }[];
       };
+      adjust_personal_points: {
+        Args: {
+          p_amount: number;
+          p_dry_run?: boolean;
+          p_id: string;
+          p_kind: string;
+          p_reason: string;
+        };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+          preview: Json;
+        }[];
+      };
       adjust_points: {
         Args: {
           p_amount: number;
@@ -455,6 +469,13 @@ export type Database = {
       };
       archive_habit: {
         Args: { p_archived: boolean; p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      archive_personal_reward: {
+        Args: { p_archived: boolean; p_expected_revision: number; p_reward_id: string };
         Returns: {
           outcome: string;
           revision: number;
@@ -884,6 +905,24 @@ export type Database = {
       };
       create_meal_slot: {
         Args: { p_home_id?: string; p_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_personal_reward: {
+        Args: {
+          p_available_from?: string;
+          p_available_until?: string;
+          p_cost: number;
+          p_description?: string;
+          p_enabled?: boolean;
+          p_id: string;
+          p_limit_period?: string;
+          p_name: string;
+          p_period_limit?: number;
+          p_total_limit?: number;
+        };
         Returns: {
           outcome: string;
           revision: number;
@@ -1382,6 +1421,7 @@ export type Database = {
           overridden: boolean;
         }[];
       };
+      get_personal_points: { Args: { p_before?: number; p_limit?: number }; Returns: Json };
       get_point_leaderboard: { Args: { p_home_id: string; p_period?: string }; Returns: Json };
       get_point_summary: { Args: { p_home_id: string }; Returns: Json };
       get_recipe: { Args: { p_home_id?: string; p_recipe_id: string }; Returns: Json };
@@ -1872,6 +1912,11 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_personal_reward_redemptions: { Args: { p_view?: string }; Returns: Json };
+      list_personal_rewards: {
+        Args: { p_include_archived?: boolean; p_today?: string; p_week_start?: string };
+        Returns: Json;
+      };
       list_point_accounts: {
         Args: { p_home_id: string };
         Returns: {
@@ -2288,6 +2333,20 @@ export type Database = {
         Args: { p_error_code?: string; p_notification_id: string; p_status: string };
         Returns: boolean;
       };
+      redeem_personal_reward: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_cost: number;
+          p_id: string;
+          p_reward_id: string;
+          p_today?: string;
+          p_week_start?: string;
+        };
+        Returns: {
+          detail: Json;
+          outcome: string;
+        }[];
+      };
       redeem_reward: {
         Args: { p_dry_run?: boolean; p_expected_cost: number; p_id: string; p_reward_id: string };
         Returns: {
@@ -2426,6 +2485,21 @@ export type Database = {
         Returns: boolean;
       };
       reset_notification_quiet_hours: { Args: { p_home_id?: string }; Returns: boolean };
+      resolve_personal_reward_redemption: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_note?: string;
+          p_redemption_id: string;
+          p_replacement?: string;
+          p_resolution: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       resolve_reward_redemption: {
         Args: {
           p_dry_run?: boolean;
@@ -2461,6 +2535,14 @@ export type Database = {
           entry_id: string;
           options: string[];
           outcome: string;
+        }[];
+      };
+      reverse_personal_point_entry: {
+        Args: { p_dry_run?: boolean; p_entry_id: string; p_reason: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+          preview: Json;
         }[];
       };
       reverse_point_entry: {
@@ -2698,6 +2780,18 @@ export type Database = {
           p_time_zone: string;
         };
         Returns: string;
+      };
+      set_personal_reward_fulfillment: {
+        Args: {
+          p_expected_revision: number;
+          p_note?: string;
+          p_redemption_id: string;
+          p_state: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       set_recipe_favorite: {
         Args: { p_favorite: boolean; p_home_id?: string; p_recipe_id: string };
@@ -3207,6 +3301,27 @@ export type Database = {
           p_name?: string;
           p_slot_id: string;
           p_today?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_personal_reward: {
+        Args: {
+          p_available_from?: string;
+          p_available_until?: string;
+          p_cost: number;
+          p_description?: string;
+          p_dry_run?: boolean;
+          p_enabled?: boolean;
+          p_expected_revision: number;
+          p_limit_period?: string;
+          p_name: string;
+          p_period_limit?: number;
+          p_reward_id: string;
+          p_total_limit?: number;
         };
         Returns: {
           impact: Json;
