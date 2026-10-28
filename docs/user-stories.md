@@ -212,6 +212,19 @@ As a Home member, I want completed chores to earn points that I can spend on the
 - Limits, the availability window and an archived or disabled reward are enforced by the server; my points stay with my membership in that Home only and never expire.
 - The leaderboard is optional for the Home and for each member; the weekly points and leaderboard widgets show only what I may see.
 
+### US-029 — Keep my own points and rewards without any Home
+
+As a person, with or without Homes, I want a personal points balance and rewards I define myself, so I can reward my own progress where no Home and nobody else can see or change it.
+
+**Acceptance checks**
+
+- With zero Homes I can open my personal points and rewards; I see my available, earned and spent points and my ledger.
+- I can add points or correct my balance with a reason after a preview, and reverse one of those entries once; a correction never takes my balance below zero.
+- I define my own rewards with a cost and an optional window, total limit and limit per week, month, year or in total; editing shows how often it was redeemed and never changes past redemptions; archiving keeps the history.
+- Redeeming shows the cost and my balance after and takes the points at once; I mark it fulfilled or unable to fulfill, and resolve Unable once with a refund or a note of what I chose instead.
+- No other account, no role in any Home and no Madeora staff account can see or change my personal points or rewards; leaving or deleting a Home changes nothing in them, and my Home points never mix with them.
+- The Personal points widget is offered on my personal dashboard only.
+
 ### US-023 — Plan chores around vacations and temporary absences
 
 As a Home member, I want vacations and temporary absences reflected in chore planning so work remains fair while people are away.
@@ -355,9 +368,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points, rewards, recipe, shopping, meal and habit workflows
+## Implementation evidence for chore, vacation, points, rewards, recipe, shopping, meal, habit and personal points workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 

@@ -86,6 +86,7 @@ export function WidgetSettings({
     case "quick-actions":
     case "home-vacation":
     case "my-points":
+    case "personal-points":
       return <p className="text-helper text-fg-muted">{t("settingsNone")}</p>;
     case "weekly-points":
       return (

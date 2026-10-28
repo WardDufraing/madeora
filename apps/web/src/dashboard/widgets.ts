@@ -180,6 +180,12 @@ const pointsLeaderboardConfig = z.strictObject({
   count: z.union([z.literal(5), z.literal(10)]).default(5),
 });
 const myPointsConfig = z.strictObject({});
+/**
+ * The Personal points widget (S28b): the viewer's own personal balance and the cheapest of their own
+ * rewards they can redeem. Personal dashboard only: never a Home dashboard, never a Home source, so
+ * a Household Display never shows it (PS L100). No settings.
+ */
+const personalPointsConfig = z.strictObject({});
 const pointsSizes = sizes(
   { w: 4, h: 3, minW: 3, maxW: 12, minH: 2, maxH: 8 },
   { w: 3, h: 3, minW: 3, maxW: 6, minH: 2, maxH: 8 },
@@ -354,6 +360,11 @@ export const widgetRegistry = {
     sizes: pointsSizes,
     config: myPointsConfig,
   },
+  "personal-points": {
+    surfaces: ["personal"],
+    sizes: pointsSizes,
+    config: personalPointsConfig,
+  },
   recipes: {
     surfaces: ["personal", "home", "home-source"],
     sizes: sizes(
@@ -412,6 +423,7 @@ export interface WidgetConfigs {
   readonly "weekly-points": WidgetConfig<"weekly-points">;
   readonly "points-leaderboard": WidgetConfig<"points-leaderboard">;
   readonly "my-points": WidgetConfig<"my-points">;
+  readonly "personal-points": WidgetConfig<"personal-points">;
   readonly recipes: WidgetConfig<"recipes">;
   readonly shopping: WidgetConfig<"shopping">;
   readonly "meal-planner": WidgetConfig<"meal-planner">;

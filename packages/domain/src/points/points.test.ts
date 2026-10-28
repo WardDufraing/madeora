@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canOnRedemption,
+  canUsePersonalLedger,
   choreAward,
   competitionRanks,
   isLateCompletion,
@@ -113,6 +114,35 @@ describe("canOnRedemption", () => {
       for (const action of ["approve", "reject", "cancel"] as const) {
         expect(canOnRedemption(owner, { status, own: false }, action)).toBe(false);
       }
+    }
+  });
+});
+
+describe("canUsePersonalLedger (S28b)", () => {
+  const owner = "11111111-1111-4111-8111-111111111111";
+  const someoneElse = "22222222-2222-4222-8222-222222222222";
+
+  it("lets the owner, in their own session, and nobody else use the ledger", () => {
+    const matrix = [
+      { who: "the owner", viewer: { userId: owner, session: "account" }, allowed: true },
+      {
+        who: "another account",
+        viewer: { userId: someoneElse, session: "account" },
+        allowed: false,
+      },
+      // A Home Owner, an Administrator with every points capability, a member and a Madeora staff
+      // account are all just "another account" here: no role or capability is an input.
+      { who: "a Home Owner", viewer: { userId: someoneElse, session: "account" }, allowed: false },
+      { who: "staff", viewer: { userId: someoneElse, session: "account" }, allowed: false },
+      { who: "signed out", viewer: { userId: null, session: "account" }, allowed: false },
+      {
+        who: "a Household Display, even on the owner's account",
+        viewer: { userId: owner, session: "household-display" },
+        allowed: false,
+      },
+    ] as const;
+    for (const row of matrix) {
+      expect(canUsePersonalLedger(row.viewer, owner), row.who).toBe(row.allowed);
     }
   });
 });
