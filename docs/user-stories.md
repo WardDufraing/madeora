@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 23 October 2026
+**Last reviewed:** 28 October 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
