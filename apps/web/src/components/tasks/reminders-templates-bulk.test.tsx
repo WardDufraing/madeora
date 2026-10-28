@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 
 import type { DateTimeFormats } from "@/invitations/format";
 import type { BulkResponse, TaskReminderView, TaskRow, TaskTemplate } from "@/tasks/api";
@@ -664,6 +665,89 @@ describe("bulk actions", () => {
       expectedRevisions: { [TASK]: 2, [TASK_B]: 5 },
       dryRun: false,
     });
+  });
+
+  it("does not preview again after a refresh removes the completed tasks from the open list", async () => {
+    const user = userEvent.setup();
+    routes.set("POST /api/v1/tasks/bulk", (init) => {
+      const body = bodyOf(init) as { dryRun: boolean; taskIds: readonly string[]; action: string };
+      if (body.taskIds.length === 0) {
+        return { status: 400, body: { error: "invalid", fields: ["taskIds"] } };
+      }
+      return {
+        status: 200,
+        body: {
+          action: body.action,
+          dryRun: body.dryRun,
+          results: body.taskIds.map((taskId) => ({
+            taskId,
+            outcome: body.dryRun ? "will_change" : "changed",
+            revision: 2,
+            openSubtasks: 0,
+            recurring: false,
+            shared: false,
+          })),
+        },
+      };
+    });
+
+    function ListAfterRefresh() {
+      const [refreshed, setRefreshed] = useState(false);
+      const tasks = refreshed
+        ? []
+        : [row(), row({ id: TASK_B, title: "Paint the door", revision: 5 })];
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setRefreshed(true);
+            }}
+          >
+            Server refreshed the list
+          </button>
+          <TaskList
+            userId="user-a"
+            homeId={HOME}
+            initial={{ tasks, total: tasks.length }}
+            query="status=open"
+            loadedAt={refreshed ? "2026-10-16T10:00:01.000Z" : "2026-10-16T10:00:00.000Z"}
+            labels={labels}
+            members={members}
+            dateFormat="dmy-slash"
+            showListName
+            filtered={false}
+            pageSize={50}
+            moveLists={[
+              { id: LIST, name: "Chores" },
+              { id: LIST_B, name: "Garden" },
+            ]}
+          />
+        </>
+      );
+    }
+
+    renderWithQuery(<ListAfterRefresh />);
+    await user.click(screen.getByRole("button", { name: "Select tasks" }));
+    await user.click(screen.getByRole("button", { name: "Select all shown (2)" }));
+    await user.click(screen.getByRole("button", { name: "Review 2 tasks" }));
+    const dialog = await screen.findByRole("dialog", { name: "Complete: what would happen" });
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("bulk-outcome")).toHaveTextContent("2 tasks will change.");
+    });
+    await user.click(within(dialog).getByTestId("bulk-apply"));
+    const result = await screen.findByRole("dialog", { name: "Result" });
+    expect(within(result).getByTestId("bulk-outcome")).toHaveTextContent("Done: 2 tasks changed.");
+
+    await user.click(screen.getByRole("button", { name: "Server refreshed the list" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "No tasks" })).toBeVisible();
+    });
+    expect(within(result).getByTestId("bulk-outcome")).toHaveTextContent("Done: 2 tasks changed.");
+    const bodies = callsTo("POST", "/api/v1/tasks/bulk").map(
+      ([, init]) => bodyOf(init) as { taskIds: readonly string[] },
+    );
+    expect(bodies.some((body) => body.taskIds.length === 0)).toBe(false);
   });
 
   it("keeps add, remove and replace of labels apart", async () => {

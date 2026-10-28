@@ -273,23 +273,34 @@ interface BulkDialogProps {
  * Previews a bulk action from the server's dry run (what changes, what is already so, what is left
  * out and why, with the warnings), applies it with each task's previewed revision, then shows each
  * task's result. A partial result is never called complete.
+ *
+ * The tasks are the ones selected when Review was opened. The open list drops rows that just
+ * completed, and the selection follows the rows still shown, so it can become empty while this
+ * dialog is open. Starting the preview again from that empty selection is not a preview: the
+ * server rejects it, and the browser reports the rejection as a console error.
  */
 function BulkDialog({ homeId, taskIds, titles, choice, onClose }: BulkDialogProps) {
   const t = useTranslations("TaskBulk");
   const tTasks = useTranslations("Tasks");
   const texts = useTaskTexts(noMembers);
+  const [reviewed] = useState(() => ({
+    taskIds: [...taskIds],
+    titles: new Map(titles),
+    choice,
+  }));
+  const [result, setResult] = useState<BulkResponse | null>(null);
   const preview = useQuery<BulkResponse, TaskRequestError>({
-    queryKey: ["task-bulk-preview", homeId, taskIds, choice],
-    queryFn: () => sendBulk(homeId, taskIds, choice, null, true),
+    queryKey: ["task-bulk-preview", homeId, reviewed.taskIds, reviewed.choice],
+    queryFn: () => sendBulk(homeId, reviewed.taskIds, reviewed.choice, null, true),
+    enabled: reviewed.taskIds.length > 0 && result === null,
     gcTime: 0,
     staleTime: 0,
     retry: false,
   });
-  const [result, setResult] = useState<BulkResponse | null>(null);
   const apply = useTaskMutation(
     `task-bulk:${homeId ?? "personal"}`,
     (revisions: Readonly<Record<string, number>>) =>
-      sendBulk(homeId, taskIds, choice, revisions, false),
+      sendBulk(homeId, reviewed.taskIds, reviewed.choice, revisions, false),
     (response) => {
       setResult(response);
     },
@@ -312,7 +323,11 @@ function BulkDialog({ homeId, taskIds, titles, choice, onClose }: BulkDialogProp
       onClose={() => {
         onClose(result !== null);
       }}
-      title={result ? t("resultTitle") : t("previewTitle", { action: t(actionKey[choice.action]) })}
+      title={
+        result
+          ? t("resultTitle")
+          : t("previewTitle", { action: t(actionKey[reviewed.choice.action]) })
+      }
       closeLabel={tTasks("close")}
       footer={
         result ? (
@@ -347,17 +362,21 @@ function BulkDialog({ homeId, taskIds, titles, choice, onClose }: BulkDialogProp
         )
       }
     >
-      <div aria-live="polite" aria-busy={preview.isPending} className="flex flex-col gap-3">
-        {preview.isPending ? (
+      <div
+        aria-live="polite"
+        aria-busy={!result && preview.isPending}
+        className="flex flex-col gap-3"
+      >
+        {result ? (
+          <Outcome rows={result.results} titles={reviewed.titles} applied />
+        ) : preview.isPending ? (
           <p className="text-body text-fg-muted">{tTasks("impactLoading")}</p>
         ) : preview.isError ? (
           <p className="text-body text-danger">{texts.failure(preview.error.failure)}</p>
-        ) : result ? (
-          <Outcome rows={result.results} titles={titles} applied />
         ) : (
-          <Outcome rows={preview.data.results} titles={titles} applied={false} />
+          <Outcome rows={preview.data.results} titles={reviewed.titles} applied={false} />
         )}
-        {!result && preview.data ? <Warnings rows={willChange} choice={choice} /> : null}
+        {!result && preview.data ? <Warnings rows={willChange} choice={reviewed.choice} /> : null}
         {apply.error ? (
           <FormAlert tone="error" announce>
             <p>{texts.failure(apply.error.failure)}</p>
