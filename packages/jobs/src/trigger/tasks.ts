@@ -12,6 +12,7 @@ import { parseStorageEnv } from "@madeora/storage";
 import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
 import { choreClaimRelease, choreReminder, vacationReminder } from "../jobs/chores.ts";
+import { habitPauseEnd, habitReminder, habitReminderSnooze } from "../jobs/habits.ts";
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
@@ -78,12 +79,16 @@ export const taskReminderTask = jobTask(taskReminder);
 export const choreClaimReleaseTask = jobTask(choreClaimRelease);
 export const choreReminderTask = jobTask(choreReminder);
 export const vacationReminderTask = jobTask(vacationReminder);
+export const habitReminderTask = jobTask(habitReminder);
+export const habitReminderSnoozeTask = jobTask(habitReminderSnooze);
+export const habitPauseEndTask = jobTask(habitPauseEnd);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
 
 // Recurring occurrences are created lazily, so a reminder days before a due date needs its
-// occurrence to exist in time. Hourly: ~720 runs a month, well inside the free tier.
+// occurrence to exist in time; the same run tops up habit reminder chains whose next moment is
+// missing (S28). Hourly: ~720 runs a month, well inside the free tier.
 export const taskReminderAdvance = schedules.task({
   id: "task-reminder-advance",
   cron: "0 * * * *",
@@ -93,8 +98,9 @@ export const taskReminderAdvance = schedules.task({
   run: async () => {
     const { services, logger } = getServices();
     const created = await services.data.advanceReminderSeries(REMINDER_ADVANCE_BATCH);
-    logger.info("jobs.task_reminder_advance.done", { created });
-    return { created };
+    const habits = await services.data.advanceHabitReminders(REMINDER_ADVANCE_BATCH);
+    logger.info("jobs.task_reminder_advance.done", { created, habits });
+    return { created, habits };
   },
 });
 

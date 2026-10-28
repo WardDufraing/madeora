@@ -75,3 +75,17 @@ export {
   type MealMemberAccess,
   type MealPermissionProjection,
 } from "./meals";
+export {
+  decideHabitAction,
+  habitAccess,
+  habitAccessAllows,
+  habitAccessLevels,
+  habitActions,
+  habitMemberAccess,
+  habitPermissions,
+  type HabitAccess,
+  type HabitAction,
+  type HabitContextFacts,
+  type HabitMemberAccess,
+  type HabitPermissionProjection,
+} from "./habits";

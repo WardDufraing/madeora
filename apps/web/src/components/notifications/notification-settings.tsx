@@ -97,6 +97,14 @@ const categoryText = {
     email: "previewRewardsEmail",
     none: "previewRewardsNone",
   },
+  habits: {
+    title: "categoryHabits",
+    hint: "categoryHabitsHint",
+    both: "previewHabitsBoth",
+    inApp: "previewHabitsInApp",
+    email: "previewHabitsEmail",
+    none: "previewHabitsNone",
+  },
 } as const satisfies Record<OptionalNotificationCategory, Record<string, string>>;
 
 /** Runs one change, then refreshes the page so every status and preview follows. */

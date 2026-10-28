@@ -58,6 +58,12 @@ export const notificationKinds = [
   "reward.unable",
   "reward.refunded",
   "reward.replacement",
+  "habit.reminder.home",
+  "habit.reminder.personal",
+  "habit.paused.dated",
+  "habit.paused.open",
+  "habit.resumed.manual",
+  "habit.resumed.ended",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -437,6 +443,48 @@ const en: Catalogue = {
     body: "A reward you redeemed in {home} could not be given, so a replacement was arranged at no extra cost. Open Madeora to see it.",
     button: "Open my rewards",
   },
+  "habit.reminder.home": {
+    subject: "Reminder: a habit in {home}",
+    preview: "Open Madeora to check in.",
+    heading: "A reminder about a habit in {home}",
+    body: "A habit in {home} is still open for today. Open Madeora to see which habit it is and to check in.",
+    button: "Open the habit",
+  },
+  "habit.reminder.personal": {
+    subject: "Reminder: one of your habits",
+    preview: "Open Madeora to check in.",
+    heading: "A reminder about one of your habits",
+    body: "One of your habits is still open for today. Open Madeora to see which habit it is and to check in.",
+    button: "Open the habit",
+  },
+  "habit.paused.dated": {
+    subject: "A habit in {home} is paused until it resumes on {date}",
+    preview: "Open Madeora to see which habit.",
+    heading: "A habit in {home} is paused",
+    body: "A habit manager in {home} paused a habit; it resumes on {date}. Paused days do not count against its streak. Open Madeora to see which habit it is.",
+    button: "Open the habit",
+  },
+  "habit.paused.open": {
+    subject: "A habit in {home} is paused",
+    preview: "Open Madeora to see which habit.",
+    heading: "A habit in {home} is paused",
+    body: "A habit manager in {home} paused a habit until further notice. Paused days do not count against its streak. Open Madeora to see which habit it is.",
+    button: "Open the habit",
+  },
+  "habit.resumed.manual": {
+    subject: "A habit in {home} has resumed",
+    preview: "Open Madeora to see which habit.",
+    heading: "A habit in {home} has resumed",
+    body: "A habit manager in {home} ended the pause of a habit, so it counts again from today. Open Madeora to see which habit it is.",
+    button: "Open the habit",
+  },
+  "habit.resumed.ended": {
+    subject: "A habit in {home} has resumed",
+    preview: "Its pause has ended.",
+    heading: "A habit in {home} has resumed",
+    body: "The pause of a habit in {home} has ended, so it counts again from today. Open Madeora to see which habit it is.",
+    button: "Open the habit",
+  },
 };
 
 const nl: Catalogue = {
@@ -804,6 +852,48 @@ const nl: Catalogue = {
     body: "Een beloning die je in {home} inwisselde, kon niet gegeven worden, dus is er zonder extra kosten een vervanging geregeld. Open Madeora om ze te zien.",
     button: "Open mijn beloningen",
   },
+  "habit.reminder.home": {
+    subject: "Herinnering: een gewoonte in {home}",
+    preview: "Open Madeora om af te vinken.",
+    heading: "Een herinnering over een gewoonte in {home}",
+    body: "Een gewoonte in {home} staat vandaag nog open. Open Madeora om te zien welke gewoonte het is en om af te vinken.",
+    button: "Open de gewoonte",
+  },
+  "habit.reminder.personal": {
+    subject: "Herinnering: een van je gewoontes",
+    preview: "Open Madeora om af te vinken.",
+    heading: "Een herinnering over een van je gewoontes",
+    body: "Een van je gewoontes staat vandaag nog open. Open Madeora om te zien welke gewoonte het is en om af te vinken.",
+    button: "Open de gewoonte",
+  },
+  "habit.paused.dated": {
+    subject: "Een gewoonte in {home} is gepauzeerd en loopt weer vanaf {date}",
+    preview: "Open Madeora om te zien welke gewoonte.",
+    heading: "Een gewoonte in {home} is gepauzeerd",
+    body: "Een gewoontebeheerder in {home} heeft een gewoonte gepauzeerd; ze loopt weer vanaf {date}. Gepauzeerde dagen tellen niet tegen de reeks. Open Madeora om te zien welke gewoonte het is.",
+    button: "Open de gewoonte",
+  },
+  "habit.paused.open": {
+    subject: "Een gewoonte in {home} is gepauzeerd",
+    preview: "Open Madeora om te zien welke gewoonte.",
+    heading: "Een gewoonte in {home} is gepauzeerd",
+    body: "Een gewoontebeheerder in {home} heeft een gewoonte gepauzeerd tot nader order. Gepauzeerde dagen tellen niet tegen de reeks. Open Madeora om te zien welke gewoonte het is.",
+    button: "Open de gewoonte",
+  },
+  "habit.resumed.manual": {
+    subject: "Een gewoonte in {home} loopt weer",
+    preview: "Open Madeora om te zien welke gewoonte.",
+    heading: "Een gewoonte in {home} loopt weer",
+    body: "Een gewoontebeheerder in {home} heeft de pauze van een gewoonte beëindigd, dus ze telt vanaf vandaag weer mee. Open Madeora om te zien welke gewoonte het is.",
+    button: "Open de gewoonte",
+  },
+  "habit.resumed.ended": {
+    subject: "Een gewoonte in {home} loopt weer",
+    preview: "Haar pauze is voorbij.",
+    heading: "Een gewoonte in {home} loopt weer",
+    body: "De pauze van een gewoonte in {home} is voorbij, dus ze telt vanaf vandaag weer mee. Open Madeora om te zien welke gewoonte het is.",
+    button: "Open de gewoonte",
+  },
 };
 
 export const notificationMessages = {
@@ -844,6 +934,7 @@ export function isOptionalNotificationKind(kind: NotificationEmailKind): boolean
     kind.startsWith("task.reminder.") ||
     kind === "chore.approval_requested" ||
     kind.startsWith("points.") ||
-    kind.startsWith("reward.")
+    kind.startsWith("reward.") ||
+    kind.startsWith("habit.")
   );
 }

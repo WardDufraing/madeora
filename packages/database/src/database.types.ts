@@ -423,6 +423,7 @@ export type Database = {
         }[];
       };
       advance_chores: { Args: { p_home_id: string }; Returns: number };
+      advance_habit_reminders: { Args: { p_limit: number }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_shopping: { Args: { p_home_id?: string }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
@@ -451,6 +452,13 @@ export type Database = {
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
+      };
+      archive_habit: {
+        Args: { p_archived: boolean; p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       archive_reward: {
         Args: { p_archived: boolean; p_expected_revision: number; p_reward_id: string };
@@ -561,6 +569,22 @@ export type Database = {
           status: string;
         }[];
       };
+      change_habit_schedule: {
+        Args: {
+          p_dry_run?: boolean;
+          p_effective_on?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_kind: string;
+          p_target?: number;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       change_home_member_role: {
         Args: {
           p_expected_role: string;
@@ -629,6 +653,16 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      complete_habit: {
+        Args: {
+          p_checkin_id: string;
+          p_habit_id: string;
+          p_note?: string;
+          p_on?: string;
+          p_source?: string;
+        };
+        Returns: Json;
       };
       complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
@@ -748,6 +782,25 @@ export type Database = {
         Returns: {
           outcome: string;
           template_id: string;
+        }[];
+      };
+      create_habit: {
+        Args: {
+          p_description?: string;
+          p_ends_on?: string;
+          p_home_id?: string;
+          p_id: string;
+          p_kind?: string;
+          p_name?: string;
+          p_starts_on?: string;
+          p_target?: number;
+          p_time_zone?: string;
+          p_week_start?: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
         }[];
       };
       create_home: {
@@ -1060,6 +1113,13 @@ export type Database = {
         }[];
       };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
+      delete_habit: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       delete_meal_entry: {
         Args: { p_expected_revision: number; p_id: string };
         Returns: {
@@ -1143,6 +1203,15 @@ export type Database = {
         Args: { p_occurrence_id: string; p_revision: number; p_user_id: string };
         Returns: string;
       };
+      deliver_habit_pause_end: {
+        Args: { p_pause_id: string; p_resumes_on: string };
+        Returns: string;
+      };
+      deliver_habit_reminder: {
+        Args: { p_at: string; p_habit_id: string; p_revision: number };
+        Returns: string;
+      };
+      deliver_habit_snooze: { Args: { p_notification_id: string }; Returns: string };
       deliver_recovery_ready: {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
@@ -1249,6 +1318,15 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      get_habit: { Args: { p_habit_id: string }; Returns: Json };
+      get_habit_calendar: { Args: { p_habit_id: string; p_month: string }; Returns: Json };
+      get_habit_checkins: { Args: { p_before?: string; p_habit_id: string }; Returns: Json };
+      get_habit_events: { Args: { p_before?: string; p_habit_id: string }; Returns: Json };
+      get_habit_insights: { Args: { p_days: number; p_habit_id: string }; Returns: Json };
+      get_habits: {
+        Args: { p_home_id?: string; p_query?: string; p_view?: string };
+        Returns: Json;
+      };
       get_home_vacation: { Args: { p_vacation_id: string }; Returns: Json };
       get_home_vacation_widget: { Args: { p_home_id: string }; Returns: Json };
       get_invitation_email: {
@@ -1342,9 +1420,17 @@ export type Database = {
       };
       get_task_reminder: { Args: { p_task_id: string; p_time_zone?: string }; Returns: Json };
       get_task_template: { Args: { p_id: string }; Returns: Json };
+      get_vacation_habits: { Args: { p_vacation_id: string }; Returns: Json };
       get_weekly_points: {
         Args: { p_date?: string; p_home_id: string; p_shared?: boolean };
         Returns: Json;
+      };
+      habit_notice_names: {
+        Args: { p_habit_ids: string[] };
+        Returns: {
+          habit_id: string;
+          name: string;
+        }[];
       };
       home_capabilities: {
         Args: { p_home_id: string };
@@ -2055,6 +2141,19 @@ export type Database = {
         Args: { p_home_id: string; p_reason: string };
         Returns: string;
       };
+      pause_habit: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_id: string;
+          p_resumes_on?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       preview_chore_points_change: {
         Args: {
           p_action: string;
@@ -2141,6 +2240,26 @@ export type Database = {
         Returns: {
           entry_id: string;
           outcome: string;
+        }[];
+      };
+      reactivate_habit: {
+        Args: {
+          p_dry_run?: boolean;
+          p_ends_on?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_kind?: string;
+          p_reminder?: string;
+          p_reminder_times?: string[];
+          p_reminder_weekdays?: number[];
+          p_starts_on?: string;
+          p_target?: number;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
         }[];
       };
       recipe_delete_impact: {
@@ -2529,7 +2648,42 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_habit_celebrations: { Args: { p_enabled: boolean }; Returns: string };
+      set_habit_checkin_note: {
+        Args: { p_checkin_id: string; p_expected_revision: number; p_note?: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_habit_end: {
+        Args: {
+          p_dry_run?: boolean;
+          p_ends_on?: string;
+          p_expected_revision: number;
+          p_id: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_habit_reminders: {
+        Args: {
+          p_enabled: boolean;
+          p_expected_revision: number;
+          p_id: string;
+          p_times?: string[];
+          p_weekdays?: number[];
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
+      set_my_habit_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_home_avatar: { Args: { p_file_id?: string; p_home_id: string }; Returns: string };
       set_notification_preference: {
         Args: { p_category: string; p_channel: string; p_enabled: boolean; p_home_id?: string };
@@ -2650,6 +2804,10 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_vacation_habit: {
+        Args: { p_habit_id: string; p_paused: boolean; p_vacation_id: string };
+        Returns: string;
+      };
       share_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
@@ -2679,6 +2837,13 @@ export type Database = {
         }[];
       };
       skip_meal_occurrence: { Args: { p_on: string; p_recurrence_id: string }; Returns: string };
+      snooze_habit_reminder: {
+        Args: { p_minutes: number; p_notification_id: string };
+        Returns: {
+          due_at: string;
+          outcome: string;
+        }[];
+      };
       staff_close_recovery_appeal: {
         Args: { p_appeal_id: string; p_notes: string };
         Returns: string;
@@ -2825,6 +2990,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      undo_habit_checkin: { Args: { p_checkin_id: string; p_reason?: string }; Returns: Json };
       unshare_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
@@ -2936,6 +3102,37 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      update_habit: {
+        Args: {
+          p_description?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_name: string;
+          p_time_zone?: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_habit_pause: {
+        Args: {
+          p_action: string;
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_pause_id: string;
+          p_resumes_on?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_habit_settings: {
+        Args: { p_home_id: string; p_member_access: string };
+        Returns: string;
       };
       update_home_vacation: {
         Args: {

@@ -52,6 +52,7 @@ const matrix: readonly {
       ["manageHomeRecipes"],
       ["manageHomeShopping"],
       ["manageHomeMeals"],
+      ["manageHomeHabits"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -113,6 +114,8 @@ const matrix: readonly {
           "home.shopping.manage": owner || (admin && has("manageHomeShopping")),
           "home.meals.view": true,
           "home.meals.manage": owner || (admin && has("manageHomeMeals")),
+          "home.habits.view": true,
+          "home.habits.manage": owner || (admin && has("manageHomeHabits")),
         },
       };
     }),

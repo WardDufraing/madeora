@@ -17,6 +17,7 @@ export const notificationCategories = [
   "chores",
   "points",
   "rewards",
+  "habits",
 ] as const;
 export type NotificationCategory = (typeof notificationCategories)[number];
 
@@ -28,6 +29,7 @@ export const optionalNotificationCategories = [
   "chores",
   "points",
   "rewards",
+  "habits",
 ] as const;
 export type OptionalNotificationCategory = (typeof optionalNotificationCategories)[number];
 
@@ -89,6 +91,9 @@ export const notificationKinds = [
   "reward.unable",
   "reward.refunded",
   "reward.replacement",
+  "habit.reminder",
+  "habit.paused",
+  "habit.resumed",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -106,6 +111,12 @@ export function notificationPath(
     const taskId = typeof params.taskId === "string" ? encodeURIComponent(params.taskId) : null;
     const base = homeId ? `/homes/${encodeURIComponent(homeId)}/tasks` : "/tasks";
     return taskId ? `${base}/${taskId}` : base;
+  }
+  // S28: habit reminders and pause notices lead to the habit, in its Home or the personal space.
+  if (kind.startsWith("habit.")) {
+    const habitId = typeof params.habitId === "string" ? encodeURIComponent(params.habitId) : null;
+    const base = homeId ? `/homes/${encodeURIComponent(homeId)}/habits` : "/habits";
+    return habitId ? `${base}/${habitId}` : base;
   }
   if (
     kind === "recovery.former_owner_completed" ||

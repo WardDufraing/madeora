@@ -34,6 +34,17 @@ export interface NotificationView {
   readonly taskId: string | null;
   readonly dueDate: string | null;
   readonly taskTitle: string | null;
+  /**
+   * A habit reminder's or pause notice's habit (S28) and its name when the reader can still see it;
+   * the day a reminder is for, whether the habit is weekly, and when a pause ends.
+   */
+  readonly habitId: string | null;
+  readonly habitName: string | null;
+  readonly onDate: string | null;
+  readonly weekly: boolean;
+  readonly resumesOn: string | null;
+  /** A pause notice sent because a dated pause ended by itself. */
+  readonly automatic: boolean;
   readonly duringQuietHours: boolean;
   readonly createdAt: string;
   readonly readAt: string | null;

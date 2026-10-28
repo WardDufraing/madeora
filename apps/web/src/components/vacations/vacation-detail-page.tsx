@@ -1,9 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
+import { VacationHabitsSection } from "@/components/habits/vacation-habits";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
 import { formatDateTime } from "@/invitations/format";
+import { readVacationHabits } from "@/habits/data";
 import { getDateTimeFormats } from "@/invitations/server";
 import { listTaskMembers } from "@/tasks/data";
 import { memberNames } from "@/tasks/format";
@@ -18,7 +20,7 @@ import { serverPerson } from "./vacations-page";
 /**
  * One Home vacation (S22): its status, overall dates, the people with their own dates and states,
  * the actions the viewer may take, the Home-wide chore pause, the affected chores with decisions,
- * and (chore managers and the creator) its history.
+ * the viewer's own personal habit pauses (S28), and (chore managers and the creator) its history.
  */
 export async function VacationDetailPage({
   home,
@@ -27,12 +29,13 @@ export async function VacationDetailPage({
   readonly home: { readonly id: string; readonly name: string };
   readonly vacationId: string;
 }) {
-  const [t, formats, vacation, review, members] = await Promise.all([
+  const [t, formats, vacation, review, members, habits] = await Promise.all([
     getTranslations("Vacations"),
     getDateTimeFormats(),
     getHomeVacation(vacationId),
     listVacationReview(vacationId),
     listTaskMembers(home.id),
+    readVacationHabits(vacationId),
   ]);
   const back = (
     <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
@@ -211,6 +214,10 @@ export async function VacationDetailPage({
               formats={formats}
             />
           </section>
+        ) : null}
+
+        {habits.status === "ok" ? (
+          <VacationHabitsSection vacationId={value.id} value={habits.value} />
         ) : null}
 
         {value.history ? (

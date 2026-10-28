@@ -9,6 +9,7 @@ import type { DashboardWidget } from "@/dashboard/layout";
 import {
   choreScheduleLayouts,
   choreScheduleLimits,
+  habitWidgetCounts,
   leaderboardWidgetCounts,
   leaderboardWidgetPeriods,
   mealWidgetModes,
@@ -21,6 +22,7 @@ import {
   widgetRegistry,
 } from "@/dashboard/widgets";
 
+import { HabitInsightsWidgetSettings } from "@/components/habits/habit-insights-widget-settings";
 import { ShoppingWidgetSettings } from "@/components/shopping/shopping-widget-settings";
 
 import { ChoreWidgetSettings } from "./chore-widget-settings";
@@ -258,6 +260,30 @@ export function WidgetSettings({
             />
           ) : null}
         </div>
+      );
+    }
+    case "habits":
+      return (
+        <SelectField
+          label={t("settingHabitCount")}
+          value={String(config.count)}
+          options={habitWidgetCounts.map((count) => ({
+            value: String(count),
+            label: t("settingCountOption", { count }),
+          }))}
+          onChange={(event) => {
+            set("count", Number(event.currentTarget.value));
+          }}
+        />
+      );
+    case "habit-insights": {
+      const parsed = widgetRegistry["habit-insights"].config.safeParse(widget.config);
+      return (
+        <HabitInsightsWidgetSettings
+          config={parsed.success ? parsed.data : widgetRegistry["habit-insights"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
       );
     }
     case "chore-approvals": {

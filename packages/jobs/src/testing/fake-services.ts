@@ -13,6 +13,9 @@ import {
 
 import type {
   ChoreClaimReleaseOutcome,
+  HabitPauseEndOutcome,
+  HabitReminderOutcome,
+  HabitSnoozeOutcome,
   EmailRecordStatus,
   InvitationEmailRead,
   JobDataPort,
@@ -51,6 +54,15 @@ export class FakeJobData implements JobDataPort {
   vacationReminderOutcome: TaskReminderOutcome = "notified";
   readonly vacationReminderCalls: { vacationId: string; startsOn: string; days: number }[] = [];
   summariesSent = 0;
+  /** Habits (S28): what each delivery answers, the calls, and how many habits an advance checks. */
+  habitReminderOutcome: HabitReminderOutcome = "notified";
+  readonly habitReminderCalls: { habitId: string; revision: number; at: string }[] = [];
+  habitsAdvanced = 0;
+  readonly habitAdvanceCalls: number[] = [];
+  habitSnoozeOutcome: HabitSnoozeOutcome = "notified";
+  readonly habitSnoozeCalls: string[] = [];
+  habitPauseEndOutcome: HabitPauseEndOutcome = "notified";
+  readonly habitPauseEndCalls: { pauseId: string; resumesOn: string }[] = [];
   readonly summaryCalls: number[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
   readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
@@ -151,6 +163,34 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.summaryCalls.push(limit);
     return Promise.resolve(this.summariesSent);
+  }
+
+  deliverHabitReminder(
+    habitId: string,
+    revision: number,
+    at: string,
+  ): Promise<HabitReminderOutcome> {
+    this.check();
+    this.habitReminderCalls.push({ habitId, revision, at });
+    return Promise.resolve(this.habitReminderOutcome);
+  }
+
+  advanceHabitReminders(limit: number): Promise<number> {
+    this.check();
+    this.habitAdvanceCalls.push(limit);
+    return Promise.resolve(this.habitsAdvanced);
+  }
+
+  deliverHabitSnooze(notificationId: string): Promise<HabitSnoozeOutcome> {
+    this.check();
+    this.habitSnoozeCalls.push(notificationId);
+    return Promise.resolve(this.habitSnoozeOutcome);
+  }
+
+  deliverHabitPauseEnd(pauseId: string, resumesOn: string): Promise<HabitPauseEndOutcome> {
+    this.check();
+    this.habitPauseEndCalls.push({ pauseId, resumesOn });
+    return Promise.resolve(this.habitPauseEndOutcome);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

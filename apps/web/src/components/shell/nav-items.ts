@@ -65,7 +65,6 @@ export const secondaryNav: readonly NavItem[] = [
  */
 export const unbuiltSections: ReadonlySet<NavId> = new Set([
   "calendar",
-  "habits",
   "pets",
   "photos",
   "integrations",
@@ -90,14 +89,16 @@ export function homeIdFromPath(pathname: string): string | null {
  * open (S09), the personal dashboard otherwise; Tasks opens the Home's tasks (S18), Chores the Home's
  * chores (S20). Other sections
  * are not Home-aware yet; each module's step decides when it adds its pages. Meals opens the
- * Home's meal planner (S27), Shopping the Home's shopping lists (S26).
+ * Home's meal planner (S27), Shopping the Home's shopping lists (S26), Habits the Home's habits
+ * (S28).
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
   if (
     item.id === "tasks" ||
     item.id === "chores" ||
     item.id === "shopping" ||
-    item.id === "meals"
+    item.id === "meals" ||
+    item.id === "habits"
   ) {
     return homeId !== null ? `/homes/${homeId}/${item.id}` : item.href;
   }

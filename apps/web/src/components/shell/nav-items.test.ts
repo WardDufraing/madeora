@@ -107,4 +107,13 @@ describe("navigation items", () => {
     expect(isUnbuiltSection("shopping")).toBe(false);
     expect(isActive(`/homes/${HOME}/shopping`, `/homes/${HOME}/shopping/${HOME}`)).toBe(true);
   });
+
+  it("points Habits at the open Home's habits (S28) and marks it built", () => {
+    const habits = primaryNav.find((item) => item.id === "habits");
+    if (!habits) throw new Error("habits item missing");
+    expect(contextHref(habits, HOME)).toBe(`/homes/${HOME}/habits`);
+    expect(contextHref(habits, null)).toBe("/habits");
+    expect(isUnbuiltSection("habits")).toBe(false);
+    expect(isActive(`/homes/${HOME}/habits`, `/homes/${HOME}/habits/${HOME}`)).toBe(true);
+  });
 });

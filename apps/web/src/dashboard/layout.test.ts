@@ -74,6 +74,10 @@ describe("widget registry", () => {
       { type: "shopping", needsSource: true },
       { type: "meal-planner", needsSource: false },
       { type: "meal-planner", needsSource: true },
+      { type: "habits", needsSource: false },
+      { type: "habits", needsSource: true },
+      { type: "habit-insights", needsSource: false },
+      { type: "habit-insights", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
@@ -91,6 +95,8 @@ describe("widget registry", () => {
       "recipes",
       "shopping",
       "meal-planner",
+      "habits",
+      "habit-insights",
     ]);
   });
 

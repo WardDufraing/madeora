@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { HabitReminderActions } from "@/components/habits/habit-reminder-actions";
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
 import type { NotificationView } from "@/notifications/types";
 import { formatTaskDate } from "@/tasks/format";
@@ -101,12 +102,18 @@ type MessageKey =
   | "kindJoinRequestDeclined"
   | "kindTaskReminder"
   | "kindTaskReminderDue"
+  | "kindHabitReminder"
+  | "kindHabitReminderWeekly"
+  | "kindHabitPaused"
+  | "kindHabitPausedOpen"
+  | "kindHabitResumed"
+  | "kindHabitPauseEnded"
   | "kindUnknown";
 
 /** The message key for a notification (exported for tests). */
 export function messageKeyFor(
   item: Pick<NotificationView, "kind" | "decision"> &
-    Partial<Pick<NotificationView, "dueDate" | "reason">>,
+    Partial<Pick<NotificationView, "dueDate" | "reason" | "weekly" | "resumesOn" | "automatic">>,
 ): MessageKey {
   const outcomes: Readonly<Record<string, MessageKey>> | undefined = (
     choreOutcomeMessage as Readonly<Record<string, Readonly<Record<string, MessageKey>>>>
@@ -115,6 +122,16 @@ export function messageKeyFor(
   if (outcomes && outcome && outcomes[outcome]) return outcomes[outcome];
   if (item.kind === "task.reminder")
     return item.dueDate ? "kindTaskReminderDue" : "kindTaskReminder";
+  // S28: a weekly reminder is about the week, a pause notice says until when.
+  if (item.kind === "habit.reminder") {
+    return item.weekly ? "kindHabitReminderWeekly" : "kindHabitReminder";
+  }
+  if (item.kind === "habit.paused") {
+    return item.resumesOn ? "kindHabitPaused" : "kindHabitPausedOpen";
+  }
+  if (item.kind === "habit.resumed") {
+    return item.automatic ? "kindHabitPauseEnded" : "kindHabitResumed";
+  }
   if (item.kind === "join_request.decided") {
     return item.decision === "declined" ? "kindJoinRequestDeclined" : "kindJoinRequestApproved";
   }
@@ -154,17 +171,24 @@ export async function NotificationList({
               ? formatDateTime(item.objectionEndsAt, formats)
               : item.dueDate
                 ? formatTaskDate(item.dueDate, formats)
-                : "",
+                : item.kind === "habit.paused" && item.resumesOn
+                  ? formatTaskDate(item.resumesOn, formats)
+                  : item.onDate
+                    ? formatTaskDate(item.onDate, formats)
+                    : "",
             task: item.taskTitle ? isolate(item.taskTitle) : t("taskFallback"),
+            habit: item.habitName ? isolate(item.habitName) : t("habitFallback"),
           });
           const href = notificationPath(
             item.kind,
             item.homeId,
             item.taskId
               ? { taskId: item.taskId }
-              : item.occurrenceId
-                ? { occurrenceId: item.occurrenceId }
-                : {},
+              : item.habitId
+                ? { habitId: item.habitId }
+                : item.occurrenceId
+                  ? { occurrenceId: item.occurrenceId }
+                  : {},
           );
           const isUnread = item.readAt === null;
           return (
@@ -191,6 +215,14 @@ export async function NotificationList({
                 <time dateTime={item.createdAt}>{formatDateTime(item.createdAt, formats)}</time>
                 {item.duringQuietHours ? ` · ${t("quietMarker")}` : ""}
               </p>
+              {item.kind === "habit.reminder" && item.habitId && item.habitName ? (
+                <HabitReminderActions
+                  notificationId={item.id}
+                  habitId={item.habitId}
+                  habitName={item.habitName}
+                  onDate={item.weekly ? null : item.onDate}
+                />
+              ) : null}
               <div className="flex flex-wrap items-start gap-3">
                 <Link href={href} className="text-body font-medium text-accent-fg underline">
                   {t("open")}

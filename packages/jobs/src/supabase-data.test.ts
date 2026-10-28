@@ -170,6 +170,42 @@ describe("Supabase job data", () => {
     });
   });
 
+  it("delivers habit reminders, snoozes and pause ends and refuses an unknown answer", async () => {
+    const { client, calls } = fakeClient({
+      deliver_habit_reminder: ok("late"),
+      advance_habit_reminders: ok(4),
+      deliver_habit_snooze: ok("cancelled"),
+      deliver_habit_pause_end: ok("still_paused"),
+    });
+    const data = createSupabaseJobData(client);
+    await expect(data.deliverHabitReminder("h1", 2, "2026-11-10T07:30:00Z")).resolves.toBe("late");
+    await expect(data.advanceHabitReminders(200)).resolves.toBe(4);
+    await expect(data.deliverHabitSnooze("n1")).resolves.toBe("cancelled");
+    await expect(data.deliverHabitPauseEnd("p1", "2026-11-12")).resolves.toBe("still_paused");
+    expect(calls).toEqual([
+      {
+        fn: "deliver_habit_reminder",
+        args: { p_habit_id: "h1", p_revision: 2, p_at: "2026-11-10T07:30:00Z" },
+      },
+      { fn: "advance_habit_reminders", args: { p_limit: 200 } },
+      { fn: "deliver_habit_snooze", args: { p_notification_id: "n1" } },
+      { fn: "deliver_habit_pause_end", args: { p_pause_id: "p1", p_resumes_on: "2026-11-12" } },
+    ]);
+    const { client: odd } = fakeClient({
+      deliver_habit_reminder: ok("not_sent"),
+      deliver_habit_snooze: ok("notified twice"),
+      deliver_habit_pause_end: ok("resumed"),
+    });
+    const strict = createSupabaseJobData(odd);
+    for (const call of [
+      strict.deliverHabitReminder("h1", 1, "2026-11-10T07:30:00Z"),
+      strict.deliverHabitSnooze("n1"),
+      strict.deliverHabitPauseEnd("p1", "2026-11-12"),
+    ]) {
+      await expect(call).rejects.toMatchObject({ code: "unexpected_result" });
+    }
+  });
+
   it("throws the Postgres code only", async () => {
     const { client } = fakeClient({
       get_notification_email: {

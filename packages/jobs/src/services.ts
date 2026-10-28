@@ -105,7 +105,26 @@ export interface JobDataPort {
   ): Promise<TaskReminderOutcome>;
   /** chore-digest (S21): sends the daily summaries whose hour has come; how many were sent. */
   sendChoreSummaries(limit: number): Promise<number>;
+  /** habit-reminder (S28): reminds of one habit's moment `at` (an ISO instant) if still current. */
+  deliverHabitReminder(
+    habitId: string,
+    revision: number,
+    at: string,
+  ): Promise<HabitReminderOutcome>;
+  /** task-reminder-advance (S28): queues missing next reminder moments; how many habits it checked. */
+  advanceHabitReminders(limit: number): Promise<number>;
+  /** habit-reminder-snooze (S28): delivers a snoozed reminder if it is still wanted. */
+  deliverHabitSnooze(notificationId: string): Promise<HabitSnoozeOutcome>;
+  /** habit-pause-end (S28): tells the members a Home habit resumed after a dated pause. */
+  deliverHabitPauseEnd(pauseId: string, resumesOn: string): Promise<HabitPauseEndOutcome>;
 }
+
+export type HabitReminderOutcome =
+  "notified" | "not_needed" | "late" | "inactive" | "stale" | "not_due";
+
+export type HabitSnoozeOutcome = "notified" | "cancelled" | "stale" | "not_due";
+
+export type HabitPauseEndOutcome = "notified" | "still_paused" | "stale" | "not_due";
 
 export type ChoreClaimReleaseOutcome = "released" | "stale" | "missing";
 
