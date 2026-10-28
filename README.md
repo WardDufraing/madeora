@@ -49,6 +49,7 @@ This list describes feature areas present in the repository; it does not certify
 - [Production setup](docs/production-setup.md) and [production migrations](docs/production-migrations.md): production environment setup and database migration reference.
 - [Provider cost register](docs/provider-cost-register.md): free-tier checks for external services.
 - [Architecture decision records](docs/adr/): accepted technical decisions.
+- [Step roadmap](plans/roadmap.md): step order evidenced in this repository, including [S28b personal points and rewards](plans/steps/S28b-brief.md).
 - [Provider setup guides](docs/): service-specific configuration and operational instructions.
 
 ## Repository rules

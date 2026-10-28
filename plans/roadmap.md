@@ -1,0 +1,74 @@
+# Roadmap
+
+`plans/build-plan.md` is not in this repository. Briefs and ADRs cite it (for example ADR 0002 and `plans/steps/S01-brief.md`), and S04b and S06b say that file is where a new step is recorded. This page lists only step numbers that a file in the repo actually uses. Titles in the first table are the brief headings. Anything only mentioned in passing is in the second table and marked uncertain when the citation is a fragment.
+
+Step briefs live in `plans/steps/`. S28b, personal points and rewards, is `plans/steps/S28b-brief.md`.
+
+Two briefs are not numbered steps: `plans/steps/graphify-brief.md` (Graphify evaluation) and `plans/steps/fix-chore-pool-e2e-brief.md` (a chore-pool end-to-end failure). They are not given step numbers here.
+
+## Steps with a brief
+
+| Step | Heading in the brief                                            | File                                           |
+| ---- | --------------------------------------------------------------- | ---------------------------------------------- |
+| S01  | Monorepo bootstrap                                              | `plans/steps/S01-brief.md`                     |
+| S02  | CI and repository guards                                        | `plans/steps/S02-brief.md`                     |
+| S03  | Database, migrations and RLS test harness                       | `plans/steps/S03-brief.md`                     |
+| S04  | Design tokens and base components                               | `plans/steps/S04-brief.md`                     |
+| S04b | Vercel preview deployments                                      | `plans/steps/S04b-brief.md`                    |
+| S05  | App shell, theme and languages                                  | `plans/steps/S05-brief.md`                     |
+| S06  | Adult email/password accounts                                   | `plans/steps/S06-brief.md`                     |
+| S06b | Early production                                                | `plans/steps/S06b-brief.md`                    |
+| S07  | Personal context and preferences                                | `plans/steps/S07-brief.md`                     |
+| S08  | Google sign-in                                                  | `plans/steps/S08-brief.md`                     |
+| S09  | Homes, roles and the permission engine                          | `plans/steps/S09-brief.md`                     |
+| S10  | Invitations and join requests                                   | `plans/steps/S10-brief.md`                     |
+| S11  | Member directory, display names, nicknames and personal accents | `plans/steps/S11-brief.md`                     |
+| S12  | Role management and ownership                                   | `plans/steps/S12-brief.md`                     |
+| S12b | Verified Home ownership recovery                                | `plans/steps/S12b-ownership-recovery-brief.md` |
+| S13  | Background jobs                                                 | `plans/steps/S13-brief.md`                     |
+| S14  | Notifications core                                              | `plans/steps/S14-brief.md`                     |
+| S15  | File storage and quotas                                         | `plans/steps/S15-brief.md`                     |
+| S16  | Trash and recovery                                              | `plans/steps/S16-brief.md`                     |
+| S17  | Dashboard engine                                                | `plans/steps/S17-brief.md`                     |
+| S18  | Tasks core                                                      | `plans/steps/S18-brief.md`                     |
+| S19  | Tasks: recurrence and occurrence history                        | `plans/steps/S19-brief.md`                     |
+| S19b | Tasks: reminders, templates and bulk actions                    | `plans/steps/S19b-brief.md`                    |
+| S19c | Tasks: attachments, calendar views and widgets                  | `plans/steps/S19c-brief.md`                    |
+| S20  | Chores core                                                     | `plans/steps/S20-brief.md`                     |
+| S21  | Chore pool and volunteering                                     | `plans/steps/S21-brief.md`                     |
+| S22  | Home vacations and absences                                     | `plans/steps/S22-brief.md`                     |
+| S23  | Points and rewards (Home)                                       | `plans/steps/S23-brief.md`                     |
+| S24  | Recipes core                                                    | `plans/steps/S24-brief.md`                     |
+| S25  | Recipe import and sharing                                       | `plans/steps/S25-brief.md`                     |
+| S26  | Shopping lists                                                  | `plans/steps/S26-brief.md`                     |
+| S27  | Meal planner                                                    | `plans/steps/S27-brief.md`                     |
+| S28  | Habits core                                                     | `plans/steps/S28-brief.md`                     |
+| S28b | Personal points and rewards                                     | `plans/steps/S28b-brief.md`                    |
+
+S28b was added on Ward's decision (2026-10-28). It is not in the earlier briefs. It sits after S28 and before S29. The S23 heading says "Points and rewards"; "(Home)" is added in this table so it is not read as the personal ledger.
+
+S00 appears only as the seed commit and as review carry-overs (`plans/steps/S01-brief.md` L3–L4, `plans/steps/S02-brief.md` L4). There is no S00 brief. What S00 contained, beyond that seed, is not recorded here.
+
+S21's brief also uses the labels S21b and S21c for parts of the same step (`plans/steps/S21-brief.md`). They are not separate brief files.
+
+## Later numbers, cited only
+
+These have no brief in the repo. The phrase is copied from the citation. Where two files describe the same number differently, both are quoted and the scope is uncertain. No dates are known. Numbers that never appear are not listed: S34, S36, S39, S46, S47 and S48 are not cited anywhere in the repository.
+
+| Step | What the citation says                                                                                               | Source                                                                                                                                                                                     | Certainty                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| S29  | "Numeric habits (S29)"                                                                                               | `plans/steps/S28-brief.md` L68                                                                                                                                                             | The phrase is the whole citation.                                                                                                           |
+| S30  | "goals and habit-to-goal links (S30)"                                                                                | `plans/steps/S28-brief.md` L68                                                                                                                                                             | The phrase is the whole citation.                                                                                                           |
+| S31  | "pet care in the reminder (S31)"                                                                                     | `docs/adr/0029-home-vacations-absences.md` L37; `plans/steps/S22-brief.md` L79                                                                                                             | Phrase only. S22 says "pet-care items in the reminder (S31)".                                                                               |
+| S32  | "main Calendar banners (S32)"                                                                                        | `docs/adr/0029-home-vacations-absences.md` L37; `plans/steps/S22-brief.md` L79; `plans/steps/S17-brief.md` L36                                                                             | Phrase only. S17 says "calendar S32" for module widgets. S22 also names the "Show Home vacations" toggle.                                   |
+| S33  | "Google Calendar (S33)"                                                                                              | `plans/steps/S08-brief.md` L35; `docs/provider-cost-register.md` (Calendar API later, S33)                                                                                                 | Phrase only.                                                                                                                                |
+| S35  | "photos and HEIC (S35)"                                                                                              | `plans/steps/S15-brief.md` L55                                                                                                                                                             | Phrase only.                                                                                                                                |
+| S37  | "2FA" / "set a password"                                                                                             | `plans/steps/S06-brief.md` L38; `plans/steps/S08-brief.md` L35; `docs/adr/0010-google-sign-in.md` L38, L49                                                                                 | Several citations agree this is two-factor sign-in and setting a password.                                                                  |
+| S38  | "security activity history and in-app notices (S38)" and "deactivation and deletion (S38–S40)"; also "exports (S38)" | `plans/steps/S08-brief.md` L35; `plans/steps/S15-brief.md` L55                                                                                                                             | Uncertain. The two briefs do not describe the same scope.                                                                                   |
+| S40  | Home deletion, account deletion, 30-day recovery                                                                     | `plans/steps/S09-brief.md` L13, L42; `plans/steps/S12-brief.md` L63; `plans/steps/S16-brief.md` L36; `docs/adr/0014-roles-and-ownership.md` L23; `docs/adr/0020-trash-and-recovery.md` L34 | Cited as the account and Home lifecycle step. The split with S38 is uncertain.                                                              |
+| S41  | "guardian and child rules (S41)"                                                                                     | `plans/steps/S23-brief.md` L106; `docs/adr/0030-points-and-rewards.md` L39; `plans/steps/S09-brief.md` L8                                                                                  | S09 says accounts are adults until S41. `docs/production-migrations.md` also says children arrive with S41.                                 |
+| S42  | "child and Household Display accounts (S42, S43)"                                                                    | `docs/adr/0010-google-sign-in.md` L49                                                                                                                                                      | Uncertain. This is the only file that names S42. S09 L42 writes the range "S41–S44" and does not define S42. S09 L8 calls S43 the displays. |
+| S43  | Household Displays                                                                                                   | `plans/steps/S09-brief.md` L8; `docs/adr/0010-google-sign-in.md` L49; `docs/production-migrations.md`                                                                                      | Often written S43–S44 together with wall-display privacy.                                                                                   |
+| S44  | Wall-display privacy, with S43                                                                                       | `plans/steps/S23-brief.md` L106; `docs/adr/0030-points-and-rewards.md` L39                                                                                                                 | Not given its own title.                                                                                                                    |
+| S45  | Ora celebrations, Ora shell, Ora actions                                                                             | `plans/steps/S23-brief.md` L15, L83, L106; `plans/steps/S28-brief.md` L68                                                                                                                  | The citations name Ora work, not one complete scope.                                                                                        |
+| S49  | Release readiness: staging, backups, production wiring                                                               | `docs/adr/0002-branch-model.md` L28; `docs/adr/0005-early-previews.md` L17; `docs/adr/0008-early-production.md`                                                                            | Called the release step. S04b's brief says the build plan had put previews there before S04b moved them.                                    |
