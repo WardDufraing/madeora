@@ -13,6 +13,7 @@ import {
   WeeklyPointsWidget,
 } from "@/components/points/points-widgets";
 import { RecipesWidget } from "@/components/recipes/recipe-widget";
+import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
 import { QuickComplete } from "@/components/chores/quick-complete";
 import { messageKeyFor } from "@/components/notifications/notification-list";
@@ -757,6 +758,12 @@ function recipesConfig(widget: DashboardWidget): WidgetConfigs["recipes"] {
   return parsed.success ? parsed.data : config.parse({});
 }
 
+function shoppingConfig(widget: DashboardWidget): WidgetConfigs["shopping"] {
+  const { config } = widgetRegistry.shopping;
+  const parsed = config.safeParse(widget.config);
+  return parsed.success ? parsed.data : config.parse({});
+}
+
 function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals" | "chore-schedule">(
   type: T,
   widget: DashboardWidget,
@@ -783,6 +790,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "points-leaderboard": t("widgetPointsLeaderboard"),
     "my-points": t("widgetMyPoints"),
     recipes: t("widgetRecipes"),
+    shopping: t("widgetShopping"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -910,6 +918,36 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         body: (
           <RecipesWidget homeId={home.id} widgetId={widget.id} config={recipesConfig(widget)} />
         ),
+        unavailable: false,
+      };
+    }
+    case "shopping": {
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles.shopping,
+          sourceName: null,
+          body: <ShoppingWidget homeId={scope.home.id} config={shoppingConfig(widget)} />,
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: t("widgetPersonalShopping"),
+          sourceName: null,
+          body: <ShoppingWidget homeId={null} config={shoppingConfig(widget)} />,
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles.shopping, home: isolate(home.name) }),
+        sourceName: home.name,
+        body: <ShoppingWidget homeId={home.id} config={shoppingConfig(widget)} />,
         unavailable: false,
       };
     }

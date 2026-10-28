@@ -272,6 +272,38 @@ export type Database = {
           },
         ];
       };
+      shopping_signals: {
+        Row: {
+          changed_at: string;
+          context_id: string;
+          home_id: string | null;
+          user_id: string | null;
+          version: number;
+        };
+        Insert: {
+          changed_at?: string;
+          context_id: string;
+          home_id?: string | null;
+          user_id?: string | null;
+          version?: number;
+        };
+        Update: {
+          changed_at?: string;
+          context_id?: string;
+          home_id?: string | null;
+          user_id?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shopping_signals_home_id_fkey";
+            columns: ["home_id"];
+            isOneToOne: false;
+            referencedRelation: "homes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_preferences: {
         Row: {
           accent_color: string | null;
@@ -340,6 +372,13 @@ export type Database = {
           revision: number;
         }[];
       };
+      add_shopping_items: {
+        Args: { p_items: Json; p_list_id: string };
+        Returns: {
+          id: string;
+          outcome: string;
+        }[];
+      };
       add_subtask: {
         Args: { p_id: string; p_task_id: string; p_title: string };
         Returns: {
@@ -385,6 +424,7 @@ export type Database = {
       };
       advance_chores: { Args: { p_home_id: string }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
+      advance_shopping: { Args: { p_home_id?: string }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
       answer_chore_reassignment: {
         Args: { p_action: string; p_request_id: string };
@@ -568,6 +608,15 @@ export type Database = {
         }[];
       };
       claim_my_upload: { Args: { p_file_id: string }; Returns: string };
+      clear_completed_shopping_items: {
+        Args: { p_item_ids: string[]; p_list_id: string };
+        Returns: {
+          cleared: number;
+          entry_id: string;
+          outcome: string;
+          skipped: number;
+        }[];
+      };
       complete_chore_occurrence: {
         Args: { p_contributor: string; p_note?: string; p_occurrence_id: string };
         Returns: {
@@ -769,6 +818,20 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_shopping_category: {
+        Args: { p_id: string; p_list_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      create_shopping_list: {
+        Args: { p_home_id?: string; p_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       create_task: {
         Args: {
           p_assignee_ids?: string[];
@@ -938,6 +1001,27 @@ export type Database = {
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
       delete_recipe: {
         Args: { p_impact_token?: string; p_recipe_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
+      delete_shopping_category: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          moved_items: number;
+          outcome: string;
+        }[];
+      };
+      delete_shopping_item: {
+        Args: { p_item_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
+      delete_shopping_list: {
+        Args: { p_expected_revision: number; p_list_id: string };
         Returns: {
           entry_id: string;
           outcome: string;
@@ -1140,6 +1224,15 @@ export type Database = {
         }[];
       };
       get_reward_redemption: { Args: { p_redemption_id: string }; Returns: Json };
+      get_shopping_context: {
+        Args: { p_home_id?: string };
+        Returns: {
+          can_create: boolean;
+          can_reorder: boolean;
+          signal_version: number;
+        }[];
+      };
+      get_shopping_list: { Args: { p_list_id: string }; Returns: Json };
       get_storage_object_deletion: {
         Args: { p_deletion_id: string };
         Returns: {
@@ -1656,6 +1749,20 @@ export type Database = {
       };
       list_reward_redemptions: { Args: { p_home_id: string; p_view: string }; Returns: Json };
       list_rewards: { Args: { p_home_id: string; p_include_archived?: boolean }; Returns: Json };
+      list_shopping_lists: {
+        Args: { p_archived?: boolean; p_home_id?: string };
+        Returns: {
+          access: string;
+          active_items: number;
+          archived: boolean;
+          completed_items: number;
+          id: string;
+          member_access: string;
+          name: string;
+          position: number;
+          revision: number;
+        }[];
+      };
       list_task_attachments: { Args: { p_task_id: string }; Returns: Json };
       list_task_calendar: {
         Args: {
@@ -1801,6 +1908,9 @@ export type Database = {
       };
       list_vacation_review: { Args: { p_vacation_id: string }; Returns: Json };
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
+      move_shopping_category: { Args: { p_direction: string; p_id: string }; Returns: string };
+      move_shopping_item: { Args: { p_direction: string; p_item_id: string }; Returns: string };
+      move_shopping_list: { Args: { p_direction: string; p_list_id: string }; Returns: string };
       move_task: {
         Args: { p_expected_revision: number; p_list_id: string; p_task_id: string };
         Returns: {
@@ -1980,6 +2090,13 @@ export type Database = {
       rename_dashboard_template: {
         Args: { p_name: string; p_template_id: string };
         Returns: string;
+      };
+      rename_shopping_category: {
+        Args: { p_expected_revision: number; p_id: string; p_name: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       rename_subtask: {
         Args: { p_expected_revision: number; p_id: string; p_title: string };
@@ -2321,6 +2438,14 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_shopping_item_completed: {
+        Args: { p_completed: boolean; p_item_id: string; p_seen_completed_at?: string };
+        Returns: {
+          completed_at: string;
+          completed_by: Json;
+          outcome: string;
+        }[];
+      };
       set_storage_allowance: {
         Args: { p_bytes: number; p_home_id: string; p_user_id: string };
         Returns: boolean;
@@ -2388,6 +2513,19 @@ export type Database = {
       share_recipe: {
         Args: { p_can_edit: boolean; p_home_id: string; p_recipe_id: string };
         Returns: string;
+      };
+      shopping_item_history: {
+        Args: { p_item_id: string };
+        Returns: {
+          actor: Json;
+          at: string;
+          kind: string;
+          other_list_name: string;
+        }[];
+      };
+      shopping_widget: {
+        Args: { p_home_id?: string; p_limit?: number; p_list_ids: string[] };
+        Returns: Json;
       };
       skip_chore_occurrence: {
         Args: { p_occurrence_id: string; p_reason?: string };
@@ -2458,6 +2596,22 @@ export type Database = {
           transfer_id: string;
         }[];
       };
+      start_shopping_recurrence: {
+        Args: {
+          p_frequency: string;
+          p_id: string;
+          p_item_id: string;
+          p_month_day?: number;
+          p_start_on?: string;
+          p_time_zone?: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          next_on: string;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       storage_stats: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2478,6 +2632,22 @@ export type Database = {
         Returns: {
           task_id: string;
           title: string;
+        }[];
+      };
+      transfer_shopping_item: {
+        Args: {
+          p_allow_duplicate?: boolean;
+          p_category_id?: string;
+          p_copy_id?: string;
+          p_destination_list_id: string;
+          p_expected_revision: number;
+          p_item_id: string;
+          p_keep_completed?: boolean;
+          p_mode: string;
+        };
+        Returns: {
+          item_id: string;
+          outcome: string;
         }[];
       };
       trash_stats: {
@@ -2669,6 +2839,53 @@ export type Database = {
         };
         Returns: {
           impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_shopping_item: {
+        Args: {
+          p_category_id?: string;
+          p_expected_revision: number;
+          p_item_id: string;
+          p_name: string;
+          p_notes?: string;
+          p_packaging?: string;
+          p_quantity?: number;
+          p_unit?: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_shopping_list: {
+        Args: {
+          p_archived: boolean;
+          p_expected_revision: number;
+          p_list_id: string;
+          p_member_access: string;
+          p_name: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_shopping_recurrence: {
+        Args: {
+          p_action: string;
+          p_expected_revision: number;
+          p_frequency?: string;
+          p_id: string;
+          p_month_day?: number;
+          p_start_on?: string;
+          p_template_item_id?: string;
+          p_time_zone?: string;
+          p_weekdays?: number[];
+        };
+        Returns: {
+          next_on: string;
           outcome: string;
           revision: number;
         }[];

@@ -67,6 +67,9 @@ const itemTypeKey = {
   chore_occurrence: "itemTypeChoreOccurrence",
   chore_removal: "itemTypeChoreRemoval",
   recipe: "itemTypeRecipe",
+  shopping_list: "itemTypeShoppingList",
+  shopping_item: "itemTypeShoppingItem",
+  shopping_clear: "itemTypeShoppingClear",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -92,6 +95,12 @@ function conflictMessage(kind: string) {
       return "conflictChoreLimit";
     case "recipe_limit":
       return "conflictRecipeLimit";
+    case "shopping_list_limit":
+      return "conflictShoppingListLimit";
+    case "shopping_list_unavailable":
+      return "conflictShoppingListUnavailable";
+    case "shopping_item_limit":
+      return "conflictShoppingItemLimit";
     default:
       return "conflictOther";
   }

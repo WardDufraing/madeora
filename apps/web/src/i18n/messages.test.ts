@@ -187,6 +187,11 @@ describe("message dictionaries", () => {
       ],
       // Vacation states, changes, reasons, decisions, events and participant actions, looked up
       // by the value the database answers (S22).
+      // The shopping repeat frequencies and list access modes (S26).
+      Shopping: [
+        ...withPrefix("frequency_", ["daily", "weekly", "monthly"]),
+        ...withPrefix("access_", ["edit", "check", "view"]),
+      ],
       Vacations: [
         ...withPrefix("status_", ["upcoming", "active", "ended", "cancelled"]),
         ...withPrefix("absence_", ["upcoming", "active", "ended"]),

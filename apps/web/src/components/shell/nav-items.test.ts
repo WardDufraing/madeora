@@ -92,4 +92,13 @@ describe("navigation items", () => {
     expect(isUnbuiltSection("chores")).toBe(false);
     expect(isActive(`/homes/${HOME}/chores`, `/homes/${HOME}/chores/manage`)).toBe(true);
   });
+
+  it("points Shopping at the open Home's lists (S26) and marks it built", () => {
+    const shopping = primaryNav.find((item) => item.id === "shopping");
+    if (!shopping) throw new Error("shopping item missing");
+    expect(contextHref(shopping, HOME)).toBe(`/homes/${HOME}/shopping`);
+    expect(contextHref(shopping, null)).toBe("/shopping");
+    expect(isUnbuiltSection("shopping")).toBe(false);
+    expect(isActive(`/homes/${HOME}/shopping`, `/homes/${HOME}/shopping/${HOME}`)).toBe(true);
+  });
 });
