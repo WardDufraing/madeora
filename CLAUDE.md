@@ -13,6 +13,10 @@ These instructions are mandatory for every Claude agent working in this reposito
 - **Security:** tenant isolation in Supabase RLS plus authorized server workflows. Never rely on hidden UI or client state for access control.
 - **Scope:** native iOS/Android apps are post-MVP. Never add unapproved services, architecture changes, or product behavior.
 
+### Next steps
+
+Next steps and their order live in `plans/roadmap.md`. Take the next unfinished step and read its brief in `plans/steps/` before starting.
+
 ### Before writing code
 
 1. Read relevant approved product requirements, the applicable `architecture.md` sections and this file.
