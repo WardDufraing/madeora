@@ -17,6 +17,8 @@
 
 **Decided by Ward (2026-10-28).** Personal points are strictly personal. One ledger per account, independent of every Home. No conversion to Home points, no mixing, no shared balance, and no Home can see or affect the personal ledger. Deleting a Home does nothing to it. Leaving a Home does nothing to it. `manageHomePoints`, `manageHomeRewards` and `approveHomeRewards` do not apply.
 
+**Rewards, decided by Ward (2026-10-28).** Personal rewards are self-defined only. A user defines their own personal rewards and redeems them against their own balance. No one else defines them. Do not invent a different model, such as a Home defining personal rewards or a shared personal catalog.
+
 **Tables are new.** Do not add nullable `home_id` columns to the S23 tables, and do not store personal rows in them. ARCH §4 says module tables reference `home_id` where that applies; a personal ledger has no Home, so these tables have no `home_id` column at all.
 
 **Account** (`private.personal_point_accounts`): one row per account (`user_id` unique, not null). Cached `balance` is the sum of entries. There is no `reserved` column under the default below (immediate redemption only). Available = balance.
@@ -35,7 +37,7 @@ No `chore_award` and no `chore_reversal`. Every entry stores the owner, the acto
 
 A redemption or a negative correction never makes the balance negative (`insufficient_points`, nothing partial). There is no "points owed" path, because nothing posts a reversal the owner did not choose.
 
-**Rewards, default awaiting Ward's confirmation.** The owner defines their own rewards and redeems them against their own balance. Nobody else creates, approves, fulfills or sees them. See Defaults item 1. Columns follow S23's shape where it does not need another person: name, description, cost, enabled, optional availability window, optional total limit, optional per-period limit, archived flag, revision. Archiving hides the reward and keeps history. Edits do not change past redemptions. At most `POINTS_LIMITS.rewards` (200) active rewards per account. Windows and the per-period limit use the account's effective timezone and week start (S07), never a Home timezone.
+**Rewards.** Self-defined only, as decided above. Columns follow S23's shape where it does not need another person: name, description, cost, enabled, optional availability window, optional total limit, optional per-period limit, archived flag, revision. Archiving hides the reward and keeps history. Edits do not change past redemptions. At most `POINTS_LIMITS.rewards` (200) active rewards per account. Windows and the per-period limit use the account's effective timezone and week start (S07), never a Home timezone.
 
 **Redemptions:** immediate only. Status is `redeemed` at once, then fulfillment **Pending fulfillment** → **Fulfilled** / **Unable to fulfill**, recorded by the owner. Unable is resolved by **Refund** (one linked `refund`) or **Replacement** (the owner's note, never charged again). No pending request, no reservation, no second reviewer. The Home independent-reviewer rule (PS L1488–L1492) cannot be copied here: a second person is not allowed to see the ledger.
 
@@ -96,15 +98,14 @@ Changing the Home ledger, its pages, its capabilities or its widgets (S23). Auto
 
 ## Defaults picked (Ward may override)
 
-1. **Awaiting Ward's confirmation.** Personal rewards are self-defined only. The user defines their own personal rewards and redeems them against their own balance. No one else defines, approves or fulfills them. Build this default. Do not invent a different model (a Home defining personal rewards, a second approver, or a shared personal catalog). If Ward has answered before implementation starts, follow that answer.
-2. **How points are earned is not in the spec.** MOD L70 says scoring rules need a supporting specification and that not every completed task awards points. PS L2966 and L2984 do not imply automatic rewards for goals. PS L2957 says habit completion does not automatically award reward points unless a separately approved reward rule explicitly allows it. No such rule exists for personal points. Default: the only credit is an explicit self-posted `credit` with a reason (3–300 characters, preview, confirm). No module posts points into this ledger.
-3. Immediate redemption only. No approval queue and no reserved points. Fulfillment and a one-time refund or replacement stay, performed by the owner, reusing the S23 states.
-4. Personal points do not expire. The spec's never-expire sentence is about Home points (PS L1452–L1456); this copies it as a default.
-5. Optional availability window, total limit and per-period limit, same bounds as `POINTS_LIMITS` and `memberPeriods` in `packages/domain/src/points`. Unlimited when unset. The period uses the account timezone and week start.
-6. Name 1–80, description ≤ 500, cost 1–100 000, at most 200 active rewards. Those numbers are S23's `POINTS_LIMITS`, not a spec sentence.
-7. Notifications as in the API section: account-level, owner only, Home overrides ignored.
-8. Adults only. No guardian read. S41 must not assume a guardian can see this ledger; that question is still open.
-9. One step, one migration, one ADR.
+1. **How points are earned is not in the spec.** MOD L70 says scoring rules need a supporting specification and that not every completed task awards points. PS L2966 and L2984 do not imply automatic rewards for goals. PS L2957 says habit completion does not automatically award reward points unless a separately approved reward rule explicitly allows it. No such rule exists for personal points. Default: the only credit is an explicit self-posted `credit` with a reason (3–300 characters, preview, confirm). No module posts points into this ledger.
+2. Immediate redemption only. No approval queue and no reserved points. Fulfillment and a one-time refund or replacement stay, performed by the owner, reusing the S23 states.
+3. Personal points do not expire. The spec's never-expire sentence is about Home points (PS L1452–L1456); this copies it as a default.
+4. Optional availability window, total limit and per-period limit, same bounds as `POINTS_LIMITS` and `memberPeriods` in `packages/domain/src/points`. Unlimited when unset. The period uses the account timezone and week start.
+5. Name 1–80, description ≤ 500, cost 1–100 000, at most 200 active rewards. Those numbers are S23's `POINTS_LIMITS`, not a spec sentence.
+6. Notifications as in the API section: account-level, owner only, Home overrides ignored.
+7. Adults only. No guardian read. S41 must not assume a guardian can see this ledger; that question is still open.
+8. One step, one migration, one ADR.
 
 ## Docs the implementation step writes
 
@@ -116,7 +117,7 @@ This brief does not write them. The implementation step adds the next ADR after 
 - A `security definer` function that forgets `auth.uid()` would expose every ledger. Tests must call it as someone else.
 - The service role bypasses RLS. The API must not use it for these reads or writes. There is no staff function to add.
 - `20261111090000` can collide with S28 or S29 if either lands a migration with that timestamp. The name above is provisional.
-- Self-posted credits are a default, not a spec rule. Shipping them without Ward's eye on Default 2 would freeze an earning rule the spec left open.
+- Self-posted credits are a default, not a spec rule. Shipping them without Ward's eye on Default 1 would freeze an earning rule the spec left open.
 - Cascade on `auth.users` is wrong if account deletion removes the auth user before the 30-day recovery ends. The deletion step has to check that before relying on the cascade.
 - PS L658 does not list a points category. The export step has to add one on purpose; this schema only keeps the rows addressable.
 
