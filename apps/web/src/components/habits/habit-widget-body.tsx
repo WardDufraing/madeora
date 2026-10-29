@@ -6,14 +6,18 @@ import Link from "next/link";
 
 import {
   HABITS_ENDPOINT,
+  habitEndpoint,
   sendHabitRequest,
+  type HabitDetail,
   type HabitInsights,
   type HabitList,
 } from "@/habits/api";
 import { completionRate, habitKeys, habitsPath } from "@/habits/format";
 import { memberNames, type MemberOption } from "@/tasks/format";
 
+import { ProgressMeter, QuickAddButtons } from "./habit-progress";
 import { HabitToday, HabitWeekProgress } from "./habit-today";
+import { useNumericTexts } from "./use-numeric-texts";
 import { useHabitTexts } from "./use-habit-texts";
 
 const REFRESH_INTERVAL_MS = 60_000;
@@ -124,6 +128,57 @@ export function HabitInsightsWidgetBody({ insights }: { readonly insights: Habit
       >
         {t("viewInsights")}
       </Link>
+    </div>
+  );
+}
+
+/**
+ * One numeric habit's day in the widget: the amount against the target, and quick-add buttons while
+ * progress can be added today. Read again on focus, every minute and after each change.
+ */
+export function HabitProgressWidgetBody({ initialHabit }: { readonly initialHabit: HabitDetail }) {
+  const tn = useTranslations("HabitsNumeric");
+  const texts = useNumericTexts();
+  const habitTexts = useHabitTexts();
+  const query = useQuery<{ habit: HabitDetail }>({
+    queryKey: [...habitKeys.all, "detail", initialHabit.id],
+    queryFn: () => sendHabitRequest("GET", habitEndpoint(initialHabit.id)),
+    initialData: { habit: initialHabit },
+    staleTime: 30_000,
+    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchOnWindowFocus: true,
+  });
+  const habit = query.data.habit;
+  const may = habit.access !== "view" && habit.contributionBlock === null;
+  return (
+    <div className="flex flex-col gap-2" data-testid="habit-progress-widget">
+      <p className="text-body font-medium text-fg">
+        <Link
+          href={habitsPath(habit.homeId, habit.id)}
+          className="underline-offset-4 hover:underline"
+        >
+          <bdi>{habit.name}</bdi>
+        </Link>
+        {habit.status === "ended" || habit.status === "archived"
+          ? ` · ${habitTexts.status(habit)}`
+          : ""}
+      </p>
+      {habit.progress ? (
+        <ProgressMeter habit={habit} progress={habit.progress} />
+      ) : (
+        <p className="text-body text-fg-muted" data-testid="habit-today-state">
+          {habit.contributionBlock ? texts.block(habit.contributionBlock) : tn("noProgressToday")}
+        </p>
+      )}
+      {may ? <QuickAddButtons habit={habit} source="widget" compact /> : null}
+      {may ? (
+        <Link
+          href={habitsPath(habit.homeId, habit.id)}
+          className="text-body font-medium text-accent-fg underline"
+        >
+          {tn("widgetAddOther")}
+        </Link>
+      ) : null}
     </div>
   );
 }

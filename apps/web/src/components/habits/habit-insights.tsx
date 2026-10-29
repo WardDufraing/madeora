@@ -23,6 +23,7 @@ import {
 } from "@/habits/api";
 import { completionRate, formatWeekday, habitKeys } from "@/habits/format";
 
+import { NumericSummaries } from "./habit-numeric-summaries";
 import { useHabitTexts } from "./use-habit-texts";
 
 /** A mark per state, so a state never depends on colour alone. */
@@ -121,6 +122,7 @@ export function HabitInsightsPanel({
       ) : (
         <InsightsSummary insights={value} />
       )}
+      {value?.numeric ? <NumericSummaries summary={value.numeric} /> : null}
       {value ? (
         <div className="flex flex-col gap-2">
           <h3 className="text-body font-semibold text-fg">{t("trendTitle")}</h3>

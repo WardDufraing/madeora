@@ -41,6 +41,8 @@ const eventKey = {
   note_edited: "eventNoteEdited",
   note_removed: "eventNoteRemoved",
   vacation_pause_changed: "eventVacationPauseChanged",
+  tracking_changed: "eventTrackingChanged",
+  contribution_corrected: "eventContributionCorrected",
 } as const satisfies Record<HabitEvent["kind"], string>;
 
 /** Pages of check-ins or events; each page continues after the last row of the one before. */

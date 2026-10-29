@@ -2,10 +2,14 @@ import { getTranslations } from "next-intl/server";
 
 import { ErrorState } from "@/components/ui/states";
 import type { WidgetConfigs } from "@/dashboard/widgets";
-import { readHabitInsights, readHabits } from "@/habits/data";
+import { readHabit, readHabitInsights, readHabits } from "@/habits/data";
 import { listTaskMembers } from "@/tasks/data";
 
-import { HabitInsightsWidgetBody, HabitsWidgetBody } from "./habit-widget-body";
+import {
+  HabitInsightsWidgetBody,
+  HabitProgressWidgetBody,
+  HabitsWidgetBody,
+} from "./habit-widget-body";
 
 type WidgetHome = { readonly id: string; readonly name: string } | null;
 
@@ -68,4 +72,37 @@ export async function HabitInsightsWidget({
     return <p className="text-body text-fg-muted">{t("widgetHabitUnavailable")}</p>;
   }
   return <HabitInsightsWidgetBody insights={insights.value} />;
+}
+
+/**
+ * The Habit progress widget (S29): one chosen numeric habit's day against its target, with the
+ * quick-add buttons. A habit that is not chosen, gone, from another context, no longer visible or not
+ * numeric says so explicitly.
+ */
+export async function HabitProgressWidget({
+  home,
+  config,
+}: {
+  readonly home: WidgetHome;
+  readonly config: WidgetConfigs["habit-progress"];
+}) {
+  const [t, tn] = await Promise.all([getTranslations("Habits"), getTranslations("HabitsNumeric")]);
+  if (!config.habitId) {
+    return <p className="text-body text-fg-muted">{t("widgetChooseHabit")}</p>;
+  }
+  const habit = await readHabit(config.habitId);
+  if (habit.status === "not-found") {
+    return <p className="text-body text-fg-muted">{t("widgetHabitUnavailable")}</p>;
+  }
+  if (habit.status !== "ok") {
+    return <ErrorState title={t("widgetFailedTitle")} description={t("widgetFailed")} />;
+  }
+  // Only a habit of the widget's own context.
+  if (habit.value.homeId !== (home?.id ?? null)) {
+    return <p className="text-body text-fg-muted">{t("widgetHabitUnavailable")}</p>;
+  }
+  if (habit.value.tracking.mode !== "numeric" && habit.value.nextTracking?.mode !== "numeric") {
+    return <p className="text-body text-fg-muted">{tn("widgetNotNumeric")}</p>;
+  }
+  return <HabitProgressWidgetBody initialHabit={habit.value} />;
 }

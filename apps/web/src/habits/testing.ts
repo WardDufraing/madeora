@@ -1,4 +1,4 @@
-import type { HabitCheckin, HabitSummary } from "./shapes";
+import type { HabitCheckin, HabitDetail, HabitNumericDay, HabitSummary } from "./shapes";
 
 /** Test data for the habit routes and components (S28). Not imported by app code. */
 
@@ -58,6 +58,82 @@ export function habitSummary(overrides: Partial<HabitSummary> = {}): HabitSummar
     reminders: false,
     myReminders: true,
     access: "manage",
+    tracking: {
+      effectiveOn: null,
+      mode: "once",
+      target: null,
+      unit: null,
+      unitKind: null,
+      quickAdds: [],
+    },
+    nextTracking: null,
+    progress: null,
+    contributionBlock: "not_numeric",
+    ...overrides,
+  };
+}
+
+/** A numeric habit: 2,000 ml a day with two quick-add presets, 500 ml done today. */
+export function numericHabitSummary(overrides: Partial<HabitSummary> = {}): HabitSummary {
+  return habitSummary({
+    name: "Drink water",
+    tracking: {
+      effectiveOn: "2026-11-01",
+      mode: "numeric",
+      target: 2000,
+      unit: "ml",
+      unitKind: "preset",
+      quickAdds: [250, 500],
+    },
+    progress: {
+      onDate: "2026-11-10",
+      total: 500,
+      target: 2000,
+      unit: "ml",
+      unitKind: "preset",
+      met: false,
+      above: false,
+    },
+    contributionBlock: null,
+    ...overrides,
+  });
+}
+
+/** A numeric day of the daily totals: 2,250 of 2,000 ml. */
+export function numericDay(overrides: Partial<HabitNumericDay> = {}): HabitNumericDay {
+  return {
+    onDate: "2026-11-09",
+    state: "completed",
+    pausedBy: null,
+    target: 2000,
+    unit: "ml",
+    unitKind: "preset",
+    total: 2250,
+    met: true,
+    above: true,
+    note: null,
+    noteRevision: 0,
+    block: null,
+    ...overrides,
+  };
+}
+
+/** A numeric habit as its page reads it. */
+export function numericHabitDetail(overrides: Partial<HabitDetail> = {}): HabitDetail {
+  const summary = numericHabitSummary();
+  return {
+    ...summary,
+    trackings: [summary.tracking],
+    numericRecent: [],
+    periods: [{ id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0082", startsOn: "2026-11-01", endsOn: null }],
+    schedules: summary.schedule ? [summary.schedule] : [],
+    pauses: [],
+    vacationDays: [],
+    recent: [],
+    weeks: [],
+    milestones: [],
+    reminder: null,
+    celebrations: true,
     ...overrides,
   };
 }

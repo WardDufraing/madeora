@@ -1,10 +1,16 @@
 import {
+  addContributionSchema,
+  changeTrackingSchema,
   completeSchema,
   createHabitSchema,
+  dayNoteSchema,
+  quantitySchema,
+  quickAddsSchema,
   reactivateSchema,
   remindersSchema,
   settingsSchema,
   snoozeSchema,
+  updateContributionSchema,
   updatePauseSchema,
 } from "./schema";
 
@@ -106,5 +112,131 @@ describe("habit request schemas", () => {
     expect(
       settingsSchema.safeParse({ homeId: ID, memberAccess: "view", celebrations: true }).success,
     ).toBe(false);
+  });
+});
+
+describe("numeric habit schemas (S29)", () => {
+  const base = {
+    id: ID,
+    homeId: null,
+    name: "Water",
+    startsOn: "2026-11-10",
+    weekStart: "monday",
+    schedule: { kind: "daily" },
+  };
+  const tracking = { target: "2000", unit: "ml", unitKind: "preset", quickAdds: ["250", "500"] };
+
+  it("reads a quantity as a decimal string with at most three decimals", () => {
+    expect(quantitySchema.parse("1500")).toBe(1500);
+    expect(quantitySchema.parse("0.1")).toBe(0.1);
+    expect(quantitySchema.parse("1.125")).toBe(1.125);
+    // A number is accepted when it is already exact in three decimals, so a parsed body can be resent.
+    expect(quantitySchema.parse(1.5)).toBe(1.5);
+    for (const bad of [
+      "1,5",
+      "1.5555",
+      "1e3",
+      "-1",
+      "+1",
+      " 1",
+      "1.",
+      ".5",
+      "",
+      "12345678",
+      "abc",
+    ]) {
+      expect(quantitySchema.safeParse(bad).success, bad).toBe(false);
+    }
+    for (const bad of [0.1 + 0.2, -1, Number.NaN, Infinity, 1_000_001]) {
+      expect(quantitySchema.safeParse(bad).success, String(bad)).toBe(false);
+    }
+  });
+
+  it("creates a numeric habit with a valid tracking, and none by default", () => {
+    expect(createHabitSchema.parse(base).tracking).toBeNull();
+    const parsed = createHabitSchema.parse({ ...base, tracking });
+    expect(parsed.tracking).toEqual({
+      target: 2000,
+      unit: "ml",
+      unitKind: "preset",
+      quickAdds: [250, 500],
+    });
+    // The parsed body can be sent again (the form posts what it parsed).
+    expect(createHabitSchema.safeParse({ ...base, tracking: parsed.tracking }).success).toBe(true);
+  });
+
+  it("refuses a numeric target on a weekly schedule, a fraction of a whole unit and bad presets", () => {
+    const weekly = { ...base, schedule: { kind: "weekly", target: 3 } };
+    expect(createHabitSchema.safeParse({ ...weekly, tracking }).success).toBe(false);
+    expect(createHabitSchema.safeParse({ ...weekly, tracking: null }).success).toBe(true);
+    const glasses = { ...tracking, unit: "glasses", quickAdds: [] };
+    expect(
+      createHabitSchema.safeParse({ ...base, tracking: { ...glasses, target: "8" } }).success,
+    ).toBe(true);
+    expect(
+      createHabitSchema.safeParse({ ...base, tracking: { ...glasses, target: "7.5" } }).success,
+    ).toBe(false);
+    for (const bad of [
+      { ...tracking, quickAdds: ["250", "250"] },
+      { ...tracking, quickAdds: ["1", "2", "3", "4", "5", "6"] },
+      { ...tracking, unit: "stone" },
+      { ...tracking, unit: "", unitKind: "custom" },
+      { ...tracking, unit: "x".repeat(21), unitKind: "custom" },
+      { ...tracking, target: "0" },
+    ]) {
+      expect(createHabitSchema.safeParse({ ...base, tracking: bad }).success).toBe(false);
+    }
+    expect(
+      createHabitSchema.safeParse({
+        ...base,
+        tracking: { ...tracking, unit: "cups of tea", unitKind: "custom", quickAdds: ["1"] },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("changes tracking from a day, and a chosen date needs its date", () => {
+    const base = { revision: 3, tracking, when: "next" };
+    expect(changeTrackingSchema.parse(base)).toMatchObject({
+      when: "next",
+      effectiveOn: null,
+      expectedTotal: null,
+      confirmStatus: false,
+      confirmUnit: false,
+      preview: false,
+    });
+    expect(changeTrackingSchema.safeParse({ ...base, when: "date" }).success).toBe(false);
+    expect(
+      changeTrackingSchema.safeParse({ ...base, when: "date", effectiveOn: "2026-11-12" }).success,
+    ).toBe(true);
+    expect(changeTrackingSchema.safeParse({ ...base, tracking: null }).success).toBe(true);
+    expect(changeTrackingSchema.safeParse({ ...base, when: "yesterday" }).success).toBe(false);
+  });
+
+  it("adds a contribution with a client id, and corrects only with a quantity", () => {
+    expect(addContributionSchema.parse({ id: ID, quantity: "250" })).toEqual({
+      id: ID,
+      quantity: 250,
+      onDate: null,
+      enteredUnit: null,
+      source: "app",
+      revision: null,
+    });
+    expect(addContributionSchema.safeParse({ id: ID, quantity: "-250" }).success).toBe(false);
+    expect(addContributionSchema.safeParse({ quantity: "250" }).success).toBe(false);
+    expect(updateContributionSchema.safeParse({ action: "undo" }).success).toBe(true);
+    expect(updateContributionSchema.safeParse({ action: "amend" }).success).toBe(false);
+    expect(updateContributionSchema.safeParse({ action: "amend", quantity: "300" }).success).toBe(
+      true,
+    );
+    expect(updateContributionSchema.safeParse({ action: "delete" }).success).toBe(false);
+  });
+
+  it("limits the quick-add presets and a day note", () => {
+    expect(quickAddsSchema.safeParse({ revision: 1, quickAdds: [] }).success).toBe(true);
+    expect(
+      quickAddsSchema.safeParse({ revision: 1, quickAdds: ["1", "2", "3", "4", "5", "6"] }).success,
+    ).toBe(false);
+    expect(dayNoteSchema.parse({ revision: 0, note: "  " }).note).toBeNull();
+    expect(dayNoteSchema.safeParse({ revision: 0, note: "x".repeat(281) }).success).toBe(false);
   });
 });

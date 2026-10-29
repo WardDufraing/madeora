@@ -617,6 +617,33 @@ From here everyone has **personal points and rewards** in the Personal context, 
 
 2. In the app, open `/points` in the Personal context: it shows **My personal points** with **Add points or correct**, and links to **My personal rewards**. On the personal dashboard, **Customize** offers **Personal points**; a Home dashboard does not.
 
+## Check S29 (`20261112090000_numeric_habits.sql`)
+
+From here a habit can have a **daily numeric target** (for example 2,000 mL or 8 glasses): members add progress in steps, the day completes when the total reaches the target, excess never carries over, and the target or unit can change from a chosen date. Existing habits stay "complete once". Nothing changes for existing data. Apply it after the S28b file. It adds no background job, schedule, notification category or provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.habit_tracking') as tracking_table,
+     to_regclass('private.habit_contributions') as contributions_table,
+     to_regclass('private.habit_day_notes') as notes_table,
+     has_table_privilege('authenticated', 'private.habit_contributions', 'select')
+       as members_can_read_contributions_table,
+     has_function_privilege('authenticated',
+       'public.add_habit_contribution(uuid, uuid, numeric, date, text, text, integer)', 'execute')
+       as members_can_add_progress,
+     has_function_privilege('anon', 'public.get_habit_daily_totals(uuid, date, integer)', 'execute')
+       as anonymous_can_read_totals,
+     (select count(*) from information_schema.columns
+       where table_schema = 'private' and table_name = 'habit_checkins' and column_name = 'derived')
+       as derived_column;
+   ```
+
+   It must show the three tables, **true** for `members_can_add_progress`, **false** for `members_can_read_contributions_table` and `anonymous_can_read_totals`, and **1** for `derived_column`.
+
+2. In the app, create a habit with **Numeric daily target**: its page shows a progress card with **Add progress**. Add part of the target, then the rest: the day completes once. **Review contributions** shows who added what to the owner and to Home managers; other members see only totals.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

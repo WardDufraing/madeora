@@ -20,7 +20,8 @@ export async function GET(request: Request): Promise<Response> {
 
 /**
  * Creates a habit with its first tracking period and schedule (a personal habit; a Home habit:
- * habit managers). A personal habit without a timezone takes the person's effective one.
+ * habit managers). A personal habit without a timezone takes the person's effective one. `tracking`
+ * makes it a numeric habit with a daily target (daily or weekdays schedules only).
  */
 export async function POST(request: Request): Promise<Response> {
   const input = await readHabitMutation(request, createHabitSchema);
@@ -41,6 +42,14 @@ export async function POST(request: Request): Promise<Response> {
     ...(body.endsOn === null ? {} : { p_ends_on: body.endsOn }),
     ...(timeZone === null ? {} : { p_time_zone: timeZone }),
     p_week_start: body.weekStart,
+    ...(body.tracking === null
+      ? {}
+      : {
+          p_tracking_target: body.tracking.target,
+          p_tracking_unit: body.tracking.unit,
+          p_tracking_unit_kind: body.tracking.unitKind,
+          p_tracking_quick_adds: body.tracking.quickAdds,
+        }),
   });
   if (error) return databaseFailure("habits.create_failed", error);
   const row = data[0];

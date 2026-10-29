@@ -9,7 +9,7 @@ import type { WidgetConfigs } from "@/dashboard/widgets";
 import { HABITS_ENDPOINT, sendHabitRequest, type HabitList } from "@/habits/api";
 import { habitKeys } from "@/habits/format";
 
-type Config = WidgetConfigs["habit-insights"];
+type Config = WidgetConfigs["habit-insights"] & WidgetConfigs["habit-progress"];
 
 /**
  * The Habit insights widget's setting (S28): which habit of the widget's context it shows, from the
@@ -20,10 +20,13 @@ export function HabitInsightsWidgetSettings({
   config,
   homeId,
   onChange,
+  numericOnly = false,
 }: {
   readonly config: Config;
   readonly homeId: string | null;
   readonly onChange: (config: Config) => void;
+  /** The Habit progress widget offers habits with a numeric target only. */
+  readonly numericOnly?: boolean;
 }) {
   const t = useTranslations("Habits");
   const read = (view: "active" | "ended") => () => {
@@ -51,7 +54,10 @@ export function HabitInsightsWidgetSettings({
       </FormAlert>
     );
   }
-  const habits = [...active.data.list.habits, ...ended.data.list.habits];
+  const habits = [...active.data.list.habits, ...ended.data.list.habits].filter(
+    (habit) =>
+      !numericOnly || habit.tracking.mode === "numeric" || habit.nextTracking?.mode === "numeric",
+  );
   const known = config.habitId === null || habits.some((habit) => habit.id === config.habitId);
   return (
     <SelectField
@@ -70,7 +76,7 @@ export function HabitInsightsWidgetSettings({
         const value = event.currentTarget.value;
         onChange({ habitId: value === "" ? null : value });
       }}
-      data-testid="habit-insights-widget-habit"
+      data-testid={numericOnly ? "habit-progress-widget-habit" : "habit-insights-widget-habit"}
     />
   );
 }

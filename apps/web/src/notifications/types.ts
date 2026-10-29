@@ -42,6 +42,13 @@ export interface NotificationView {
   readonly habitName: string | null;
   readonly onDate: string | null;
   readonly weekly: boolean;
+  /** A numeric habit's progress when a reminder was sent (S29); null for other habits. */
+  readonly progress: {
+    readonly total: number;
+    readonly target: number;
+    readonly unit: string;
+    readonly unitKind: "preset" | "custom";
+  } | null;
   readonly resumesOn: string | null;
   /** A pause notice sent because a dated pause ended by itself. */
   readonly automatic: boolean;

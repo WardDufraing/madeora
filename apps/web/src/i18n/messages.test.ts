@@ -7,6 +7,7 @@ import { createTranslator } from "next-intl";
 import { stateKey } from "@/components/recovery/recovery-state-text";
 import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
+import { unitMessageKeys } from "@/habits/numeric-keys";
 
 import { locales } from "./locales";
 import en from "./messages/en.json";
@@ -140,6 +141,8 @@ describe("message dictionaries", () => {
       Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
       // Each palette colour's name, looked up by its id (S11).
       Accent: accentPalette.map((entry) => entry.id),
+      // The names of the preset units, chosen by the quantity's plural form (S29).
+      HabitsNumeric: unitMessageKeys,
       // Each recovery state's sentence and staff label, looked up by state (S12b).
       Recovery: [...Object.values(stateKey), ...Object.values(staffStateKey)],
       // Points and rewards (S23): kinds, policies, periods, blocks and states, looked up by the

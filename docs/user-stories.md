@@ -313,6 +313,19 @@ As a person or Home member, I want to track habits on a schedule, check in today
 - During my accepted participation in a Home vacation I can pause chosen personal habits; a Home habit pauses on the vacation's confirmed Home-wide pause days.
 - The Habits and Habit insights widgets show today's habits with Complete and Undo, and one habit's last 30 days; Home members can be set to view only.
 
+### US-030 — Track a habit by a daily numeric target
+
+As a person or Home member, I want a habit such as water or reading to complete when I reach a daily amount, so I can add progress in steps and see how far I am.
+
+- A daily or chosen-weekday habit can use a numeric daily target in a unit (glasses, pages, repetitions, mL, L, min, h, m, km or a label of my own); weekly habits stay complete-once.
+- I add progress with quick-add buttons or by typing an amount in my own number format (Dutch `1,5`, English `1.5`); the other separator, thousands separators and more than three decimals are refused with a reason, and I see the normalized amount before saving.
+- I can enter a compatible unit (L for mL, h for min, km for m) and the amount is converted exactly; a conversion needing more than three decimals is refused.
+- The day completes once when the total reaches the target; going over is shown and never carries to the next day; the next day starts at zero.
+- I can undo my own contributions for 7 days; managers correct or amend any, with the original kept. Nothing is ever deleted.
+- Managers change the target or unit from today, the next scheduled day or a chosen date after a preview of the impact, confirming a same-day status change; past days keep the target they had.
+- Each day has one optional note. Daily totals are listed without a timeline of contributions: only the contributor and the habit's managers see who added what.
+- Reminders stop when the target is reached and, while it is not, say how far I am; the Habit progress widget shows one numeric habit with quick-adds.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications

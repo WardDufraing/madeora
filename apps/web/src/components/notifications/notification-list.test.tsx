@@ -15,6 +15,7 @@ vi.mock("next-intl/server", async () => {
   const { createTranslator } = await import("next-intl");
   const { default: en } = await import("@/i18n/messages/en.json");
   return {
+    getLocale: () => Promise.resolve("en"),
     getTranslations: (namespace: string) =>
       Promise.resolve(
         createTranslator({ locale: "en", messages: en, namespace: namespace as "Notifications" }),
@@ -50,6 +51,7 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     habitName: null,
     onDate: null,
     weekly: false,
+    progress: null,
     resumesOn: null,
     automatic: false,
     duringQuietHours: false,
@@ -212,6 +214,53 @@ describe("NotificationList", () => {
     expect(paused).toHaveTextContent("is paused and resumes on 20/11/2026.");
     expect(resumed).toHaveTextContent("The pause of a habit in \u2068Thuis\u2069 has ended.");
     expect(within(resumed as HTMLElement).queryByRole("button", { name: /Complete/ })).toBeNull();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("shows a numeric habit's progress when the reminder was sent and opens the habit instead of Complete", async () => {
+    const habitId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00d1";
+    const { container } = await showWithToasts([
+      item({
+        kind: "habit.reminder",
+        habitId,
+        habitName: "Water",
+        onDate: "2026-11-10",
+        progress: { total: 500, target: 2000, unit: "ml", unitKind: "preset" },
+      }),
+      item({
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00a5",
+        kind: "habit.reminder",
+        habitId,
+        habitName: "Tea",
+        onDate: "2026-11-10",
+        progress: { total: 1, target: 3, unit: "cups", unitKind: "custom" },
+      }),
+      item({
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00a6",
+        kind: "habit.reminder",
+        habitId,
+        habitName: "Sleep",
+        onDate: "2026-11-10",
+        progress: { total: 0, target: 8, unit: "glasses", unitKind: "preset" },
+      }),
+    ]);
+    const [water, tea, glasses] = screen.getAllByTestId("notification");
+    expect(water).toHaveTextContent(
+      "Reminder: \u2068Water\u2069 for 10/11/2026. So far: 500 / 2,000 mL.",
+    );
+    expect(tea).toHaveTextContent("So far: 1 / 3 \u2068cups\u2069.");
+    expect(glasses).toHaveTextContent("So far: 0 / 8 glasses.");
+    for (const row of [water, tea, glasses]) {
+      expect(within(row as HTMLElement).queryByRole("button", { name: /Complete/ })).toBeNull();
+      expect(within(row as HTMLElement).getByTestId("habit-reminder-add-progress")).toHaveAttribute(
+        "href",
+        `/homes/${HOME_ID}/habits/${habitId}`,
+      );
+      // Snoozing still works: the reminder, not the quantity, is what is postponed.
+      expect(
+        within(row as HTMLElement).getAllByRole("button", { name: /Snooze the reminder/ }),
+      ).not.toHaveLength(0);
+    }
     expect(await axeViolations(container)).toEqual([]);
   });
 

@@ -11,6 +11,8 @@ import { logHabits } from "./log";
 import {
   habitCalendarSchema,
   habitCheckinSchema,
+  habitContributionsSchema,
+  habitDailyTotalsSchema,
   habitDetailSchema,
   habitEventSchema,
   habitInsightsSchema,
@@ -18,6 +20,8 @@ import {
   vacationHabitsSchema,
   type HabitCalendar,
   type HabitCheckin,
+  type HabitContributions,
+  type HabitDailyTotals,
   type HabitDetail,
   type HabitEvent,
   type HabitInsights,
@@ -120,6 +124,34 @@ export async function readHabitCheckins(
   });
   if (error) return failed("habits.checkins_failed", error);
   return parsed("habits.checkins_unexpected_shape", habitCheckinSchema.array(), data);
+}
+
+/** A page of a numeric habit's daily totals, the day before `before` and earlier (none: up to today). */
+export async function readHabitDailyTotals(
+  habitId: string,
+  before: string | null,
+): Promise<Read<HabitDailyTotals>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("get_habit_daily_totals", {
+    p_habit_id: habitId,
+    ...(before ? { p_before: before } : {}),
+  });
+  if (error) return failed("habits.days_failed", error);
+  return parsed("habits.days_unexpected_shape", habitDailyTotalsSchema, data);
+}
+
+/** The contributions of one day the person may see (their own; all for habit managers). */
+export async function readHabitContributions(
+  habitId: string,
+  on: string,
+): Promise<Read<HabitContributions>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("get_habit_contributions", {
+    p_habit_id: habitId,
+    p_on: on,
+  });
+  if (error) return failed("habits.contributions_failed", error);
+  return parsed("habits.contributions_unexpected_shape", habitContributionsSchema, data);
 }
 
 /** A page of the habit's history after the event `before` (none: the newest). */

@@ -5,15 +5,23 @@ export type {
   HabitCalendar,
   HabitCheckin,
   HabitCheckinResult,
+  HabitContribution,
+  HabitContributionResult,
+  HabitContributions,
+  HabitDailyTotals,
   HabitDay,
   HabitDetail,
   HabitEvent,
   HabitInsights,
   HabitList,
   HabitMilestone,
+  HabitNumericDay,
+  HabitNumericSummary,
+  HabitProgress,
   HabitScheduleVersion,
   HabitStreak,
   HabitSummary,
+  HabitTracking,
   HabitWeek,
   VacationHabits,
 } from "./shapes";
@@ -33,6 +41,10 @@ export type {
  * - `POST /api/v1/habit-reminders/:notificationId/snooze`.
  * - `PATCH /api/v1/habits/settings` (`{ homeId, memberAccess }` or `{ celebrations }`).
  * - `GET|PUT /api/v1/vacations/:id/habits` (the person's own personal habit switches).
+ * - Numeric habits (S29): `POST /api/v1/habits/:id/tracking` (`preview: true` → `{ impact }`),
+ *   `PUT …/quick-adds`, `POST|GET …/contributions` (`?on=`), `PATCH /api/v1/habit-contributions/:id`
+ *   (undo, void or amend), `GET …/days?before=`, `PUT …/day-notes/:date`. Quantities travel as decimal
+ *   strings ("1.5"); a conversion that would lose decimals answers `409 precision` with `converted`.
  *
  * `409 conflict` (with the current `revision`) means someone changed it since it was read; a
  * refused check-in answers `409` with its reason (`already-completed` with who did it,
@@ -54,7 +66,11 @@ export function habitEndpoint(
     | "insights"
     | "calendar"
     | "history"
-    | "checkins",
+    | "checkins"
+    | "tracking"
+    | "quick-adds"
+    | "contributions"
+    | "days",
 ): string {
   const base = `${HABITS_ENDPOINT}/${encodeURIComponent(habitId)}`;
   return part ? `${base}/${part}` : base;
@@ -66,6 +82,14 @@ export function habitPauseEndpoint(habitId: string, pauseId: string): string {
 
 export function habitCheckinEndpoint(checkinId: string, part: "undo" | "note"): string {
   return `/api/v1/habit-checkins/${encodeURIComponent(checkinId)}/${part}`;
+}
+
+export function habitContributionEndpoint(contributionId: string): string {
+  return `/api/v1/habit-contributions/${encodeURIComponent(contributionId)}`;
+}
+
+export function habitDayNoteEndpoint(habitId: string, onDate: string): string {
+  return `${habitEndpoint(habitId)}/day-notes/${encodeURIComponent(onDate)}`;
 }
 
 export function habitSnoozeEndpoint(notificationId: string): string {
@@ -107,6 +131,17 @@ export type HabitErrorCode =
   | "window-closed"
   | "quiet-hours"
   | "not-participant"
+  | "not-numeric"
+  | "numeric-required"
+  | "numeric-derived"
+  | "numeric-requires-daily"
+  | "unit-mismatch"
+  | "stale"
+  | "precision"
+  | "confirm-unit"
+  | "confirm-status"
+  | "today-ineligible"
+  | "unchanged"
   | "failed";
 
 export interface HabitErrorResponse {
@@ -117,6 +152,8 @@ export interface HabitErrorResponse {
   readonly habit?: HabitSummary;
   readonly checkin?: HabitCheckin;
   readonly dueAt?: string;
+  /** A refused conversion, rounded to the 3 decimals that fit. */
+  readonly converted?: number;
 }
 
 /** What a refused or failed request means to the person. */
@@ -148,6 +185,17 @@ export type HabitFailure =
   | "windowClosed"
   | "quietHours"
   | "notParticipant"
+  | "notNumeric"
+  | "numericRequired"
+  | "numericDerived"
+  | "numericRequiresDaily"
+  | "unitMismatch"
+  | "stale"
+  | "precision"
+  | "confirmUnit"
+  | "confirmStatus"
+  | "todayIneligible"
+  | "unchanged"
   | "network"
   | "failed";
 
@@ -179,6 +227,17 @@ const failures: { readonly [C in HabitErrorCode]?: HabitFailure } = {
   "window-closed": "windowClosed",
   "quiet-hours": "quietHours",
   "not-participant": "notParticipant",
+  "not-numeric": "notNumeric",
+  "numeric-required": "numericRequired",
+  "numeric-derived": "numericDerived",
+  "numeric-requires-daily": "numericRequiresDaily",
+  "unit-mismatch": "unitMismatch",
+  stale: "stale",
+  precision: "precision",
+  "confirm-unit": "confirmUnit",
+  "confirm-status": "confirmStatus",
+  "today-ineligible": "todayIneligible",
+  unchanged: "unchanged",
 };
 
 export class HabitRequestError extends Error {
