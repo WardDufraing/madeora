@@ -63,14 +63,16 @@ export async function settle(page: Page) {
 /**
  * axe-core in the real browser, including colour contrast.
  *
- * A click leaves the pointer where it was, so `:hover` stays on. Muted helper text
- * (`#667085`) on a meal row's hover wash (`#f0ebfe`) is 4.27:1, under the 4.5:1 threshold,
- * and only while the pointer is there. The same text on the card (`#ffffff`) is 4.97:1.
- * Park the pointer in the page corner, which has no hover treatment, and let that colour
- * transition finish before measuring.
+ * A click leaves the pointer where it was, so `:hover` stays on and the next check can
+ * measure that wash by accident. By default the pointer is parked in the page corner,
+ * which has no hover treatment, and that colour transition is allowed to finish.
+ * Pass `pointer: "leave"` when the test has placed the pointer on purpose.
  */
-export async function axeViolations(page: Page): Promise<string[]> {
-  await page.mouse.move(0, 0);
+export async function axeViolations(
+  page: Page,
+  options?: { readonly pointer?: "rest" | "leave" },
+): Promise<string[]> {
+  if (options?.pointer !== "leave") await page.mouse.move(0, 0);
   await settle(page);
   await page.addScriptTag({ path: axePath });
   const result = await page.evaluate(async () => {
