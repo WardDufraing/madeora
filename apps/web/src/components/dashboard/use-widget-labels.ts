@@ -34,6 +34,8 @@ export function useWidgetLabels(): {
     habits: t("widgetHabits"),
     "habit-insights": t("widgetHabitInsights"),
     "habit-progress": t("widgetHabitProgress"),
+    goals: t("widgetGoals"),
+    "goal-progress": t("widgetGoalProgress"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -56,6 +58,8 @@ export function useWidgetLabels(): {
     habits: t("widgetHabitsDescription"),
     "habit-insights": t("widgetHabitInsightsDescription"),
     "habit-progress": t("widgetHabitProgressDescription"),
+    goals: t("widgetGoalsDescription"),
+    "goal-progress": t("widgetGoalProgressDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),
@@ -65,6 +69,8 @@ export function useWidgetLabels(): {
     habits: t("widgetPersonalHabits"),
     "habit-insights": t("widgetPersonalHabitInsights"),
     "habit-progress": t("widgetPersonalHabitProgress"),
+    goals: t("widgetPersonalGoals"),
+    "goal-progress": t("widgetPersonalGoalProgress"),
   };
   return {
     name: (type) => names[type],

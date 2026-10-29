@@ -2,6 +2,7 @@ import {
   CalendarIcon,
   ChoresIcon,
   DashboardIcon,
+  GoalsIcon,
   HabitsIcon,
   HelpIcon,
   IntegrationsIcon,
@@ -22,6 +23,7 @@ export type NavId =
   | "meals"
   | "shopping"
   | "habits"
+  | "goals"
   | "pets"
   | "photos"
   | "integrations"
@@ -48,6 +50,7 @@ export const primaryNav: readonly NavItem[] = [
   { id: "meals", href: "/meals", icon: MealsIcon },
   { id: "shopping", href: "/shopping", icon: ShoppingIcon },
   { id: "habits", href: "/habits", icon: HabitsIcon },
+  { id: "goals", href: "/goals", icon: GoalsIcon },
   { id: "pets", href: "/pets", icon: PetsIcon },
   { id: "photos", href: "/photos", icon: PhotosIcon },
   { id: "integrations", href: "/integrations", icon: IntegrationsIcon },
@@ -90,7 +93,7 @@ export function homeIdFromPath(pathname: string): string | null {
  * chores (S20). Other sections
  * are not Home-aware yet; each module's step decides when it adds its pages. Meals opens the
  * Home's meal planner (S27), Shopping the Home's shopping lists (S26), Habits the Home's habits
- * (S28).
+ * (S28), Goals the Home's goals (S30).
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
   if (
@@ -98,7 +101,8 @@ export function contextHref(item: NavItem, homeId: string | null): string {
     item.id === "chores" ||
     item.id === "shopping" ||
     item.id === "meals" ||
-    item.id === "habits"
+    item.id === "habits" ||
+    item.id === "goals"
   ) {
     return homeId !== null ? `/homes/${homeId}/${item.id}` : item.href;
   }

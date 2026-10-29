@@ -19,6 +19,7 @@ import {
   HabitProgressWidget,
   HabitsWidget,
 } from "@/components/habits/habit-widgets";
+import { GoalProgressWidget, GoalsWidget } from "@/components/goals/goal-widgets";
 import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
@@ -786,6 +787,15 @@ function habitWidgetConfig<T extends "habits" | "habit-insights" | "habit-progre
   return (parsed.success ? parsed.data : config.parse({})) as WidgetConfigs[T];
 }
 
+function goalWidgetConfig<T extends "goals" | "goal-progress">(
+  type: T,
+  widget: DashboardWidget,
+): WidgetConfigs[T] {
+  const { config } = widgetRegistry[type];
+  const parsed = config.safeParse(widget.config);
+  return (parsed.success ? parsed.data : config.parse({})) as WidgetConfigs[T];
+}
+
 function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals" | "chore-schedule">(
   type: T,
   widget: DashboardWidget,
@@ -818,6 +828,8 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     habits: t("widgetHabits"),
     "habit-insights": t("widgetHabitInsights"),
     "habit-progress": t("widgetHabitProgress"),
+    goals: t("widgetGoals"),
+    "goal-progress": t("widgetGoalProgress"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -1024,6 +1036,48 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         habits: t("widgetPersonalHabits"),
         "habit-insights": t("widgetPersonalHabitInsights"),
         "habit-progress": t("widgetPersonalHabitProgress"),
+      }[type];
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles[type],
+          sourceName: null,
+          body: render(scope.home),
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: personalTitle,
+          sourceName: null,
+          body: render(null),
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles[type], home: isolate(home.name) }),
+        sourceName: home.name,
+        body: render(home),
+        unavailable: false,
+      };
+    }
+    case "goals":
+    case "goal-progress": {
+      const type = widget.type;
+      const render = (home: { readonly id: string; readonly name: string } | null) =>
+        type === "goals" ? (
+          <GoalsWidget home={home} config={goalWidgetConfig("goals", widget)} />
+        ) : (
+          <GoalProgressWidget home={home} config={goalWidgetConfig("goal-progress", widget)} />
+        );
+      const personalTitle = {
+        goals: t("widgetPersonalGoals"),
+        "goal-progress": t("widgetPersonalGoalProgress"),
       }[type];
       if (scope.kind === "home") {
         return {

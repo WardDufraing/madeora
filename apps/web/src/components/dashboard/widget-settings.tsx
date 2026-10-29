@@ -9,6 +9,7 @@ import type { DashboardWidget } from "@/dashboard/layout";
 import {
   choreScheduleLayouts,
   choreScheduleLimits,
+  goalWidgetCounts,
   habitWidgetCounts,
   leaderboardWidgetCounts,
   leaderboardWidgetPeriods,
@@ -22,6 +23,7 @@ import {
   widgetRegistry,
 } from "@/dashboard/widgets";
 
+import { GoalProgressWidgetSettings } from "@/components/goals/goal-widget-settings";
 import { HabitInsightsWidgetSettings } from "@/components/habits/habit-insights-widget-settings";
 import { ShoppingWidgetSettings } from "@/components/shopping/shopping-widget-settings";
 
@@ -295,6 +297,30 @@ export function WidgetSettings({
           homeId={contextHomeId}
           onChange={onChange}
           numericOnly
+        />
+      );
+    }
+    case "goals":
+      return (
+        <SelectField
+          label={t("settingGoalCount")}
+          value={String(config.count)}
+          options={goalWidgetCounts.map((count) => ({
+            value: String(count),
+            label: t("settingCountOption", { count }),
+          }))}
+          onChange={(event) => {
+            set("count", Number(event.currentTarget.value));
+          }}
+        />
+      );
+    case "goal-progress": {
+      const parsed = widgetRegistry["goal-progress"].config.safeParse(widget.config);
+      return (
+        <GoalProgressWidgetSettings
+          config={parsed.success ? parsed.data : widgetRegistry["goal-progress"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
         />
       );
     }

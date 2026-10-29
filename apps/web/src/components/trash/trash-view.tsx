@@ -72,6 +72,7 @@ const itemTypeKey = {
   shopping_clear: "itemTypeShoppingClear",
   meal_entry: "itemTypeMealEntry",
   habit: "itemTypeHabit",
+  goal: "itemTypeGoal",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {

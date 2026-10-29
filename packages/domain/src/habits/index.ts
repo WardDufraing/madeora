@@ -51,5 +51,6 @@ export {
   type HabitUnitKind,
   type NumericTrackingInput,
   type ParsedQuantity,
+  type QuantityLimits,
   type QuantityProblem,
 } from "./numeric";

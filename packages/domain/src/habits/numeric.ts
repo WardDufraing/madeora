@@ -120,6 +120,14 @@ export type ParsedQuantity =
   | { readonly ok: true; readonly thousandths: number }
   | { readonly ok: false; readonly problem: QuantityProblem };
 
+/** Other bounds than a habit quantity's (goals, S30): a larger maximum, or 0 allowed. */
+export interface QuantityLimits {
+  /** Largest value in units (default `HABIT_QUANTITY.max`). */
+  readonly max?: number;
+  /** Whether 0 is a valid value (default false). */
+  readonly zero?: boolean;
+}
+
 /** The decimal separator a locale writes numbers with. */
 export function decimalSeparator(locale: string): string {
   const part = new Intl.NumberFormat(locale).formatToParts(1.1).find((p) => p.type === "decimal");
@@ -131,7 +139,13 @@ export function decimalSeparator(locale: string): string {
  * locale. The other separator, thousands separators, signs, exponents and spaces are refused with a
  * reason instead of being guessed (1.500 in Dutch is not 1500).
  */
-export function parseQuantity(text: string, locale: string, unit?: HabitUnit): ParsedQuantity {
+export function parseQuantity(
+  text: string,
+  locale: string,
+  unit?: HabitUnit,
+  limits: QuantityLimits = {},
+): ParsedQuantity {
+  const max = limits.max ?? HABIT_QUANTITY.max;
   const raw = text.trim();
   if (raw === "") return { ok: false, problem: "empty" };
   const separator = decimalSeparator(locale);
@@ -144,10 +158,10 @@ export function parseQuantity(text: string, locale: string, unit?: HabitUnit): P
   const whole = match[1] ?? "";
   const fraction = match[2] ?? "";
   if (fraction.length > HABIT_QUANTITY.decimals) return { ok: false, problem: "precision" };
-  if (whole.length > 8) return { ok: false, problem: "range" };
+  if (whole.replace(/^0+/, "").length > String(max).length) return { ok: false, problem: "range" };
   const thousandths = Number(whole) * SCALE + Number(fraction.padEnd(HABIT_QUANTITY.decimals, "0"));
-  if (thousandths === 0) return { ok: false, problem: "not-positive" };
-  if (thousandths > HABIT_QUANTITY.max * SCALE) return { ok: false, problem: "range" };
+  if (thousandths === 0 && limits.zero !== true) return { ok: false, problem: "not-positive" };
+  if (thousandths > max * SCALE) return { ok: false, problem: "range" };
   if (unit && isDiscreteUnit(unit) && thousandths % SCALE !== 0) {
     return { ok: false, problem: "whole" };
   }

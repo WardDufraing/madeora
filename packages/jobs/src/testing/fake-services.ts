@@ -13,6 +13,8 @@ import {
 
 import type {
   ChoreClaimReleaseOutcome,
+  GoalReminderKind,
+  GoalReminderOutcome,
   HabitPauseEndOutcome,
   HabitReminderOutcome,
   HabitSnoozeOutcome,
@@ -63,6 +65,14 @@ export class FakeJobData implements JobDataPort {
   readonly habitSnoozeCalls: string[] = [];
   habitPauseEndOutcome: HabitPauseEndOutcome = "notified";
   readonly habitPauseEndCalls: { pauseId: string; resumesOn: string }[] = [];
+  /** Goals (S30): what a reminder delivery answers, and the calls. */
+  goalReminderOutcome: GoalReminderOutcome = "notified";
+  readonly goalReminderCalls: {
+    goalId: string;
+    revision: number;
+    kind: GoalReminderKind;
+    at: string;
+  }[] = [];
   readonly summaryCalls: number[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
   readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
@@ -191,6 +201,17 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.habitPauseEndCalls.push({ pauseId, resumesOn });
     return Promise.resolve(this.habitPauseEndOutcome);
+  }
+
+  deliverGoalReminder(
+    goalId: string,
+    revision: number,
+    kind: GoalReminderKind,
+    at: string,
+  ): Promise<GoalReminderOutcome> {
+    this.check();
+    this.goalReminderCalls.push({ goalId, revision, kind, at });
+    return Promise.resolve(this.goalReminderOutcome);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

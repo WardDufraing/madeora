@@ -372,6 +372,18 @@ export type Database = {
           revision: number;
         }[];
       };
+      add_goal_entry: {
+        Args: {
+          p_expected_total?: number;
+          p_goal_id: string;
+          p_id: string;
+          p_mode: string;
+          p_note?: string;
+          p_quantity: number;
+          p_source?: string;
+        };
+        Returns: Json;
+      };
       add_habit_contribution: {
         Args: {
           p_entered_unit?: string;
@@ -478,6 +490,13 @@ export type Database = {
       appeal_ownership_recovery: {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
+      };
+      archive_goal: {
+        Args: { p_archived: boolean; p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       archive_habit: {
         Args: { p_archived: boolean; p_expected_revision: number; p_id: string };
@@ -601,6 +620,19 @@ export type Database = {
           skipped: string[];
           status: string;
         }[];
+      };
+      change_goal_target: {
+        Args: {
+          p_confirm_status?: boolean;
+          p_confirm_unit?: boolean;
+          p_dry_run?: boolean;
+          p_expected_revision: number;
+          p_id: string;
+          p_target: number;
+          p_unit: string;
+          p_unit_kind: string;
+        };
+        Returns: Json;
       };
       change_habit_schedule: {
         Args: {
@@ -837,6 +869,26 @@ export type Database = {
         Returns: {
           outcome: string;
           template_id: string;
+        }[];
+      };
+      create_goal: {
+        Args: {
+          p_deadline?: string;
+          p_description?: string;
+          p_home_id?: string;
+          p_id: string;
+          p_initial?: number;
+          p_kind?: string;
+          p_renewed_from?: string;
+          p_target?: number;
+          p_time_zone?: string;
+          p_title?: string;
+          p_unit?: string;
+          p_unit_kind?: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
         }[];
       };
       create_habit: {
@@ -1190,6 +1242,13 @@ export type Database = {
         }[];
       };
       delete_dashboard_template: { Args: { p_template_id: string }; Returns: string };
+      delete_goal: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       delete_habit: {
         Args: { p_expected_revision: number; p_id: string };
         Returns: {
@@ -1278,6 +1337,10 @@ export type Database = {
       };
       deliver_chore_reminder: {
         Args: { p_occurrence_id: string; p_revision: number; p_user_id: string };
+        Returns: string;
+      };
+      deliver_goal_reminder: {
+        Args: { p_at: string; p_goal_id: string; p_kind: string; p_revision: number };
         Returns: string;
       };
       deliver_habit_pause_end: {
@@ -1395,6 +1458,10 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      get_goal: { Args: { p_goal_id: string }; Returns: Json };
+      get_goal_entries: { Args: { p_before?: string; p_goal_id: string }; Returns: Json };
+      get_goal_events: { Args: { p_before?: string; p_goal_id: string }; Returns: Json };
+      get_goals: { Args: { p_home_id?: string; p_query?: string; p_view?: string }; Returns: Json };
       get_habit: { Args: { p_habit_id: string }; Returns: Json };
       get_habit_calendar: { Args: { p_habit_id: string; p_month: string }; Returns: Json };
       get_habit_checkins: { Args: { p_before?: string; p_habit_id: string }; Returns: Json };
@@ -1507,6 +1574,13 @@ export type Database = {
       get_weekly_points: {
         Args: { p_date?: string; p_home_id: string; p_shared?: boolean };
         Returns: Json;
+      };
+      goal_notice_names: {
+        Args: { p_goal_ids: string[] };
+        Returns: {
+          goal_id: string;
+          title: string;
+        }[];
       };
       habit_notice_names: {
         Args: { p_habit_ids: string[] };
@@ -2773,6 +2847,22 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_goal_achievement: {
+        Args: { p_achieved: boolean; p_expected_revision: number; p_id: string; p_reason?: string };
+        Returns: Json;
+      };
+      set_goal_reminders: {
+        Args: {
+          p_at_time?: string;
+          p_dry_run?: boolean;
+          p_enabled: boolean;
+          p_expected_revision: number;
+          p_id: string;
+          p_lead_days?: number;
+          p_overdue_days?: number;
+        };
+        Returns: Json;
+      };
       set_habit_celebrations: { Args: { p_enabled: boolean }; Returns: string };
       set_habit_checkin_note: {
         Args: { p_checkin_id: string; p_expected_revision: number; p_note?: string };
@@ -2822,6 +2912,7 @@ export type Database = {
         }[];
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
+      set_my_goal_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_habit_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_home_avatar: { Args: { p_file_id?: string; p_home_id: string }; Returns: string };
       set_notification_preference: {
@@ -3253,6 +3344,28 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      update_goal: {
+        Args: {
+          p_deadline?: string;
+          p_description?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_time_zone?: string;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      update_goal_entry: {
+        Args: { p_action: string; p_id: string; p_quantity?: number; p_reason?: string };
+        Returns: Json;
+      };
+      update_goal_settings: {
+        Args: { p_home_id: string; p_member_access: string };
+        Returns: string;
       };
       update_habit: {
         Args: {

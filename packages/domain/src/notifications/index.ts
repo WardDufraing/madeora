@@ -94,6 +94,7 @@ export const notificationKinds = [
   "habit.reminder",
   "habit.paused",
   "habit.resumed",
+  "goal.reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -117,6 +118,12 @@ export function notificationPath(
     const habitId = typeof params.habitId === "string" ? encodeURIComponent(params.habitId) : null;
     const base = homeId ? `/homes/${encodeURIComponent(homeId)}/habits` : "/habits";
     return habitId ? `${base}/${habitId}` : base;
+  }
+  // S30: goal deadline reminders lead to the goal, in its Home or the personal space.
+  if (kind.startsWith("goal.")) {
+    const goalId = typeof params.goalId === "string" ? encodeURIComponent(params.goalId) : null;
+    const base = homeId ? `/homes/${encodeURIComponent(homeId)}/goals` : "/goals";
+    return goalId ? `${base}/${goalId}` : base;
   }
   if (
     kind === "recovery.former_owner_completed" ||

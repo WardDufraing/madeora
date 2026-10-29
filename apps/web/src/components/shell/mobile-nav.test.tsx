@@ -19,7 +19,7 @@ describe("MobileNav", () => {
     await user.click(button);
     const dialog = screen.getByRole("dialog", { name: "Menu" });
     const nav = within(dialog).getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(12);
+    expect(within(nav).getAllByRole("link")).toHaveLength(13);
 
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

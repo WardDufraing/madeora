@@ -65,6 +65,30 @@ describe("buildNotificationEmail", () => {
     expect(personal.text).toContain(`https://app.madeora.test/tasks/${taskId}`);
   });
 
+  it("emails a goal reminder by moment, naming neither the goal nor its progress", async () => {
+    const goalId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b02";
+    const lead = await buildNotificationEmail({
+      ...base,
+      kind: "goal.reminder",
+      params: { goalId, reminder: "lead", deadline: "2026-12-01" },
+    });
+    expect(lead.subject).toBe(
+      "Reminder: a goal in \u2068De Boomgaard\u2069 has a deadline coming up",
+    );
+    expect(lead.text).toContain(`https://app.madeora.test/homes/${homeId}/goals/${goalId}`);
+    const overdue = await buildNotificationEmail({
+      ...base,
+      locale: "nl",
+      homeId: null,
+      homeName: null,
+      homeTimeZone: null,
+      kind: "goal.reminder",
+      params: { goalId, reminder: "overdue", deadline: "2026-12-01" },
+    });
+    expect(overdue.subject).toBe("Herinnering: een van je doelen is over zijn deadline");
+    expect(overdue.text).toContain(`https://app.madeora.test/goals/${goalId}`);
+  });
+
   it("emails reviewers that chores wait, naming neither the chore nor a person", async () => {
     const email = await buildNotificationEmail({
       ...base,

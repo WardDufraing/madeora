@@ -36,6 +36,7 @@ describe("Sidebar", () => {
       "Meals",
       "Shopping",
       "Habits",
+      "Goals",
       "Pets",
       "Photos",
       "Integrations",
