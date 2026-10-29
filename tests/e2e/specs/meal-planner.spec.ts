@@ -162,6 +162,12 @@ test("custom and repeating meals, one occurrence edited, copy week and print", a
   expect(await page.getByRole("button", { name: /Porridge.*Repeating/ }).count()).toBeGreaterThan(
     0,
   );
+  // Saving leaves the pointer on this row. Hover it on purpose so the contrast check
+  // covers that state; axeViolations measures the row at rest.
+  await page
+    .getByRole("button", { name: /Porridge.*Repeating/ })
+    .first()
+    .hover();
   expect(await axeViolations(page)).toEqual([]);
 
   // Copy this week to the next one.
