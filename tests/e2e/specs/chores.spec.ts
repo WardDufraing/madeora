@@ -352,7 +352,11 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByTestId("new-chore-view").click();
 
     // Escape closes the delete dialog and returns focus to its button.
-    await page.getByTestId("chore-delete-open").press("Enter");
+    // Opening the occurrence is a client navigation, so this control is disabled until that
+    // page has hydrated. press() does not wait for enabled.
+    const deleteOpen = page.getByTestId("chore-delete-open");
+    await expect(deleteOpen).toBeEnabled();
+    await deleteOpen.press("Enter");
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(await axeViolations(page)).toEqual([]);
     await page.keyboard.press("Escape");
