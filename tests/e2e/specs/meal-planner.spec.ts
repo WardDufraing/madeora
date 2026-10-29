@@ -162,6 +162,8 @@ test("custom and repeating meals, one occurrence edited, copy week and print", a
   expect(await page.getByRole("button", { name: /Porridge.*Repeating/ }).count()).toBeGreaterThan(
     0,
   );
+  // A hovered meal row keeps readable text (the pointer rests where the dialog was).
+  await page.getByTestId("meal-item").nth(1).hover();
   expect(await axeViolations(page)).toEqual([]);
 
   // Copy this week to the next one.

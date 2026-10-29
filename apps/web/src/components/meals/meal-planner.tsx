@@ -332,7 +332,7 @@ function MealButton({
   return (
     <button
       type="button"
-      className="flex flex-col items-start rounded-control px-2 py-1 text-start hover:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className="group flex flex-col items-start rounded-control px-2 py-1 text-start hover:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       onClick={() => {
         onOpen(meal);
       }}
@@ -342,7 +342,7 @@ function MealButton({
       <span className={cx("text-body font-medium text-fg", unavailable && "italic text-fg-muted")}>
         <bdi>{texts.mealTitle(meal)}</bdi>
       </span>
-      <span className="flex flex-wrap items-center gap-x-2 text-helper text-fg-muted">
+      <span className="flex flex-wrap items-center gap-x-2 text-helper text-fg-muted group-hover:text-fg">
         <span>{meal.type === "custom" ? t("customMark") : t("recipeMark")}</span>
         {meal.kind === "occurrence" ? (
           <span className="flex items-center gap-1">
