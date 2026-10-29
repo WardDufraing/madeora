@@ -1,6 +1,6 @@
 # Madeora
 
-Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, Home membership and invitations, tasks, task calendars, chores, Home vacations and absences, points and rewards, recipes, shopping lists, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
+Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, Home membership and invitations, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, private personal points and rewards, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
 
 ## Repository
 
@@ -30,7 +30,10 @@ The repository currently contains working code for the application shell and the
 - Home vacations and temporary chore absences, including participant invitations and date proposals, vacation-aware rotation, a confirmed Home-wide chore pause, affected-chore review and a vacation dashboard widget.
 - Chore points, private per-Home ledgers and balances, manual adjustments, rewards and approval-based redemption, optional leaderboard and weekly points views, and points dashboard widgets.
 - Personal and Home recipes, private drafts, exclusive edit sessions, cover images, ratings, favorites, cooking mode, cross-Home sharing, impact-reviewed deletion and protected URL import.
+- Personal and Home meal planning with configurable slots, recipe and custom meals, recurring series, occurrence edits, copy/print views, reviewed shopping-list transfers and dashboard widgets.
 - Personal and Home shopping lists with configurable access, categories, live check-offs, recurring items, moves and copies, trash recovery and dashboard widgets.
+- Personal and Home habits with daily, weekday and weekly-target schedules, recent check-ins and corrections, pauses, reminders, streaks, milestones, insights, vacation integration and dashboard widgets.
+- Private personal points ledgers and self-defined rewards, with previewed adjustments, one-time reversals, redemption limits, fulfillment outcomes and a personal-only dashboard widget, kept separate from every Home ledger.
 - Notifications and notification preferences.
 - Private file storage, trash and recovery.
 

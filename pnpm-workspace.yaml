@@ -22,7 +22,9 @@ overrides:
   # (high) and two moderate advisories. Same major version; patched in 8.12.2. Remove once jsdom
   # requires 8.12.2 or later itself.
   jsdom>undici: 8.12.2
-  # 2026-10-29: @trigger.dev/core → @opentelemetry/host-metrics pulls systeminformation 5.33.15,
-  # which has GHSA-3f7j-7jwc-fxfj (high, Windows command injection). Same minor line; patched in
-  # 5.33.16. Remove once host-metrics requires 5.33.16 or later itself.
-  systeminformation: 5.33.16
+  # 2026-10-29: @trigger.dev/sdk 4.6.4 → @trigger.dev/core 4.6.4 → @opentelemetry/host-metrics
+  # 0.38.3 depends on systeminformation ^5.31.1, resolved to 5.33.15 (GHSA-3f7j-7jwc-fxfj, high:
+  # Windows command injection in services() through Unicode quotation marks). Same major; patched
+  # in 5.33.16, which still exports the networkStats path host-metrics imports. Remove once
+  # host-metrics requires 5.33.16 or later itself.
+  "@opentelemetry/host-metrics>systeminformation": 5.33.16

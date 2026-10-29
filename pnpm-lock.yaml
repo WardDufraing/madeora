@@ -9,7 +9,7 @@ overrides:
   icu-minify: 4.14.7
   engine.io-client>ws: 8.21.3
   jsdom>undici: 8.12.2
-  systeminformation: 5.33.16
+  '@opentelemetry/host-metrics>systeminformation': 5.33.16
 
 importers:
 

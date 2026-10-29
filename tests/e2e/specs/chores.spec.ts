@@ -327,8 +327,12 @@ for (const scheme of ["light", "dark"] as const) {
     const bea = await secondAdult(browser, baseURL, "Bea");
     addMember(homeId, bea.account.email, "member");
     await page.goto(`/homes/${homeId}/chores`);
-    await page.getByTestId("new-chore-open").focus();
-    await page.keyboard.press("Enter");
+    // The control stays disabled until React has hydrated, and focus() does not wait for that.
+    // Sending Enter in a later step can miss it too: on CI the key went out while the page was
+    // prefetching links, the form never opened, and focus was left on the document.
+    const opener = page.getByTestId("new-chore-open");
+    await expect(opener).toBeEnabled();
+    await opener.press("Enter");
     await expect(page.getByLabel("Title")).toBeFocused();
     await page.keyboard.type("Water the plants");
     await page.getByTestId("repeat-frequency").selectOption("daily");
@@ -338,8 +342,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByTestId("rotation-add-select").selectOption({ label: "Bea" });
     await page.getByTestId("rotation-add").press("Enter");
     // The order changes with a keyboard: Bea moves up.
-    await page.getByRole("button", { name: "Move Bea up" }).focus();
-    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Move Bea up" }).press("Enter");
     await expect(page.getByTestId("rotation-member").first()).toContainText("Bea");
     await expect(page.getByTestId("rotation-preview").getByRole("listitem").first()).toContainText(
       "Bea",
@@ -349,8 +352,11 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByTestId("new-chore-view").click();
 
     // Escape closes the delete dialog and returns focus to its button.
-    await page.getByTestId("chore-delete-open").focus();
-    await page.keyboard.press("Enter");
+    // Opening the occurrence is a client navigation, so this control is disabled until that
+    // page has hydrated. press() does not wait for enabled.
+    const deleteOpen = page.getByTestId("chore-delete-open");
+    await expect(deleteOpen).toBeEnabled();
+    await deleteOpen.press("Enter");
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(await axeViolations(page)).toEqual([]);
     await page.keyboard.press("Escape");
