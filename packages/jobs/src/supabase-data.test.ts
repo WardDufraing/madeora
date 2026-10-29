@@ -206,6 +206,12 @@ describe("Supabase job data", () => {
     }
   });
 
+  it("rolls recurring goal series with the batch limit", async () => {
+    const { client, calls } = fakeClient({ roll_goal_periods: ok(2) });
+    await expect(createSupabaseJobData(client).rollGoalPeriods(200)).resolves.toBe(2);
+    expect(calls).toEqual([{ fn: "roll_goal_periods", args: { p_limit: 200 } }]);
+  });
+
   it("delivers goal reminders and refuses an unknown answer", async () => {
     const { client, calls } = fakeClient({ deliver_goal_reminder: ok("inactive") });
     await expect(

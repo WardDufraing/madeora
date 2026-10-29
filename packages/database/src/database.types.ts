@@ -621,6 +621,20 @@ export type Database = {
           status: string;
         }[];
       };
+      change_goal_series_target: {
+        Args: {
+          p_confirm_status?: boolean;
+          p_confirm_unit?: boolean;
+          p_dry_run?: boolean;
+          p_effective_from: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_target: number;
+          p_unit: string;
+          p_unit_kind: string;
+        };
+        Returns: Json;
+      };
       change_goal_target: {
         Args: {
           p_confirm_status?: boolean;
@@ -890,6 +904,27 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      create_goal_series: {
+        Args: {
+          p_description?: string;
+          p_dry_run?: boolean;
+          p_ends_on?: string;
+          p_first_period?: string;
+          p_frequency?: string;
+          p_home_id?: string;
+          p_id: string;
+          p_kind?: string;
+          p_reminder_at_time?: string;
+          p_reminder_lead_days?: number;
+          p_target?: number;
+          p_time_zone?: string;
+          p_title?: string;
+          p_unit?: string;
+          p_unit_kind?: string;
+          p_week_start?: string;
+        };
+        Returns: Json;
       };
       create_habit: {
         Args: {
@@ -1249,6 +1284,13 @@ export type Database = {
           outcome: string;
         }[];
       };
+      delete_goal_series: {
+        Args: { p_expected_revision: number; p_id: string };
+        Returns: {
+          entry_id: string;
+          outcome: string;
+        }[];
+      };
       delete_habit: {
         Args: { p_expected_revision: number; p_id: string };
         Returns: {
@@ -1461,6 +1503,8 @@ export type Database = {
       get_goal: { Args: { p_goal_id: string }; Returns: Json };
       get_goal_entries: { Args: { p_before?: string; p_goal_id: string }; Returns: Json };
       get_goal_events: { Args: { p_before?: string; p_goal_id: string }; Returns: Json };
+      get_goal_series: { Args: { p_series_id: string }; Returns: Json };
+      get_goal_series_periods: { Args: { p_before?: string; p_series_id: string }; Returns: Json };
       get_goals: { Args: { p_home_id?: string; p_query?: string; p_view?: string }; Returns: Json };
       get_habit: { Args: { p_habit_id: string }; Returns: Json };
       get_habit_calendar: { Args: { p_habit_id: string; p_month: string }; Returns: Json };
@@ -2729,6 +2773,7 @@ export type Database = {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: string;
       };
+      roll_goal_periods: { Args: { p_limit?: number }; Returns: number };
       save_chore_absence: {
         Args: {
           p_ends_on: string;
@@ -2862,6 +2907,13 @@ export type Database = {
           p_overdue_days?: number;
         };
         Returns: Json;
+      };
+      set_goal_series_state: {
+        Args: { p_action: string; p_expected_revision: number; p_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       set_habit_celebrations: { Args: { p_enabled: boolean }; Returns: string };
       set_habit_checkin_note: {
@@ -3172,6 +3224,7 @@ export type Database = {
           pending_uploads: number;
         }[];
       };
+      sync_goal_periods: { Args: { p_home_id?: string; p_series_id?: string }; Returns: number };
       task_attachment_scope_impact: {
         Args: { p_attachment_id?: string; p_scope: string; p_task_id: string };
         Returns: {
@@ -3362,6 +3415,22 @@ export type Database = {
       update_goal_entry: {
         Args: { p_action: string; p_id: string; p_quantity?: number; p_reason?: string };
         Returns: Json;
+      };
+      update_goal_series: {
+        Args: {
+          p_description?: string;
+          p_ends_on?: string;
+          p_expected_revision: number;
+          p_id: string;
+          p_reminder_at_time?: string;
+          p_reminder_lead_days?: number;
+          p_time_zone?: string;
+          p_title: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
       };
       update_goal_settings: {
         Args: { p_home_id: string; p_member_access: string };

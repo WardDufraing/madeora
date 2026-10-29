@@ -100,6 +100,7 @@ describe("the goals list", () => {
         today="2026-11-10"
         timeZone="Europe/Brussels"
         timeZones={[]}
+        weekStart="monday"
       />,
     );
     expect(screen.getByRole("button", { name: "New goal" })).toBeInTheDocument();
@@ -120,6 +121,7 @@ describe("the goals list", () => {
         today="2026-11-10"
         timeZone="Europe/Brussels"
         timeZones={[]}
+        weekStart="monday"
       />,
     );
     expect(screen.queryByRole("button", { name: "New goal" })).not.toBeInTheDocument();

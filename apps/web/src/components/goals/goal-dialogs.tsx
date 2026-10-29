@@ -486,7 +486,11 @@ export function RemindersDialog({
   const [lead, setLead] = useState(reminder?.leadDays?.toString() ?? "3");
   const [overdue, setOverdue] = useState(reminder?.overdueDays?.toString() ?? "0");
   const [useLead, setUseLead] = useState(reminder ? reminder.leadDays !== null : true);
-  const [useOverdue, setUseOverdue] = useState(reminder ? reminder.overdueDays !== null : true);
+  // A period of a series ends at its deadline: advance reminders only.
+  const isPeriod = goal.period !== null;
+  const [useOverdue, setUseOverdue] = useState(
+    !isPeriod && (reminder ? reminder.overdueDays !== null : true),
+  );
   const [atTime, setAtTime] = useState(reminder?.atTime ?? "09:00");
   const [moments, setMoments] = useState<readonly GoalMoment[] | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -586,29 +590,33 @@ export function RemindersDialog({
                 data-testid="goal-reminders-lead"
               />
             ) : null}
-            <Checkbox
-              label={t("remindersOverdue")}
-              checked={useOverdue}
-              onChange={(event) => {
-                setUseOverdue(event.target.checked);
-                changed();
-              }}
-            />
-            {useOverdue ? (
-              <TextField
-                label={t("remindersOverdueDays")}
-                description={t("remindersOverdueDaysHint", { max: GOAL_LIMITS.overdueDays })}
-                type="number"
-                min={0}
-                max={GOAL_LIMITS.overdueDays}
-                value={overdue}
-                onChange={(event) => {
-                  setOverdue(event.target.value);
-                  changed();
-                }}
-                data-testid="goal-reminders-overdue"
-              />
-            ) : null}
+            {isPeriod ? null : (
+              <>
+                <Checkbox
+                  label={t("remindersOverdue")}
+                  checked={useOverdue}
+                  onChange={(event) => {
+                    setUseOverdue(event.target.checked);
+                    changed();
+                  }}
+                />
+                {useOverdue ? (
+                  <TextField
+                    label={t("remindersOverdueDays")}
+                    description={t("remindersOverdueDaysHint", { max: GOAL_LIMITS.overdueDays })}
+                    type="number"
+                    min={0}
+                    max={GOAL_LIMITS.overdueDays}
+                    value={overdue}
+                    onChange={(event) => {
+                      setOverdue(event.target.value);
+                      changed();
+                    }}
+                    data-testid="goal-reminders-overdue"
+                  />
+                ) : null}
+              </>
+            )}
             <TextField
               label={t("remindersAt")}
               type="time"

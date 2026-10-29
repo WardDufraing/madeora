@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-import { goalEntryKinds, goalKinds, goalReminderKinds, goalStatuses } from "@madeora/domain/goals";
+import {
+  goalEntryKinds,
+  goalFrequencies,
+  goalKinds,
+  goalOutcomes,
+  goalReminderKinds,
+  goalSeriesStates,
+  goalStatuses,
+  goalWeekStarts,
+} from "@madeora/domain/goals";
 import { habitUnitKinds } from "@madeora/domain/habits";
 import { goalAccessLevels, goalMemberAccess } from "@madeora/domain/permissions";
 
@@ -8,11 +17,32 @@ import { goalAccessLevels, goalMemberAccess } from "@madeora/domain/permissions"
  * The shapes the goal database functions answer (S30; supabase/migrations/*_goals.sql), checked on
  * the server before anything reaches a page, and the types the interface uses. Client-safe. People
  * are membership references (`null`: a personal goal, or someone who left the Home). Quantities are
- * exact decimals in at most 3 decimals; the interface works in thousandths.
+ * exact decimals in at most 3 decimals; the interface works in thousandths. S30b adds recurring series
+ * (supabase/migrations/*_recurring_goals.sql): a period of a series is a goal with `period`.
  */
 
 const date = z.iso.date();
 const person = z.uuid().nullable();
+
+/** A goal that is one period of a recurring series. */
+export const goalPeriodSchema = z.object({
+  seriesId: z.uuid(),
+  seriesTitle: z.string(),
+  frequency: z.enum(goalFrequencies),
+  /** Inclusive local dates. */
+  start: date,
+  end: date,
+  /** Its last day has passed: nobody adds progress, only goal managers correct it. */
+  ended: z.boolean(),
+  /** The calculated outcome once ended (never an achievement by itself). */
+  outcome: z.enum(goalOutcomes).nullable(),
+  finalizedAt: z.string().nullable(),
+  /** A correction changed the finalized result. */
+  correctedAt: z.string().nullable(),
+  /** Marked achieved, but a correction took the total below the target. */
+  needsReview: z.boolean(),
+});
+export type GoalPeriod = z.infer<typeof goalPeriodSchema>;
 
 export const goalSummarySchema = z.object({
   id: z.uuid(),
@@ -42,6 +72,8 @@ export const goalSummarySchema = z.object({
   /** The viewer receives them (a Home goal: not turned off for themselves). */
   myReminders: z.boolean(),
   access: z.enum(goalAccessLevels),
+  /** Null for a goal outside a series. */
+  period: goalPeriodSchema.nullable(),
   /** What the viewer may do now. */
   actions: z.object({
     contribute: z.boolean(),
@@ -53,9 +85,43 @@ export const goalSummarySchema = z.object({
 });
 export type GoalSummary = z.infer<typeof goalSummarySchema>;
 
+/** A series as lists show it, with the period running now. */
+export const goalSeriesSummarySchema = z.object({
+  id: z.uuid(),
+  homeId: z.uuid().nullable(),
+  kind: z.enum(goalKinds),
+  frequency: z.enum(goalFrequencies),
+  weekStart: z.enum(goalWeekStarts),
+  title: z.string(),
+  state: z.enum(goalSeriesStates),
+  firstPeriodStart: date,
+  endsOn: date.nullable(),
+  revision: z.int(),
+  /** The target that applies now (null for a completion series). */
+  target: z.number().nullable(),
+  unit: z.string().nullable(),
+  unitKind: z.enum(habitUnitKinds).nullable(),
+  current: z
+    .object({
+      id: z.uuid(),
+      start: date,
+      end: date,
+      total: z.number(),
+      target: z.number().nullable(),
+      unit: z.string().nullable(),
+      unitKind: z.enum(habitUnitKinds).nullable(),
+      status: z.enum(goalStatuses),
+    })
+    .nullable(),
+  access: z.enum(goalAccessLevels),
+});
+export type GoalSeriesSummary = z.infer<typeof goalSeriesSummarySchema>;
+
 export const goalListSchema = z.object({
   goals: z.array(goalSummarySchema),
   counts: z.object({ active: z.int(), completed: z.int(), archived: z.int() }),
+  /** The context's recurring series. */
+  series: z.array(goalSeriesSummarySchema),
   /** The viewer's access in this context (null: none, which the database answers as not found). */
   access: z.enum(goalAccessLevels).nullable(),
   /** A Home's member access; null for the Personal space. */
@@ -162,6 +228,8 @@ export const goalEventKinds = [
   "unarchived",
   "restored",
   "reminders_changed",
+  "finalized",
+  "outcome_changed",
 ] as const;
 export type GoalEventKind = (typeof goalEventKinds)[number];
 
@@ -229,3 +297,112 @@ export const goalRemindersResultSchema = z.object({
   moments: z.array(goalMomentSchema).optional(),
 });
 export type GoalRemindersResult = z.infer<typeof goalRemindersResultSchema>;
+
+const periodBounds = z.object({ start: date, end: date });
+
+export const goalSeriesEventKinds = [
+  "created",
+  "edited",
+  "target_scheduled",
+  "paused",
+  "resumed",
+  "stopped",
+  "restored",
+] as const;
+export type GoalSeriesEventKind = (typeof goalSeriesEventKinds)[number];
+
+export const goalSeriesTargetSchema = z.object({
+  effectiveFrom: date,
+  target: z.number(),
+  unit: z.string(),
+  unitKind: z.enum(habitUnitKinds),
+  /** Applies only to periods that have begun (kept as their history). */
+  past: z.boolean(),
+});
+export type GoalSeriesTarget = z.infer<typeof goalSeriesTargetSchema>;
+
+export const goalSeriesDetailSchema = goalSeriesSummarySchema.extend({
+  description: z.string().nullable(),
+  timeZone: z.string(),
+  today: date,
+  createdAt: z.string(),
+  stoppedAt: z.string().nullable(),
+  reminder: z.object({ leadDays: z.int(), atTime: z.string() }).nullable(),
+  /** The period running now (or the first, before the series starts) and the one after it. */
+  currentPeriod: periodBounds,
+  nextPeriod: periodBounds.nullable(),
+  targets: z.array(goalSeriesTargetSchema),
+  events: z.array(
+    z.object({
+      id: z.uuid(),
+      kind: z.enum(goalSeriesEventKinds),
+      by: person,
+      mine: z.boolean(),
+      at: z.string(),
+      details: z.record(z.string(), z.unknown()).nullable(),
+    }),
+  ),
+  periodCount: z.int(),
+  actions: z.object({
+    manage: z.boolean(),
+    changeTarget: z.boolean(),
+    pause: z.boolean(),
+    resume: z.boolean(),
+    stop: z.boolean(),
+  }),
+});
+export type GoalSeriesDetail = z.infer<typeof goalSeriesDetailSchema>;
+
+export const goalSeriesPeriodsSchema = z.object({
+  periods: z.array(goalSummarySchema),
+  hasMore: z.boolean(),
+});
+export type GoalSeriesPeriods = z.infer<typeof goalSeriesPeriodsSchema>;
+
+/** A new series' preview: its first and next periods. */
+export const goalSeriesPreviewSchema = z.object({
+  startsNow: z.boolean(),
+  periods: z.object({ first: periodBounds, next: periodBounds.nullable() }),
+});
+export type GoalSeriesPreview = z.infer<typeof goalSeriesPreviewSchema>;
+
+export const goalSeriesCreateResultSchema = z.object({
+  outcome: z.string(),
+  revision: z.int().optional(),
+  currentGoalId: z.uuid().nullable().optional(),
+  startsNow: z.boolean().optional(),
+  periods: goalSeriesPreviewSchema.shape.periods.optional(),
+});
+export type GoalSeriesCreateResult = z.infer<typeof goalSeriesCreateResultSchema>;
+
+/** A series target change's impact (preview, or why it needs confirming). */
+export const goalSeriesTargetImpactSchema = z.object({
+  effectiveFrom: date,
+  /** The next scheduled change after it (exclusive), or null: it applies onward. */
+  until: date.nullable(),
+  /** It changes the period running now. */
+  current: z.boolean(),
+  targetBefore: z.number(),
+  targetAfter: z.number(),
+  unitBefore: z.string(),
+  unitKindBefore: z.enum(habitUnitKinds),
+  unitAfter: z.string(),
+  unitKindAfter: z.enum(habitUnitKinds),
+  unitChanged: z.boolean(),
+  /** The running period, when it changes. */
+  goalId: z.uuid().nullable(),
+  total: z.number().nullable(),
+  reachedBefore: z.boolean().nullable(),
+  reachedAfter: z.boolean().nullable(),
+  achieved: z.boolean(),
+  reopens: z.boolean(),
+  reminders: z.boolean(),
+});
+export type GoalSeriesTargetImpact = z.infer<typeof goalSeriesTargetImpactSchema>;
+
+export const goalSeriesTargetResultSchema = z.object({
+  outcome: z.string(),
+  revision: z.int().optional(),
+  impact: goalSeriesTargetImpactSchema.optional(),
+});
+export type GoalSeriesTargetResult = z.infer<typeof goalSeriesTargetResultSchema>;

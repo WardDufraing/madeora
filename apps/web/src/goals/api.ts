@@ -12,8 +12,17 @@ export type {
   GoalEvents,
   GoalList,
   GoalMoment,
+  GoalPeriod,
   GoalReminder,
   GoalRemindersResult,
+  GoalSeriesCreateResult,
+  GoalSeriesDetail,
+  GoalSeriesPeriods,
+  GoalSeriesPreview,
+  GoalSeriesSummary,
+  GoalSeriesTarget,
+  GoalSeriesTargetImpact,
+  GoalSeriesTargetResult,
   GoalSummary,
   GoalTargetImpact,
   GoalTargetResult,
@@ -35,11 +44,28 @@ export type {
  * - `PUT /api/v1/goals/:id/reminders` (`preview: true` → `{ moments }`); `PUT …/my-reminders`.
  * - `GET /api/v1/goals/:id/history?before=`; `PATCH /api/v1/goals/settings`.
  *
+ * Recurring series (S30b):
+ *
+ * - `POST /api/v1/goal-series` creates (`preview: true` → the first and next periods).
+ * - `GET|PATCH|DELETE /api/v1/goal-series/:id` (detail; edit, for later periods; to the trash).
+ * - `POST /api/v1/goal-series/:id/state` (pause, resume, stop).
+ * - `POST /api/v1/goal-series/:id/target` (from a period on; `preview: true` → `{ impact }`).
+ * - `GET /api/v1/goal-series/:id/periods?before=` (newest first).
+ *
  * `409 conflict` (with the current `revision`) means someone changed it since it was read; a refused
  * change answers `409` with its reason and, where it explains it, the goal as it is now.
  */
 export const GOALS_ENDPOINT = "/api/v1/goals";
 export const GOAL_SETTINGS_ENDPOINT = "/api/v1/goals/settings";
+export const GOAL_SERIES_ENDPOINT = "/api/v1/goal-series";
+
+export function goalSeriesEndpoint(
+  seriesId: string,
+  part?: "state" | "target" | "periods",
+): string {
+  const base = `${GOAL_SERIES_ENDPOINT}/${encodeURIComponent(seriesId)}`;
+  return part ? `${base}/${part}` : base;
+}
 
 export function goalEndpoint(
   goalId: string,
@@ -76,6 +102,10 @@ export type GoalErrorCode =
   | "confirm-unit"
   | "confirm-status"
   | "no-deadline"
+  | "period-ended"
+  | "series-period"
+  | "invalid-period"
+  | "stopped"
   | "failed";
 
 export interface GoalErrorResponse {
@@ -106,6 +136,10 @@ export type GoalFailure =
   | "confirmUnit"
   | "confirmStatus"
   | "noDeadline"
+  | "periodEnded"
+  | "seriesPeriod"
+  | "invalidPeriod"
+  | "stopped"
   | "network"
   | "failed";
 
@@ -128,6 +162,10 @@ const failures: { readonly [C in GoalErrorCode]?: GoalFailure } = {
   "confirm-unit": "confirmUnit",
   "confirm-status": "confirmStatus",
   "no-deadline": "noDeadline",
+  "period-ended": "periodEnded",
+  "series-period": "seriesPeriod",
+  "invalid-period": "invalidPeriod",
+  stopped: "stopped",
 };
 
 export class GoalRequestError extends Error {

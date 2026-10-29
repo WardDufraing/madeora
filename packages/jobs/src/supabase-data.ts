@@ -274,6 +274,12 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return outcome;
     },
 
+    async rollGoalPeriods(limit) {
+      const { data, error } = await client.rpc("roll_goal_periods", { p_limit: limit });
+      if (error) throw new JobStoreError("roll_goal_periods", error.code);
+      return data;
+    },
+
     async deliverGoalReminder(goalId, revision, kind, at) {
       const { data, error } = await client.rpc("deliver_goal_reminder", {
         p_goal_id: goalId,

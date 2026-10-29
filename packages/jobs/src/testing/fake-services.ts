@@ -61,6 +61,8 @@ export class FakeJobData implements JobDataPort {
   readonly habitReminderCalls: { habitId: string; revision: number; at: string }[] = [];
   habitsAdvanced = 0;
   readonly habitAdvanceCalls: number[] = [];
+  goalPeriodsCreated = 0;
+  readonly goalRollCalls: number[] = [];
   habitSnoozeOutcome: HabitSnoozeOutcome = "notified";
   readonly habitSnoozeCalls: string[] = [];
   habitPauseEndOutcome: HabitPauseEndOutcome = "notified";
@@ -212,6 +214,12 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.goalReminderCalls.push({ goalId, revision, kind, at });
     return Promise.resolve(this.goalReminderOutcome);
+  }
+
+  rollGoalPeriods(limit: number): Promise<number> {
+    this.check();
+    this.goalRollCalls.push(limit);
+    return Promise.resolve(this.goalPeriodsCreated);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

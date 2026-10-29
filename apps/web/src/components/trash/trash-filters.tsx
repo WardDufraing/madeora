@@ -42,6 +42,7 @@ const itemTypeKey = {
   meal_entry: "itemTypeMealEntry",
   habit: "itemTypeHabit",
   goal: "itemTypeGoal",
+  goal_series: "itemTypeGoalSeries",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

@@ -2,7 +2,14 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
-import type { GoalEntryKind, GoalStatus } from "@madeora/domain/goals";
+import type {
+  GoalEntryKind,
+  GoalFrequency,
+  GoalOutcome,
+  GoalSeriesState,
+  GoalStatus,
+  GoalWeekStart,
+} from "@madeora/domain/goals";
 import type { HabitUnitKind } from "@madeora/domain/habits";
 
 import { useNumericTexts } from "@/components/habits/use-numeric-texts";
@@ -29,6 +36,10 @@ const failureKey = {
   confirmUnit: "failureConfirmUnit",
   confirmStatus: "failureConfirmStatus",
   noDeadline: "failureNoDeadline",
+  periodEnded: "failurePeriodEnded",
+  seriesPeriod: "failureSeriesPeriod",
+  invalidPeriod: "failureInvalidPeriod",
+  stopped: "failureStopped",
   network: "failureNetwork",
   failed: "failureFailed",
 } as const satisfies Record<GoalFailure, string>;
@@ -36,9 +47,33 @@ const failureKey = {
 const statusKey = {
   active: "statusActive",
   overdue: "statusOverdue",
+  ended: "statusEnded",
   achieved: "statusAchieved",
   archived: "statusArchived",
 } as const satisfies Record<GoalStatus, string>;
+
+const frequencyKey = {
+  weekly: "frequencyWeekly",
+  monthly: "frequencyMonthly",
+  yearly: "frequencyYearly",
+} as const satisfies Record<GoalFrequency, string>;
+
+const seriesStateKey = {
+  active: "seriesActive",
+  paused: "seriesPaused",
+  stopped: "seriesStopped",
+} as const satisfies Record<GoalSeriesState, string>;
+
+const outcomeKey = {
+  reached: "outcomeReached",
+  not_reached: "outcomeNotReached",
+} as const satisfies Record<GoalOutcome, string>;
+
+const weekStartKey = {
+  monday: "weekStartMonday",
+  saturday: "weekStartSaturday",
+  sunday: "weekStartSunday",
+} as const satisfies Record<GoalWeekStart, string>;
 
 const entryKindKey = {
   initial: "entryInitial",
@@ -95,6 +130,16 @@ export function useGoalTexts() {
     progress,
     instant,
     status: (status: GoalStatus) => t(statusKey[status]),
+    frequency: (frequency: GoalFrequency) => t(frequencyKey[frequency]),
+    seriesState: (state: GoalSeriesState) => t(seriesStateKey[state]),
+    outcome: (outcome: GoalOutcome) => t(outcomeKey[outcome]),
+    weekStart: (weekStart: GoalWeekStart) => t(weekStartKey[weekStart]),
+    /** A period's dates ("1 Oct – 31 Oct 2026"). */
+    period: (start: string, end: string) =>
+      t("periodRange", {
+        start: formatHabitDate(start, locale, "short"),
+        end: formatHabitDate(end, locale, "short"),
+      }),
     entryKind: (kind: GoalEntryKind) => t(entryKindKey[kind]),
     failure: (failure: GoalFailure) => t(failureKey[failure]),
     field: (code: string | undefined) =>

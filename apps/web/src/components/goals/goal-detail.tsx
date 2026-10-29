@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { goalEndpoint, sendGoalRequest, type GoalDetail } from "@/goals/api";
-import { goalKeys, goalsPath } from "@/goals/format";
+import { goalKeys, goalSeriesPath, goalsPath } from "@/goals/format";
 import { memberNames, type MemberOption } from "@/tasks/format";
 
 import {
@@ -60,7 +60,8 @@ function useGoalDetail(initial: GoalDetail): GoalDetail {
  * One goal's page (S30): its status, progress against the target (uncapped numbers, a bar capped at
  * 100%), Target reached with Mark achieved, Add progress and Set total, the contributions with their
  * corrections, the achievement history, the change log, and the changes the viewer may make. Every
- * change is checked again by the database.
+ * change is checked again by the database. A period of a recurring series (S30b) shows its dates and
+ * series, and once it ended its calculated outcome; its target changes from the series.
  */
 export function GoalDetailView({
   initialGoal,
@@ -109,6 +110,20 @@ export function GoalDetailView({
             </span>
           ) : null}
         </p>
+        {goal.period ? (
+          <p className="text-body text-fg" data-testid="goal-period-line">
+            {t("periodLine", {
+              period: texts.period(goal.period.start, goal.period.end),
+              frequency: texts.frequency(goal.period.frequency),
+            })}{" "}
+            <Link
+              href={goalSeriesPath(goal.homeId, goal.period.seriesId)}
+              className="text-accent-fg underline"
+            >
+              <bdi>{goal.period.seriesTitle}</bdi>
+            </Link>
+          </p>
+        ) : null}
         {goal.description ? (
           <p className="max-w-prose whitespace-pre-line text-body text-fg-muted">
             <bdi>{goal.description}</bdi>
@@ -135,6 +150,22 @@ export function GoalDetailView({
           {t("progressTitle")}
         </h2>
         {measurable ? <GoalProgressMeter goal={goal} /> : null}
+        {goal.period?.outcome ? (
+          <p className="text-body font-medium text-fg" data-testid="goal-period-outcome">
+            {t("outcomeLine", { outcome: texts.outcome(goal.period.outcome) })}
+            {goal.period.correctedAt ? ` · ${t("outcomeCorrected")}` : ""}
+          </p>
+        ) : null}
+        {goal.period?.ended && !archived ? (
+          <p className="text-helper text-fg-muted">
+            {actions.manage ? t("periodEndedManage") : t("periodEndedView")}
+          </p>
+        ) : null}
+        {goal.period?.needsReview ? (
+          <p className="text-body text-fg" role="note" data-testid="goal-needs-review">
+            {t("needsReview")}
+          </p>
+        ) : null}
         {achieved && goal.achievedAt ? (
           <p className="text-body font-medium text-fg" data-testid="goal-achieved-line">
             {t("achievedLine", {
@@ -306,7 +337,7 @@ export function GoalDetailView({
                 >
                   {t("edit")}
                 </Button>
-                {measurable ? (
+                {measurable && !goal.period ? (
                   <Button
                     variant="secondary"
                     onClick={() => {
