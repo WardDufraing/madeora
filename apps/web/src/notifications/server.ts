@@ -111,6 +111,7 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
         typeof params.habitId === "string" ? (habitNames.get(params.habitId) ?? null) : null,
       onDate: typeof params.onDate === "string" ? params.onDate : null,
       weekly: params.weekly === true,
+      progress: readProgress(params.progress),
       resumesOn: typeof params.resumesOn === "string" ? params.resumesOn : null,
       automatic: params.automatic === true,
       duringQuietHours: row.during_quiet_hours,
@@ -120,6 +121,18 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
   }
   return { status: "ok", value: items };
 });
+
+/** A reminder's point-in-time progress snapshot, or null when it is missing or malformed. */
+function readProgress(value: unknown): NotificationView["progress"] {
+  if (!isRecord(value)) return null;
+  const { total, target, unit, unitKind } = value;
+  return typeof total === "number" &&
+    typeof target === "number" &&
+    typeof unit === "string" &&
+    (unitKind === "preset" || unitKind === "custom")
+    ? { total, target, unit, unitKind }
+    : null;
+}
 
 /** How many notifications are unread; 0 when they cannot be counted (the bell then shows none). */
 export const countUnreadNotifications = cache(async (): Promise<number> => {

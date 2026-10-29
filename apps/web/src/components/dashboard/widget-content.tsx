@@ -14,7 +14,11 @@ import {
 } from "@/components/points/points-widgets";
 import { PersonalPointsWidget } from "@/components/personal-points/personal-points-widget";
 import { RecipesWidget } from "@/components/recipes/recipe-widget";
-import { HabitInsightsWidget, HabitsWidget } from "@/components/habits/habit-widgets";
+import {
+  HabitInsightsWidget,
+  HabitProgressWidget,
+  HabitsWidget,
+} from "@/components/habits/habit-widgets";
 import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
@@ -773,7 +777,7 @@ function mealPlannerConfig(widget: DashboardWidget): WidgetConfigs["meal-planner
   return parsed.success ? parsed.data : config.parse({});
 }
 
-function habitWidgetConfig<T extends "habits" | "habit-insights">(
+function habitWidgetConfig<T extends "habits" | "habit-insights" | "habit-progress">(
   type: T,
   widget: DashboardWidget,
 ): WidgetConfigs[T] {
@@ -813,6 +817,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "meal-planner": t("widgetMealPlanner"),
     habits: t("widgetHabits"),
     "habit-insights": t("widgetHabitInsights"),
+    "habit-progress": t("widgetHabitProgress"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -1004,14 +1009,22 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
       };
     }
     case "habits":
-    case "habit-insights": {
+    case "habit-insights":
+    case "habit-progress": {
       const type = widget.type;
       const render = (home: { readonly id: string; readonly name: string } | null) =>
         type === "habits" ? (
           <HabitsWidget home={home} config={habitWidgetConfig("habits", widget)} />
-        ) : (
+        ) : type === "habit-insights" ? (
           <HabitInsightsWidget home={home} config={habitWidgetConfig("habit-insights", widget)} />
+        ) : (
+          <HabitProgressWidget home={home} config={habitWidgetConfig("habit-progress", widget)} />
         );
+      const personalTitle = {
+        habits: t("widgetPersonalHabits"),
+        "habit-insights": t("widgetPersonalHabitInsights"),
+        "habit-progress": t("widgetPersonalHabitProgress"),
+      }[type];
       if (scope.kind === "home") {
         return {
           id: widget.id,
@@ -1024,7 +1037,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
       if (!widget.source) {
         return {
           id: widget.id,
-          title: type === "habits" ? t("widgetPersonalHabits") : t("widgetPersonalHabitInsights"),
+          title: personalTitle,
           sourceName: null,
           body: render(null),
           unavailable: false,

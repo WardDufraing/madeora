@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useState } from "react";
 
 import { habitSnoozeMinutes, type HabitSnoozeMinutes } from "@madeora/domain/habits";
@@ -20,6 +21,10 @@ export interface HabitReminderActionsProps {
   readonly habitName: string;
   /** The day the reminder is for; null for a weekly habit (completes the habit's today). */
   readonly onDate: string | null;
+  /** A numeric habit: no Complete (a quantity cannot be invented); the habit's page takes progress. */
+  readonly numeric?: boolean;
+  /** Where the habit's page is, for a numeric habit's reminder. */
+  readonly href?: string;
 }
 
 /**
@@ -32,8 +37,11 @@ export function HabitReminderActions({
   habitId,
   habitName,
   onDate,
+  numeric = false,
+  href,
 }: HabitReminderActionsProps) {
   const t = useTranslations("Habits");
+  const tn = useTranslations("HabitsNumeric");
   const texts = useHabitTexts();
   const hydrated = useHydrated();
   const checkins = useHabitCheckins(`habit-reminder:${notificationId}`);
@@ -52,18 +60,34 @@ export function HabitReminderActions({
   return (
     <div className="flex flex-col gap-2" data-testid="habit-reminder-actions">
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          disabled={!hydrated || checkins.complete.isSuccess}
-          loading={checkins.complete.busy}
-          aria-label={t("completeHabit", { habit: habitName })}
-          onClick={() => {
-            checkins.complete.mutate({ habitId, name: habitName, onDate, source: "notification" });
-          }}
-          data-testid="habit-reminder-complete"
-        >
-          {t("complete")}
-        </Button>
+        {numeric ? (
+          <Link
+            href={href ?? "#"}
+            className="inline-flex min-h-8 items-center rounded-control border border-line-control px-3 text-body font-medium text-fg"
+            aria-label={tn("addProgressTo", { habit: habitName })}
+            data-testid="habit-reminder-add-progress"
+          >
+            {tn("addProgress")}
+          </Link>
+        ) : (
+          <Button
+            size="sm"
+            disabled={!hydrated || checkins.complete.isSuccess}
+            loading={checkins.complete.busy}
+            aria-label={t("completeHabit", { habit: habitName })}
+            onClick={() => {
+              checkins.complete.mutate({
+                habitId,
+                name: habitName,
+                onDate,
+                source: "notification",
+              });
+            }}
+            data-testid="habit-reminder-complete"
+          >
+            {t("complete")}
+          </Button>
+        )}
         <span className="text-helper text-fg-muted" id={`snooze-${notificationId}`}>
           {t("snoozeLabel")}
         </span>

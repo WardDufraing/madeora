@@ -372,6 +372,18 @@ export type Database = {
           revision: number;
         }[];
       };
+      add_habit_contribution: {
+        Args: {
+          p_entered_unit?: string;
+          p_expected_revision?: number;
+          p_habit_id: string;
+          p_id: string;
+          p_on?: string;
+          p_quantity: number;
+          p_source?: string;
+        };
+        Returns: Json;
+      };
       add_shopping_items: {
         Args: { p_items: Json; p_list_id: string };
         Returns: {
@@ -606,6 +618,28 @@ export type Database = {
           revision: number;
         }[];
       };
+      change_habit_tracking: {
+        Args: {
+          p_confirm_status?: boolean;
+          p_confirm_unit?: boolean;
+          p_dry_run?: boolean;
+          p_effective_on?: string;
+          p_expected_revision: number;
+          p_expected_total?: number;
+          p_id: string;
+          p_mode: string;
+          p_quick_adds?: number[];
+          p_target?: number;
+          p_unit?: string;
+          p_unit_kind?: string;
+          p_when?: string;
+        };
+        Returns: {
+          impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
       change_home_member_role: {
         Args: {
           p_expected_role: string;
@@ -816,6 +850,10 @@ export type Database = {
           p_starts_on?: string;
           p_target?: number;
           p_time_zone?: string;
+          p_tracking_quick_adds?: number[];
+          p_tracking_target?: number;
+          p_tracking_unit?: string;
+          p_tracking_unit_kind?: string;
           p_week_start?: string;
           p_weekdays?: number[];
         };
@@ -1360,6 +1398,11 @@ export type Database = {
       get_habit: { Args: { p_habit_id: string }; Returns: Json };
       get_habit_calendar: { Args: { p_habit_id: string; p_month: string }; Returns: Json };
       get_habit_checkins: { Args: { p_before?: string; p_habit_id: string }; Returns: Json };
+      get_habit_contributions: { Args: { p_habit_id: string; p_on: string }; Returns: Json };
+      get_habit_daily_totals: {
+        Args: { p_before?: string; p_days?: number; p_habit_id: string };
+        Returns: Json;
+      };
       get_habit_events: { Args: { p_before?: string; p_habit_id: string }; Returns: Json };
       get_habit_insights: { Args: { p_days: number; p_habit_id: string }; Returns: Json };
       get_habits: {
@@ -2738,6 +2781,13 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_habit_day_note: {
+        Args: { p_expected_revision: number; p_habit_id: string; p_note?: string; p_on: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       set_habit_end: {
         Args: {
           p_dry_run?: boolean;
@@ -2747,6 +2797,13 @@ export type Database = {
         };
         Returns: {
           impact: Json;
+          outcome: string;
+          revision: number;
+        }[];
+      };
+      set_habit_quick_adds: {
+        Args: { p_expected_revision: number; p_id: string; p_quick_adds: number[] };
+        Returns: {
           outcome: string;
           revision: number;
         }[];
@@ -3209,6 +3266,10 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      update_habit_contribution: {
+        Args: { p_action: string; p_id: string; p_quantity?: number; p_reason?: string };
+        Returns: Json;
       };
       update_habit_pause: {
         Args: {

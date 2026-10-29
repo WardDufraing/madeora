@@ -139,7 +139,7 @@ function usePreviewFlow<Body extends object>(
   };
 }
 
-function DialogActions({
+export function DialogActions({
   onClose,
   children,
 }: {
@@ -157,7 +157,7 @@ function DialogActions({
   );
 }
 
-function Failure({ error }: { readonly error: HabitRequestError | null }) {
+export function Failure({ error }: { readonly error: HabitRequestError | null }) {
   const texts = useHabitTexts();
   return error ? (
     <FormAlert tone="error" announce>
@@ -223,7 +223,7 @@ function RangeList({
   );
 }
 
-function Preview({ children }: { readonly children: ReactNode }) {
+export function Preview({ children }: { readonly children: ReactNode }) {
   const t = useTranslations("Habits");
   return (
     <section

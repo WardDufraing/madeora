@@ -254,6 +254,11 @@ const habitInsightsConfig = z.strictObject({
   habitId: z.uuid().nullable().default(null),
 });
 
+/** The Habit progress widget (S29): one chosen numeric habit's day, with quick-adds (null: not chosen). */
+const habitProgressConfig = z.strictObject({
+  habitId: z.uuid().nullable().default(null),
+});
+
 const habitSizes = sizes(
   { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
   { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -402,6 +407,11 @@ export const widgetRegistry = {
     sizes: habitSizes,
     config: habitInsightsConfig,
   },
+  "habit-progress": {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: habitSizes,
+    config: habitProgressConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -429,6 +439,7 @@ export interface WidgetConfigs {
   readonly "meal-planner": WidgetConfig<"meal-planner">;
   readonly habits: WidgetConfig<"habits">;
   readonly "habit-insights": WidgetConfig<"habit-insights">;
+  readonly "habit-progress": WidgetConfig<"habit-progress">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

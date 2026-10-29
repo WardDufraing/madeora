@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -16,6 +16,12 @@ import { TextField } from "@/components/ui/text-field";
 import { HABITS_ENDPOINT, habitEndpoint, sendHabitRequest, type HabitSummary } from "@/habits/api";
 import { habitsPath, newId } from "@/habits/format";
 import { createHabitSchema, updateHabitSchema } from "@/habits/schema";
+import {
+  defaultTrackingDraft,
+  trackingFromDraft,
+  type TrackingDraft,
+  type TrackingErrors,
+} from "@/habits/tracking-draft";
 
 import {
   defaultSchedule,
@@ -23,6 +29,7 @@ import {
   scheduleBody,
   type ScheduleDraft,
 } from "./habit-schedule-fields";
+import { TrackingFields } from "./numeric-fields";
 import { useHabitMutation } from "./use-habit-mutation";
 import { useHabitTexts } from "./use-habit-texts";
 
@@ -81,7 +88,10 @@ export function HabitFormDialog({
   const t = useTranslations("Habits");
   const texts = useHabitTexts();
   const router = useRouter();
+  const locale = useLocale();
   const [id] = useState(newId);
+  const [tracking, setTracking] = useState<TrackingDraft>(() => defaultTrackingDraft(locale));
+  const [trackingErrors, setTrackingErrors] = useState<TrackingErrors | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleDraft>(defaultSchedule);
   const [scheduleError, setScheduleError] = useState<string | undefined>(undefined);
   const personal = (habit ? habit.homeId : homeId) === null;
@@ -110,6 +120,14 @@ export function HabitFormDialog({
   );
 
   const submit = (values: FormValues) => {
+    setTrackingErrors(undefined);
+    // A weekly schedule is always completed once; numeric targets are daily.
+    const numeric = !habit && tracking.numeric && schedule.kind !== "weekly";
+    const reading = trackingFromDraft({ ...tracking, numeric }, locale);
+    if (!reading.ok) {
+      setTrackingErrors(reading.errors);
+      return;
+    }
     const body = habit
       ? {
           revision: habit.revision,
@@ -127,6 +145,7 @@ export function HabitFormDialog({
           endsOn: values.endsOn === "" ? null : values.endsOn,
           timeZone: personal ? values.timeZone : null,
           weekStart: values.weekStart,
+          tracking: reading.tracking,
         };
     const parsed = (habit ? updateHabitSchema : createHabitSchema).safeParse(body);
     form.clearErrors();
@@ -192,6 +211,12 @@ export function HabitFormDialog({
               onChange={setSchedule}
               weekStart={chosenWeekStart}
               error={scheduleError}
+            />
+            <TrackingFields
+              value={tracking}
+              onChange={setTracking}
+              weekly={schedule.kind === "weekly"}
+              errors={trackingErrors}
             />
             <TextField
               label={t("fieldStartsOn")}

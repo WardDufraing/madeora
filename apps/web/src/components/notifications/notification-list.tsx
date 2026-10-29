@@ -1,11 +1,12 @@
 import { notificationPath } from "@madeora/domain/notifications";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { FormAlert } from "@/components/auth/form-alert";
 import { HabitReminderActions } from "@/components/habits/habit-reminder-actions";
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
 import type { NotificationView } from "@/notifications/types";
+import { isPresetUnit, unitMessageKey } from "@/habits/numeric-keys";
 import { formatTaskDate } from "@/tasks/format";
 
 import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
@@ -108,12 +109,18 @@ type MessageKey =
   | "kindHabitPausedOpen"
   | "kindHabitResumed"
   | "kindHabitPauseEnded"
+  | "kindHabitReminderProgress"
   | "kindUnknown";
 
 /** The message key for a notification (exported for tests). */
 export function messageKeyFor(
   item: Pick<NotificationView, "kind" | "decision"> &
-    Partial<Pick<NotificationView, "dueDate" | "reason" | "weekly" | "resumesOn" | "automatic">>,
+    Partial<
+      Pick<
+        NotificationView,
+        "dueDate" | "reason" | "weekly" | "resumesOn" | "automatic" | "progress"
+      >
+    >,
 ): MessageKey {
   const outcomes: Readonly<Record<string, MessageKey>> | undefined = (
     choreOutcomeMessage as Readonly<Record<string, Readonly<Record<string, MessageKey>>>>
@@ -124,7 +131,8 @@ export function messageKeyFor(
     return item.dueDate ? "kindTaskReminderDue" : "kindTaskReminder";
   // S28: a weekly reminder is about the week, a pause notice says until when.
   if (item.kind === "habit.reminder") {
-    return item.weekly ? "kindHabitReminderWeekly" : "kindHabitReminder";
+    if (item.weekly) return "kindHabitReminderWeekly";
+    return item.progress ? "kindHabitReminderProgress" : "kindHabitReminder";
   }
   if (item.kind === "habit.paused") {
     return item.resumesOn ? "kindHabitPaused" : "kindHabitPausedOpen";
@@ -150,7 +158,22 @@ export async function NotificationList({
   readonly items: readonly NotificationView[];
   readonly formats: DateTimeFormats;
 }) {
-  const t = await getTranslations("Notifications");
+  const [t, tn, locale] = await Promise.all([
+    getTranslations("Notifications"),
+    getTranslations("HabitsNumeric"),
+    getLocale(),
+  ]);
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
+  /** "500 / 2,000 mL": the day's point-in-time progress when the reminder was sent. */
+  const progressText = (progress: NonNullable<NotificationView["progress"]>) =>
+    tn("progressText", {
+      total: number.format(progress.total),
+      target: number.format(progress.target),
+      unit:
+        progress.unitKind === "preset" && isPresetUnit(progress.unit)
+          ? tn(unitMessageKey(progress.unit, progress.target, locale))
+          : isolate(progress.unit),
+    });
   if (items.length === 0) {
     return (
       <FormAlert tone="info">
@@ -178,6 +201,7 @@ export async function NotificationList({
                     : "",
             task: item.taskTitle ? isolate(item.taskTitle) : t("taskFallback"),
             habit: item.habitName ? isolate(item.habitName) : t("habitFallback"),
+            progress: item.progress ? progressText(item.progress) : "",
           });
           const href = notificationPath(
             item.kind,
@@ -221,6 +245,8 @@ export async function NotificationList({
                   habitId={item.habitId}
                   habitName={item.habitName}
                   onDate={item.weekly ? null : item.onDate}
+                  numeric={item.progress !== null}
+                  href={href}
                 />
               ) : null}
               <div className="flex flex-wrap items-start gap-3">

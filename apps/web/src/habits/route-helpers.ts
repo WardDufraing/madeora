@@ -135,6 +135,16 @@ const refusals = new Set<string>([
   "window_closed",
   "quiet_hours",
   "not_participant",
+  "not_numeric",
+  "numeric_required",
+  "numeric_derived",
+  "numeric_requires_daily",
+  "unit_mismatch",
+  "stale",
+  "precision",
+  "confirm_unit",
+  "confirm_status",
+  "today_ineligible",
 ]);
 
 /** What travels along with an answer: the current revision, an impact, the habit, a check-in. */
@@ -144,6 +154,8 @@ export interface OutcomeExtra {
   readonly habit?: unknown;
   readonly checkin?: unknown;
   readonly dueAt?: unknown;
+  /** A conversion the database refused for needing more decimals, rounded for the person to see. */
+  readonly converted?: unknown;
 }
 
 function present(extra: OutcomeExtra): object {
@@ -174,6 +186,8 @@ export function outcomeAnswer(
     case "undone":
     case "reactivated":
     case "preview":
+    case "added":
+    case "corrected":
     case "snoozed":
       return json(200, body);
     case "conflict":
@@ -199,7 +213,13 @@ export function outcomeAnswer(
       if (outcome && refusals.has(outcome)) {
         return json(409, {
           error: outcome.replaceAll("_", "-"),
-          ...present({ habit: extra.habit, checkin: extra.checkin, dueAt: extra.dueAt }),
+          ...present({
+            habit: extra.habit,
+            checkin: extra.checkin,
+            dueAt: extra.dueAt,
+            impact: extra.impact,
+            converted: extra.converted,
+          }),
         });
       }
       logHabits(event, "unexpected_outcome");

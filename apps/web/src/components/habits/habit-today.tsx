@@ -8,6 +8,7 @@ import { useHydrated } from "@/components/ui/use-hydrated";
 import type { HabitSummary } from "@/habits/api";
 import type { MemberNames } from "@/tasks/format";
 
+import { isNumeric, NumericToday } from "./habit-progress";
 import { useHabitCheckins } from "./use-habit-checkins";
 import { useHabitTexts } from "./use-habit-texts";
 
@@ -25,6 +26,15 @@ export interface HabitTodayProps {
  * today (not scheduled, paused, week target reached, …). Read-only viewers only see the state.
  */
 export function HabitToday({ habit, names, source, compact = false }: HabitTodayProps) {
+  // A quantity cannot be invented: a numeric habit shows its progress and opens the page instead.
+  return isNumeric(habit) ? (
+    <NumericToday habit={habit} source={source} compact={compact} />
+  ) : (
+    <CompleteToday habit={habit} names={names} source={source} compact={compact} />
+  );
+}
+
+function CompleteToday({ habit, names, source, compact = false }: HabitTodayProps) {
   const t = useTranslations("Habits");
   const texts = useHabitTexts();
   const hydrated = useHydrated();

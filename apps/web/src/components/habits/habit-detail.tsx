@@ -33,7 +33,10 @@ import {
   RemindersDialog,
   ScheduleChangeDialog,
 } from "./habit-dialogs";
+import { NumericDayRow, OlderDailyTotals, TrackingHistory } from "./habit-daily-totals";
 import { HabitFormDialog } from "./habit-form-dialog";
+import { QuickAddsDialog, TrackingChangeDialog } from "./habit-numeric-dialogs";
+import { HabitProgressCard, isNumeric } from "./habit-progress";
 import { HabitHistory } from "./habit-history";
 import { HabitInsightsPanel } from "./habit-insights";
 import { HabitToday, HabitWeekProgress } from "./habit-today";
@@ -52,7 +55,9 @@ type DialogKind =
   | "reminders"
   | "reactivate"
   | "archive"
-  | "delete";
+  | "delete"
+  | "tracking"
+  | "quickAdds";
 
 export interface HabitDetailViewProps {
   readonly initialHabit: HabitDetail;
@@ -127,7 +132,20 @@ export function HabitDetailView({
             {t("todayTitle")}
           </h2>
           <HabitWeekProgress habit={habit} />
-          <HabitToday habit={habit} names={names} source="app" />
+          {isNumeric(habit) ? (
+            <HabitProgressCard
+              habit={habit}
+              onEditQuickAdds={
+                manage && !archived
+                  ? () => {
+                      setDialog("quickAdds");
+                    }
+                  : undefined
+              }
+            />
+          ) : (
+            <HabitToday habit={habit} names={names} source="app" />
+          )}
         </section>
       ) : null}
 
@@ -185,6 +203,7 @@ export function HabitDetailView({
             </li>
           ))}
         </ul>
+        <TrackingHistory habit={habit} />
         <h3 className="text-body font-semibold text-fg">{t("periodsTitle")}</h3>
         <ul className="flex flex-col gap-1 text-body text-fg" data-testid="habit-periods">
           {habit.periods.map((period) => (
@@ -254,6 +273,15 @@ export function HabitDetailView({
                   data-testid="habit-change-schedule"
                 >
                   {t("changeSchedule")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDialog("tracking");
+                  }}
+                  data-testid="habit-change-tracking"
+                >
+                  {t("changeTracking")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -342,6 +370,8 @@ export function HabitDetailView({
         />
       ) : null}
       {dialog === "schedule" ? <ScheduleChangeDialog habit={habit} onClose={close} /> : null}
+      {dialog === "tracking" ? <TrackingChangeDialog habit={habit} onClose={close} /> : null}
+      {dialog === "quickAdds" ? <QuickAddsDialog habit={habit} onClose={close} /> : null}
       {dialog === "end" ? <EndDateDialog habit={habit} onClose={close} /> : null}
       {dialog === "pause" ? <PauseDialog habit={habit} onClose={close} /> : null}
       {dialog === "pauseChange" && habit.pause ? (
@@ -370,6 +400,8 @@ function RecentDays({
   const [noting, setNoting] = useState<HabitCheckin | null>(null);
   const [backdating, setBackdating] = useState<HabitDay | null>(null);
   const may = habit.access !== "view";
+  const numericDays = new Map(habit.numericRecent.map((day) => [day.onDate, day]));
+  const oldestNumeric = habit.numericRecent.at(-1)?.onDate ?? null;
   const complete = (onDate: string) => {
     checkins.complete.mutate({ habitId: habit.id, name: habit.name, onDate, source: "app" });
   };
@@ -381,6 +413,10 @@ function RecentDays({
       <p className="text-helper text-fg-muted">{t("recentExplanation")}</p>
       <ol className="flex flex-col gap-2" data-testid="habit-recent">
         {habit.recent.map((day) => {
+          const numericDay = numericDays.get(day.onDate);
+          if (numericDay) {
+            return <NumericDayRow key={day.onDate} habit={habit} day={numericDay} names={names} />;
+          }
           const checkin = day.checkin;
           const label = texts.date(day.onDate, "short");
           return (
@@ -476,6 +512,9 @@ function RecentDays({
           );
         })}
       </ol>
+      {oldestNumeric ? (
+        <OlderDailyTotals habit={habit} names={names} oldest={oldestNumeric} />
+      ) : null}
       {checkins.failureText ? (
         <FormAlert tone="error" announce>
           {checkins.failureText}

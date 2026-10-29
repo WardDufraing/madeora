@@ -287,6 +287,17 @@ export function WidgetSettings({
         />
       );
     }
+    case "habit-progress": {
+      const parsed = widgetRegistry["habit-progress"].config.safeParse(widget.config);
+      return (
+        <HabitInsightsWidgetSettings
+          config={parsed.success ? parsed.data : widgetRegistry["habit-progress"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+          numericOnly
+        />
+      );
+    }
     case "chore-approvals": {
       const parsed = widgetRegistry["chore-approvals"].config.safeParse(widget.config);
       return (
