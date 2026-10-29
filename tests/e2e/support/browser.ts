@@ -60,8 +60,19 @@ export async function settle(page: Page) {
   );
 }
 
-/** axe-core in the real browser, including colour contrast. */
-export async function axeViolations(page: Page): Promise<string[]> {
+/**
+ * axe-core in the real browser, including colour contrast.
+ *
+ * A click leaves the pointer where it was, so `:hover` stays on and the next check can
+ * measure that wash by accident. By default the pointer is parked in the page corner,
+ * which has no hover treatment, and that colour transition is allowed to finish.
+ * Pass `pointer: "leave"` when the test has placed the pointer on purpose.
+ */
+export async function axeViolations(
+  page: Page,
+  options?: { readonly pointer?: "rest" | "leave" },
+): Promise<string[]> {
+  if (options?.pointer !== "leave") await page.mouse.move(0, 0);
   await settle(page);
   await page.addScriptTag({ path: axePath });
   const result = await page.evaluate(async () => {
