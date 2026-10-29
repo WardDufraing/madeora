@@ -644,6 +644,31 @@ From here a habit can have a **daily numeric target** (for example 2,000 mL or 8
 
 2. In the app, create a habit with **Numeric daily target**: its page shows a progress card with **Add progress**. Add part of the target, then the rest: the day completes once. **Review contributions** shows who added what to the owner and to Home managers; other members see only totals.
 
+## Check S30 (`20261113090000_goals.sql`)
+
+From here people can keep **goals** in their Personal space or a Home: completion goals, or measurable goals with a target and unit that members add progress to, with an explicit **Mark achieved**, reopening, deadlines and deadline reminders. Nothing changes for existing data. Apply it after the S29 file. It adds the background job `goal-reminder` (category `reminders`) and the delegable capability `manageHomeGoals`; no new provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.goals') as goals_table,
+     to_regclass('private.goal_entries') as entries_table,
+     to_regclass('private.goal_achievements') as achievements_table,
+     has_table_privilege('authenticated', 'private.goal_entries', 'select')
+       as members_can_read_entries_table,
+     has_function_privilege('authenticated',
+       'public.add_goal_entry(uuid, uuid, text, numeric, text, text, numeric)', 'execute')
+       as members_can_add_progress,
+     has_function_privilege('anon', 'public.get_goals(uuid, text, text)', 'execute')
+       as anonymous_can_read_goals,
+     private.is_delegable_capability('manageHomeGoals') as goal_capability;
+   ```
+
+   It must show the three tables, **true** for `members_can_add_progress` and `goal_capability`, and **false** for `members_can_read_entries_table` and `anonymous_can_read_goals`.
+
+2. In the app, open **Goals**, create a measurable goal and add progress twice with decimals: the total adds up exactly. Add more than the target: it shows "Target reached" but stays active until you choose **Mark achieved**; it then appears under **Completed**, and **Reopen** keeps the achievement in its history.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

@@ -8,6 +8,7 @@ import { cache } from "react";
 
 import { getVerifiedIdentity } from "@/auth/identity";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
+import { goalNoticeNames } from "@/goals/data";
 import { habitNoticeNames } from "@/habits/data";
 
 import {
@@ -78,7 +79,7 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
     return { status: "unavailable" };
   }
   const items: NotificationView[] = [];
-  const [titles, habitNames] = await Promise.all([
+  const [titles, habitNames, goalNames] = await Promise.all([
     reminderTitles(supabase, data),
     habitNoticeNames(
       data.flatMap((row) =>
@@ -86,6 +87,15 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
         isRecord(row.params) &&
         typeof row.params.habitId === "string"
           ? [row.params.habitId]
+          : [],
+      ),
+    ),
+    goalNoticeNames(
+      data.flatMap((row) =>
+        row.kind.startsWith("goal.") &&
+        isRecord(row.params) &&
+        typeof row.params.goalId === "string"
+          ? [row.params.goalId]
           : [],
       ),
     ),
@@ -109,6 +119,10 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       habitId: typeof params.habitId === "string" ? params.habitId : null,
       habitName:
         typeof params.habitId === "string" ? (habitNames.get(params.habitId) ?? null) : null,
+      goalId: typeof params.goalId === "string" ? params.goalId : null,
+      goalName: typeof params.goalId === "string" ? (goalNames.get(params.goalId) ?? null) : null,
+      goalReminder: oneOf(["lead", "overdue"] as const, params.reminder),
+      deadline: typeof params.deadline === "string" ? params.deadline : null,
       onDate: typeof params.onDate === "string" ? params.onDate : null,
       weekly: params.weekly === true,
       progress: readProgress(params.progress),

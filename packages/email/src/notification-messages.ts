@@ -64,6 +64,10 @@ export const notificationKinds = [
   "habit.paused.open",
   "habit.resumed.manual",
   "habit.resumed.ended",
+  "goal.reminder.home_lead",
+  "goal.reminder.home_overdue",
+  "goal.reminder.personal_lead",
+  "goal.reminder.personal_overdue",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -485,6 +489,34 @@ const en: Catalogue = {
     body: "The pause of a habit in {home} has ended, so it counts again from today. Open Madeora to see which habit it is.",
     button: "Open the habit",
   },
+  "goal.reminder.home_lead": {
+    subject: "Reminder: a goal in {home} has a deadline coming up",
+    preview: "Open Madeora to see the goal.",
+    heading: "A goal in {home} has a deadline coming up",
+    body: "The deadline of a goal in {home} is coming up. Open Madeora to see which goal it is and how far along it is.",
+    button: "Open the goal",
+  },
+  "goal.reminder.home_overdue": {
+    subject: "Reminder: a goal in {home} is past its deadline",
+    preview: "Open Madeora to see the goal.",
+    heading: "A goal in {home} is past its deadline",
+    body: "A goal in {home} has passed its deadline without being marked achieved. Its progress is kept. Open Madeora to see which goal it is.",
+    button: "Open the goal",
+  },
+  "goal.reminder.personal_lead": {
+    subject: "Reminder: one of your goals has a deadline coming up",
+    preview: "Open Madeora to see the goal.",
+    heading: "One of your goals has a deadline coming up",
+    body: "The deadline of one of your goals is coming up. Open Madeora to see which goal it is and how far along it is.",
+    button: "Open the goal",
+  },
+  "goal.reminder.personal_overdue": {
+    subject: "Reminder: one of your goals is past its deadline",
+    preview: "Open Madeora to see the goal.",
+    heading: "One of your goals is past its deadline",
+    body: "One of your goals has passed its deadline without being marked achieved. Its progress is kept. Open Madeora to see which goal it is.",
+    button: "Open the goal",
+  },
 };
 
 const nl: Catalogue = {
@@ -894,6 +926,34 @@ const nl: Catalogue = {
     body: "De pauze van een gewoonte in {home} is voorbij, dus ze telt vanaf vandaag weer mee. Open Madeora om te zien welke gewoonte het is.",
     button: "Open de gewoonte",
   },
+  "goal.reminder.home_lead": {
+    subject: "Herinnering: de deadline van een doel in {home} komt eraan",
+    preview: "Open Madeora om het doel te zien.",
+    heading: "De deadline van een doel in {home} komt eraan",
+    body: "De deadline van een doel in {home} komt eraan. Open Madeora om te zien welk doel het is en hoe ver het staat.",
+    button: "Open het doel",
+  },
+  "goal.reminder.home_overdue": {
+    subject: "Herinnering: een doel in {home} is over zijn deadline",
+    preview: "Open Madeora om het doel te zien.",
+    heading: "Een doel in {home} is over zijn deadline",
+    body: "Een doel in {home} is over zijn deadline zonder als behaald gemarkeerd te zijn. De voortgang blijft bewaard. Open Madeora om te zien welk doel het is.",
+    button: "Open het doel",
+  },
+  "goal.reminder.personal_lead": {
+    subject: "Herinnering: de deadline van een van je doelen komt eraan",
+    preview: "Open Madeora om het doel te zien.",
+    heading: "De deadline van een van je doelen komt eraan",
+    body: "De deadline van een van je doelen komt eraan. Open Madeora om te zien welk doel het is en hoe ver het staat.",
+    button: "Open het doel",
+  },
+  "goal.reminder.personal_overdue": {
+    subject: "Herinnering: een van je doelen is over zijn deadline",
+    preview: "Open Madeora om het doel te zien.",
+    heading: "Een van je doelen is over zijn deadline",
+    body: "Een van je doelen is over zijn deadline zonder als behaald gemarkeerd te zijn. De voortgang blijft bewaard. Open Madeora om te zien welk doel het is.",
+    button: "Open het doel",
+  },
 };
 
 export const notificationMessages = {
@@ -935,6 +995,7 @@ export function isOptionalNotificationKind(kind: NotificationEmailKind): boolean
     kind === "chore.approval_requested" ||
     kind.startsWith("points.") ||
     kind.startsWith("reward.") ||
-    kind.startsWith("habit.")
+    kind.startsWith("habit.") ||
+    kind.startsWith("goal.")
   );
 }

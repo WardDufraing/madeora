@@ -110,6 +110,8 @@ type MessageKey =
   | "kindHabitResumed"
   | "kindHabitPauseEnded"
   | "kindHabitReminderProgress"
+  | "kindGoalReminderLead"
+  | "kindGoalReminderOverdue"
   | "kindUnknown";
 
 /** The message key for a notification (exported for tests). */
@@ -118,7 +120,7 @@ export function messageKeyFor(
     Partial<
       Pick<
         NotificationView,
-        "dueDate" | "reason" | "weekly" | "resumesOn" | "automatic" | "progress"
+        "dueDate" | "reason" | "weekly" | "resumesOn" | "automatic" | "progress" | "goalReminder"
       >
     >,
 ): MessageKey {
@@ -139,6 +141,10 @@ export function messageKeyFor(
   }
   if (item.kind === "habit.resumed") {
     return item.automatic ? "kindHabitPauseEnded" : "kindHabitResumed";
+  }
+  // S30: an advance reminder before the deadline, or an overdue one after it.
+  if (item.kind === "goal.reminder") {
+    return item.goalReminder === "overdue" ? "kindGoalReminderOverdue" : "kindGoalReminderLead";
   }
   if (item.kind === "join_request.decided") {
     return item.decision === "declined" ? "kindJoinRequestDeclined" : "kindJoinRequestApproved";
@@ -196,11 +202,14 @@ export async function NotificationList({
                 ? formatTaskDate(item.dueDate, formats)
                 : item.kind === "habit.paused" && item.resumesOn
                   ? formatTaskDate(item.resumesOn, formats)
-                  : item.onDate
-                    ? formatTaskDate(item.onDate, formats)
-                    : "",
+                  : item.kind === "goal.reminder" && item.deadline
+                    ? formatTaskDate(item.deadline, formats)
+                    : item.onDate
+                      ? formatTaskDate(item.onDate, formats)
+                      : "",
             task: item.taskTitle ? isolate(item.taskTitle) : t("taskFallback"),
             habit: item.habitName ? isolate(item.habitName) : t("habitFallback"),
+            goal: item.goalName ? isolate(item.goalName) : t("goalFallback"),
             progress: item.progress ? progressText(item.progress) : "",
           });
           const href = notificationPath(
@@ -210,9 +219,11 @@ export async function NotificationList({
               ? { taskId: item.taskId }
               : item.habitId
                 ? { habitId: item.habitId }
-                : item.occurrenceId
-                  ? { occurrenceId: item.occurrenceId }
-                  : {},
+                : item.goalId
+                  ? { goalId: item.goalId }
+                  : item.occurrenceId
+                    ? { occurrenceId: item.occurrenceId }
+                    : {},
           );
           const isUnread = item.readAt === null;
           return (

@@ -117,6 +117,13 @@ export interface JobDataPort {
   deliverHabitSnooze(notificationId: string): Promise<HabitSnoozeOutcome>;
   /** habit-pause-end (S28): tells the members a Home habit resumed after a dated pause. */
   deliverHabitPauseEnd(pauseId: string, resumesOn: string): Promise<HabitPauseEndOutcome>;
+  /** goal-reminder (S30): one deadline reminder moment of a goal, if still current. */
+  deliverGoalReminder(
+    goalId: string,
+    revision: number,
+    kind: GoalReminderKind,
+    at: string,
+  ): Promise<GoalReminderOutcome>;
 }
 
 export type HabitReminderOutcome =
@@ -125,6 +132,10 @@ export type HabitReminderOutcome =
 export type HabitSnoozeOutcome = "notified" | "cancelled" | "stale" | "not_due";
 
 export type HabitPauseEndOutcome = "notified" | "still_paused" | "stale" | "not_due";
+
+export type GoalReminderKind = "lead" | "overdue";
+
+export type GoalReminderOutcome = "notified" | "late" | "inactive" | "stale" | "not_due";
 
 export type ChoreClaimReleaseOutcome = "released" | "stale" | "missing";
 

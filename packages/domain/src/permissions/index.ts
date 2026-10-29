@@ -89,3 +89,17 @@ export {
   type HabitMemberAccess,
   type HabitPermissionProjection,
 } from "./habits";
+export {
+  decideGoalAction,
+  goalAccess,
+  goalAccessAllows,
+  goalAccessLevels,
+  goalActions,
+  goalMemberAccess,
+  goalPermissions,
+  type GoalAccess,
+  type GoalAction,
+  type GoalContextFacts,
+  type GoalMemberAccess,
+  type GoalPermissionProjection,
+} from "./goals";

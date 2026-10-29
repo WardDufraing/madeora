@@ -22,6 +22,7 @@ const moduleKey = {
   shopping: "moduleShopping",
   meals: "moduleMeals",
   habits: "moduleHabits",
+  goals: "moduleGoals",
 } as const;
 const itemTypeKey = {
   sample: "itemTypeSample",
@@ -40,6 +41,7 @@ const itemTypeKey = {
   shopping_clear: "itemTypeShoppingClear",
   meal_entry: "itemTypeMealEntry",
   habit: "itemTypeHabit",
+  goal: "itemTypeGoal",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

@@ -44,8 +44,11 @@ Two briefs are not numbered steps: `plans/steps/graphify-brief.md` (Graphify eva
 | S27  | Meal planner                                                    | `plans/steps/S27-brief.md`                     |
 | S28  | Habits core                                                     | `plans/steps/S28-brief.md`                     |
 | S28b | Personal points and rewards                                     | `plans/steps/S28b-brief.md`                    |
+| S30  | Goals core                                                      | `plans/steps/S30-brief.md`                     |
 
 S28b was added on Ward's decision (2026-10-28). It is not in the earlier briefs. It sits after S28 and before S29. The S23 heading says "Points and rewards"; "(Home)" is added in this table so it is not read as the personal ledger.
+
+Ward split S30 in three (2026-10-29, `plans/steps/S30-brief.md` L6): S30 goals core, S30b recurring goal series and S30c habit-to-goal links. S30b and S30c have no brief yet.
 
 S00 appears only as the seed commit and as review carry-overs (`plans/steps/S01-brief.md` L3–L4, `plans/steps/S02-brief.md` L4). There is no S00 brief. What S00 contained, beyond that seed, is not recorded here.
 

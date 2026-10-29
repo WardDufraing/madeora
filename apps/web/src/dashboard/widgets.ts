@@ -259,6 +259,17 @@ const habitProgressConfig = z.strictObject({
   habitId: z.uuid().nullable().default(null),
 });
 
+/** The Goals widget (S30): the context's active goals, with Add progress and Mark achieved. */
+export const goalWidgetCounts = [5, 10, 15] as const;
+const goalsConfig = z.strictObject({
+  count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
+});
+
+/** The Goal progress widget (S30): one chosen goal (null: not chosen yet). */
+const goalProgressConfig = z.strictObject({
+  goalId: z.uuid().nullable().default(null),
+});
+
 const habitSizes = sizes(
   { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
   { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -412,6 +423,16 @@ export const widgetRegistry = {
     sizes: habitSizes,
     config: habitProgressConfig,
   },
+  goals: {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: habitSizes,
+    config: goalsConfig,
+  },
+  "goal-progress": {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: habitSizes,
+    config: goalProgressConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -440,6 +461,8 @@ export interface WidgetConfigs {
   readonly habits: WidgetConfig<"habits">;
   readonly "habit-insights": WidgetConfig<"habit-insights">;
   readonly "habit-progress": WidgetConfig<"habit-progress">;
+  readonly goals: WidgetConfig<"goals">;
+  readonly "goal-progress": WidgetConfig<"goal-progress">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

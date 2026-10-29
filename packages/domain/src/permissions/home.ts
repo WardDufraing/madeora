@@ -40,6 +40,7 @@ export const delegableCapabilities = [
   "manageHomeShopping",
   "manageHomeMeals",
   "manageHomeHabits",
+  "manageHomeGoals",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -85,6 +86,8 @@ export const homeActions = [
   "home.meals.manage",
   "home.habits.view",
   "home.habits.manage",
+  "home.goals.view",
+  "home.goals.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -240,6 +243,12 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // edit, pause, end and archive habits and set that member access. SQL: private.habit_access.
   "home.habits.view": { roles: ["owner", "administrator", "member"] },
   "home.habits.manage": { roles: ["owner"], delegatedThrough: "manageHomeHabits" },
+  // Goals (S30; default picked in the S30 brief): every current member sees the Home's goals and
+  // contributes unless a goal manager set them to view only (./goals.ts); goal managers (the Owner,
+  // Administrators granted manageHomeGoals) create, change, correct, achieve and archive goals and set
+  // that member access. SQL: private.goal_access.
+  "home.goals.view": { roles: ["owner", "administrator", "member"] },
+  "home.goals.manage": { roles: ["owner"], delegatedThrough: "manageHomeGoals" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -315,6 +324,8 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.meals.manage": can("home.meals.manage"),
     "home.habits.view": can("home.habits.view"),
     "home.habits.manage": can("home.habits.manage"),
+    "home.goals.view": can("home.goals.view"),
+    "home.goals.manage": can("home.goals.manage"),
   };
 }
 

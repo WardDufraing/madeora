@@ -40,6 +40,14 @@ export interface NotificationView {
    */
   readonly habitId: string | null;
   readonly habitName: string | null;
+  /**
+   * A goal's deadline reminder (S30): the goal and its title when the reader can still see it,
+   * whether it is the advance or the overdue reminder, and the deadline.
+   */
+  readonly goalId: string | null;
+  readonly goalName: string | null;
+  readonly goalReminder: "lead" | "overdue" | null;
+  readonly deadline: string | null;
   readonly onDate: string | null;
   readonly weekly: boolean;
   /** A numeric habit's progress when a reminder was sent (S29); null for other habits. */

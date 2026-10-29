@@ -46,6 +46,7 @@ const paramsSchema = z.object({
   dueDate: z.iso.date().nullable().optional(),
   resumesOn: z.iso.date().nullable().optional(),
   automatic: z.boolean().nullable().optional(),
+  reminder: z.enum(["lead", "overdue"]).optional(),
 });
 
 /** The template for a kind whose wording depends on a parameter (the decision, the reason). */
@@ -58,6 +59,9 @@ function emailKind(kind: string, inHome: boolean, params: z.infer<typeof paramsS
   if (kind === "habit.reminder") return `${kind}.${inHome ? "home" : "personal"}`;
   if (kind === "habit.paused") return `${kind}.${params.resumesOn ? "dated" : "open"}`;
   if (kind === "habit.resumed") return `${kind}.${params.automatic ? "ended" : "manual"}`;
+  if (kind === "goal.reminder") {
+    return `${kind}.${inHome ? "home" : "personal"}_${params.reminder === "overdue" ? "overdue" : "lead"}`;
+  }
   if (
     (kind === "chore.reassignment_answered" ||
       kind === "chore.reassignment_decided" ||

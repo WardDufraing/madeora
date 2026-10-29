@@ -206,6 +206,23 @@ describe("Supabase job data", () => {
     }
   });
 
+  it("delivers goal reminders and refuses an unknown answer", async () => {
+    const { client, calls } = fakeClient({ deliver_goal_reminder: ok("inactive") });
+    await expect(
+      createSupabaseJobData(client).deliverGoalReminder("g1", 3, "overdue", "2026-11-10T08:00:00Z"),
+    ).resolves.toBe("inactive");
+    expect(calls).toEqual([
+      {
+        fn: "deliver_goal_reminder",
+        args: { p_goal_id: "g1", p_revision: 3, p_kind: "overdue", p_at: "2026-11-10T08:00:00Z" },
+      },
+    ]);
+    const { client: odd } = fakeClient({ deliver_goal_reminder: ok("not_needed") });
+    await expect(
+      createSupabaseJobData(odd).deliverGoalReminder("g1", 1, "lead", "2026-11-10T08:00:00Z"),
+    ).rejects.toMatchObject({ code: "unexpected_result" });
+  });
+
   it("throws the Postgres code only", async () => {
     const { client } = fakeClient({
       get_notification_email: {

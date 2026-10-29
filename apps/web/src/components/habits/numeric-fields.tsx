@@ -9,6 +9,7 @@ import {
   isDiscreteUnit,
   parseQuantity,
   type HabitUnit,
+  type QuantityLimits,
 } from "@madeora/domain/habits";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,8 @@ export interface QuantityFieldProps {
   readonly error?: string | undefined;
   readonly testId?: string;
   readonly disabled?: boolean;
+  /** Other bounds than a habit quantity's (a goal's larger maximum, or 0 allowed). */
+  readonly limits?: QuantityLimits;
 }
 
 /**
@@ -51,10 +54,12 @@ export function QuantityField({
   error,
   testId,
   disabled,
+  limits,
 }: QuantityFieldProps) {
   const t = useTranslations("HabitsNumeric");
   const texts = useNumericTexts();
-  const parsed = value.trim() === "" ? null : parseQuantity(value, texts.locale, unit ?? undefined);
+  const parsed =
+    value.trim() === "" ? null : parseQuantity(value, texts.locale, unit ?? undefined, limits);
   const problem = parsed && !parsed.ok ? texts.problem(parsed.problem) : undefined;
   const normalized =
     parsed?.ok === true

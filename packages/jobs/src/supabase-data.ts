@@ -52,6 +52,7 @@ const habitReminderOutcomes = [
 ] as const;
 const habitSnoozeOutcomes = ["notified", "cancelled", "stale", "not_due"] as const;
 const habitPauseEndOutcomes = ["notified", "still_paused", "stale", "not_due"] as const;
+const goalReminderOutcomes = ["notified", "late", "inactive", "stale", "not_due"] as const;
 
 function fileStatus(operation: string, value: string | null): StoredFileStatus {
   const status = oneOf(fileStatuses, value);
@@ -270,6 +271,19 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       if (error) throw new JobStoreError("deliver_habit_pause_end", error.code);
       const outcome = oneOf(habitPauseEndOutcomes, data);
       if (!outcome) throw new JobStoreError("deliver_habit_pause_end", "unexpected_result");
+      return outcome;
+    },
+
+    async deliverGoalReminder(goalId, revision, kind, at) {
+      const { data, error } = await client.rpc("deliver_goal_reminder", {
+        p_goal_id: goalId,
+        p_revision: revision,
+        p_kind: kind,
+        p_at: at,
+      });
+      if (error) throw new JobStoreError("deliver_goal_reminder", error.code);
+      const outcome = oneOf(goalReminderOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_goal_reminder", "unexpected_result");
       return outcome;
     },
 

@@ -90,8 +90,8 @@ test("the Owner delegates removal; an Administrator removes a Member only, and r
   await expect(page.getByText("Bob is now Administrator.")).toBeVisible();
   await expect(page.getByTestId("member-role")).toContainText("Administrator");
   const rights = page.getByRole("region", { name: "Administrator rights" });
-  // Home settings, invitations, member removal, the Home dashboard (S17), Home tasks (S18), managing and approving chores (S20), and managing rewards, approving reward requests and managing points (S23), Home recipes (S24), Home shopping lists (S26), the Home meal planner (S27) and Home habits (S28).
-  await expect(rights.getByRole("checkbox")).toHaveCount(14);
+  // Home settings, invitations, member removal, the Home dashboard (S17), Home tasks (S18), managing and approving chores (S20), and managing rewards, approving reward requests and managing points (S23), Home recipes (S24), Home shopping lists (S26), the Home meal planner (S27), Home habits (S28) and Home goals (S30).
+  await expect(rights.getByRole("checkbox")).toHaveCount(15);
   for (const box of await rights.getByRole("checkbox").all()) await expect(box).not.toBeChecked();
   await rights.getByRole("checkbox", { name: /Remove members/ }).check();
   await expect(page.getByTestId("capabilities-preview")).toContainText("Remove members granted");

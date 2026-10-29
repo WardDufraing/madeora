@@ -326,6 +326,19 @@ As a person or Home member, I want a habit such as water or reading to complete 
 - Each day has one optional note. Daily totals are listed without a timeline of contributions: only the contributor and the habit's managers see who added what.
 - Reminders stop when the target is reached and, while it is not, say how far I am; the Habit progress widget shows one numeric habit with quick-adds.
 
+### US-031 — Reach goals alone or together
+
+As a person or Home member, I want to set goals with a target or a single completion, add progress together and mark them achieved, so we can see how far we are and keep what we reached.
+
+- I can create a personal goal, and goal managers can create Home goals: a completion goal, or a measurable goal with a target in a unit (the habit units or a label of my own), optional initial progress, deadline and description.
+- I add progress in my own number format; decimals add up exactly, I see the resulting total before saving and can Undo for 10 seconds. Going over the target is kept and shown, the bar stops at 100%.
+- Every contribution is listed with who and when. I can reverse my own; managers can set the total and correct or reverse any entry with a reason. Nothing is deleted and the total never goes below zero.
+- Reaching the target only shows "Target reached": the goal is achieved when someone allowed marks it achieved. Achieved goals move to Completed; reopening keeps the achievement in the history.
+- Managers change the target or unit with a preview and an explicit confirmation when it changes the status or reinterprets progress; an achieved goal can be extended or renewed as a follow-up goal that starts at zero.
+- A goal with a deadline shows Overdue after it; optional reminders a number of days before and after the deadline are never sent late, and each Home member can turn them off for themselves.
+- Managers archive, delete to the trash and restore goals, and can set Home members to view only. Personal goals are never visible to anyone else.
+- The Goals widget lists active goals with Add progress and Mark achieved; the Goal progress widget shows one chosen goal.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications
