@@ -151,11 +151,13 @@ describe("creating and reading goals", () => {
     }
   });
 
-  it("reads a list and one goal through the shape check", async () => {
-    answers({ get_goals: goalList(), get_goal: goalDetail() });
+  it("rolls the context, then reads a list and one goal through the shape check", async () => {
+    answers({ sync_goal_periods: 0, get_goals: goalList(), get_goal: goalDetail() });
     const listed = await list(request(`/goals?homeId=${HOME}&view=completed&q=walk`, "GET"));
     expect(listed.status).toBe(200);
-    expect(state.rpc.mock.calls[0]?.[1]).toEqual({
+    // The context's recurring series are rolled first (S30b), so the list shows current periods.
+    expect(state.rpc.mock.calls[0]).toEqual(["sync_goal_periods", { p_home_id: HOME }]);
+    expect(state.rpc.mock.calls[1]?.[1]).toEqual({
       p_home_id: HOME,
       p_view: "completed",
       p_query: "walk",

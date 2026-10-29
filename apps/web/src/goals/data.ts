@@ -13,10 +13,14 @@ import {
   goalEntriesSchema,
   goalEventsSchema,
   goalListSchema,
+  goalSeriesDetailSchema,
+  goalSeriesPeriodsSchema,
   type GoalDetail,
   type GoalEntries,
   type GoalEvents,
   type GoalList,
+  type GoalSeriesDetail,
+  type GoalSeriesPeriods,
 } from "./shapes";
 
 /**
@@ -51,13 +55,34 @@ function parsed<S extends z.ZodType>(event: string, schema: S, data: unknown): R
   return { status: "ok", value: result.data };
 }
 
-/** The goals of a context in one view, with its counts, the person's access and settings. */
+/**
+ * Rolls the recurring series of a context (or one series) whose period changed since they were last
+ * rolled (S30b), so a read sees the period running now even before the hourly background run. Best
+ * effort: a failure is logged and the read goes on (the background run catches up).
+ */
+async function syncGoalPeriods(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  target: { readonly homeId: string | null } | { readonly seriesId: string },
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "sync_goal_periods",
+    "seriesId" in target
+      ? { p_series_id: target.seriesId }
+      : target.homeId
+        ? { p_home_id: target.homeId }
+        : {},
+  );
+  if (error && error.code !== "42501") logGoals("goals.sync_failed", error.code);
+}
+
+/** The goals of a context in one view, with its counts, its series, the person's access and settings. */
 export async function readGoals(
   homeId: string | null,
   view: GoalView = "active",
   query: string | null = null,
 ): Promise<Read<GoalList>> {
   const supabase = await createSupabaseServerClient();
+  await syncGoalPeriods(supabase, { homeId });
   const { data, error } = await supabase.rpc("get_goals", {
     ...(homeId ? { p_home_id: homeId } : {}),
     p_view: view,
@@ -74,6 +99,29 @@ export const readGoal = cache(async (goalId: string): Promise<Read<GoalDetail>> 
   if (error) return failed("goals.detail_failed", error);
   return parsed("goals.detail_unexpected_shape", goalDetailSchema, data);
 });
+
+/** One recurring series with everything its page shows (read once per request). */
+export const readGoalSeries = cache(async (seriesId: string): Promise<Read<GoalSeriesDetail>> => {
+  const supabase = await createSupabaseServerClient();
+  await syncGoalPeriods(supabase, { seriesId });
+  const { data, error } = await supabase.rpc("get_goal_series", { p_series_id: seriesId });
+  if (error) return failed("goals.series_failed", error);
+  return parsed("goals.series_unexpected_shape", goalSeriesDetailSchema, data);
+});
+
+/** A page of a series' periods (newest first) after the period `before` (none: the newest). */
+export async function readGoalSeriesPeriods(
+  seriesId: string,
+  before: string | null,
+): Promise<Read<GoalSeriesPeriods>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("get_goal_series_periods", {
+    p_series_id: seriesId,
+    ...(before ? { p_before: before } : {}),
+  });
+  if (error) return failed("goals.series_periods_failed", error);
+  return parsed("goals.series_periods_unexpected_shape", goalSeriesPeriodsSchema, data);
+}
 
 /** A page of a goal's entries after the entry `before` (none: the newest). */
 export async function readGoalEntries(

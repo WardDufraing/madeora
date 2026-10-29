@@ -2,8 +2,11 @@ import { z } from "zod";
 
 import {
   GOAL_LIMITS,
+  goalFrequencies,
   goalKinds,
   goalViews,
+  goalWeekStarts,
+  isGoalFrequencyAllowed,
   isValidGoalReminder,
   isValidGoalThousandths,
 } from "@madeora/domain/goals";
@@ -231,3 +234,79 @@ export const listQuerySchema = z.object({
 
 /** A page of entries or history: after `before`, the last row of the previous page (none: newest). */
 export const pageQuerySchema = z.object({ before: z.uuid().optional() });
+
+/** A series' advance reminder: days before each period's last day, at a local time. */
+const seriesReminderSchema = z.strictObject({
+  leadDays: z.int().min(1).max(GOAL_LIMITS.leadDays),
+  atTime: clockTimeSchema.default("09:00"),
+});
+
+/**
+ * A recurring series (S30b): a measurable goal repeating weekly, monthly or yearly, or a completion
+ * goal monthly or yearly. `firstPeriod` is a date in the first period (this period or a later one);
+ * `endsOn`: no period starts after it. `preview: true` answers the first and next periods only.
+ */
+export const createSeriesSchema = z
+  .strictObject({
+    id,
+    homeId: id.nullable(),
+    kind: z.enum(goalKinds),
+    frequency: z.enum(goalFrequencies),
+    title: goalTitleSchema,
+    description: goalDescriptionSchema,
+    measure: measureSchema.nullable().default(null),
+    weekStart: z.enum(goalWeekStarts).default("monday"),
+    firstPeriod: goalDateSchema,
+    endsOn: goalDateSchema.nullable().default(null),
+    timeZone: timeZone.nullable().default(null),
+    reminder: seriesReminderSchema.nullable().default(null),
+    preview: z.boolean().default(false),
+  })
+  .refine((body) => (body.kind === "measurable") === (body.measure !== null), {
+    error: "invalid",
+    path: ["measure"],
+  })
+  .refine((body) => isGoalFrequencyAllowed(body.kind, body.frequency), {
+    error: "invalid",
+    path: ["frequency"],
+  })
+  .refine((body) => body.endsOn === null || body.endsOn >= body.firstPeriod, {
+    error: "invalid",
+    path: ["endsOn"],
+  });
+export type CreateSeriesInput = z.input<typeof createSeriesSchema>;
+
+/** Edits apply to the periods created afterwards. */
+export const updateSeriesSchema = z.strictObject({
+  revision,
+  title: goalTitleSchema,
+  description: goalDescriptionSchema,
+  endsOn: goalDateSchema.nullable().default(null),
+  timeZone: timeZone.nullable().default(null),
+  reminder: seriesReminderSchema.nullable().default(null),
+});
+
+export const seriesStateSchema = z.strictObject({
+  revision,
+  action: z.enum(["pause", "resume", "stop"]),
+});
+
+/** A target and unit from a period on: `effectiveFrom` is the start of this or a later period. */
+export const seriesTargetSchema = z
+  .strictObject({
+    revision,
+    effectiveFrom: goalDateSchema,
+    target: goalQuantitySchema,
+    unit: unitLabel,
+    unitKind: z.enum(habitUnitKinds),
+    confirmUnit: z.boolean().default(false),
+    confirmStatus: z.boolean().default(false),
+    preview: z.boolean().default(false),
+  })
+  .refine(
+    (body) =>
+      isValidGoalThousandths(toThousandths(body.target), { unit: body.unit, kind: body.unitKind }),
+    { error: "invalid", path: ["target"] },
+  );
+
+export const deleteSeriesSchema = z.strictObject({ revision });

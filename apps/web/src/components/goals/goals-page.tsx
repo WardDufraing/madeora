@@ -7,7 +7,7 @@ import { zonedParts } from "@/chores/format";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
 import { readGoals } from "@/goals/data";
-import { getEffectiveTimeZone } from "@/preferences/server";
+import { getEffectiveTimeZone, getRegionalFormats } from "@/preferences/server";
 import { timeZoneChoices } from "@/preferences/timezone";
 
 import { GoalsView } from "./goals-view";
@@ -28,15 +28,17 @@ function queryParam(value: string | string[] | undefined): string {
 
 /**
  * The goals page of one context (S30), read with the viewer's own session: a Home they are not in
- * is not found, and nobody else's personal goals are ever listed.
+ * is not found, and nobody else's personal goals are ever listed. Reading it first rolls the
+ * context's recurring series (S30b), so the period running now is there.
  */
 export async function GoalsPage({ home, searchParams }: GoalsPageProps) {
   const homeId = home?.id ?? null;
   const view = viewParam(searchParams.view);
   const query = view === "active" ? "" : queryParam(searchParams.q);
-  const [t, zone, list] = await Promise.all([
+  const [t, zone, regional, list] = await Promise.all([
     getTranslations("Goals"),
     getEffectiveTimeZone(),
+    getRegionalFormats(),
     readGoals(homeId, view, query || null),
   ]);
   if (list.status === "not-found") notFound();
@@ -55,6 +57,7 @@ export async function GoalsPage({ home, searchParams }: GoalsPageProps) {
         today={today}
         timeZone={zone.timeZone}
         timeZones={homeId ? [] : timeZoneChoices([zone.timeZone])}
+        weekStart={regional.effective.weekStart}
       />
     </>
   );

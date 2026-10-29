@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useState } from "react";
 
-import type { GoalView } from "@madeora/domain/goals";
+import type { GoalView, GoalWeekStart } from "@madeora/domain/goals";
 
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
@@ -15,9 +15,10 @@ import {
   GOALS_ENDPOINT,
   sendGoalRequest,
   type GoalList,
+  type GoalSeriesSummary,
   type GoalSummary,
 } from "@/goals/api";
-import { goalKeys, goalsPath } from "@/goals/format";
+import { goalKeys, goalSeriesPath, goalsPath } from "@/goals/format";
 
 import { Failure } from "./goal-dialogs";
 import { GoalFormDialog } from "./goal-form-dialog";
@@ -37,6 +38,8 @@ export interface GoalsViewProps {
   readonly today: string;
   readonly timeZone: string;
   readonly timeZones: readonly string[];
+  /** The viewer's week start, the default for a weekly series. */
+  readonly weekStart: GoalWeekStart;
 }
 
 /** Reads the list again on focus, every minute and after each change. */
@@ -60,7 +63,8 @@ function useGoalList(homeId: string | null, view: GoalView, query: string, initi
 /**
  * The goals of one context (S30): the active ones (an Overdue label where the deadline passed), the
  * Completed ones and the Archived ones, searchable by title. Goal managers create goals here and, in
- * a Home, set whether members contribute or only view.
+ * a Home, set whether members contribute or only view. Recurring series (S30b) are listed in their
+ * own section; their running periods are among the active goals.
  */
 export function GoalsView({
   homeId,
@@ -70,6 +74,7 @@ export function GoalsView({
   today,
   timeZone,
   timeZones,
+  weekStart,
 }: GoalsViewProps) {
   const t = useTranslations("Goals");
   const list = useGoalList(homeId, view, query, initialList);
@@ -161,6 +166,20 @@ export function GoalsView({
           ))}
         </ul>
       )}
+      {view === "active" && list.series.length > 0 ? (
+        <section aria-labelledby="goal-series-heading" className="flex flex-col gap-3">
+          <h2 id="goal-series-heading" className="text-section-title font-semibold">
+            {t("seriesTitle")}
+          </h2>
+          <ul className="grid gap-3 md:grid-cols-2" data-testid="goal-series-list">
+            {list.series.map((series) => (
+              <li key={series.id}>
+                <SeriesCard series={series} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {homeId && list.memberAccess ? <GoalSettings homeId={homeId} list={list} /> : null}
       {creating ? (
         <GoalFormDialog
@@ -169,6 +188,7 @@ export function GoalsView({
           today={today}
           timeZone={timeZone}
           timeZones={timeZones}
+          weekStart={weekStart}
           onClose={() => {
             setCreating(false);
           }}
@@ -195,6 +215,11 @@ function GoalCard({ goal }: { readonly goal: GoalSummary }) {
       </h2>
       <p className="flex flex-wrap items-center gap-2 text-helper text-fg-muted">
         <GoalStatusLabel goal={goal} />
+        {goal.period ? (
+          <span className="inline-flex items-center rounded-full border border-line px-2 font-medium text-fg">
+            {texts.frequency(goal.period.frequency)}
+          </span>
+        ) : null}
         {goal.deadline ? (
           <span>{t("deadlineLine", { date: texts.date(goal.deadline, "short") })}</span>
         ) : null}
@@ -206,6 +231,46 @@ function GoalCard({ goal }: { readonly goal: GoalSummary }) {
           {goal.status === "achieved" ? t("completionDone") : t("completionOpen")}
         </p>
       )}
+    </article>
+  );
+}
+
+/** A recurring series: how it repeats, its state and the period running now. */
+function SeriesCard({ series }: { readonly series: GoalSeriesSummary }) {
+  const t = useTranslations("Goals");
+  const texts = useGoalTexts();
+  const headingId = `goal-series-${series.id}-title`;
+  return (
+    <article
+      aria-labelledby={headingId}
+      className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-4"
+      data-testid="goal-series-card"
+    >
+      <h3 id={headingId} className="text-section-title font-semibold text-fg">
+        <Link
+          href={goalSeriesPath(series.homeId, series.id)}
+          className="underline-offset-4 hover:underline"
+        >
+          <bdi>{series.title}</bdi>
+        </Link>
+      </h3>
+      <p className="text-helper text-fg-muted">
+        {t("seriesLine", {
+          frequency: texts.frequency(series.frequency),
+          state: texts.seriesState(series.state),
+        })}
+      </p>
+      <p className="text-body text-fg">
+        {series.current
+          ? t("seriesCurrentLine", {
+              period: texts.period(series.current.start, series.current.end),
+              progress:
+                series.kind === "measurable"
+                  ? texts.progress(series.current)
+                  : texts.status(series.current.status),
+            })
+          : t("seriesNoCurrent")}
+      </p>
     </article>
   );
 }

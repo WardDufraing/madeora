@@ -36,6 +36,7 @@ export const trashItemTypes = [
   "meal_entry",
   "habit",
   "goal",
+  "goal_series",
 ] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 

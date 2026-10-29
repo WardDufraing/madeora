@@ -124,6 +124,11 @@ export interface JobDataPort {
     kind: GoalReminderKind,
     at: string,
   ): Promise<GoalReminderOutcome>;
+  /**
+   * task-reminder-advance (S30b): finalizes ended periods of recurring goal series and creates the
+   * period running now; how many periods it created.
+   */
+  rollGoalPeriods(limit: number): Promise<number>;
 }
 
 export type HabitReminderOutcome =

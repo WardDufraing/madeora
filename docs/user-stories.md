@@ -339,6 +339,16 @@ As a person or Home member, I want to set goals with a target or a single comple
 - Managers archive, delete to the trash and restore goals, and can set Home members to view only. Personal goals are never visible to anyone else.
 - The Goals widget lists active goals with Add progress and Mark achieved; the Goal progress widget shows one chosen goal.
 
+### US-032 — Repeat a goal every week, month or year
+
+As a person or Home member, I want a goal that starts again every week, month or year, so each period has its own target and result while earlier periods keep theirs.
+
+- When I create a goal I can make it repeat: measurable goals weekly, monthly or yearly, completion goals monthly or yearly, from this period or a later one, optionally until an end date and with a reminder a number of days before each period ends. I see the first and next periods before I create it.
+- The period running now appears with my other active goals, marked Weekly, Monthly or Yearly, and starts at zero; missed periods are never added afterwards.
+- When a period ends, its result (target reached or not) is kept. Nobody adds progress to it afterwards; goal managers can still correct it, and the result follows, marked "corrected". A period marked achieved that a correction took below its target asks for review.
+- Goal managers change the target from the current period or a later one with a preview; earlier periods keep their target. Changing the current period asks for confirmation when it changes whether the target is reached.
+- Goal managers pause, resume and stop a repeating goal, edit it for later periods and delete it to the trash with all its periods. The series page shows the target schedule and every period with its result.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications

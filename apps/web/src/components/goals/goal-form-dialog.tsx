@@ -2,10 +2,19 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
-import { GOAL_LIMITS, parseGoalQuantity, type GoalKind } from "@madeora/domain/goals";
+import {
+  GOAL_LIMITS,
+  goalFrequencies,
+  goalWeekStarts,
+  isGoalFrequencyAllowed,
+  parseGoalQuantity,
+  type GoalFrequency,
+  type GoalKind,
+  type GoalWeekStart,
+} from "@madeora/domain/goals";
 import {
   HABIT_QUANTITY,
   habitUnits,
@@ -21,9 +30,16 @@ import { Dialog } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
 import { TextArea } from "@/components/ui/text-area";
 import { TextField } from "@/components/ui/text-field";
-import { GOALS_ENDPOINT, goalEndpoint, sendGoalRequest, type GoalSummary } from "@/goals/api";
-import { goalsPath, newId } from "@/goals/format";
-import { createGoalSchema, updateGoalSchema } from "@/goals/schema";
+import {
+  GOAL_SERIES_ENDPOINT,
+  GOALS_ENDPOINT,
+  goalEndpoint,
+  sendGoalRequest,
+  type GoalSeriesCreateResult,
+  type GoalSummary,
+} from "@/goals/api";
+import { goalSeriesPath, goalsPath, newId } from "@/goals/format";
+import { createGoalSchema, createSeriesSchema, updateGoalSchema } from "@/goals/schema";
 import { CUSTOM_UNIT, draftUnit, localizedDecimal } from "@/habits/tracking-draft";
 
 import { useGoalMutation } from "./use-goal-mutation";
@@ -50,10 +66,26 @@ interface FormValues {
   deadline: string;
   timeZone: string;
   context: string;
+  /** "none", or how a new goal repeats (a recurring series, S30b). */
+  repeat: "none" | GoalFrequency;
+  weekStart: GoalWeekStart;
+  firstPeriod: string;
+  endsOn: string;
+  leadDays: string;
+  leadTime: string;
 }
 
-type Field = "title" | "description" | "deadline" | "timeZone";
-const fields: readonly Field[] = ["title", "description", "deadline", "timeZone"];
+type Field =
+  "title" | "description" | "deadline" | "timeZone" | "firstPeriod" | "endsOn" | "leadDays";
+const fields: readonly Field[] = [
+  "title",
+  "description",
+  "deadline",
+  "timeZone",
+  "firstPeriod",
+  "endsOn",
+  "leadDays",
+];
 
 function isField(value: unknown): value is Field {
   return typeof value === "string" && (fields as readonly string[]).includes(value);
@@ -71,6 +103,8 @@ export interface GoalFormDialogProps {
   /** For personal goals: the viewer's effective timezone and the zones to offer. */
   readonly timeZone: string;
   readonly timeZones: readonly string[];
+  /** The viewer's week start, the default for a weekly series. */
+  readonly weekStart?: GoalWeekStart;
   readonly onClose: () => void;
 }
 
@@ -79,6 +113,9 @@ export interface GoalFormDialogProps {
  * deadline and description, and a personal goal's timezone), renews a completed one into a context
  * the person chooses (progress starts at 0), or edits a goal's title, description, deadline and
  * timezone. A target or unit changes elsewhere, with a preview. Errors are shown at their fields.
+ * A new goal may repeat (S30b): weekly (measurable goals), monthly or yearly, from this period or a
+ * later one, optionally until an end date and with an advance reminder; its first and next periods
+ * are previewed before the series is created. A period's deadline comes from its series.
  */
 export function GoalFormDialog({
   mode,
@@ -86,6 +123,7 @@ export function GoalFormDialog({
   today,
   timeZone,
   timeZones,
+  weekStart = "monday",
   onClose,
 }: GoalFormDialogProps) {
   const t = useTranslations("Goals");
@@ -113,13 +151,30 @@ export function GoalFormDialog({
       deadline: editing?.deadline ?? "",
       timeZone: source?.timeZone ?? timeZone,
       context: initialHome ?? PERSONAL,
+      repeat: "none",
+      weekStart,
+      firstPeriod: today,
+      endsOn: "",
+      leadDays: "",
+      leadTime: "09:00",
     },
   });
   const errors = form.formState.errors;
-  const [kind, unitCode, custom, context] = useWatch({
+  const [kind, unitCode, custom, context, repeat] = useWatch({
     control: form.control,
-    name: ["kind", "unit", "custom", "context"],
+    name: ["kind", "unit", "custom", "context", "repeat"],
   });
+  const recurring = mode.kind === "create" && repeat !== "none";
+  const period = editing?.period ?? null;
+  // A preview belongs to the values it was made for: any change asks for a new one before the
+  // series is created.
+  const draftKey = JSON.stringify([useWatch({ control: form.control }), target]);
+  const submittedKey = useRef("");
+  const [previewed, setPreviewed] = useState<{
+    readonly key: string;
+    readonly result: GoalSeriesCreateResult;
+  } | null>(null);
+  const preview = previewed?.key === draftKey ? previewed.result : null;
   const homeId = editing ? editing.homeId : context === PERSONAL ? null : context;
   const personal = homeId === null;
   const unit = draftUnit({ unit: unitCode, custom });
@@ -132,6 +187,19 @@ export function GoalFormDialog({
     () => {
       onClose();
       if (!editing) router.push(goalsPath(homeId, id));
+    },
+  );
+
+  const createSeries = useGoalMutation(
+    `goal-series:${id}`,
+    (body: object) => sendGoalRequest<GoalSeriesCreateResult>("POST", GOAL_SERIES_ENDPOINT, body),
+    (result) => {
+      if (result.outcome === "preview") {
+        setPreviewed({ key: submittedKey.current, result });
+        return;
+      }
+      onClose();
+      router.push(goalSeriesPath(homeId, id));
     },
   );
 
@@ -168,7 +236,7 @@ export function GoalFormDialog({
       } else if (unit && readTarget.value !== null) {
         measure = { target: readTarget.value, unit: unit.unit, unitKind: unit.kind };
       }
-      if (mode.kind === "create") {
+      if (mode.kind === "create" && !recurring) {
         const readInitial = readQuantity(initial, true);
         if (!readInitial.ok) {
           setInitialError(texts.numeric.problem(readInitial.problem));
@@ -177,6 +245,47 @@ export function GoalFormDialog({
           initialValue = readInitial.value;
         }
       }
+    }
+    if (recurring && values.repeat !== "none") {
+      const lead = values.leadDays.trim();
+      const leadDays = lead === "" ? null : Number(lead);
+      if (
+        leadDays !== null &&
+        (!Number.isInteger(leadDays) || leadDays < 1 || leadDays > GOAL_LIMITS.leadDays)
+      ) {
+        form.setError("leadDays", { message: "invalid" });
+        first = "leadDays";
+      }
+      const seriesBody = {
+        id,
+        homeId,
+        kind: values.kind,
+        frequency: values.repeat,
+        title: values.title,
+        description: values.description,
+        measure: values.kind === "measurable" ? measure : null,
+        weekStart: values.weekStart,
+        firstPeriod: values.firstPeriod,
+        endsOn: values.endsOn === "" ? null : values.endsOn,
+        timeZone: personal ? values.timeZone : null,
+        reminder: leadDays === null ? null : { leadDays, atTime: values.leadTime },
+        preview: preview === null,
+      };
+      const parsedSeries = createSeriesSchema.safeParse(seriesBody);
+      if (!parsedSeries.success) {
+        for (const issue of parsedSeries.error.issues) {
+          const field = issue.path[0];
+          if (isField(field) && !form.getFieldState(field).error) {
+            form.setError(field, { message: issue.message });
+            first ??= field;
+          }
+        }
+      }
+      if (first) form.setFocus(first);
+      if (!parsedSeries.success || first || !quantitiesOk) return;
+      submittedKey.current = draftKey;
+      createSeries.mutate(parsedSeries.data);
+      return;
     }
     const deadline = values.deadline === "" ? null : values.deadline;
     const deadlineChanged = deadline !== (editing?.deadline ?? null);
@@ -219,6 +328,7 @@ export function GoalFormDialog({
     save.mutate(parsed.data);
   };
 
+  const formError = save.error ?? createSeries.error;
   const title =
     mode.kind === "edit" ? t("editTitle") : mode.kind === "renew" ? t("renewTitle") : t("newTitle");
   const unitOptions = [
@@ -309,7 +419,7 @@ export function GoalFormDialog({
                   onChange={setTarget}
                   testId="goal-target"
                 />
-                {mode.kind === "create" ? (
+                {mode.kind === "create" && !recurring ? (
                   <QuantityField
                     label={t("fieldInitial")}
                     description={t("fieldInitialHint")}
@@ -325,15 +435,83 @@ export function GoalFormDialog({
             ) : null}
           </>
         )}
-        <TextField
-          label={t("fieldDeadline")}
-          description={t("fieldDeadlineHint")}
-          type="date"
-          min={today}
-          error={errors.deadline ? texts.field(errors.deadline.message) : undefined}
-          data-testid="goal-deadline"
-          {...form.register("deadline")}
-        />
+        {mode.kind === "create" ? (
+          <SelectField
+            label={t("fieldRepeat")}
+            description={t("fieldRepeatHint")}
+            options={[
+              { value: "none", label: t("repeatNone") },
+              ...goalFrequencies
+                .filter((frequency) => isGoalFrequencyAllowed(kind, frequency))
+                .map((frequency) => ({ value: frequency, label: texts.frequency(frequency) })),
+            ]}
+            error={
+              repeat !== "none" && !isGoalFrequencyAllowed(kind, repeat)
+                ? t("fieldRepeatWeeklyMeasurable")
+                : undefined
+            }
+            data-testid="goal-repeat"
+            {...form.register("repeat")}
+          />
+        ) : null}
+        {recurring ? (
+          <>
+            {repeat === "weekly" ? (
+              <SelectField
+                label={t("fieldWeekStart")}
+                options={goalWeekStarts.map((day) => ({ value: day, label: texts.weekStart(day) }))}
+                data-testid="goal-week-start"
+                {...form.register("weekStart")}
+              />
+            ) : null}
+            <TextField
+              label={t("fieldFirstPeriod")}
+              description={t("fieldFirstPeriodHint")}
+              type="date"
+              min={today}
+              error={errors.firstPeriod ? texts.field(errors.firstPeriod.message) : undefined}
+              data-testid="goal-first-period"
+              {...form.register("firstPeriod")}
+            />
+            <TextField
+              label={t("fieldEndsOn")}
+              description={t("fieldEndsOnHint")}
+              type="date"
+              min={today}
+              error={errors.endsOn ? texts.field(errors.endsOn.message) : undefined}
+              data-testid="goal-ends-on"
+              {...form.register("endsOn")}
+            />
+            <TextField
+              label={t("fieldSeriesLead")}
+              description={t("fieldSeriesLeadHint", { max: GOAL_LIMITS.leadDays })}
+              type="number"
+              min={1}
+              max={GOAL_LIMITS.leadDays}
+              error={errors.leadDays ? t("fieldSeriesLeadInvalid") : undefined}
+              data-testid="goal-series-lead"
+              {...form.register("leadDays")}
+            />
+            <TextField
+              label={t("remindersAt")}
+              type="time"
+              data-testid="goal-series-lead-time"
+              {...form.register("leadTime")}
+            />
+          </>
+        ) : period ? (
+          <p className="text-helper text-fg-muted">{t("periodDeadlineFixed")}</p>
+        ) : (
+          <TextField
+            label={t("fieldDeadline")}
+            description={t("fieldDeadlineHint")}
+            type="date"
+            min={today}
+            error={errors.deadline ? texts.field(errors.deadline.message) : undefined}
+            data-testid="goal-deadline"
+            {...form.register("deadline")}
+          />
+        )}
         <TextArea
           label={t("fieldDescription")}
           description={t("fieldOptional")}
@@ -342,7 +520,7 @@ export function GoalFormDialog({
           data-testid="goal-description"
           {...form.register("description")}
         />
-        {personal ? (
+        {personal && !period ? (
           <SelectField
             label={t("fieldTimeZone")}
             description={t("fieldTimeZoneHint")}
@@ -352,17 +530,49 @@ export function GoalFormDialog({
             {...form.register("timeZone")}
           />
         ) : null}
-        {save.error ? (
+        {recurring && preview?.periods ? (
+          <div
+            className="flex flex-col gap-1 rounded-card border border-line bg-surface-muted p-3 text-body text-fg"
+            role="status"
+            data-testid="goal-series-preview"
+          >
+            <p className="font-medium">
+              {preview.startsNow ? t("seriesPreviewStartsNow") : t("seriesPreviewStartsLater")}
+            </p>
+            <p>
+              {t("seriesPreviewFirst", {
+                period: texts.period(preview.periods.first.start, preview.periods.first.end),
+              })}
+            </p>
+            {preview.periods.next ? (
+              <p>
+                {t("seriesPreviewNext", {
+                  period: texts.period(preview.periods.next.start, preview.periods.next.end),
+                })}
+              </p>
+            ) : (
+              <p>{t("seriesPreviewOnlyOne")}</p>
+            )}
+            <p className="text-helper text-fg-muted">{t("seriesPreviewRules")}</p>
+          </div>
+        ) : null}
+        {formError ? (
           <FormAlert tone="error" announce>
-            {texts.failure(save.error.failure)}
+            {texts.failure(formError.failure)}
           </FormAlert>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button type="submit" loading={save.busy} data-testid="goal-save">
-            {editing ? t("save") : t("create")}
+          <Button type="submit" loading={save.busy || createSeries.busy} data-testid="goal-save">
+            {editing
+              ? t("save")
+              : recurring
+                ? preview
+                  ? t("createSeries")
+                  : t("previewSeries")
+                : t("create")}
           </Button>
         </div>
       </form>

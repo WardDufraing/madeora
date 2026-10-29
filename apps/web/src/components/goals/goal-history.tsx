@@ -32,6 +32,8 @@ const eventKey = {
   unarchived: "eventUnarchived",
   restored: "eventRestored",
   reminders_changed: "eventRemindersChanged",
+  finalized: "eventFinalized",
+  outcome_changed: "eventOutcomeChanged",
 } as const satisfies Record<GoalEvent["kind"], string>;
 
 /** The goal's entries, newest first, fifty at a time, each page after the last entry before. */

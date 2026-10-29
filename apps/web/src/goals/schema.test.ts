@@ -3,10 +3,13 @@ import {
   addEntrySchema,
   changeTargetSchema,
   createGoalSchema,
+  createSeriesSchema,
   remindersSchema,
+  seriesTargetSchema,
   updateEntrySchema,
+  updateSeriesSchema,
 } from "./schema";
-import { GOAL } from "./testing";
+import { GOAL, SERIES } from "./testing";
 
 const measurable = {
   id: GOAL,
@@ -133,5 +136,72 @@ describe("the other contracts", () => {
       changeTargetSchema.safeParse({ revision: 1, target: "0", unit: "km", unitKind: "preset" })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("the recurring series contracts (S30b)", () => {
+  const series = {
+    ...measurable,
+    id: SERIES,
+    frequency: "weekly",
+    firstPeriod: "2026-11-10",
+  };
+
+  it("takes a weekly measurable series with defaults and a reminder", () => {
+    const parsed = createSeriesSchema.parse({ ...series, reminder: { leadDays: 2 } });
+    expect(parsed).toMatchObject({
+      weekStart: "monday",
+      endsOn: null,
+      timeZone: null,
+      preview: false,
+      reminder: { leadDays: 2, atTime: "09:00" },
+    });
+  });
+
+  it("refuses weekly completion series, a missing measure and an end before the first period", () => {
+    const completion = { id: SERIES, homeId: null, kind: "completion", title: "Paint" };
+    expect(
+      createSeriesSchema.safeParse({
+        ...completion,
+        frequency: "weekly",
+        firstPeriod: "2026-11-10",
+      }).success,
+    ).toBe(false);
+    expect(
+      createSeriesSchema.safeParse({
+        ...completion,
+        frequency: "monthly",
+        firstPeriod: "2026-11-10",
+      }).success,
+    ).toBe(true);
+    expect(createSeriesSchema.safeParse({ ...series, measure: null }).success).toBe(false);
+    expect(createSeriesSchema.safeParse({ ...series, endsOn: "2026-11-09" }).success).toBe(false);
+    expect(createSeriesSchema.safeParse({ ...series, firstPeriod: "2026-02-30" }).success).toBe(
+      false,
+    );
+    expect(createSeriesSchema.safeParse({ ...series, weekStart: "friday" }).success).toBe(false);
+    expect(createSeriesSchema.safeParse({ ...series, reminder: { leadDays: 91 } }).success).toBe(
+      false,
+    );
+  });
+
+  it("checks edits and target changes", () => {
+    expect(updateSeriesSchema.safeParse({ revision: 1, title: "Run" }).success).toBe(true);
+    expect(updateSeriesSchema.safeParse({ revision: 1, title: "" }).success).toBe(false);
+    const target = {
+      revision: 1,
+      effectiveFrom: "2026-12-01",
+      target: "40",
+      unit: "km",
+      unitKind: "preset",
+    };
+    expect(seriesTargetSchema.parse(target)).toMatchObject({
+      target: 40,
+      confirmUnit: false,
+      confirmStatus: false,
+      preview: false,
+    });
+    expect(seriesTargetSchema.safeParse({ ...target, target: "0" }).success).toBe(false);
+    expect(seriesTargetSchema.safeParse({ ...target, effectiveFrom: "next" }).success).toBe(false);
   });
 });

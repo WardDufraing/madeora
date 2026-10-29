@@ -127,6 +127,10 @@ const refusals = new Set<string>([
   "confirm_unit",
   "confirm_status",
   "no_deadline",
+  "period_ended",
+  "series_period",
+  "invalid_period",
+  "stopped",
 ]);
 
 /** What travels along with an answer: the current revision, an impact, the goal as it is now. */

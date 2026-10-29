@@ -90,7 +90,9 @@ const REMINDER_ADVANCE_BATCH = 200;
 
 // Recurring occurrences are created lazily, so a reminder days before a due date needs its
 // occurrence to exist in time; the same run tops up habit reminder chains whose next moment is
-// missing (S28). Hourly: ~720 runs a month, well inside the free tier.
+// missing (S28), and rolls recurring goal series (S30b): ended periods are finalized and the period
+// running now is created (reads also roll lazily). Hourly: ~720 runs a month, well inside the free
+// tier; no extra schedule.
 export const taskReminderAdvance = schedules.task({
   id: "task-reminder-advance",
   cron: "0 * * * *",
@@ -101,8 +103,9 @@ export const taskReminderAdvance = schedules.task({
     const { services, logger } = getServices();
     const created = await services.data.advanceReminderSeries(REMINDER_ADVANCE_BATCH);
     const habits = await services.data.advanceHabitReminders(REMINDER_ADVANCE_BATCH);
-    logger.info("jobs.task_reminder_advance.done", { created, habits });
-    return { created, habits };
+    const goalPeriods = await services.data.rollGoalPeriods(REMINDER_ADVANCE_BATCH);
+    logger.info("jobs.task_reminder_advance.done", { created, habits, goalPeriods });
+    return { created, habits, goalPeriods };
   },
 });
 

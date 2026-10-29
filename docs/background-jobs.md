@@ -55,6 +55,8 @@ Use a job only for work that is durable, scheduled, retryable, long-running or f
 
 The hourly schedule `task-reminder-advance` also calls `advance_habit_reminders` (S28): it queues the next reminder moment of every habit whose reminder is on and whose chain stopped (a job that failed for good). Queueing is idempotent, so a habit with its next moment already queued is unchanged.
 
+The same hourly run calls `roll_goal_periods` (S30b): for at most 200 recurring goal series whose next period change has come, oldest first, it finalizes every period that ended (its result, never an achievement) and creates the period running now. It is idempotent under the series lock and never creates a missed period, so a retried or overlapping run changes nothing; reads of the goals list and series pages roll their own series lazily as well.
+
 The hourly schedule `chore-digest` (S21, 5 minutes past each hour) calls `send_chore_summaries`: each chore manager who turned on the daily summary for a Home gets at most one `chores` notice per local day, at or after their chosen hour, and only when something needs attention. The dedupe key (Home, person, local day) makes a repeated run harmless.
 
 Email jobs pass their idempotency key to Resend (`sendJobEmail`), record the outcome on the notification or invitation, and treat a Resend refusal as permanent and an outage as retryable. In-app delivery never waits for them.

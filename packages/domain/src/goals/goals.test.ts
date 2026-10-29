@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   GOAL_LIMITS,
+  goalPeriodStart,
   goalProgress,
   goalStatus,
+  isGoalFrequencyAllowed,
+  nextGoalPeriodStart,
   isValidGoalReminder,
   isValidGoalThousandths,
   parseGoalQuantity,
@@ -94,5 +97,49 @@ describe("validation", () => {
     expect(isValidGoalReminder({ leadDays: 91, overdueDays: null, atTime: "09:00" })).toBe(false);
     expect(isValidGoalReminder({ leadDays: 1, overdueDays: 31, atTime: "09:00" })).toBe(false);
     expect(isValidGoalReminder({ leadDays: 1, overdueDays: null, atTime: "24:00" })).toBe(false);
+  });
+});
+
+describe("recurring goals", () => {
+  it("shows an ended period as ended, never overdue", () => {
+    const period = {
+      archivedAt: null,
+      achievedAt: null,
+      deadline: "2026-10-31",
+      periodEnd: "2026-10-31",
+    };
+    expect(goalStatus(period, "2026-10-31")).toBe("active");
+    expect(goalStatus(period, "2026-11-01")).toBe("ended");
+    expect(goalStatus({ ...period, achievedAt: "2026-10-30T10:00:00Z" }, "2026-11-01")).toBe(
+      "achieved",
+    );
+  });
+
+  it("lets completion goals repeat monthly or yearly, measurable goals also weekly", () => {
+    expect(isGoalFrequencyAllowed("measurable", "weekly")).toBe(true);
+    expect(isGoalFrequencyAllowed("completion", "weekly")).toBe(false);
+    expect(isGoalFrequencyAllowed("completion", "monthly")).toBe(true);
+    expect(isGoalFrequencyAllowed("completion", "yearly")).toBe(true);
+  });
+});
+
+describe("goalPeriodStart", () => {
+  it("finds the week by its week start, across New Year", () => {
+    expect(goalPeriodStart("weekly", "monday", "2027-01-01")).toBe("2026-12-28");
+    expect(goalPeriodStart("weekly", "sunday", "2027-01-01")).toBe("2026-12-27");
+    expect(goalPeriodStart("weekly", "saturday", "2027-01-01")).toBe("2026-12-26");
+    expect(goalPeriodStart("weekly", "monday", "2026-12-28")).toBe("2026-12-28");
+  });
+
+  it("finds the calendar month and year", () => {
+    expect(goalPeriodStart("monthly", "monday", "2028-02-29")).toBe("2028-02-01");
+    expect(goalPeriodStart("yearly", "monday", "2028-02-29")).toBe("2028-01-01");
+  });
+
+  it("steps to the next period", () => {
+    expect(nextGoalPeriodStart("weekly", "2026-12-28")).toBe("2027-01-04");
+    expect(nextGoalPeriodStart("monthly", "2026-12-01")).toBe("2027-01-01");
+    expect(nextGoalPeriodStart("monthly", "2028-01-01")).toBe("2028-02-01");
+    expect(nextGoalPeriodStart("yearly", "2026-01-01")).toBe("2027-01-01");
   });
 });

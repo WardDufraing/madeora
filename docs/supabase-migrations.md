@@ -669,6 +669,32 @@ From here people can keep **goals** in their Personal space or a Home: completio
 
 2. In the app, open **Goals**, create a measurable goal and add progress twice with decimals: the total adds up exactly. Add more than the target: it shows "Target reached" but stays active until you choose **Mark achieved**; it then appears under **Completed**, and **Reopen** keeps the achievement in its history.
 
+## Check S30b (`20261114090000_recurring_goals.sql`)
+
+From here a goal can **repeat** weekly, monthly or yearly: each period is its own goal that starts at zero, keeps its result when it ends, and can take a new target from a later period. Nothing changes for existing goals. Apply it after the S30 file. The hourly background job `task-reminder-advance` now also starts and closes periods; no new job, schedule or provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.goal_series') as series_table,
+     to_regclass('private.goal_series_targets') as targets_table,
+     has_table_privilege('authenticated', 'private.goal_series', 'select')
+       as members_can_read_series_table,
+     has_function_privilege('authenticated', 'public.get_goal_series(uuid)', 'execute')
+       as members_can_read_series,
+     has_function_privilege('authenticated', 'public.roll_goal_periods(integer)', 'execute')
+       as members_can_run_rollover,
+     has_function_privilege('service_role', 'public.roll_goal_periods(integer)', 'execute')
+       as jobs_can_run_rollover,
+     has_function_privilege('anon', 'public.sync_goal_periods(uuid, uuid)', 'execute')
+       as anonymous_can_sync;
+   ```
+
+   It must show the two tables, **true** for `members_can_read_series` and `jobs_can_run_rollover`, and **false** for `members_can_read_series_table`, `members_can_run_rollover` and `anonymous_can_sync`.
+
+2. In the app, open **Goals**, choose **New goal**, set **Repeat** to Monthly and preview the periods, then create it. The current month appears under Active with a **Monthly** badge and the series under **Recurring**. On the series page, change the target for the next period: the current period keeps its target.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:
