@@ -10,6 +10,13 @@ export type {
   GoalEntryResult,
   GoalEvent,
   GoalEvents,
+  GoalLink,
+  GoalLinkCandidate,
+  GoalLinkCandidates,
+  GoalLinkGoalImpact,
+  GoalLinkImpact,
+  GoalLinkResult,
+  GoalLinks,
   GoalList,
   GoalMoment,
   GoalPeriod,
@@ -52,6 +59,15 @@ export type {
  * - `POST /api/v1/goal-series/:id/target` (from a period on; `preview: true` → `{ impact }`).
  * - `GET /api/v1/goal-series/:id/periods?before=` (newest first).
  *
+ * Habit-to-goal links (S30c):
+ *
+ * - `GET /api/v1/goal-links?goalId|seriesId|habitId` (the active links of one of them).
+ * - `GET /api/v1/goal-links/candidates?goalId|seriesId` (the habits the person could link).
+ * - `POST /api/v1/goal-links` (`preview: true` → `{ impact }`; confirming with the previewed
+ *   `revision` and `expectedAmount`, `409 stale` with a new impact when either changed).
+ * - `PATCH /api/v1/goal-links/:id` (change the start; preview and confirm the same way).
+ * - `POST /api/v1/goal-links/:id/unlink` (`keep` or `remove`; preview and confirm the same way).
+ *
  * `409 conflict` (with the current `revision`) means someone changed it since it was read; a refused
  * change answers `409` with its reason and, where it explains it, the goal as it is now.
  */
@@ -73,6 +89,23 @@ export function goalEndpoint(
     "target" | "entries" | "achievement" | "archive" | "reminders" | "my-reminders" | "history",
 ): string {
   const base = `${GOALS_ENDPOINT}/${encodeURIComponent(goalId)}`;
+  return part ? `${base}/${part}` : base;
+}
+
+export const GOAL_LINKS_ENDPOINT = "/api/v1/goal-links";
+
+export function goalLinksQuery(
+  target:
+    { readonly goalId: string } | { readonly seriesId: string } | { readonly habitId: string },
+  candidates = false,
+): string {
+  const [key, value] = Object.entries(target)[0] ?? ["goalId", ""];
+  const base = candidates ? `${GOAL_LINKS_ENDPOINT}/candidates` : GOAL_LINKS_ENDPOINT;
+  return `${base}?${new URLSearchParams({ [key]: value }).toString()}`;
+}
+
+export function goalLinkEndpoint(linkId: string, part?: "unlink"): string {
+  const base = `${GOAL_LINKS_ENDPOINT}/${encodeURIComponent(linkId)}`;
   return part ? `${base}/${part}` : base;
 }
 
@@ -106,12 +139,22 @@ export type GoalErrorCode =
   | "series-period"
   | "invalid-period"
   | "stopped"
+  | "already-linked"
+  | "incompatible-unit"
+  | "not-numeric"
+  | "other-context"
+  | "invalid-start"
+  | "habit-archived"
+  | "source-unavailable"
+  | "below-linked"
+  | "linked-unit"
   | "failed";
 
 export interface GoalErrorResponse {
   readonly error: GoalErrorCode;
   readonly revision?: number;
   readonly fields?: readonly string[];
+  /** A target change's impact, or a habit link's (read with `goalLinkImpactSchema`). */
   readonly impact?: GoalTargetImpact;
   readonly goal?: GoalSummary;
 }
@@ -140,6 +183,15 @@ export type GoalFailure =
   | "seriesPeriod"
   | "invalidPeriod"
   | "stopped"
+  | "alreadyLinked"
+  | "incompatibleUnit"
+  | "notNumeric"
+  | "otherContext"
+  | "invalidStart"
+  | "habitArchived"
+  | "sourceUnavailable"
+  | "belowLinked"
+  | "linkedUnit"
   | "network"
   | "failed";
 
@@ -166,6 +218,15 @@ const failures: { readonly [C in GoalErrorCode]?: GoalFailure } = {
   "series-period": "seriesPeriod",
   "invalid-period": "invalidPeriod",
   stopped: "stopped",
+  "already-linked": "alreadyLinked",
+  "incompatible-unit": "incompatibleUnit",
+  "not-numeric": "notNumeric",
+  "other-context": "otherContext",
+  "invalid-start": "invalidStart",
+  "habit-archived": "habitArchived",
+  "source-unavailable": "sourceUnavailable",
+  "below-linked": "belowLinked",
+  "linked-unit": "linkedUnit",
 };
 
 export class GoalRequestError extends Error {

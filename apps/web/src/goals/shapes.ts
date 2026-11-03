@@ -4,6 +4,8 @@ import {
   goalEntryKinds,
   goalFrequencies,
   goalKinds,
+  goalLinkRemovals,
+  goalLinkSources,
   goalOutcomes,
   goalReminderKinds,
   goalSeriesStates,
@@ -18,7 +20,9 @@ import { goalAccessLevels, goalMemberAccess } from "@madeora/domain/permissions"
  * the server before anything reaches a page, and the types the interface uses. Client-safe. People
  * are membership references (`null`: a personal goal, or someone who left the Home). Quantities are
  * exact decimals in at most 3 decimals; the interface works in thousandths. S30b adds recurring series
- * (supabase/migrations/*_recurring_goals.sql): a period of a series is a goal with `period`.
+ * (supabase/migrations/*_recurring_goals.sql): a period of a series is a goal with `period`. S30c
+ * adds habit-to-goal links (supabase/migrations/*_habit_goal_links.sql): a goal's total is its manual
+ * part plus what linked habits count.
  */
 
 const date = z.iso.date();
@@ -58,8 +62,13 @@ export const goalSummarySchema = z.object({
   target: z.number().nullable(),
   unit: z.string().nullable(),
   unitKind: z.enum(habitUnitKinds).nullable(),
-  /** The exact sum of the active entries (0 for a completion goal). */
+  /** The exact total: the manual entries plus what linked habits count (0 for a completion goal). */
   total: z.number(),
+  /** The manual part (entries) and the linked part (habits); null for a completion goal. */
+  manualTotal: z.number().nullable(),
+  linkedTotal: z.number().nullable(),
+  /** Active habit links counting toward it (for a period: its series' links). */
+  linkCount: z.int(),
   reached: z.boolean(),
   achievedAt: z.string().nullable(),
   achievedBy: person,
@@ -200,7 +209,8 @@ export const goalEntrySchema = z.object({
   by: person,
   mine: z.boolean(),
   recordedAt: z.string(),
-  source: z.enum(["app", "widget"]),
+  /** `link`: the amount a removed habit link kept as a manual adjustment. */
+  source: z.enum(["app", "widget", "link"]),
   status: z.enum(["active", "reversed"]),
   amendedAt: z.string().nullable(),
   reversedAt: z.string().nullable(),
@@ -230,6 +240,9 @@ export const goalEventKinds = [
   "reminders_changed",
   "finalized",
   "outcome_changed",
+  "link_created",
+  "link_changed",
+  "link_removed",
 ] as const;
 export type GoalEventKind = (typeof goalEventKinds)[number];
 
@@ -308,6 +321,9 @@ export const goalSeriesEventKinds = [
   "resumed",
   "stopped",
   "restored",
+  "link_created",
+  "link_changed",
+  "link_removed",
 ] as const;
 export type GoalSeriesEventKind = (typeof goalSeriesEventKinds)[number];
 
@@ -406,3 +422,138 @@ export const goalSeriesTargetResultSchema = z.object({
   impact: goalSeriesTargetImpactSchema.optional(),
 });
 export type GoalSeriesTargetResult = z.infer<typeof goalSeriesTargetResultSchema>;
+
+// Habit-to-goal links (S30c) ----------------------------------------------------------------------------
+
+const unitKind = z.enum(habitUnitKinds);
+
+/** A link as a viewer of its goal or habit sees it: daily totals only, nobody's contribution. */
+export const goalLinkSchema = z.object({
+  id: z.uuid(),
+  /** Null once the habit was purged (the link keeps its amounts, frozen). */
+  habit: z
+    .object({
+      id: z.uuid(),
+      name: z.string(),
+      unit: z.string().nullable(),
+      unitKind: unitKind.nullable(),
+      /** The habit's first start date and today, for the start choices. */
+      firstStart: date.nullable(),
+      today: date,
+    })
+    .nullable(),
+  source: z.enum(goalLinkSources),
+  goalId: z.uuid().nullable(),
+  seriesId: z.uuid().nullable(),
+  destination: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("goal"), id: z.uuid(), title: z.string() }),
+    z.object({
+      kind: z.literal("series"),
+      id: z.uuid(),
+      title: z.string(),
+      frequency: z.enum(goalFrequencies),
+    }),
+  ]),
+  homeId: z.uuid().nullable(),
+  /** The first counted habit day (inclusive). */
+  startsOn: date,
+  state: z.enum(["active", "removed"]),
+  revision: z.int(),
+  /** The goal the amount is for: the link's goal, the period asked about, or the current period. */
+  scopeGoalId: z.uuid().nullable(),
+  amount: z.number(),
+  /** Habit days in a unit that cannot count toward the goal. */
+  uncountedDays: z.int(),
+  createdAt: z.string(),
+  createdBy: person,
+  mine: z.boolean(),
+  actions: z.object({ manage: z.boolean(), changeStart: z.boolean() }),
+});
+export type GoalLink = z.infer<typeof goalLinkSchema>;
+
+export const goalLinksSchema = z.object({ links: z.array(goalLinkSchema) });
+export type GoalLinks = z.infer<typeof goalLinksSchema>;
+
+/** A habit the person could link: numeric, same context, managed by them, compatible unit. */
+export const goalLinkCandidateSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  unit: z.string(),
+  unitKind: unitKind,
+  firstStart: date.nullable(),
+  today: date,
+});
+export type GoalLinkCandidate = z.infer<typeof goalLinkCandidateSchema>;
+
+export const goalLinkCandidatesSchema = z.object({ habits: z.array(goalLinkCandidateSchema) });
+export type GoalLinkCandidates = z.infer<typeof goalLinkCandidatesSchema>;
+
+/** What a link change does to one goal (a one-off goal, or a period of a series). */
+export const goalLinkGoalImpactSchema = z.object({
+  goalId: z.uuid(),
+  title: z.string(),
+  periodStart: date.nullable(),
+  periodEnd: date.nullable(),
+  ended: z.boolean(),
+  target: z.number().nullable(),
+  unit: z.string().nullable(),
+  unitKind: unitKind.nullable(),
+  /** What this link counts there before and after. */
+  linkedBefore: z.number(),
+  linkedAfter: z.number(),
+  totalBefore: z.number(),
+  totalAfter: z.number(),
+  reachedBefore: z.boolean(),
+  reachedAfter: z.boolean(),
+  achieved: z.boolean(),
+  /** An ended period's finalized outcome before the change. */
+  outcomeBefore: z.enum(goalOutcomes).nullable(),
+  /** False for an archived goal (left alone until it returns). */
+  syncable: z.boolean(),
+  uncountedDays: z.int(),
+});
+export type GoalLinkGoalImpact = z.infer<typeof goalLinkGoalImpactSchema>;
+
+/** A link preview: the habit, the destination, the start and what changes in each goal. */
+export const goalLinkImpactSchema = z.object({
+  habit: z
+    .object({
+      id: z.uuid(),
+      name: z.string(),
+      unit: z.string().nullable().optional(),
+      unitKind: unitKind.nullable().optional(),
+      firstStart: date.nullable().optional(),
+      today: date.optional(),
+    })
+    .nullable()
+    .optional(),
+  destination: z
+    .object({
+      kind: z.enum(["goal", "series"]),
+      id: z.uuid(),
+      title: z.string(),
+      frequency: z.enum(goalFrequencies).optional(),
+      unit: z.string().nullable(),
+      unitKind: unitKind.nullable(),
+      target: z.number().nullable(),
+    })
+    .optional(),
+  startsOn: date.optional(),
+  startsOnBefore: date.optional(),
+  until: date.optional(),
+  mode: z.enum(goalLinkRemovals).optional(),
+  source: z.enum(goalLinkSources).optional(),
+  amountBefore: z.number(),
+  amountAfter: z.number(),
+  uncountedDays: z.int(),
+  goals: z.array(goalLinkGoalImpactSchema),
+});
+export type GoalLinkImpact = z.infer<typeof goalLinkImpactSchema>;
+
+export const goalLinkResultSchema = z.object({
+  outcome: z.string(),
+  revision: z.int().optional(),
+  impact: goalLinkImpactSchema.optional(),
+  link: goalLinkSchema.optional(),
+});
+export type GoalLinkResult = z.infer<typeof goalLinkResultSchema>;

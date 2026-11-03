@@ -131,6 +131,15 @@ const refusals = new Set<string>([
   "series_period",
   "invalid_period",
   "stopped",
+  "already_linked",
+  "incompatible_unit",
+  "not_numeric",
+  "other_context",
+  "invalid_start",
+  "habit_archived",
+  "source_unavailable",
+  "below_linked",
+  "linked_unit",
 ]);
 
 /** What travels along with an answer: the current revision, an impact, the goal as it is now. */
@@ -171,6 +180,7 @@ export function outcomeAnswer(
     case "reversed":
     case "achieved":
     case "reopened":
+    case "removed":
       return json(200, body);
     case "conflict":
       return json(409, {
@@ -195,4 +205,28 @@ export function outcomeAnswer(
       logGoals(event, "unexpected_outcome");
       return failure(500, "failed");
   }
+}
+
+/**
+ * A habit-to-goal link answer (S30c): like `outcomeAnswer`, except that a stale confirmation also
+ * carries the current revision with its new impact, so the person can confirm what they now see.
+ */
+export function goalLinkAnswer(
+  event: string,
+  value: {
+    readonly outcome: string;
+    readonly revision?: number | undefined;
+    readonly impact?: unknown;
+  },
+): Response {
+  if (value.outcome === "stale") {
+    return json(409, {
+      error: "stale",
+      ...present({ revision: value.revision, impact: value.impact }),
+    });
+  }
+  return outcomeAnswer(event, value.outcome, value, {
+    revision: value.revision,
+    impact: value.impact,
+  });
 }

@@ -90,6 +90,7 @@ export {
   type HabitPermissionProjection,
 } from "./habits";
 export {
+  canManageGoalLink,
   decideGoalAction,
   goalAccess,
   goalAccessAllows,

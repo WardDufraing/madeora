@@ -1,6 +1,9 @@
 import type {
   GoalDetail,
   GoalEntry,
+  GoalLink,
+  GoalLinkGoalImpact,
+  GoalLinkImpact,
   GoalList,
   GoalPeriod,
   GoalSeriesDetail,
@@ -14,6 +17,8 @@ export const GOAL = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0090";
 export const ENTRY = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0091";
 export const MEMBER = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0040";
 export const SERIES = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0095";
+export const HABIT = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0096";
+export const LINK = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0097";
 
 /** A measurable Home goal: 7.5 of 10 km, the viewer manages it. */
 export function goalSummary(overrides: Partial<GoalSummary> = {}): GoalSummary {
@@ -32,6 +37,9 @@ export function goalSummary(overrides: Partial<GoalSummary> = {}): GoalSummary {
     unit: "km",
     unitKind: "preset",
     total: 7.5,
+    manualTotal: 7.5,
+    linkedTotal: 0,
+    linkCount: 0,
     reached: false,
     achievedAt: null,
     achievedBy: null,
@@ -153,6 +161,92 @@ export function goalList(overrides: Partial<GoalList> = {}): GoalList {
     memberAccess: "contribute",
     timeZone: "Europe/Brussels",
     series: [],
+    ...overrides,
+  };
+}
+
+/** Run, a km habit, counting toward GOAL from 1 November (S30c); the viewer manages both. */
+export function goalLink(overrides: Partial<GoalLink> = {}): GoalLink {
+  return {
+    id: LINK,
+    habit: {
+      id: HABIT,
+      name: "Run",
+      unit: "km",
+      unitKind: "preset",
+      firstStart: "2026-10-01",
+      today: "2026-11-10",
+    },
+    source: "active",
+    goalId: GOAL,
+    seriesId: null,
+    destination: { kind: "goal", id: GOAL, title: "Walk to the coast" },
+    homeId: HOME,
+    startsOn: "2026-11-01",
+    state: "active",
+    revision: 1,
+    scopeGoalId: GOAL,
+    amount: 4.5,
+    uncountedDays: 0,
+    createdAt: "2026-11-01T09:00:00Z",
+    createdBy: MEMBER,
+    mine: true,
+    actions: { manage: true, changeStart: true },
+    ...overrides,
+  };
+}
+
+/** Linking Run to GOAL from its beginning: 6 km from the habit, 3 km manual (S30c). */
+export function goalLinkImpact(overrides: Partial<GoalLinkImpact> = {}): GoalLinkImpact {
+  return {
+    habit: {
+      id: HABIT,
+      name: "Run",
+      unit: "km",
+      unitKind: "preset",
+      firstStart: "2026-10-01",
+      today: "2026-11-10",
+    },
+    destination: {
+      kind: "goal",
+      id: GOAL,
+      title: "Walk to the coast",
+      unit: "km",
+      unitKind: "preset",
+      target: 10,
+    },
+    startsOn: "2026-10-01",
+    until: "2026-11-10",
+    amountBefore: 0,
+    amountAfter: 6,
+    uncountedDays: 0,
+    goals: [goalLinkGoalImpact()],
+    ...overrides,
+  };
+}
+
+export function goalLinkGoalImpact(
+  overrides: Partial<GoalLinkGoalImpact> = {},
+): GoalLinkGoalImpact {
+  return {
+    goalId: GOAL,
+    title: "Walk to the coast",
+    periodStart: null,
+    periodEnd: null,
+    ended: false,
+    target: 10,
+    unit: "km",
+    unitKind: "preset",
+    linkedBefore: 0,
+    linkedAfter: 6,
+    totalBefore: 3,
+    totalAfter: 9,
+    reachedBefore: false,
+    reachedAfter: false,
+    achieved: false,
+    outcomeBefore: null,
+    syncable: true,
+    uncountedDays: 0,
     ...overrides,
   };
 }

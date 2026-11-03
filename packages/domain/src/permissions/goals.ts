@@ -12,6 +12,7 @@
  *   create and change goals, set totals, correct anyone's entry, mark a measurable goal achieved,
  *   reopen, archive and delete goals and set that member access.
  */
+import type { HabitAccess } from "./habits";
 import { decideHomeAction, type HomeDecision, type HomeMembershipFacts } from "./home";
 
 export const goalMemberAccess = ["contribute", "view"] as const;
@@ -77,4 +78,20 @@ export function goalPermissions(access: GoalAccess | null): GoalPermissionProjec
     "goals.contribute": goalAccessAllows(access, "goals.contribute"),
     "goals.manage": goalAccessAllows(access, "goals.manage"),
   };
+}
+
+/**
+ * Whether a person may create a habit-to-goal link (S30c), change its start or remove it, as
+ * `private.goal_link_manager` decides it: manage on the goal (or series) and on the habit. A link
+ * whose habit was purged (`habitAccess` "gone") needs only the goal side. Links stay inside one
+ * context, so both levels come from the same Personal space or Home.
+ */
+export function canManageGoalLink(
+  goalAccessLevel: GoalAccess | null,
+  habitAccessLevel: HabitAccess | null | "gone",
+): boolean {
+  return (
+    goalAccessAllows(goalAccessLevel, "goals.manage") &&
+    (habitAccessLevel === "gone" || habitAccessLevel === "manage")
+  );
 }

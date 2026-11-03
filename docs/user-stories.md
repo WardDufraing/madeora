@@ -349,6 +349,16 @@ As a person or Home member, I want a goal that starts again every week, month or
 - Goal managers change the target from the current period or a later one with a preview; earlier periods keep their target. Changing the current period asks for confirmation when it changes whether the target is reached.
 - Goal managers pause, resume and stop a repeating goal, edit it for later periods and delete it to the trash with all its periods. The series page shows the target schedule and every period with its result.
 
+### US-033 — Let a numeric habit count toward a goal
+
+As a person or Home member who manages both a numeric habit and a measurable goal, I want the habit's progress to count toward the goal automatically, so I record an activity once.
+
+- On a measurable goal or repeating goal I can link a numeric habit of the same Personal space or Home whose unit fits (the same unit, a convertible one such as m and km, or the same custom unit). I choose to count from today, from a date or from the habit's beginning, and see the linked amount and the new total before I confirm.
+- The goal shows how much is manual and how much comes from linked habits. Every change to the habit (adding, Undo, a correction, a missed day filled in later) updates the goal straight away; a correction in a period that has ended updates that period's result.
+- One habit can count toward several goals, and several habits toward one goal; each habit day counts once per goal. A goal keeps counting after it is achieved.
+- I can change the start date or unlink, each with a preview. Unlinking either keeps the amount as manual progress or removes it.
+- The habit page lists the goals it counts toward. People who can see the goal see which habits feed it and how much, never who recorded each entry.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications
