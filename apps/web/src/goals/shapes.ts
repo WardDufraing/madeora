@@ -498,6 +498,8 @@ export const goalLinkGoalImpactSchema = z.object({
   target: z.number().nullable(),
   unit: z.string().nullable(),
   unitKind: unitKind.nullable(),
+  /** The goal's manual part (entries), which the link does not change. */
+  manualTotal: z.number(),
   /** What this link counts there before and after. */
   linkedBefore: z.number(),
   linkedAfter: z.number(),
@@ -508,6 +510,8 @@ export const goalLinkGoalImpactSchema = z.object({
   achieved: z.boolean(),
   /** An ended period's finalized outcome before the change. */
   outcomeBefore: z.enum(goalOutcomes).nullable(),
+  /** A finalized period's outcome after the change (null for a goal that is not one). */
+  outcomeAfter: z.enum(goalOutcomes).nullable(),
   /** False for an archived goal (left alone until it returns). */
   syncable: z.boolean(),
   uncountedDays: z.int(),

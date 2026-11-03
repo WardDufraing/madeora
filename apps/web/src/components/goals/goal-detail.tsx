@@ -13,6 +13,7 @@ import { goalKeys, goalSeriesPath, goalsPath } from "@/goals/format";
 import { memberNames, type MemberOption } from "@/tasks/format";
 
 import {
+  ArchiveDialog,
   DeleteDialog,
   Failure,
   ProgressDialog,
@@ -31,7 +32,9 @@ import { useGoalTexts } from "./use-goal-texts";
 const REFRESH_INTERVAL_MS = 60_000;
 
 type DialogKind =
-  | { readonly kind: "add" | "total" | "target" | "reminders" | "reopen" | "delete" }
+  | {
+      readonly kind: "add" | "total" | "target" | "reminders" | "reopen" | "delete" | "archive";
+    }
   | { readonly kind: "form"; readonly mode: GoalFormMode };
 
 export interface GoalDetailViewProps {
@@ -375,7 +378,9 @@ export function GoalDetailView({
               variant="secondary"
               loading={archive.busy}
               onClick={() => {
-                archive.mutate(!archived);
+                // Archiving a goal habits count toward says first what happens to those links.
+                if (!archived && goal.linkCount > 0) setDialog({ kind: "archive" });
+                else archive.mutate(!archived);
               }}
               data-testid="goal-archive"
             >
@@ -412,6 +417,7 @@ export function GoalDetailView({
       {dialog?.kind === "reminders" ? <RemindersDialog goal={goal} onClose={close} /> : null}
       {dialog?.kind === "reopen" ? <ReopenDialog goal={goal} onClose={close} /> : null}
       {dialog?.kind === "delete" ? <DeleteDialog goal={goal} onClose={close} /> : null}
+      {dialog?.kind === "archive" ? <ArchiveDialog goal={goal} onClose={close} /> : null}
       {dialog?.kind === "form" ? (
         <GoalFormDialog
           mode={dialog.mode}

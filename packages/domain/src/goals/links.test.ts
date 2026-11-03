@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { areLinkUnitsCompatible, goalLinkStartDate, linkedThousandths } from "./links";
+import {
+  areLinkUnitsCompatible,
+  goalLinkStartDate,
+  linkConversionRounds,
+  linkedThousandths,
+} from "./links";
 
 const km = { unit: "km", kind: "preset" } as const;
 const m = { unit: "m", kind: "preset" } as const;
@@ -47,5 +52,20 @@ describe("goalLinkStartDate", () => {
     expect(goalLinkStartDate("date", { ...facts, date: "2026-08-31" })).toBeNull();
     expect(goalLinkStartDate("date", { ...facts, date: "2026-10-30" })).toBeNull();
     expect(goalLinkStartDate("date", facts)).toBeNull();
+  });
+});
+
+describe("linkConversionRounds", () => {
+  it("is true only when the goal's unit is larger than the habit's", () => {
+    expect(linkConversionRounds({ unit: "m", kind: "preset" }, km)).toBe(true);
+    expect(
+      linkConversionRounds({ unit: "min", kind: "preset" }, { unit: "h", kind: "preset" }),
+    ).toBe(true);
+    expect(linkConversionRounds(km, { unit: "m", kind: "preset" })).toBe(false);
+    expect(linkConversionRounds(km, km)).toBe(false);
+    expect(
+      linkConversionRounds({ unit: "laps", kind: "custom" }, { unit: "laps", kind: "custom" }),
+    ).toBe(false);
+    expect(linkConversionRounds({ unit: "ml", kind: "preset" }, km)).toBe(false);
   });
 });

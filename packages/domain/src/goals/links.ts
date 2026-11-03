@@ -41,6 +41,18 @@ export function linkedThousandths(value: number, from: HabitUnit, to: HabitUnit)
   return Math.round((value * a.factor) / b.factor);
 }
 
+/**
+ * Whether converting from `from` to `to` can round a day's total (m to km, ml to l, min to h): the
+ * goal's unit is not a whole multiple of thousandths of the habit's. False for the same unit.
+ */
+export function linkConversionRounds(from: HabitUnit, to: HabitUnit): boolean {
+  if (from.kind === to.kind && from.unit === to.unit) return false;
+  const a = habitUnitInfo(from);
+  const b = habitUnitInfo(to);
+  if (!a || !b || linkedThousandths(1, from, to) === null) return false;
+  return a.factor % b.factor !== 0;
+}
+
 /** Whether a habit in `from` may count toward a goal in `to`. */
 export function areLinkUnitsCompatible(from: HabitUnit, to: HabitUnit): boolean {
   return linkedThousandths(1, from, to) !== null;

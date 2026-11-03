@@ -152,6 +152,22 @@ returns jsonb
       coalesce(p_rev, (v_preview ->> 'revision')::integer),
       coalesce(p_amount, (v_preview -> 'impact' ->> 'amountAfter')::numeric));
   end $$;
+-- Previews a link, adds manual progress, then confirms with the preview's numbers; rolled back.
+create function tests.mk_after_manual(p_link text, p_habit text, p_goal text, p_quantity numeric) returns text
+  language plpgsql as $$
+  declare v_preview jsonb;
+  begin
+    begin
+      v_preview := public.create_goal_link(tests.i(p_link), tests.i(p_habit), tests.i(p_goal), null, 'beginning',
+        null, true);
+      perform public.add_goal_entry(gen_random_uuid(), tests.i(p_goal), 'add', p_quantity);
+      raise exception using errcode = 'P0001', message = public.create_goal_link(tests.i(p_link), tests.i(p_habit),
+        tests.i(p_goal), null, 'beginning', null, false, (v_preview ->> 'revision')::integer,
+        (v_preview -> 'impact' ->> 'amountAfter')::numeric) ->> 'outcome';
+    exception when sqlstate 'P0001' then
+      return sqlerrm;
+    end;
+  end $$;
 create function tests.mko(p_link text, p_habit text, p_dest text, p_start text default 'beginning', p_date date default null)
 returns text
   language sql as $$ select tests.mk(p_link, p_habit, p_dest, p_start, p_date) ->> 'outcome'; $$;
@@ -279,6 +295,7 @@ select tests.assert_true((select
     and (x -> 'impact' ->> 'startsOn')::date = tests.d(-40)
     and (x -> 'impact' -> 'goals' -> 0 ->> 'totalBefore')::numeric = 5
     and (x -> 'impact' -> 'goals' -> 0 ->> 'totalAfter')::numeric = 24.5
+    and (x -> 'impact' -> 'goals' -> 0 ->> 'manualTotal')::numeric = 5
     and (x -> 'impact' -> 'goals' -> 0 ->> 'reachedAfter')::boolean = false
     and x -> 'impact' -> 'habit' ->> 'unit' = 'km'
     and x -> 'impact' -> 'destination' ->> 'unit' = 'km'
@@ -290,6 +307,8 @@ select tests.assert_true(tests.mk('l-1', 'h-run', 'g-km', 'beginning', null, fal
   'A confirmation with another amount than the preview is stale');
 select tests.assert_true(tests.mk('l-1', 'h-run', 'g-km', 'beginning', null, false, null, tests.grev('g-km') + 1) ->> 'outcome'
   = 'stale', 'So is one with another revision');
+select tests.assert_true(tests.mk_after_manual('l-1', 'h-run', 'g-km', 80) = 'stale',
+  'And one after manual progress changed what the preview showed (total, reached)');
 select tests.assert_true(tests.mko('l-1', 'h-run', 'g-km') = 'created', 'Alice links Run to the goal from the beginning');
 select tests.assert_true(tests.total(tests.i('g-km')) = 24.5 and tests.linked(tests.i('g-km')) = 19.5,
   'The total is the manual 5 plus 19.5 from the habit');
@@ -442,7 +461,8 @@ select tests.assert_true(tests.p($$select outcome = 'not_reached' and finalized_
   where series_id = tests.i('s-old') and period_end < tests.d(0)$$), 'Last month closed not reached');
 select tests.assert_true((select
     exists (select 1 from jsonb_array_elements(x -> 'impact' -> 'goals') g where (g ->> 'ended')::boolean
-      and (g ->> 'linkedAfter')::numeric >= 30 and g ->> 'outcomeBefore' = 'not_reached' and (g ->> 'reachedAfter')::boolean)
+      and (g ->> 'linkedAfter')::numeric >= 30 and g ->> 'outcomeBefore' = 'not_reached' and (g ->> 'reachedAfter')::boolean
+      and g ->> 'outcomeAfter' = 'reached')
     and exists (select 1 from jsonb_array_elements(x -> 'impact' -> 'goals') g where not (g ->> 'ended')::boolean)
   from (select tests.mk('l-9', 'h-run', 's-old', 'beginning', null, true) as x) y),
   'The preview shows the ended period that would reach its target, and the current one');

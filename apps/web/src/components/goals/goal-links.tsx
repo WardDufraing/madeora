@@ -5,7 +5,13 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useState } from "react";
 
-import { goalLinkStartDate, type GoalLinkRemoval, type GoalLinkStart } from "@madeora/domain/goals";
+import {
+  goalLinkStartDate,
+  goalProgress,
+  linkConversionRounds,
+  type GoalLinkRemoval,
+  type GoalLinkStart,
+} from "@madeora/domain/goals";
 import type { HabitUnitKind } from "@madeora/domain/habits";
 
 import { FormAlert } from "@/components/auth/form-alert";
@@ -22,7 +28,6 @@ import {
   type GoalLinkCandidates,
   type GoalLinkImpact,
   type GoalLinkResult,
-  type GoalLinks,
   type GoalRequestError,
 } from "@/goals/api";
 import { goalKeys, goalSeriesPath, goalsPath, newId } from "@/goals/format";
@@ -30,6 +35,7 @@ import { goalLinkImpactSchema } from "@/goals/shapes";
 import { habitsPath } from "@/habits/format";
 
 import { DialogActions, Failure } from "./goal-dialogs";
+import { useLinks } from "./goal-link-notes";
 import { useGoalMutation } from "./use-goal-mutation";
 import { useGoalTexts } from "./use-goal-texts";
 
@@ -52,21 +58,6 @@ function refusedImpact(error: GoalRequestError | null): GoalLinkImpact | null {
 /** The revision a stale answer carries, to confirm what the person now sees. */
 function refusedRevision(error: GoalRequestError | null): number | null {
   return error?.failure === "stale" ? (error.details.revision ?? null) : null;
-}
-
-function useLinks(target: GoalLinkDestination | { readonly habitId: string }) {
-  const [kind, id] =
-    "goalId" in target
-      ? (["goal", target.goalId] as const)
-      : "seriesId" in target
-        ? (["series", target.seriesId] as const)
-        : (["habit", target.habitId] as const);
-  return useQuery<GoalLinks>({
-    queryKey: goalKeys.links(kind, id),
-    queryFn: () => sendGoalRequest("GET", goalLinksQuery(target)),
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
-  });
 }
 
 /** The start choice of a link form: today, a chosen past date, or the habit's beginning. */
@@ -151,10 +142,18 @@ export function GoalLinkImpactSummary({
       ) : null}
       {converted && impact.habit?.unit && impact.habit.unitKind && unit.unit && unit.unitKind ? (
         <p>
-          {t("linkImpactUnits", {
-            from: texts.numeric.unitLabel(impact.habit.unit, impact.habit.unitKind),
-            to: texts.numeric.unitLabel(unit.unit, unit.unitKind),
-          })}
+          {t(
+            linkConversionRounds(
+              { unit: impact.habit.unit, kind: impact.habit.unitKind },
+              { unit: unit.unit, kind: unit.unitKind },
+            )
+              ? "linkImpactUnitsRounded"
+              : "linkImpactUnits",
+            {
+              from: texts.numeric.unitLabel(impact.habit.unit, impact.habit.unitKind),
+              to: texts.numeric.unitLabel(unit.unit, unit.unitKind),
+            },
+          )}
         </p>
       ) : null}
       <p data-testid="goal-link-impact-amount">
@@ -176,6 +175,14 @@ export function GoalLinkImpactSummary({
             goal.target !== null && goal.unit && goal.unitKind
               ? texts.numeric.progress(total, goal.target, goal.unit, goal.unitKind)
               : texts.numeric.number(total);
+          const quantity = (value: number) =>
+            goal.unit && goal.unitKind
+              ? texts.amount(value, goal.unit, goal.unitKind)
+              : texts.numeric.number(value);
+          const outcomeChanges =
+            goal.outcomeBefore !== null &&
+            goal.outcomeAfter !== null &&
+            goal.outcomeBefore !== goal.outcomeAfter;
           return (
             <li key={goal.goalId}>
               <bdi>{name}</bdi>
@@ -184,9 +191,20 @@ export function GoalLinkImpactSummary({
                 before: progress(goal.totalBefore),
                 after: progress(goal.totalAfter),
               })}
+              {goal.target !== null
+                ? ` (${t("percent", { percent: goalProgress(goal.totalAfter, goal.target).percent })})`
+                : ""}
+              {` · ${t("linkImpactManual", { manual: quantity(goal.manualTotal) })}`}
               {goal.reachedAfter && !goal.reachedBefore ? ` · ${t("linkImpactReaches")}` : ""}
               {goal.reachedBefore && !goal.reachedAfter ? ` · ${t("linkImpactUnreaches")}` : ""}
-              {goal.ended ? ` · ${t("linkImpactEnded")}` : ""}
+              {outcomeChanges && goal.outcomeBefore && goal.outcomeAfter
+                ? ` · ${t("linkImpactOutcome", {
+                    before: texts.outcome(goal.outcomeBefore),
+                    after: texts.outcome(goal.outcomeAfter),
+                  })}`
+                : goal.ended
+                  ? ` · ${t("linkImpactEnded")}`
+                  : ""}
               {goal.achieved ? ` · ${t("linkImpactAchieved")}` : ""}
               {goal.syncable ? "" : ` · ${t("linkImpactArchived")}`}
             </li>

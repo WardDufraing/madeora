@@ -18,6 +18,7 @@ import {
 import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
 
+import { LinkArchiveNote } from "./goal-link-notes";
 import { GoalLinksSection, HabitLinkedGoals } from "./goal-links";
 import { GoalProgressMeter } from "./goal-progress";
 
@@ -190,6 +191,8 @@ describe("linking a habit", () => {
     const impact = await within(dialog).findByTestId("goal-link-impact");
     expect(impact).toHaveTextContent("From this habit: 0 km → 6 km");
     expect(impact).toHaveTextContent("3 / 10 km → 9 / 10 km");
+    expect(impact).toHaveTextContent("(90%)");
+    expect(impact).toHaveTextContent("manual progress 3 km (unchanged)");
     expect(impact).toHaveTextContent("does not mark the goal achieved");
     await user.click(within(dialog).getByTestId("goal-link-save"));
     await waitFor(() => {
@@ -359,9 +362,30 @@ describe("unlinking", () => {
                 outcome: "preview",
                 revision: 1,
                 impact: goalLinkImpact({
+                  habit: {
+                    id: HABIT,
+                    name: "Run",
+                    unit: "m",
+                    unitKind: "preset",
+                    firstStart: "2026-10-01",
+                    today: "2026-11-10",
+                  },
                   startsOn: "2026-11-05",
                   amountBefore: 4.5,
                   amountAfter: 2,
+                  goals: [
+                    goalLinkGoalImpact({
+                      periodStart: "2026-10-01",
+                      periodEnd: "2026-10-31",
+                      ended: true,
+                      totalBefore: 10.5,
+                      totalAfter: 8,
+                      reachedBefore: true,
+                      reachedAfter: false,
+                      outcomeBefore: "reached",
+                      outcomeAfter: "not_reached",
+                    }),
+                  ],
                 }),
               })
             : reply(200, { outcome: "saved", link: goalLink({ startsOn: "2026-11-05" }) }),
@@ -377,6 +401,9 @@ describe("unlinking", () => {
     expect(await within(dialog).findByTestId("goal-link-impact-amount")).toHaveTextContent(
       "4.5 km → 2 km",
     );
+    const impact = within(dialog).getByTestId("goal-link-impact");
+    expect(impact).toHaveTextContent("each day's total is rounded to three decimals");
+    expect(impact).toHaveTextContent("period result Target reached → Target not reached");
     await user.click(within(dialog).getByTestId("goal-link-start-save"));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -391,6 +418,39 @@ describe("unlinking", () => {
 });
 
 describe("around the goal and the habit", () => {
+  it("says what archiving a linked goal does to its links", async () => {
+    routeFetch([
+      links([goalLink(), goalLink({ id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0099", amount: 2 })]),
+    ]);
+    const { container } = renderWithQuery(
+      <LinkArchiveNote target={{ goalId: GOAL }} action="archive" unit={km} />,
+    );
+    const note = await screen.findByTestId("goal-link-archive-note");
+    expect(note).toHaveTextContent("2 linked habits add 6.5 km here (Run, Run).");
+    expect(note).toHaveTextContent(
+      "While the goal is archived, new habit quantities are not added",
+    );
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("names the goals a habit feeds before it is deleted, in Dutch", async () => {
+    routeFetch([links([goalLink()])]);
+    renderWithQuery(<LinkArchiveNote target={{ habitId: HABIT }} action="delete" />, "nl");
+    const note = await screen.findByTestId("goal-link-archive-note");
+    expect(note).toHaveTextContent("Deze gewoonte telt mee voor 1 doel:");
+    expect(note).toHaveTextContent("Walk to the coast");
+    expect(note).toHaveTextContent("tot een doelbeheerder ze ontkoppelt");
+  });
+
+  it("says nothing when there are no links", async () => {
+    routeFetch([links([])]);
+    renderWithQuery(<LinkArchiveNote target={{ habitId: HABIT }} action="archive" />);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId("goal-link-archive-note")).not.toBeInTheDocument();
+  });
+
   it("breaks a linked goal's progress into its manual and linked parts", () => {
     renderWithQuery(
       <GoalProgressMeter

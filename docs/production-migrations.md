@@ -45173,32 +45173,50 @@ create function private.goal_link_impact(
     ), per_goal as (
       select g.*, coalesce(cur.q, 0) as before_q,
         case when p_mode = 'set' then coalesce(nxt.q, 0) else 0 end as after_q,
-        coalesce(nxt.bad, 0) as bad, private.goal_total(g) as total
+        coalesce(nxt.bad, 0) as bad, private.goal_total(g) as total, private.goal_manual_total(g) as manual,
+        private.goal_period_ended(g) as ended, private.goal_link_syncable(g) as syncable
       from ids join private.goals g on g.id = ids.goal_id
       left join cur on cur.goal_id = g.id left join nxt on nxt.goal_id = g.id
+    ), after_goal as (
+      select r.*, case when p_mode = 'keep' then r.total else r.total - r.before_q + r.after_q end as total_after
+      from per_goal r
     )
     select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
         'goalId', r.id, 'title', r.title, 'periodStart', r.period_start, 'periodEnd', r.period_end,
-        'ended', private.goal_period_ended((select g from private.goals g where g.id = r.id)),
+        'ended', r.ended,
         'target', r.target, 'unit', r.unit, 'unitKind', r.unit_kind,
+        'manualTotal', r.manual,
         'linkedBefore', r.before_q, 'linkedAfter', r.after_q,
         'totalBefore', r.total,
-        'totalAfter', case when p_mode = 'keep' then r.total else r.total - r.before_q + r.after_q end,
+        'totalAfter', r.total_after,
         'reachedBefore', r.total >= r.target,
-        'reachedAfter', case when p_mode = 'keep' then r.total else r.total - r.before_q + r.after_q end >= r.target,
+        'reachedAfter', r.total_after >= r.target,
         'achieved', r.achieved_at is not null,
         'outcomeBefore', r.outcome,
-        'syncable', private.goal_link_syncable((select g from private.goals g where g.id = r.id)),
+        -- A finalized period's result after the change (as private.recheck_goal_outcome decides it).
+        'outcomeAfter', case when r.finalized_at is not null and r.syncable
+          then case when r.total_after >= r.target then 'reached' else 'not_reached' end
+          else r.outcome end,
+        'syncable', r.syncable,
         'uncountedDays', r.bad)
         order by r.period_start nulls first, r.id)
       filter (where r.id = p_goal_id or r.id = v_current or r.before_q <> r.after_q or (p_mode = 'keep' and r.before_q <> 0)),
         '[]'::jsonb),
       coalesce(sum(r.before_q), 0), coalesce(sum(r.after_q), 0), coalesce(sum(r.bad), 0)
       into v_goals, v_before, v_after, v_uncounted
-      from per_goal r;
+      from after_goal r;
     return pg_catalog.jsonb_build_object('amountBefore', v_before, 'amountAfter', v_after,
       'uncountedDays', v_uncounted, 'goals', v_goals);
   end
+  $$;
+
+-- What a confirmation must match: a number derived from the revision and the whole preview the person
+-- saw (amounts, manual part, totals, reached, achieved, outcomes, units). Anything that changes what the
+-- preview says (a manual entry, a habit entry, a target or state change) changes it, so the confirmation
+-- answers 'stale' with the new preview (spec: renewed confirmation when entries or goal state changed).
+create function private.goal_link_token(p_revision integer, p_impact jsonb) returns integer
+  language sql immutable set search_path = '' as $$
+    select (pg_catalog.hashtext(p_revision::text || ':' || p_impact::text) & 1073741823) + 1;
   $$;
 
 -- The common header of a link preview: the habit, the destination, the start and the units.
@@ -45284,8 +45302,9 @@ create function private.goal_link_record(
 -- Links a numeric habit to a measurable goal or series (exactly one), counting from p_start: 'today'
 -- (the habit's today, including what was entered earlier today), 'date' (p_start_date, from the habit's
 -- first start date up to today) or 'beginning' (the habit's first start date). Needs manage permission
--- on both. p_dry_run answers the preview; confirming needs the revision of the goal or series and the
--- amount the preview showed, and answers 'stale' with a new preview when either changed. A retry with
+-- on both. p_dry_run answers the preview; confirming needs the preview's revision (a token of the goal
+-- or series revision and the whole preview, private.goal_link_token) and amount, and answers 'stale'
+-- with a new preview when anything the preview showed changed. A retry with
 -- the same id answers 'exists'. Outcomes: 'preview', 'created', 'exists', 'id_taken', 'stale',
 -- 'already_linked', 'incompatible_unit', 'not_numeric', 'other_context', 'invalid_start',
 -- 'series_period', 'not_measurable', 'archived', 'habit_archived', 'stopped', 'too_many', 'not_found',
@@ -45397,6 +45416,7 @@ create function public.create_goal_link(
     v_revision := coalesce(v_series.revision, v_goal.revision);
     v_impact := private.goal_link_preview_json(v_habit, v_goal, v_series, v_starts)
       || private.goal_link_impact(null, v_habit.id, v_starts, p_goal_id, p_series_id, 'set');
+    v_revision := private.goal_link_token(v_revision, v_impact);
     if p_dry_run then
       return pg_catalog.jsonb_build_object('outcome', 'preview', 'revision', v_revision, 'impact', v_impact);
     end if;
@@ -45439,6 +45459,7 @@ create function public.change_goal_link_start(
     v_first date;
     v_starts date;
     v_impact jsonb;
+    v_token integer;
   begin
     if p_id is null or p_dry_run is null or p_start is null or p_start not in ('today', 'date', 'beginning')
        or (p_start = 'date') <> (p_start_date is not null)
@@ -45488,14 +45509,15 @@ create function public.change_goal_link_start(
     v_impact := private.goal_link_preview_json(v_habit, v_goal, v_series, v_starts)
       || private.goal_link_impact(v_link.id, v_habit.id, v_starts, v_link.goal_id, v_link.series_id, 'set')
       || pg_catalog.jsonb_build_object('startsOnBefore', v_link.starts_on);
+    v_token := private.goal_link_token(v_link.revision, v_impact);
     if v_starts = v_link.starts_on then
-      return pg_catalog.jsonb_build_object('outcome', 'unchanged', 'revision', v_link.revision, 'impact', v_impact);
+      return pg_catalog.jsonb_build_object('outcome', 'unchanged', 'revision', v_token, 'impact', v_impact);
     end if;
     if p_dry_run then
-      return pg_catalog.jsonb_build_object('outcome', 'preview', 'revision', v_link.revision, 'impact', v_impact);
+      return pg_catalog.jsonb_build_object('outcome', 'preview', 'revision', v_token, 'impact', v_impact);
     end if;
-    if p_expected_revision <> v_link.revision or p_expected_amount <> (v_impact ->> 'amountAfter')::numeric then
-      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_link.revision, 'impact', v_impact);
+    if p_expected_revision <> v_token or p_expected_amount <> (v_impact ->> 'amountAfter')::numeric then
+      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_token, 'impact', v_impact);
     end if;
     update private.goal_habit_links l set starts_on = v_starts, revision = l.revision + 1, updated_by = v_user_id,
         updated_at = pg_catalog.now()
@@ -45525,6 +45547,7 @@ create function public.remove_goal_link(
     v_series private.goal_series;
     v_goal private.goals;
     v_impact jsonb;
+    v_token integer;
     v_row record;
     v_entries jsonb := '{}'::jsonb;
     v_entry_id uuid;
@@ -45562,11 +45585,12 @@ create function public.remove_goal_link(
         'habit', case when v_link.habit_id is not null then (select pg_catalog.jsonb_build_object('id', h.id, 'name', h.name)
           from private.habits h where h.id = v_link.habit_id) end,
         'source', private.goal_link_source_state(v_link));
+    v_token := private.goal_link_token(v_link.revision, v_impact);
     if p_dry_run then
-      return pg_catalog.jsonb_build_object('outcome', 'preview', 'revision', v_link.revision, 'impact', v_impact);
+      return pg_catalog.jsonb_build_object('outcome', 'preview', 'revision', v_token, 'impact', v_impact);
     end if;
-    if p_expected_revision <> v_link.revision or p_expected_amount <> (v_impact ->> 'amountBefore')::numeric then
-      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_link.revision, 'impact', v_impact);
+    if p_expected_revision <> v_token or p_expected_amount <> (v_impact ->> 'amountBefore')::numeric then
+      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_token, 'impact', v_impact);
     end if;
     if p_mode = 'keep' then
       for v_row in select d.goal_id, sum(d.quantity) as q from private.goal_link_days d

@@ -18,7 +18,9 @@ The spec lets a numeric habit feed a measurable goal (or every period of a recur
 
 **Lock order** is habit → series → goal, ascending ids within each kind. Goal-side writes never take a habit lock; habit-side recomputes lock the goal before reading it, so both sides converge.
 
-**Preview and confirm.** Creating a link, changing its start and unlinking take a preview (`dry_run`) that reports the amount before and after, the uncounted days and, per affected goal or period, linked and total amounts before and after, reached before and after, achieved and outcome. Confirmation sends the preview's revision and amount; a mismatch answers `stale` with the new preview.
+**Preview and confirm.** Creating a link, changing its start and unlinking take a preview (`dry_run`) that reports the amount before and after, the uncounted days and, per affected goal or period, the manual part, linked and total amounts before and after (with the percentage), reached before and after, achieved, and a finalized period's outcome before and after; a conversion that can round (m to km) says each day is rounded to three decimals. The preview's `revision` is a token of the goal, series or link revision and the whole preview (`private.goal_link_token`), so a confirmation answers `stale` with the new preview whenever anything it showed changed, including a manual entry made meanwhile.
+
+**Archive and delete say what happens to links.** Archiving or deleting a goal, a series or a habit with links shows in its confirmation which links it has and what happens to their amounts (they stay; an archived or trashed goal catches up when it returns; a purged habit's amounts stay frozen).
 
 **Unlink** keeps the linked amount as one manual adjustment per goal (entry source `link`, total unchanged) or removes it (total drops; ended periods recheck their outcome). A goal or series with active links cannot change its unit (`linked_unit`), and Set total never goes below the linked part (`below_linked`).
 

@@ -50,12 +50,13 @@ _Remediation:_ send and compare a fingerprint of what the preview showed. Either
 
 **M2. The preview does not show everything the spec and brief list.**
 `goal-links.tsx:124-198` (`GoalLinkImpactSummary`) and `goal_link_impact` (`:596-659`).
+
 - The manual baseline is neither returned per goal nor shown. Spec: "manual goal baseline". Brief: "manual part".
 - No percentage is shown. Spec: "projected total and percentage". `progressText` is `{total} / {target} {unit}`.
 - Ended periods show "its result is recalculated", but no outcome before/after. Brief: "outcome before/after". `outcomeBefore` is returned; there is no `outcomeAfter`, and the UI shows neither.
 - The m→km rounding to three decimals is not stated (brief: "shown in the preview"). Only "Converted from m to km" is shown.
-_Impact:_ the confirmation is less explicit than the approved requirement. The numbers shown are correct.
-_Remediation:_ add `manualTotal` and `outcomeAfter` to each goal of the impact, and render the manual part, the percentage after (capped visually only), and outcome before → after for ended periods. Add "rounded to 0.001 per day" to the units line when the conversion can round.
+  _Impact:_ the confirmation is less explicit than the approved requirement. The numbers shown are correct.
+  _Remediation:_ add `manualTotal` and `outcomeAfter` to each goal of the impact, and render the manual part, the percentage after (capped visually only), and outcome before → after for ended periods. Add "rounded to 0.001 per day" to the units line when the conversion can round.
 
 **M3. Archiving or deleting either side shows no link impact.**
 Spec L2922: "Linking, unlinking, changing the effective date, moving to a different goal, **archiving or deleting either side** must show the exact impact before confirmation."
@@ -68,6 +69,7 @@ _Remediation:_ in those confirmations, add one line when `linkCount > 0` (goal) 
 **L1. A DB assertion counts audit rows across the whole database** (`tests/db/rls/habit-goal-links.test.sql:304-305`). `count(*) = 1 from private.audit_events where action = 'goal.link_created'` fails on any database where links were created before. That happened here after an e2e run. _Remediation:_ add `and occurred_at = now()` (the transaction's own rows), or filter by `home_id = tests.i('home-a')` and the subject.
 
 **L2. Multi-series lock order differs from the S30b context sync.**
+
 - `goal_links_after_habit_day` (`:269-272`) locks a habit's linked series by `id`.
 - `sync_goal_periods(p_home_id)` (S30b `20261114090000_recurring_goals.sql:~525-533`) rolls due series one by one in `next_roll_at, id` order and keeps each lock.
 
@@ -76,16 +78,18 @@ The window is small: both series must be due at once with different roll moments
 _Remediation:_ order the context sync by `s.id` (or use `skip locked` there, as the job does). Alternatively, lock the series on the habit side in the same `next_roll_at, id` order. Document the rule in ADR 0040.
 
 **L3. Changing the start of a link whose one-off goal is archived gives a misleading preview** (`:884-967`).
+
 - Create refuses an archived goal (`archived`), but `change_goal_link_start` does not.
 - `goal_link_impact` drops non-syncable goals, so the preview shows 0 → 0 linked, while the stored rows keep the old start until the goal is unarchived.
-_Verified:_ by probe. The answer was `preview` with `linkedBefore 0`, `linkedAfter 0` and `syncable false`, and the goal was still at 104.5.
-_Remediation:_ answer `archived` for an archived goal, as create does, and hide Change start for archived goals.
+  _Verified:_ by probe. The answer was `preview` with `linkedBefore 0`, `linkedAfter 0` and `syncable false`, and the goal was still at 104.5.
+  _Remediation:_ answer `archived` for an archived goal, as create does, and hide Change start for archived goals.
 
 **L4. A stale preview stays on screen after the form changes** (`goal-links.tsx:236-240, 300-327, 475-478`).
+
 - `stale` is derived from `send.error`, and `send.error` persists when the person changes the habit, start or unlink mode. Those changes only clear `preview`.
 - After a `409 stale`, switching to another habit (or from keep to remove) keeps the old impact visible with a Confirm button.
 - Confirm then sends the new choice with the old revision and amount. The server accepts it when the amounts coincide: for example, two habits with 0 from today, or keep versus remove, which both use `amountBefore`.
-_Remediation:_ reset the mutation (`send.reset()`) in every `onChange`, or key the shown impact on the request it was made for.
+  _Remediation:_ reset the mutation (`send.reset()`) in every `onChange`, or key the shown impact on the request it was made for.
 
 **L5. `remove_goal_link` locks the habit before checking access** (`:999`). It reads the link by id and then takes `for update` on its habit with no permission check. A caller who knows a link id from another Home can briefly lock that Home's habit. Link ids are random UUIDs, so this is a theoretical contention issue only. _Remediation:_ check `goal_for` / `goal_series_for` visibility first, or use the existing pattern (lock through a function that checks view access, falling back to a plain lock only for a trashed habit the caller may see).
 
@@ -115,6 +119,7 @@ _Remediation:_ reset the mutation (`send.reset()`) in every `onChange`, or key t
   - limits of 10
 
   Gaps: M1 (stale rule), M2 (preview items) and M3 (archive or delete impact). The done-condition journey (link with preview, an Undo recalculates, unlink keeps) is covered by `tests/e2e/specs/habit-goal-links.spec.ts`; I read it but did not run it.
+
 - **Cross-Home and personal isolation:**
   - Links require `owner_home_id` equality, or the same personal owner (`other_context`), so no link crosses Homes or exposes a personal habit.
   - Habit and goal visibility are both context-wide (`habit_access` / `goal_access`: any current member sees), so a goal viewer never learns of a habit they could not see.
@@ -193,4 +198,7 @@ _Remediation:_ reset the mutation (`send.reset()`) in every `onChange`, or key t
 ## Follow-up by the implementer
 
 - L1 fixed: the audit assertion in `tests/db/rls/habit-goal-links.test.sql` now counts only the test goal's rows. Full DB suite re-run: 32 files, 150 tests pass.
-- M1–M3 and L2–L6 are left for the owner to fix in a follow-up or accept.
+- M1 fixed (owner asked for M1–M3 on 2026-11-03): the preview's `revision` is now `private.goal_link_token` (revision plus the whole preview), so any change to what the preview showed, including a manual entry, answers `stale`. New DB case: a manual entry between preview and confirm is stale.
+- M2 fixed: each goal of the impact carries `manualTotal` and `outcomeAfter`; the preview shows the manual part, the percentage after, a finalized period's result before → after, and "each day's total is rounded to three decimals" when the conversion can round (`linkConversionRounds`). DB and component tests assert them.
+- M3 fixed: archiving a goal with links now opens a confirmation; the goal, series and habit archive and delete confirmations show `LinkArchiveNote` (which links, what happens to their amounts). Component tests in `goal-links.test.tsx`.
+- L2–L6 are left for the owner to accept or schedule.
