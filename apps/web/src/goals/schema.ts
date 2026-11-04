@@ -4,6 +4,8 @@ import {
   GOAL_LIMITS,
   goalFrequencies,
   goalKinds,
+  goalLinkRemovals,
+  goalLinkStarts,
   goalViews,
   goalWeekStarts,
   isGoalFrequencyAllowed,
@@ -310,3 +312,78 @@ export const seriesTargetSchema = z
   );
 
 export const deleteSeriesSchema = z.strictObject({ revision });
+
+// Habit-to-goal links (S30c) ----------------------------------------------------------------------------
+
+/** Exactly one of a goal, a series or a habit, whose links to list. */
+export const linksQuerySchema = z
+  .object({ goalId: id.optional(), seriesId: id.optional(), habitId: id.optional() })
+  .refine((query) => [query.goalId, query.seriesId, query.habitId].filter(Boolean).length === 1, {
+    error: "invalid",
+  });
+
+/** A goal or a series whose candidate habits to list. */
+export const linkCandidatesQuerySchema = z
+  .object({ goalId: id.optional(), seriesId: id.optional() })
+  .refine((query) => (query.goalId === undefined) !== (query.seriesId === undefined), {
+    error: "invalid",
+  });
+
+/** Where a link starts: today, a chosen past `startDate`, or the habit's first start date. */
+const linkStart = {
+  start: z.enum(goalLinkStarts),
+  startDate: goalDateSchema.nullable().default(null),
+};
+
+/**
+ * Confirming needs what the preview showed: the revision (of the goal or series when creating, of
+ * the link when changing it) and the linked amount. `preview: true` answers the impact only.
+ */
+const linkConfirmation = {
+  preview: z.boolean().default(false),
+  revision: revision.nullable().default(null),
+  expectedAmount: goalQuantitySchema.nullable().default(null),
+};
+
+function confirmed(body: {
+  readonly preview: boolean;
+  readonly revision: number | null;
+  readonly expectedAmount: number | null;
+}): boolean {
+  return body.preview || (body.revision !== null && body.expectedAmount !== null);
+}
+
+/** Links a numeric habit to a measurable goal or series (exactly one). */
+export const createLinkSchema = z
+  .strictObject({
+    id,
+    habitId: id,
+    goalId: id.nullable().default(null),
+    seriesId: id.nullable().default(null),
+    ...linkStart,
+    ...linkConfirmation,
+  })
+  .refine((body) => (body.goalId === null) !== (body.seriesId === null), {
+    error: "invalid",
+    path: ["goalId"],
+  })
+  .refine((body) => (body.start === "date") === (body.startDate !== null), {
+    error: "invalid",
+    path: ["startDate"],
+  })
+  .refine(confirmed, { error: "invalid", path: ["revision"] });
+export type CreateLinkInput = z.input<typeof createLinkSchema>;
+
+/** Changes a link's first counted day. */
+export const changeLinkStartSchema = z
+  .strictObject({ ...linkStart, ...linkConfirmation })
+  .refine((body) => (body.start === "date") === (body.startDate !== null), {
+    error: "invalid",
+    path: ["startDate"],
+  })
+  .refine(confirmed, { error: "invalid", path: ["revision"] });
+
+/** Removes a link, keeping its amount as a manual adjustment or taking it out. */
+export const removeLinkSchema = z
+  .strictObject({ mode: z.enum(goalLinkRemovals), ...linkConfirmation })
+  .refine(confirmed, { error: "invalid", path: ["revision"] });

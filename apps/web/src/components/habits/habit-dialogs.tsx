@@ -13,6 +13,7 @@ import {
 } from "@madeora/domain/habits";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { LinkArchiveNote } from "@/components/goals/goal-link-notes";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog } from "@/components/ui/dialog";
@@ -1065,6 +1066,7 @@ export function ArchiveDialog({
       closeLabel={t("close")}
     >
       <div className="flex flex-col gap-4">
+        {archived ? null : <LinkArchiveNote target={{ habitId: habit.id }} action="archive" />}
         <Failure error={save.error} />
         <DialogActions onClose={onClose}>
           <Button
@@ -1110,6 +1112,7 @@ export function DeleteDialog({
       closeLabel={t("close")}
     >
       <div className="flex flex-col gap-4">
+        <LinkArchiveNote target={{ habitId: habit.id }} action="delete" />
         <Failure error={remove.error} />
         <DialogActions onClose={onClose}>
           <Button

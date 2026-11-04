@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decideGoalAction, goalAccess, goalPermissions } from "./goals";
+import { canManageGoalLink, decideGoalAction, goalAccess, goalPermissions } from "./goals";
 import type { HomeMembershipFacts } from "./home";
 
 const home = (memberAccess: "contribute" | "view") => ({
@@ -67,5 +67,16 @@ describe("goal permissions", () => {
       "goals.contribute": false,
       "goals.manage": false,
     });
+  });
+
+  it("lets only managers of both the goal and the habit manage a link", () => {
+    expect(canManageGoalLink("manage", "manage")).toBe(true);
+    expect(canManageGoalLink("manage", "complete")).toBe(false);
+    expect(canManageGoalLink("manage", "view")).toBe(false);
+    expect(canManageGoalLink("contribute", "manage")).toBe(false);
+    expect(canManageGoalLink(null, "manage")).toBe(false);
+    expect(canManageGoalLink("manage", null)).toBe(false);
+    expect(canManageGoalLink("manage", "gone")).toBe(true);
+    expect(canManageGoalLink("view", "gone")).toBe(false);
   });
 });

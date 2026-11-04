@@ -621,6 +621,17 @@ export type Database = {
           status: string;
         }[];
       };
+      change_goal_link_start: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_amount?: number;
+          p_expected_revision?: number;
+          p_id: string;
+          p_start: string;
+          p_start_date?: string;
+        };
+        Returns: Json;
+      };
       change_goal_series_target: {
         Args: {
           p_confirm_status?: boolean;
@@ -904,6 +915,20 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      create_goal_link: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_amount?: number;
+          p_expected_revision?: number;
+          p_goal_id?: string;
+          p_habit_id: string;
+          p_id: string;
+          p_series_id?: string;
+          p_start?: string;
+          p_start_date?: string;
+        };
+        Returns: Json;
       };
       create_goal_series: {
         Args: {
@@ -1503,6 +1528,14 @@ export type Database = {
       get_goal: { Args: { p_goal_id: string }; Returns: Json };
       get_goal_entries: { Args: { p_before?: string; p_goal_id: string }; Returns: Json };
       get_goal_events: { Args: { p_before?: string; p_goal_id: string }; Returns: Json };
+      get_goal_link_candidates: {
+        Args: { p_goal_id?: string; p_series_id?: string };
+        Returns: Json;
+      };
+      get_goal_links: {
+        Args: { p_goal_id?: string; p_habit_id?: string; p_series_id?: string };
+        Returns: Json;
+      };
       get_goal_series: { Args: { p_series_id: string }; Returns: Json };
       get_goal_series_periods: { Args: { p_before?: string; p_series_id: string }; Returns: Json };
       get_goals: { Args: { p_home_id?: string; p_query?: string; p_view?: string }; Returns: Json };
@@ -2536,6 +2569,16 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      remove_goal_link: {
+        Args: {
+          p_dry_run?: boolean;
+          p_expected_amount?: number;
+          p_expected_revision?: number;
+          p_id: string;
+          p_mode: string;
+        };
+        Returns: Json;
       };
       remove_home_member: {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };

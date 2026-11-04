@@ -39,6 +39,7 @@ import { goalReasonSchema } from "@/goals/schema";
 import { CUSTOM_UNIT, draftUnit, localizedDecimal } from "@/habits/tracking-draft";
 import type { MemberNames } from "@/tasks/format";
 
+import { LinkArchiveNote } from "./goal-link-notes";
 import { goalUnit, ProgressForm } from "./goal-progress";
 import { useGoalMutation } from "./use-goal-mutation";
 import { useGoalTexts } from "./use-goal-texts";
@@ -759,6 +760,7 @@ export function DeleteDialog({
       closeLabel={t("close")}
     >
       <div className="flex flex-col gap-4">
+        <LinkArchiveNote target={{ goalId: goal.id }} action="delete" unit={linkUnit(goal)} />
         <Failure error={remove.error} />
         <DialogActions onClose={onClose}>
           <Button
@@ -770,6 +772,53 @@ export function DeleteDialog({
             data-testid="goal-delete-confirm"
           >
             {t("delete")}
+          </Button>
+        </DialogActions>
+      </div>
+    </Dialog>
+  );
+}
+
+/** A goal's unit for link notes, when it counts in one. */
+function linkUnit(goal: GoalSummary) {
+  return goal.unit && goal.unitKind ? { unit: goal.unit, unitKind: goal.unitKind } : null;
+}
+
+/**
+ * Archives a goal that habits count toward, after saying what happens to those links (S30c). A goal
+ * without links is archived straight from its page.
+ */
+export function ArchiveDialog({
+  goal,
+  onClose,
+}: {
+  readonly goal: GoalSummary;
+  readonly onClose: () => void;
+}) {
+  const t = useTranslations("Goals");
+  const archive = useGoalMutation(
+    `goal:${goal.id}`,
+    () =>
+      sendGoalRequest("POST", goalEndpoint(goal.id, "archive"), {
+        revision: goal.revision,
+        archived: true,
+      }),
+    onClose,
+  );
+  return (
+    <Dialog open onClose={onClose} title={t("archiveTitle")} closeLabel={t("close")}>
+      <div className="flex flex-col gap-4">
+        <LinkArchiveNote target={{ goalId: goal.id }} action="archive" unit={linkUnit(goal)} />
+        <Failure error={archive.error} />
+        <DialogActions onClose={onClose}>
+          <Button
+            loading={archive.busy}
+            onClick={() => {
+              archive.mutate(undefined);
+            }}
+            data-testid="goal-archive-confirm"
+          >
+            {t("archive")}
           </Button>
         </DialogActions>
       </div>

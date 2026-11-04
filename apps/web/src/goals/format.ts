@@ -20,6 +20,10 @@ export const goalKeys = {
   events: (goalId: string) => ["goals", "events", goalId] as const,
   series: (seriesId: string) => ["goals", "series", seriesId] as const,
   seriesPeriods: (seriesId: string) => ["goals", "series-periods", seriesId] as const,
+  /** Habit links of a goal, a series or a habit (S30c), and the habits a goal or series could link. */
+  links: (kind: "goal" | "series" | "habit", id: string) => ["goals", "links", kind, id] as const,
+  linkCandidates: (kind: "goal" | "series", id: string) =>
+    ["goals", "link-candidates", kind, id] as const,
 };
 
 /** A new client id for a goal or entry, so a retry never makes two. */

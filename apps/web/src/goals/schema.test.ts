@@ -1,15 +1,20 @@
 import {
   achievementSchema,
   addEntrySchema,
+  changeLinkStartSchema,
   changeTargetSchema,
+  createLinkSchema,
   createGoalSchema,
   createSeriesSchema,
+  linkCandidatesQuerySchema,
+  linksQuerySchema,
   remindersSchema,
+  removeLinkSchema,
   seriesTargetSchema,
   updateEntrySchema,
   updateSeriesSchema,
 } from "./schema";
-import { GOAL, SERIES } from "./testing";
+import { GOAL, HABIT, LINK, SERIES } from "./testing";
 
 const measurable = {
   id: GOAL,
@@ -203,5 +208,57 @@ describe("the recurring series contracts (S30b)", () => {
     });
     expect(seriesTargetSchema.safeParse({ ...target, target: "0" }).success).toBe(false);
     expect(seriesTargetSchema.safeParse({ ...target, effectiveFrom: "next" }).success).toBe(false);
+  });
+});
+
+describe("the habit link contract (S30c)", () => {
+  const link = { id: LINK, habitId: HABIT, goalId: GOAL, start: "today" };
+
+  it("takes a preview, and a confirmation with the preview's revision and amount", () => {
+    expect(createLinkSchema.parse({ ...link, preview: true })).toMatchObject({
+      seriesId: null,
+      startDate: null,
+      revision: null,
+      expectedAmount: null,
+      preview: true,
+    });
+    expect(
+      createLinkSchema.parse({ ...link, revision: 2, expectedAmount: "12.345" }).expectedAmount,
+    ).toBe(12.345);
+    expect(createLinkSchema.safeParse(link).success).toBe(false);
+    expect(createLinkSchema.safeParse({ ...link, revision: 2 }).success).toBe(false);
+  });
+
+  it("needs exactly one destination and a date exactly for a chosen date", () => {
+    expect(createLinkSchema.safeParse({ ...link, seriesId: SERIES, preview: true }).success).toBe(
+      false,
+    );
+    expect(createLinkSchema.safeParse({ ...link, goalId: null, preview: true }).success).toBe(
+      false,
+    );
+    expect(
+      createLinkSchema.safeParse({ ...link, start: "date", startDate: "2026-10-01", preview: true })
+        .success,
+    ).toBe(true);
+    expect(createLinkSchema.safeParse({ ...link, start: "date", preview: true }).success).toBe(
+      false,
+    );
+    expect(
+      createLinkSchema.safeParse({ ...link, startDate: "2026-10-01", preview: true }).success,
+    ).toBe(false);
+    expect(
+      changeLinkStartSchema.safeParse({ start: "date", startDate: "2026-02-30", preview: true })
+        .success,
+    ).toBe(false);
+  });
+
+  it("removes with keep or remove only, and lists exactly one target", () => {
+    expect(removeLinkSchema.safeParse({ mode: "keep", preview: true }).success).toBe(true);
+    expect(removeLinkSchema.safeParse({ mode: "drop", preview: true }).success).toBe(false);
+    expect(linksQuerySchema.safeParse({ habitId: HABIT }).success).toBe(true);
+    expect(linksQuerySchema.safeParse({}).success).toBe(false);
+    expect(linksQuerySchema.safeParse({ goalId: GOAL, seriesId: SERIES }).success).toBe(false);
+    expect(linkCandidatesQuerySchema.safeParse({ habitId: HABIT }).success).toBe(false);
+    expect(linkCandidatesQuerySchema.safeParse({ seriesId: SERIES }).success).toBe(true);
   });
 });

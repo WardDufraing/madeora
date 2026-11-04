@@ -90,6 +90,14 @@ export function GoalProgressMeter({
           style={{ width: `${String(Math.round(progress.fraction * 100))}%` }}
         />
       </div>
+      {!compact && (goal.linkCount > 0 || (goal.linkedTotal ?? 0) > 0) ? (
+        <p className="text-helper text-fg-muted" data-testid="goal-progress-breakdown">
+          {t("progressBreakdown", {
+            manual: texts.amount(goal.manualTotal ?? 0, goal.unit, goal.unitKind),
+            linked: texts.amount(goal.linkedTotal ?? 0, goal.unit, goal.unitKind),
+          })}
+        </p>
+      ) : null}
       {progress.overTarget > 0 ? (
         <p className="text-helper text-fg-muted" data-testid="goal-over-target">
           {t("overTarget", {
