@@ -3,7 +3,7 @@
 // chore-pool.test.sql); these tests check what the interface sends, shows and announces.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 
 import { ToastProvider } from "@/components/ui/toast";
 import type {
@@ -454,6 +454,54 @@ describe("an occurrence's claim", () => {
     });
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`/api/v1/chore-reassignment-requests/${REQUEST}`);
     expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ action: "accept" });
+    expect(await screen.findByText("Accepted: Water the plants is yours now.")).toBeInTheDocument();
+  });
+});
+
+describe("a handover answer", () => {
+  it("stays announced after the request list is removed", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(Response.json({ outcome: "accepted", status: "accepted" }));
+    const hide = { current: () => undefined };
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      hide.current = () => {
+        setOpen(false);
+      };
+      if (!open) return null;
+      return (
+        <ChoreRequests
+          homeId={HOME}
+          members={members}
+          formats={formats}
+          requests={[
+            {
+              id: REQUEST,
+              occurrenceId: OCCURRENCE,
+              title: "Water the plants",
+              dueDate: "2026-10-22",
+              status: "pending",
+              box: "incoming",
+              from: { me: false, member: BEA },
+              to: { me: true, member: ME },
+              note: "Away tonight",
+              createdAt: "2026-10-21T08:00:00Z",
+            },
+          ]}
+        />
+      );
+    }
+    withToasts(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Accept taking over Water the plants" }));
+    expect(await screen.findByText("Accepted: Water the plants is yours now.")).toBeInTheDocument();
+    act(() => {
+      hide.current();
+    });
+    expect(screen.queryByTestId("chore-request")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Accepted: Water the plants is yours now.",
+    );
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
   });
 });
 

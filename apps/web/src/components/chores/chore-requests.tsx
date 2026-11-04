@@ -6,7 +6,7 @@ import Link from "next/link";
 import { FormAlert } from "@/components/auth/form-alert";
 import { HydrationGate } from "@/components/tasks/hydration-gate";
 import { Button } from "@/components/ui/button";
-import { useAnnouncer } from "@/components/ui/use-announcer";
+import { useToast } from "@/components/ui/toast";
 import {
   CHORE_REASSIGNMENTS_ENDPOINT,
   sendChoreRequest,
@@ -129,7 +129,7 @@ export interface RequestActionsProps {
 export function RequestActions({ requestId, title, actions }: RequestActionsProps) {
   const t = useTranslations("Chores");
   const texts = useChoreTexts(memberNames([]));
-  const { announce, region } = useAnnouncer();
+  const toast = useToast();
   const mutation = useChoreMutation(
     `chore-request:${requestId}`,
     (action: ReassignmentAction) =>
@@ -141,7 +141,9 @@ export function RequestActions({ requestId, title, actions }: RequestActionsProp
         },
       ),
     (result, action) => {
-      announce(
+      // The shell keeps this. A local live region is removed with the row when the page
+      // refreshes, and that refresh can land before the region has said the words.
+      toast.announce(
         result.outcome === "awaiting_manager"
           ? t("announceRequestAwaiting")
           : t(actionText[action].done, { title }),
@@ -152,7 +154,6 @@ export function RequestActions({ requestId, title, actions }: RequestActionsProp
   );
   return (
     <HydrationGate>
-      {region}
       <div className="flex flex-col items-end gap-2">
         <div className="flex flex-wrap gap-2">
           {actions.map((action, index) => (

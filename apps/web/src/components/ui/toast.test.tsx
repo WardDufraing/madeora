@@ -179,6 +179,25 @@ describe("Toast", () => {
     expect(screen.getByRole("status")).toHaveAttribute("aria-atomic", "false");
   });
 
+  it("announces a status message without a visible toast, including the same words again", () => {
+    renderProvider();
+    act(() => {
+      api?.announce("Accepted: Water the plants is yours now.");
+    });
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Accepted: Water the plants is yours now.",
+    );
+    expect(screen.getByRole("alert")).toBeEmptyDOMElement();
+    act(() => {
+      api?.announce("Accepted: Water the plants is yours now.");
+    });
+    const lines = [...screen.getByRole("status").querySelectorAll("p")];
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toHaveTextContent("Accepted: Water the plants is yours now.");
+    expect(lines[1]).toHaveTextContent("Accepted: Water the plants is yours now.");
+  });
+
   it("keeps toasts with an action until dismissed, so the action stays reachable", () => {
     renderProvider();
     show({ title: "Item deleted", action: { label: "Undo", onAction: () => undefined } });

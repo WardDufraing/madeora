@@ -44,6 +44,11 @@ interface ToastItem extends ToastOptions {
 interface ToastApi {
   readonly show: (options: ToastOptions) => number;
   readonly dismiss: (id: number) => void;
+  /**
+   * A polite status message with no visible toast. It stays in this shell region, so it is still
+   * there after a refresh removes the control that asked for it.
+   */
+  readonly announce: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
@@ -162,7 +167,16 @@ export function ToastProvider({
     [toneLabels],
   );
 
-  const api = useMemo(() => ({ show, dismiss }), [show, dismiss]);
+  const announce = useCallback((message: string) => {
+    const id = nextId.current;
+    nextId.current += 1;
+    // A new node each time, so the same words said again are announced again.
+    setAnnouncements((items) =>
+      [...items, { id, text: message, assertive: false }].slice(-MAX_ANNOUNCEMENTS),
+    );
+  }, []);
+
+  const api = useMemo(() => ({ show, dismiss, announce }), [show, dismiss, announce]);
 
   return (
     <ToastContext value={api}>
