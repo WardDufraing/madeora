@@ -20,6 +20,7 @@ import {
   HabitsWidget,
 } from "@/components/habits/habit-widgets";
 import { GoalProgressWidget, GoalsWidget } from "@/components/goals/goal-widgets";
+import { PetCareWidget } from "@/components/pets/pet-care-widget";
 import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
@@ -830,6 +831,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "habit-progress": t("widgetHabitProgress"),
     goals: t("widgetGoals"),
     "goal-progress": t("widgetGoalProgress"),
+    "pet-care": t("widgetPetCare"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -1105,6 +1107,30 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: titles[type], home: isolate(home.name) }),
         sourceName: home.name,
         body: render(home),
+        unavailable: false,
+      };
+    }
+    case "pet-care": {
+      // Home-only, like chores: the Home's own dashboard, or one the viewer belongs to now.
+      const home =
+        scope.kind === "home"
+          ? null
+          : scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (scope.kind !== "home" && !home) return unavailable;
+      const homeId = scope.kind === "home" ? scope.home.id : (home?.id ?? "");
+      const parsed = widgetRegistry["pet-care"].config.safeParse(widget.config);
+      return {
+        id: widget.id,
+        title: home
+          ? t("widgetFromHome", { widget: titles["pet-care"], home: isolate(home.name) })
+          : titles["pet-care"],
+        sourceName: home?.name ?? null,
+        body: (
+          <PetCareWidget
+            homeId={homeId}
+            config={parsed.success ? parsed.data : widgetRegistry["pet-care"].config.parse({})}
+          />
+        ),
         unavailable: false,
       };
     }

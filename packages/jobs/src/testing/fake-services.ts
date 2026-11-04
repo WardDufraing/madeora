@@ -23,6 +23,7 @@ import type {
   JobDataPort,
   JobServices,
   NotificationEmailRead,
+  PetCareReminderOutcome,
   StoredFileStatus,
   TaskReminderOutcome,
   TrashEntryStatus,
@@ -75,6 +76,11 @@ export class FakeJobData implements JobDataPort {
     kind: GoalReminderKind;
     at: string;
   }[] = [];
+  /** Pets (S31): what a care reminder delivery answers, the calls, and the hourly advance. */
+  petCareReminderOutcome: PetCareReminderOutcome = "notified";
+  readonly petCareReminderCalls: { occurrenceId: string; at: string }[] = [];
+  petCareCreated = 0;
+  readonly petCareAdvanceCalls: number[] = [];
   readonly summaryCalls: number[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
   readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
@@ -220,6 +226,18 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.goalRollCalls.push(limit);
     return Promise.resolve(this.goalPeriodsCreated);
+  }
+
+  deliverPetCareReminder(occurrenceId: string, at: string): Promise<PetCareReminderOutcome> {
+    this.check();
+    this.petCareReminderCalls.push({ occurrenceId, at });
+    return Promise.resolve(this.petCareReminderOutcome);
+  }
+
+  advancePetCare(limit: number): Promise<number> {
+    this.check();
+    this.petCareAdvanceCalls.push(limit);
+    return Promise.resolve(this.petCareCreated);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

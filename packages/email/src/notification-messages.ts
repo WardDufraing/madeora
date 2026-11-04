@@ -68,6 +68,8 @@ export const notificationKinds = [
   "goal.reminder.home_overdue",
   "goal.reminder.personal_lead",
   "goal.reminder.personal_overdue",
+  "vacation.reminder.pet_care",
+  "pet_care.reminder",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -517,6 +519,20 @@ const en: Catalogue = {
     body: "One of your goals has passed its deadline without being marked achieved. Its progress is kept. Open Madeora to see which goal it is.",
     button: "Open the goal",
   },
+  "vacation.reminder.pet_care": {
+    subject: "A vacation in {home} starts soon",
+    preview: "Check the chores it affects and the pet care that continues.",
+    heading: "A vacation in {home} starts soon",
+    body: "A vacation in {home} starts soon. Open Madeora to check the chores it affects and decide what happens to them. Pet care continues during the vacation: check who will take care of it.",
+    button: "Open the vacation",
+  },
+  "pet_care.reminder": {
+    subject: "Reminder: pet care in {home} on {date}",
+    preview: "Open Madeora to see what to do.",
+    heading: "Pet care in {home} on {date}",
+    body: "You are responsible for pet care in {home} on {date}. Open Madeora to see what to do, and mark it done once it is.",
+    button: "Open the pet care",
+  },
 };
 
 const nl: Catalogue = {
@@ -953,6 +969,20 @@ const nl: Catalogue = {
     heading: "Een van je doelen is over zijn deadline",
     body: "Een van je doelen is over zijn deadline zonder als behaald gemarkeerd te zijn. De voortgang blijft bewaard. Open Madeora om te zien welk doel het is.",
     button: "Open het doel",
+  },
+  "vacation.reminder.pet_care": {
+    subject: "Een vakantie in {home} begint binnenkort",
+    preview: "Bekijk de klusjes waarop ze invloed heeft en de dierenzorg die doorloopt.",
+    heading: "Een vakantie in {home} begint binnenkort",
+    body: "Een vakantie in {home} begint binnenkort. Open Madeora om de klusjes te bekijken waarop ze invloed heeft en te beslissen wat ermee gebeurt. De dierenzorg loopt door tijdens de vakantie: bekijk wie ervoor zorgt.",
+    button: "Open de vakantie",
+  },
+  "pet_care.reminder": {
+    subject: "Herinnering: dierenzorg in {home} op {date}",
+    preview: "Open Madeora om te zien wat er moet gebeuren.",
+    heading: "Dierenzorg in {home} op {date}",
+    body: "Je bent verantwoordelijk voor dierenzorg in {home} op {date}. Open Madeora om te zien wat er moet gebeuren, en markeer het als gedaan zodra het gebeurd is.",
+    button: "Open de dierenzorg",
   },
 };
 

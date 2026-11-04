@@ -54,6 +54,8 @@ const matrix: readonly {
       ["manageHomeMeals"],
       ["manageHomeHabits"],
       ["manageHomeGoals"],
+      ["manageHomePets"],
+      ["managePetMedicalAccess"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -119,6 +121,11 @@ const matrix: readonly {
           "home.habits.manage": owner || (admin && has("manageHomeHabits")),
           "home.goals.view": true,
           "home.goals.manage": owner || (admin && has("manageHomeGoals")),
+          // Every member sees pets; pet managers edit them. Medical access is its own per-member
+          // level (./pets.ts), granted by the Owner or an Administrator with managePetMedicalAccess.
+          "home.pets.view": true,
+          "home.pets.manage": owner || (admin && has("manageHomePets")),
+          "home.pets.grantMedicalAccess": owner || (admin && has("managePetMedicalAccess")),
         },
       };
     }),

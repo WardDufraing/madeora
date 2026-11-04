@@ -129,6 +129,13 @@ export interface JobDataPort {
    * period running now; how many periods it created.
    */
   rollGoalPeriods(limit: number): Promise<number>;
+  /** pet-care-reminder (S31): one occurrence's reminder moment, if still current. */
+  deliverPetCareReminder(occurrenceId: string, at: string): Promise<PetCareReminderOutcome>;
+  /**
+   * task-reminder-advance (S31): creates pet-care occurrences up to a week ahead (and queues their
+   * reminders); how many it created.
+   */
+  advancePetCare(limit: number): Promise<number>;
 }
 
 export type HabitReminderOutcome =
@@ -141,6 +148,8 @@ export type HabitPauseEndOutcome = "notified" | "still_paused" | "stale" | "not_
 export type GoalReminderKind = "lead" | "overdue";
 
 export type GoalReminderOutcome = "notified" | "late" | "inactive" | "stale" | "not_due";
+
+export type PetCareReminderOutcome = "notified" | "late" | "inactive" | "stale" | "not_due";
 
 export type ChoreClaimReleaseOutcome = "released" | "stale" | "missing";
 

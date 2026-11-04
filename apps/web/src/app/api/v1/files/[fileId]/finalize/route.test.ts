@@ -21,6 +21,7 @@ interface State {
   check: Mock;
   attach: { outcome: string; attachment_id: string | null; impact: unknown };
   claim: string;
+  petAnswer: Record<string, unknown>;
 }
 const state = vi.hoisted((): State => ({
   identity: { userId: "user-a" },
@@ -32,6 +33,7 @@ const state = vi.hoisted((): State => ({
   check: vi.fn(),
   attach: { outcome: "attached", attachment_id: null, impact: null },
   claim: "claimed",
+  petAnswer: {},
 }));
 
 vi.mock("@/auth/identity", () => ({
@@ -45,6 +47,7 @@ vi.mock("@/storage/server", () => ({
     state.storageOn ? { objects: state.objects, finalizer: { finalize: state.finalize } } : null,
 }));
 vi.mock("@/storage/avatar-image", () => ({ processAvatar: state.process }));
+vi.mock("@/recipes/cover-image", () => ({ processCover: state.process }));
 vi.mock("@/tasks/attachment-file", () => ({ checkAttachment: state.check }));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
@@ -89,6 +92,10 @@ function withUpload(row: Record<string, unknown> | null) {
     if (name === "get_my_upload") return Promise.resolve({ data: row ? [row] : [], error: null });
     if (name === "claim_my_upload") return Promise.resolve({ data: state.claim, error: null });
     if (name === "attach_task_file") return Promise.resolve({ data: [state.attach], error: null });
+    if (name === "attach_pet_medical_file") {
+      return Promise.resolve({ data: state.petAnswer, error: null });
+    }
+    if (name === "set_pet_photo") return Promise.resolve({ data: state.petAnswer, error: null });
     return Promise.resolve({ data: true, error: null });
   });
 }
@@ -401,5 +408,59 @@ describe("POST /api/v1/files/{fileId}/finalize for a task attachment", () => {
 
   it("refuses an unknown scope", async () => {
     expect((await finalize(FILE_ID, { scope: "all" })).status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/files/{fileId}/finalize for pets (S31)", () => {
+  const PDF = "application/pdf";
+
+  it("checks a medical document's own signature, then attaches it with the person's session", async () => {
+    withUpload(upload({ purpose: "pet_medical_attachment", declared_type: PDF }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: PDF });
+    state.petAnswer = { outcome: "attached", attachmentId: ATTACHMENT_ID };
+    const response = await finalize();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      file: { id: FILE_ID },
+      attachment: { id: ATTACHMENT_ID, impact: null },
+    });
+    expect(state.check).toHaveBeenCalledWith(BYTES, PDF);
+    expect(state.process).not.toHaveBeenCalled();
+    expect(state.rpc).toHaveBeenCalledWith("attach_pet_medical_file", { p_file_id: FILE_ID });
+  });
+
+  it("answers a document whose uploader lost medical access as not found, attaching nothing", async () => {
+    withUpload(upload({ purpose: "pet_medical_attachment", declared_type: PDF }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: PDF });
+    state.petAnswer = { outcome: "not_found" };
+    const response = await finalize();
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not-found" });
+  });
+
+  it("answers the attachment limit with its own code", async () => {
+    withUpload(upload({ purpose: "pet_medical_attachment", declared_type: PDF }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: PDF });
+    state.petAnswer = { outcome: "limit_reached" };
+    expect((await finalize()).status).toBe(409);
+  });
+
+  it("processes a pet photo without metadata and makes it the pet's photo", async () => {
+    withUpload(upload({ purpose: "pet_photo", declared_type: "image/jpeg" }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: "image/jpeg" });
+    state.petAnswer = { outcome: "saved", revision: 3 };
+    const response = await finalize();
+    expect(response.status).toBe(200);
+    expect(state.process).toHaveBeenCalledWith(BYTES, "image/jpeg");
+    expect(state.check).not.toHaveBeenCalled();
+    expect(state.objects.put).toHaveBeenCalledWith(OBJECT_KEY, PROCESSED, "image/webp");
+    expect(state.rpc).toHaveBeenCalledWith("set_pet_photo", { p_file_id: FILE_ID });
+  });
+
+  it("refuses a photo from someone who may no longer manage the pet", async () => {
+    withUpload(upload({ purpose: "pet_photo", declared_type: "image/jpeg" }));
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: "image/jpeg" });
+    state.petAnswer = { outcome: "not_permitted" };
+    expect((await finalize()).status).toBe(403);
   });
 });

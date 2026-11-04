@@ -10,6 +10,7 @@ import { getVerifiedIdentity } from "@/auth/identity";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { goalNoticeNames } from "@/goals/data";
 import { habitNoticeNames } from "@/habits/data";
+import { petCareNoticeNames } from "@/pets/data";
 
 import {
   notificationDecisions,
@@ -79,7 +80,7 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
     return { status: "unavailable" };
   }
   const items: NotificationView[] = [];
-  const [titles, habitNames, goalNames] = await Promise.all([
+  const [titles, habitNames, goalNames, careNames] = await Promise.all([
     reminderTitles(supabase, data),
     habitNoticeNames(
       data.flatMap((row) =>
@@ -99,9 +100,22 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
           : [],
       ),
     ),
+    petCareNoticeNames(
+      data.flatMap((row) =>
+        row.kind === "pet_care.reminder" &&
+        isRecord(row.params) &&
+        typeof row.params.occurrenceId === "string"
+          ? [row.params.occurrenceId]
+          : [],
+      ),
+    ),
   ]);
   for (const row of data) {
     const params = isRecord(row.params) ? row.params : {};
+    const care =
+      row.kind === "pet_care.reminder" && typeof params.occurrenceId === "string"
+        ? careNames.get(params.occurrenceId)
+        : undefined;
     const embedded: unknown = row.homes;
     const home: unknown = Array.isArray(embedded) ? (embedded[0] as unknown) : embedded;
     items.push({
@@ -123,6 +137,13 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       goalName: typeof params.goalId === "string" ? (goalNames.get(params.goalId) ?? null) : null,
       goalReminder: oneOf(["lead", "overdue"] as const, params.reminder),
       deadline: typeof params.deadline === "string" ? params.deadline : null,
+      petId: typeof params.petId === "string" ? params.petId : null,
+      careActivityId: typeof params.activityId === "string" ? params.activityId : null,
+      petName: care?.petName ?? null,
+      careTitle: care?.title ?? null,
+      careCategory: care?.category ?? null,
+      petCare: count(params.petCare),
+      petCareUnassigned: count(params.petCareUnassigned),
       onDate: typeof params.onDate === "string" ? params.onDate : null,
       weekly: params.weekly === true,
       progress: readProgress(params.progress),
@@ -135,6 +156,11 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
   }
   return { status: "ok", value: items };
 });
+
+/** A whole count from a notice's parameters, or 0. */
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
+}
 
 /** A reminder's point-in-time progress snapshot, or null when it is missing or malformed. */
 function readProgress(value: unknown): NotificationView["progress"] {

@@ -48,6 +48,22 @@ export interface NotificationView {
   readonly goalName: string | null;
   readonly goalReminder: "lead" | "overdue" | null;
   readonly deadline: string | null;
+  /**
+   * A pet-care reminder (S31): the pet and the care activity, with the pet's name and the care's
+   * title while the reader may still see them. The title is null when it is concealed from the
+   * reader (medical details without medical view); the category then names the care.
+   */
+  readonly petId: string | null;
+  readonly careActivityId: string | null;
+  readonly petName: string | null;
+  readonly careTitle: string | null;
+  readonly careCategory: string | null;
+  /**
+   * A vacation reminder's pet-care activities with care during the vacation, and how many of them
+   * have nobody responsible (S31); 0 otherwise.
+   */
+  readonly petCare: number;
+  readonly petCareUnassigned: number;
   readonly onDate: string | null;
   readonly weekly: boolean;
   /** A numeric habit's progress when a reminder was sent (S29); null for other habits. */

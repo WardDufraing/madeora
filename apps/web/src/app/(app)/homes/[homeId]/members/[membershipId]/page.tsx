@@ -13,6 +13,7 @@ import { CapabilitiesForm } from "@/components/members/manage/capabilities-form"
 import { MemberRoleForm } from "@/components/members/manage/member-role-form";
 import { NominateOwner } from "@/components/members/manage/nominate-owner";
 import { RemoveMember } from "@/components/members/manage/remove-member";
+import { MedicalAccessForm } from "@/components/pets/medical-access-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/states";
@@ -22,6 +23,7 @@ import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import { getHomeDirectory } from "@/members/directory";
 import { getCapabilityGrants, getOwnershipTransfer } from "@/members/manage-server";
+import { readMedicalAccess } from "@/pets/data";
 
 interface MemberPageProps {
   readonly params: Promise<{ readonly homeId: string; readonly membershipId: string }>;
@@ -73,10 +75,12 @@ export default async function MemberPage({ params }: MemberPageProps) {
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
   }
   const { home, membership } = context;
-  const [directory, formats, transfer] = await Promise.all([
+  const [directory, formats, transfer, medicalAccess, tPets] = await Promise.all([
     getHomeDirectory(home.id),
     getDateTimeFormats(),
     getOwnershipTransfer(home.id),
+    readMedicalAccess(home.id),
+    getTranslations("Pets"),
   ]);
   if (directory.status === "not-found") redirect(HOME_UNAVAILABLE_PATH);
   if (directory.status === "unavailable") {
@@ -107,7 +111,13 @@ export default async function MemberPage({ params }: MemberPageProps) {
     administrator: "roleAdministrator",
     member: "roleMember",
   } as const;
-  const nothingToDo = !Object.values(can).some(Boolean);
+  // Pet medical information (S31): shown only to whoever may grant it in this Home.
+  const medical =
+    medicalAccess.status === "ok" && medicalAccess.value.canGrant
+      ? (medicalAccess.value.members.find((entry) => entry.membershipId === member.membershipId) ??
+        null)
+      : null;
+  const nothingToDo = !Object.values(can).some(Boolean) && !medical?.canChange;
 
   return (
     <>
@@ -170,6 +180,23 @@ export default async function MemberPage({ params }: MemberPageProps) {
               />
             ) : (
               <FormAlert tone="error">{tHomes("loadFailed")}</FormAlert>
+            )}
+          </Card>
+        ) : null}
+
+        {medical ? (
+          <Card title={tPets("accessSection")} description={tPets("accessSectionHint", { name })}>
+            {medical.canChange ? (
+              <MedicalAccessForm
+                homeId={home.id}
+                membershipId={member.membershipId}
+                memberName={name}
+                level={medical.level}
+              />
+            ) : (
+              <p className="text-body text-fg-muted" data-testid="pet-access-fixed">
+                {medical.role === "owner" ? tPets("accessOwner") : tPets("accessFixed")}
+              </p>
             )}
           </Card>
         ) : null}

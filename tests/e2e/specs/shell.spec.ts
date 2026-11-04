@@ -393,12 +393,12 @@ test.describe("pages", () => {
   test.use({ viewport: desktop });
 
   test("unbuilt sections say so; unknown addresses are 404", async ({ page }) => {
-    await page.goto("/pets");
-    await expect(page.getByRole("heading", { level: 1, name: "Pets" })).toBeVisible();
+    await page.goto("/photos");
+    await expect(page.getByRole("heading", { level: 1, name: "Photos" })).toBeVisible();
     await expect(
-      page.getByText("Pets is part of Madeora but has not been built yet."),
+      page.getByText("Photos is part of Madeora but has not been built yet."),
     ).toBeVisible();
-    await expect(page).toHaveTitle("Pets · Madeora");
+    await expect(page).toHaveTitle("Photos · Madeora");
     expect((await page.request.get("/not-a-section")).status()).toBe(404);
     expect((await page.request.get("/trash")).status()).toBe(404);
     expect((await page.request.get("/a/b")).status()).toBe(404);

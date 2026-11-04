@@ -24,6 +24,7 @@ import {
 } from "@/dashboard/widgets";
 
 import { GoalProgressWidgetSettings } from "@/components/goals/goal-widget-settings";
+import { PetCareWidgetSettings } from "@/components/pets/pet-care-widget-settings";
 import { HabitInsightsWidgetSettings } from "@/components/habits/habit-insights-widget-settings";
 import { ShoppingWidgetSettings } from "@/components/shopping/shopping-widget-settings";
 
@@ -314,6 +315,16 @@ export function WidgetSettings({
           }}
         />
       );
+    case "pet-care": {
+      const parsed = widgetRegistry["pet-care"].config.safeParse(widget.config);
+      return (
+        <PetCareWidgetSettings
+          config={parsed.success ? parsed.data : widgetRegistry["pet-care"].config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
+      );
+    }
     case "goal-progress": {
       const parsed = widgetRegistry["goal-progress"].config.safeParse(widget.config);
       return (

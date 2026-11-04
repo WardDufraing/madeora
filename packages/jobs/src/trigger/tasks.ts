@@ -13,6 +13,7 @@ import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
 import { choreClaimRelease, choreReminder, vacationReminder } from "../jobs/chores.ts";
 import { goalReminder } from "../jobs/goals.ts";
+import { petCareReminder } from "../jobs/pets.ts";
 import { habitPauseEnd, habitReminder, habitReminderSnooze } from "../jobs/habits.ts";
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
@@ -84,6 +85,7 @@ export const habitReminderTask = jobTask(habitReminder);
 export const habitReminderSnoozeTask = jobTask(habitReminderSnooze);
 export const habitPauseEndTask = jobTask(habitPauseEnd);
 export const goalReminderTask = jobTask(goalReminder);
+export const petCareReminderTask = jobTask(petCareReminder);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
@@ -91,7 +93,8 @@ const REMINDER_ADVANCE_BATCH = 200;
 // Recurring occurrences are created lazily, so a reminder days before a due date needs its
 // occurrence to exist in time; the same run tops up habit reminder chains whose next moment is
 // missing (S28), and rolls recurring goal series (S30b): ended periods are finalized and the period
-// running now is created (reads also roll lazily). Hourly: ~720 runs a month, well inside the free
+// running now is created (reads also roll lazily), and creates pet-care occurrences a week ahead with
+// their reminders (S31; pages also do it lazily). Hourly: ~720 runs a month, well inside the free
 // tier; no extra schedule.
 export const taskReminderAdvance = schedules.task({
   id: "task-reminder-advance",
@@ -104,8 +107,9 @@ export const taskReminderAdvance = schedules.task({
     const created = await services.data.advanceReminderSeries(REMINDER_ADVANCE_BATCH);
     const habits = await services.data.advanceHabitReminders(REMINDER_ADVANCE_BATCH);
     const goalPeriods = await services.data.rollGoalPeriods(REMINDER_ADVANCE_BATCH);
-    logger.info("jobs.task_reminder_advance.done", { created, habits, goalPeriods });
-    return { created, habits, goalPeriods };
+    const petCare = await services.data.advancePetCare(REMINDER_ADVANCE_BATCH);
+    logger.info("jobs.task_reminder_advance.done", { created, habits, goalPeriods, petCare });
+    return { created, habits, goalPeriods, petCare };
   },
 });
 

@@ -53,6 +53,13 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     goalName: null,
     goalReminder: null,
     deadline: null,
+    petId: null,
+    careActivityId: null,
+    petName: null,
+    careTitle: null,
+    careCategory: null,
+    petCare: 0,
+    petCareUnassigned: 0,
     onDate: null,
     weekly: false,
     progress: null,
@@ -266,6 +273,49 @@ describe("NotificationList", () => {
       ).not.toHaveLength(0);
     }
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("names a pet-care reminder's care and pet, its category when concealed, and links to the care", async () => {
+    const petId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00c0";
+    const careActivityId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00c1";
+    await show([
+      item({
+        kind: "pet_care.reminder",
+        petId,
+        careActivityId,
+        occurrenceId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00c2",
+        dueDate: "2027-03-28",
+        petName: "Miso",
+        careTitle: "Breakfast",
+        careCategory: "feeding",
+      }),
+      item({
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00a2",
+        kind: "pet_care.reminder",
+        petId,
+        careActivityId,
+        dueDate: "2027-03-28",
+        petName: "Miso",
+        careTitle: null,
+        careCategory: "medication",
+      }),
+    ]);
+    const [named, concealed] = screen.getAllByTestId("notification");
+    expect(named).toHaveTextContent(
+      "Reminder: \u2068Breakfast\u2069 for \u2068Miso\u2069, 28/03/2027.",
+    );
+    expect(concealed).toHaveTextContent("Reminder: Medication for \u2068Miso\u2069, 28/03/2027.");
+    expect(within(named as HTMLElement).getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      `/homes/${HOME_ID}/pets/${petId}/care/${careActivityId}`,
+    );
+  });
+
+  it("adds the pet care that continues to a vacation reminder", async () => {
+    await show([item({ kind: "vacation.reminder", petCare: 2, petCareUnassigned: 1 })]);
+    expect(screen.getByTestId("notification")).toHaveTextContent(
+      "Pet care continues during the vacation: 2 care activities, 1 of them unassigned.",
+    );
   });
 
   it("words a chore handover notice by its answer and links to the occurrence", async () => {

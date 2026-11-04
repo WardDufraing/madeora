@@ -717,6 +717,54 @@ From here a numeric habit can **count toward** a measurable goal or repeating go
 
 2. In the app, create a numeric habit in km and add some progress, then a measurable goal in km. On the goal, choose **Link a habit**, count from the habit's beginning, preview and confirm: the goal shows the amount under **From linked habits**. Undo the habit's entry: the goal's total follows.
 
+## Check S31 (`20261116090000_pets.sql`)
+
+From here a Home can keep **pets**: a basic profile every member sees, and sensitive details and a medical history that only members with medical access see. Two new Administrator rights (manage pets, grant pet medical access) start off for everyone. Apply it after the S30c file. No new job, schedule or provider; photos and documents use the existing file storage.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.pets') as pets_table,
+     to_regclass('private.pet_medical_details') as details_table,
+     to_regclass('private.pet_medical_entries') as entries_table,
+     to_regclass('private.pet_medical_access') as access_table,
+     has_table_privilege('authenticated', 'private.pet_medical_entries', 'select')
+       as members_can_read_entries_table,
+     has_function_privilege('authenticated', 'public.get_pet_medical(uuid)', 'execute')
+       as members_can_read_medical,
+     has_function_privilege('anon', 'public.get_pet_medical(uuid)', 'execute')
+       as anonymous_can_read_medical;
+   ```
+
+   It must show the four tables, **true** for `members_can_read_medical`, and **false** for `members_can_read_entries_table` and `anonymous_can_read_medical`.
+
+2. In the app, open **Pets** in a Home you own, add a pet by name, mark its allergies **None** and add a vaccination with a PDF. Open another member's page and set **Pet medical information** to **View**: signed in as that member, the pet shows the Medical section without edit buttons. Set it back to **No access**: after a reload the section is gone.
+
+## Check S31 care (`20261117090000_pet_care.sql`)
+
+From here pets can have **care**: feeding, medication, grooming and other care on a schedule, assigned to members and marked done by anyone in the Home, with optional reminders and a Pet care widget. Apply it after the S31 pets file. It adds one job kind (`pet-care-reminder`) to the existing jobs; the existing hourly run also creates upcoming care. No new provider or schedule.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.pet_care_activities') as activities_table,
+     to_regclass('private.pet_care_occurrences') as occurrences_table,
+     has_table_privilege('authenticated', 'private.pet_care_activities', 'select')
+       as members_can_read_activities_table,
+     has_function_privilege('authenticated', 'public.get_pet_care(uuid)', 'execute')
+       as members_can_read_care,
+     has_function_privilege('authenticated', 'public.advance_all_pet_care(integer)', 'execute')
+       as members_can_run_the_job,
+     has_function_privilege('service_role', 'public.advance_all_pet_care(integer)', 'execute')
+       as the_job_can_run;
+   ```
+
+   It must show both tables, **true** for `members_can_read_care` and `the_job_can_run`, and **false** for `members_can_read_activities_table` and `members_can_run_the_job`.
+
+2. In the app, open a pet in a Home you own, add care **Breakfast** (Feeding, daily) and a **Medication**. Signed in as a member without pet medical access, the pet's Care section shows Breakfast and only the word "Medication" for the other one; mark Breakfast done, and as the owner its page shows who did it.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:
