@@ -28,3 +28,18 @@ overrides:
   # in 5.33.16, which still exports the networkStats path host-metrics imports. Remove once
   # host-metrics requires 5.33.16 or later itself.
   "@opentelemetry/host-metrics>systeminformation": 5.33.16
+  # 2026-11-02 (R-004): GHSA-g3hv-75wg-m249 (moderate, dev-only) is patched in minimatch
+  # 11.0.1. The audit reports 3.1.5 (eslint 9.39.5, @eslint/config-array, @eslint/eslintrc,
+  # eslint-plugin-react, eslint-plugin-jsx-a11y) and 10.2.6 (@typescript-eslint/typescript-estree
+  # 8.71.2). 11.0.4 is the current release on that line. A scoped override cannot drop the
+  # advisory: every copy below 11.0.1 is reported, and the next path after eslint is jsx-a11y.
+  # eslint and typescript-estree call the Minimatch class or the named minimatch() function,
+  # which 11 still exports (dot, matchBase and noglobstar are unchanged). The two plugins call
+  # require("minimatch") as the v3 default function, and jsx-a11y strict runs that from
+  # label-has-associated-control. minimatch 9+ has no default export, so
+  # patches/minimatch@11.0.4.patch adds one without changing matching. Remove this once those
+  # packages require 11.0.1 or later themselves.
+  minimatch: 11.0.4
+
+patchedDependencies:
+  minimatch@11.0.4: patches/minimatch@11.0.4.patch
