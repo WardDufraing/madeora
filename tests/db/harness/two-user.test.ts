@@ -140,4 +140,36 @@ describe("baseline guards", () => {
       "Every view in schema public is security_invoker",
     );
   });
+
+  it("fail when a SECURITY DEFINER function in schema public is executable by anon", () => {
+    expectFailure(
+      [
+        "create function public.exposed() returns int language sql security definer as $$ select 1 $$;",
+        baseline,
+      ],
+      "No SECURITY DEFINER function in schema public is executable by anon or PUBLIC",
+    );
+  });
+
+  it("fail when a SECURITY DEFINER function in schema public is executable by PUBLIC", () => {
+    expectFailure(
+      [
+        "create function public.exposed() returns int language sql security definer as $$ select 1 $$;",
+        "revoke all on function public.exposed() from public, anon, authenticated, service_role;",
+        "grant execute on function public.exposed() to public;",
+        baseline,
+      ],
+      "No SECURITY DEFINER function in schema public is executable by anon or PUBLIC",
+    );
+  });
+
+  it("fail when a service-role-only function is executable by a signed-in user", () => {
+    expectFailure(
+      [
+        "grant execute on function public.claim_job_outbox(integer, integer) to authenticated;",
+        baseline,
+      ],
+      "Signed-in users cannot execute service-role-only functions",
+    );
+  });
 });
