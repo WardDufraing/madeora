@@ -1,0 +1,49 @@
+diff --git a/dist/commonjs/index.d.ts b/dist/commonjs/index.d.ts
+index 2247bba1b3d19e4de64150ba4d44bd82de532d5f..c7ef5ef22e1c5ca1aca6c2cb6ca1ae1e0de477ac 100644
+--- a/dist/commonjs/index.d.ts
++++ b/dist/commonjs/index.d.ts
+@@ -182,4 +182,5 @@ export declare class Minimatch {
+ export { escape } from './escape.js';
+ export { unescape } from './unescape.js';
+ export type { Form };
++export default minimatch;
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index eb1c915f43b2debf5faa7ac3a73c262a161c7a4f..b82aa4d25fa390ef4449967d5de96fbd83c784ff 100644
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -1547,4 +1547,10 @@ Object.defineProperty(exports, "unescape", { enumerable: true, get: function ()
+ exports.minimatch.Minimatch = Minimatch;
+ exports.minimatch.escape = escape_js_1.escape;
+ exports.minimatch.unescape = unescape_js_1.unescape;
++// minimatch 3 published the matcher as the module itself. eslint-plugin-react and
++// eslint-plugin-jsx-a11y still call require("minimatch") that way. v9+ only has
++// named exports; put the same function back as the CommonJS default.
++exports.minimatch.minimatch = exports.minimatch;
++exports.minimatch.default = exports.minimatch;
++module.exports = exports.minimatch;
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index 2247bba1b3d19e4de64150ba4d44bd82de532d5f..c7ef5ef22e1c5ca1aca6c2cb6ca1ae1e0de477ac 100644
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -182,4 +182,5 @@ export declare class Minimatch {
+ export { escape } from './escape.js';
+ export { unescape } from './unescape.js';
+ export type { Form };
++export default minimatch;
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 1dc27e67064fcbf1f3dce34aa3ea1a134b7be168..eaf470818bf945e58a3480022964b8dd7a2ea07a 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -1536,4 +1536,6 @@ export { unescape } from './unescape.js';
+ minimatch.Minimatch = Minimatch;
+ minimatch.escape = escape;
+ minimatch.unescape = unescape;
++// Same callable default as the CommonJS build, for `import minimatch from "minimatch"`.
++export default minimatch;
+ //# sourceMappingURL=index.js.map
