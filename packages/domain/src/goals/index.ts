@@ -207,3 +207,5 @@ export function nextGoalPeriodStart(frequency: GoalFrequency, start: string): st
   const next = new Date(Date.UTC(year ?? 0, month ?? 1, 1));
   return next.toISOString().slice(0, 10);
 }
+/** Habit-to-goal links (S30c). */
+export * from "./links";

@@ -695,6 +695,28 @@ From here a goal can **repeat** weekly, monthly or yearly: each period is its ow
 
 2. In the app, open **Goals**, choose **New goal**, set **Repeat** to Monthly and preview the periods, then create it. The current month appears under Active with a **Monthly** badge and the series under **Recurring**. On the series page, change the target for the next period: the current period keeps its target.
 
+## Check S30c (`20261115090000_habit_goal_links.sql`)
+
+From here a numeric habit can **count toward** a measurable goal or repeating goal: its daily amounts are added to the goal automatically from a chosen start date. Nothing changes for existing goals. Apply it after the S30b file. No new job, schedule or provider.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.goal_habit_links') as links_table,
+     to_regclass('private.goal_link_days') as linked_days_table,
+     has_table_privilege('authenticated', 'private.goal_habit_links', 'select')
+       as members_can_read_links_table,
+     has_function_privilege('authenticated', 'public.get_goal_links(uuid, uuid, uuid)', 'execute')
+       as members_can_read_links,
+     has_function_privilege('anon', 'public.get_goal_links(uuid, uuid, uuid)', 'execute')
+       as anonymous_can_read_links;
+   ```
+
+   It must show the two tables, **true** for `members_can_read_links`, and **false** for `members_can_read_links_table` and `anonymous_can_read_links`.
+
+2. In the app, create a numeric habit in km and add some progress, then a measurable goal in km. On the goal, choose **Link a habit**, count from the habit's beginning, preview and confirm: the goal shows the amount under **From linked habits**. Undo the habit's entry: the goal's total follows.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

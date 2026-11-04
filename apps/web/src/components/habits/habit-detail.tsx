@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { HabitLinkedGoals } from "@/components/goals/goal-links";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -241,6 +242,8 @@ export function HabitDetailView({
             : t("remindersOff")}
         </p>
       </section>
+
+      <HabitLinkedGoals habitId={habit.id} homeId={habit.homeId} />
 
       {habit.homeId && habit.access !== "view" && habit.reminder?.enabled ? (
         <MyReminders habit={habit} />

@@ -12,12 +12,16 @@ import {
   goalDetailSchema,
   goalEntriesSchema,
   goalEventsSchema,
+  goalLinkCandidatesSchema,
+  goalLinksSchema,
   goalListSchema,
   goalSeriesDetailSchema,
   goalSeriesPeriodsSchema,
   type GoalDetail,
   type GoalEntries,
   type GoalEvents,
+  type GoalLinkCandidates,
+  type GoalLinks,
   type GoalList,
   type GoalSeriesDetail,
   type GoalSeriesPeriods,
@@ -149,6 +153,38 @@ export async function readGoalEvents(
   });
   if (error) return failed("goals.events_failed", error);
   return parsed("goals.events_unexpected_shape", goalEventsSchema, data);
+}
+
+/** What links are listed for: a goal (a period: its series' links), a series or a habit (S30c). */
+export type GoalLinkTarget =
+  { readonly goalId: string } | { readonly seriesId: string } | { readonly habitId: string };
+
+/** The active habit links of a goal, a series or a habit, as the person may see them. */
+export async function readGoalLinks(target: GoalLinkTarget): Promise<Read<GoalLinks>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc(
+    "get_goal_links",
+    "goalId" in target
+      ? { p_goal_id: target.goalId }
+      : "seriesId" in target
+        ? { p_series_id: target.seriesId }
+        : { p_habit_id: target.habitId },
+  );
+  if (error) return failed("goals.links_failed", error);
+  return parsed("goals.links_unexpected_shape", goalLinksSchema, data);
+}
+
+/** The habits the person could link to a goal or series (empty when they may not manage it). */
+export async function readGoalLinkCandidates(
+  target: { readonly goalId: string } | { readonly seriesId: string },
+): Promise<Read<GoalLinkCandidates>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc(
+    "get_goal_link_candidates",
+    "goalId" in target ? { p_goal_id: target.goalId } : { p_series_id: target.seriesId },
+  );
+  if (error) return failed("goals.link_candidates_failed", error);
+  return parsed("goals.link_candidates_unexpected_shape", goalLinkCandidatesSchema, data);
 }
 
 /** The titles of goals notifications point at, only those the person may still see. */

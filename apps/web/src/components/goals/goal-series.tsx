@@ -45,6 +45,8 @@ import { CUSTOM_UNIT, draftUnit, localizedDecimal } from "@/habits/tracking-draf
 import { memberNames, type MemberNames, type MemberOption } from "@/tasks/format";
 
 import { DialogActions, Failure } from "./goal-dialogs";
+import { LinkArchiveNote } from "./goal-link-notes";
+import { GoalLinksSection } from "./goal-links";
 import { useGoalMutation } from "./use-goal-mutation";
 import { useGoalTexts } from "./use-goal-texts";
 
@@ -80,6 +82,9 @@ const seriesEventKey = {
   resumed: "seriesEventResumed",
   stopped: "seriesEventStopped",
   restored: "seriesEventRestored",
+  link_created: "seriesEventLinkCreated",
+  link_changed: "seriesEventLinkChanged",
+  link_removed: "seriesEventLinkRemoved",
 } as const;
 
 /**
@@ -222,6 +227,14 @@ export function GoalSeriesView({ initialSeries, members, timeZones }: GoalSeries
       <Failure error={state.error} />
 
       {measurable ? <TargetSchedule series={series} /> : null}
+      {measurable ? (
+        <GoalLinksSection
+          target={{ seriesId: series.id }}
+          homeId={series.homeId}
+          unit={{ unit: series.unit, unitKind: series.unitKind }}
+          canLink={actions.manage && series.state !== "stopped"}
+        />
+      ) : null}
       <PeriodHistory series={series} />
       <SeriesEvents series={series} names={names} />
 
@@ -885,6 +898,8 @@ function SeriesDeleteDialog({
       router.push(goalsPath(series.homeId));
     },
   );
+  const seriesUnit =
+    series.unit && series.unitKind ? { unit: series.unit, unitKind: series.unitKind } : null;
   return (
     <Dialog
       open
@@ -894,6 +909,7 @@ function SeriesDeleteDialog({
       closeLabel={t("close")}
     >
       <div className="flex flex-col gap-4">
+        <LinkArchiveNote target={{ seriesId: series.id }} action="delete" unit={seriesUnit} />
         <Failure error={remove.error} />
         <DialogActions onClose={onClose}>
           <Button

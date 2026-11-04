@@ -34,6 +34,9 @@ const eventKey = {
   reminders_changed: "eventRemindersChanged",
   finalized: "eventFinalized",
   outcome_changed: "eventOutcomeChanged",
+  link_created: "eventLinkCreated",
+  link_changed: "eventLinkChanged",
+  link_removed: "eventLinkRemoved",
 } as const satisfies Record<GoalEvent["kind"], string>;
 
 /** The goal's entries, newest first, fifty at a time, each page after the last entry before. */
@@ -92,7 +95,7 @@ function EntryRow({
       <div className="flex flex-wrap items-center gap-2 text-body text-fg">
         <span className={reversed ? "line-through" : undefined}>
           {t(entry.kind === "adjustment" ? "entryAdjustmentLine" : "entryLine", {
-            kind: texts.entryKind(entry.kind),
+            kind: entry.source === "link" ? t("entryKeptFromLink") : texts.entryKind(entry.kind),
             amount: entry.kind === "adjustment" && entry.quantity > 0 ? `+${amount}` : amount,
             person: texts.who(entry.by, entry.mine, names),
             at: texts.instant(entry.recordedAt, goal.timeZone),
@@ -250,10 +253,12 @@ export function GoalEventsList({
         <ul className="flex flex-col gap-1 text-body text-fg" data-testid="goal-events">
           {rows.map((event) => (
             <li key={event.id}>
-              {t(eventKey[event.kind], {
-                person: texts.who(event.by, event.mine, names),
-                at: texts.instant(event.at, goal.timeZone),
-              })}
+              {event.kind === "outcome_changed" && event.by === null && !event.mine
+                ? t("eventOutcomeChangedQuiet", { at: texts.instant(event.at, goal.timeZone) })
+                : t(eventKey[event.kind], {
+                    person: texts.who(event.by, event.mine, names),
+                    at: texts.instant(event.at, goal.timeZone),
+                  })}
             </li>
           ))}
         </ul>

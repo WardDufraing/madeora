@@ -13,6 +13,7 @@ import { goalKeys, goalSeriesPath, goalsPath } from "@/goals/format";
 import { memberNames, type MemberOption } from "@/tasks/format";
 
 import {
+  ArchiveDialog,
   DeleteDialog,
   Failure,
   ProgressDialog,
@@ -22,6 +23,7 @@ import {
 } from "./goal-dialogs";
 import { GoalFormDialog, type GoalContextOption, type GoalFormMode } from "./goal-form-dialog";
 import { GoalEntriesList, GoalEventsList } from "./goal-history";
+import { GoalLinksSection } from "./goal-links";
 import { GoalProgressMeter, GoalStatusLabel } from "./goal-progress";
 import { useGoalMutation } from "./use-goal-mutation";
 import { useGoalTexts } from "./use-goal-texts";
@@ -30,7 +32,9 @@ import { useGoalTexts } from "./use-goal-texts";
 const REFRESH_INTERVAL_MS = 60_000;
 
 type DialogKind =
-  | { readonly kind: "add" | "total" | "target" | "reminders" | "reopen" | "delete" }
+  | {
+      readonly kind: "add" | "total" | "target" | "reminders" | "reopen" | "delete" | "archive";
+    }
   | { readonly kind: "form"; readonly mode: GoalFormMode };
 
 export interface GoalDetailViewProps {
@@ -61,7 +65,8 @@ function useGoalDetail(initial: GoalDetail): GoalDetail {
  * 100%), Target reached with Mark achieved, Add progress and Set total, the contributions with their
  * corrections, the achievement history, the change log, and the changes the viewer may make. Every
  * change is checked again by the database. A period of a recurring series (S30b) shows its dates and
- * series, and once it ended its calculated outcome; its target changes from the series.
+ * series, and once it ended its calculated outcome; its target changes from the series. Habits linked
+ * to it (S30c) add to its progress, shown apart from the manual part.
  */
 export function GoalDetailView({
   initialGoal,
@@ -233,6 +238,16 @@ export function GoalDetailView({
         <Failure error={achieve.error} />
       </section>
 
+      {measurable ? (
+        <GoalLinksSection
+          target={{ goalId: goal.id }}
+          homeId={goal.homeId}
+          unit={{ unit: goal.unit, unitKind: goal.unitKind }}
+          canLink={actions.manage && goal.period === null && !archived}
+          readOnly={goal.period !== null}
+        />
+      ) : null}
+
       {measurable ? <GoalEntriesList goal={goal} names={names} /> : null}
 
       {goal.achievements.length > 0 ? (
@@ -363,7 +378,9 @@ export function GoalDetailView({
               variant="secondary"
               loading={archive.busy}
               onClick={() => {
-                archive.mutate(!archived);
+                // Archiving a goal habits count toward says first what happens to those links.
+                if (!archived && goal.linkCount > 0) setDialog({ kind: "archive" });
+                else archive.mutate(!archived);
               }}
               data-testid="goal-archive"
             >
@@ -400,6 +417,7 @@ export function GoalDetailView({
       {dialog?.kind === "reminders" ? <RemindersDialog goal={goal} onClose={close} /> : null}
       {dialog?.kind === "reopen" ? <ReopenDialog goal={goal} onClose={close} /> : null}
       {dialog?.kind === "delete" ? <DeleteDialog goal={goal} onClose={close} /> : null}
+      {dialog?.kind === "archive" ? <ArchiveDialog goal={goal} onClose={close} /> : null}
       {dialog?.kind === "form" ? (
         <GoalFormDialog
           mode={dialog.mode}
