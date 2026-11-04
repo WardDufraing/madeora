@@ -1,5 +1,6 @@
 -- Database-wide guards that every migration must keep true. They run against the fully migrated
--- and seeded database, so a later step that forgets RLS on a new table fails here.
+-- and seeded database, so a later step that forgets RLS on a new table, or leaves a SECURITY DEFINER
+-- function executable by anon or PUBLIC, fails here.
 
 -- Supabase grants every API role access to new tables in schema public by default, so a table
 -- without row level security would be readable and writable by anyone with the public API key.
@@ -61,6 +62,87 @@ select tests.assert_true(
       )
   ),
   'No function in schema private is executable by PUBLIC, anon or authenticated unless allowlisted'
+);
+
+-- A SECURITY DEFINER function in schema public runs as its owner, so it bypasses row level security
+-- on tables that owner can read. Supabase's default privileges grant every new function in schema
+-- public to anon. Nothing created there may keep that grant, and PUBLIC must not have EXECUTE
+-- either (the private-schema migration already takes it off the postgres role's default).
+select tests.assert_true(
+  not exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prosecdef
+      and (
+        has_function_privilege('anon', p.oid, 'execute')
+        or exists (
+          select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          where a.grantee = 0 and a.privilege_type = 'EXECUTE'
+        )
+      )
+  ),
+  'No SECURITY DEFINER function in schema public is executable by anon or PUBLIC'
+);
+
+-- Jobs and operator runbooks. Each signature is granted to service_role only; a signed-in user must
+-- not be able to execute any of them. When a migration adds one, add its signature here as
+-- regprocedure text, such as 'public.claim_job_outbox(integer,integer)'. A signature that does not
+-- resolve fails this test; it is not skipped. The list is every such function in the migrations.
+select tests.assert_true(
+  not exists (
+    select 1
+    from unnest(array[
+      -- S13: the dispatcher and execution functions.
+      'public.claim_job_outbox(integer,integer)',
+      'public.complete_job_outbox(uuid,text)',
+      'public.fail_job_outbox(uuid,text,boolean)',
+      'public.release_job_outbox(uuid[])',
+      'public.requeue_job_outbox(uuid)',
+      'public.begin_job_execution(text,text,integer)',
+      'public.finish_job_execution(text,text,uuid,text,text)',
+      'public.job_outbox_stats()',
+      -- S14: recovery-ready notice, and the invitation and notification email jobs.
+      'public.deliver_recovery_ready(uuid,timestamptz)',
+      'public.get_invitation_email(uuid,integer)',
+      'public.record_invitation_email(uuid,integer,text)',
+      'public.get_notification_email(uuid)',
+      'public.record_notification_email(uuid,text,text)',
+      -- S15: trusted upload facts, allowances and the storage jobs.
+      'public.finalize_upload(uuid,uuid,text,bigint,text)',
+      'public.set_storage_allowance(uuid,uuid,bigint)',
+      'public.expire_upload(uuid)',
+      'public.purge_stored_file(uuid)',
+      'public.get_storage_object_deletion(uuid)',
+      'public.complete_storage_object_deletion(uuid)',
+      'public.storage_stats()',
+      -- S16: the trash purge job and its runbook.
+      'public.purge_expired_trash_entry(uuid)',
+      'public.trash_stats()',
+      -- S19b: task reminder jobs.
+      'public.deliver_task_reminder(uuid,integer)',
+      'public.advance_reminder_series(integer)',
+      -- S21: an overdue claim the release job gives back.
+      'public.release_overdue_chore_claim(uuid,integer)',
+      -- S21c: chore reminder delivery and the manager summary.
+      'public.deliver_chore_reminder(uuid,uuid,integer)',
+      'public.send_chore_summaries(integer)',
+      -- S22: the vacation reminder.
+      'public.deliver_vacation_reminder(uuid,date,integer)',
+      -- S28: habit reminder jobs.
+      'public.deliver_habit_reminder(uuid,integer,timestamptz)',
+      'public.advance_habit_reminders(integer)',
+      'public.deliver_habit_snooze(uuid)',
+      'public.deliver_habit_pause_end(uuid,date)',
+      -- S30: the goal reminder.
+      'public.deliver_goal_reminder(uuid,integer,text,timestamptz)',
+      -- S30b: period rollover.
+      'public.roll_goal_periods(integer)'
+    ]::regprocedure[]) as s(signature)
+    where has_function_privilege('authenticated', s.signature, 'execute')
+  ),
+  'Signed-in users cannot execute service-role-only functions'
 );
 
 -- The synthetic seed is loaded, with its fixed IDs.
