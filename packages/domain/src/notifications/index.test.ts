@@ -54,6 +54,16 @@ describe("notificationPath", () => {
     expect(notificationPath("goal.reminder", "h1", { goalId: 7 })).toBe("/homes/h1/goals");
   });
 
+  it("leads a pet-care reminder to its activity on the pet's page", () => {
+    const petId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b03";
+    const activityId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b04";
+    expect(notificationPath("pet_care.reminder", "h1", { petId, activityId })).toBe(
+      `/homes/h1/pets/${petId}/care/${activityId}`,
+    );
+    expect(notificationPath("pet_care.reminder", "h1", { petId })).toBe(`/homes/h1/pets/${petId}`);
+    expect(notificationPath("pet_care.reminder", "h1", {})).toBe("/homes/h1/pets");
+  });
+
   it("leads a claim or reassignment notice to its occurrence, or to the chores page", () => {
     const occurrenceId = "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
     for (const kind of [
@@ -141,7 +151,8 @@ describe("notificationKinds", () => {
           name.endsWith("_home_vacations.sql") ||
           name.endsWith("_points_rewards.sql") ||
           name.endsWith("_habits.sql") ||
-          name.endsWith("_goals.sql"),
+          name.endsWith("_goals.sql") ||
+          name.endsWith("_pet_care.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -149,7 +160,9 @@ describe("notificationKinds", () => {
     // notification category count.
     const written = new Set([
       ...[...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((m) => m[1]),
-      ...[...sql.matchAll(/'reminders', '((?:task|chore|habit|goal)\.[a-z_]+)'/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/'reminders', '((?:task|chore|habit|goal|pet_care)\.[a-z_]+)'/g)].map(
+        (m) => m[1],
+      ),
       ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'chores', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'(?:chores|reminders)', '(vacation\.[a-z_]+)'/g)].map((m) => m[1]),

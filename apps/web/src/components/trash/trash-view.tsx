@@ -74,6 +74,10 @@ const itemTypeKey = {
   habit: "itemTypeHabit",
   goal: "itemTypeGoal",
   goal_series: "itemTypeGoalSeries",
+  pet: "itemTypePet",
+  pet_medical_entry: "itemTypePetMedicalEntry",
+  pet_medical_attachment: "itemTypePetMedicalAttachment",
+  pet_care_activity: "itemTypePetCareActivity",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -107,6 +111,18 @@ function conflictMessage(kind: string) {
       return "conflictShoppingItemLimit";
     case "meal_slot_occupied":
       return "conflictMealSlotOccupied";
+    case "pet_limit":
+      return "conflictPetLimit";
+    case "pet_in_trash":
+      return "conflictPetInTrash";
+    case "entry_limit":
+      return "conflictPetEntryLimit";
+    case "entry_in_trash":
+      return "conflictPetEntryInTrash";
+    case "pet_attachment_limit":
+      return "conflictPetAttachmentLimit";
+    case "care_limit":
+      return "conflictPetCareLimit";
     default:
       return "conflictOther";
   }

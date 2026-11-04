@@ -257,8 +257,8 @@ describe("DashboardBoard edit mode", () => {
     // Home members, Tasks of a Home, the four chore widgets, Home vacation, the three points
     // widgets (S23), Recipes of a Home (S24), Shopping of a Home (S26), the Meal planner of a
     // Home (S27), Habits and Habit insights of a Home (S28), Habit progress of a Home (S29), and
-    // Goals and Goal progress of a Home (S30).
-    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(18);
+    // Goals and Goal progress of a Home (S30), and Pet care (S31).
+    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(19);
     expect(within(catalogue).getByRole("button", { name: "Add My Chores" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Home members" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Tasks" })).toBeDisabled();

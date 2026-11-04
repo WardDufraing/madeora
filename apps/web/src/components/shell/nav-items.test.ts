@@ -125,4 +125,15 @@ describe("navigation items", () => {
     expect(isUnbuiltSection("goals")).toBe(false);
     expect(isActive(`/homes/${HOME}/goals`, `/homes/${HOME}/goals/${HOME}`)).toBe(true);
   });
+
+  it("points Pets at the open Home's pets (S31) and marks it built", () => {
+    const pets = primaryNav.find((item) => item.id === "pets");
+    if (!pets) throw new Error("pets item missing");
+    expect(contextHref(pets, HOME)).toBe(`/homes/${HOME}/pets`);
+    expect(contextHref(pets, null)).toBe("/pets");
+    expect(isUnbuiltSection("pets")).toBe(false);
+    expect(isActive(`/homes/${HOME}/pets`, `/homes/${HOME}/pets/${HOME}/medical/${HOME}`)).toBe(
+      true,
+    );
+  });
 });

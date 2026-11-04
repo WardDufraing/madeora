@@ -1,6 +1,7 @@
 import { StorageUnavailableError } from "@madeora/storage";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
+import { isPetAttachmentType, isPetPhotoType } from "@/pets/schema";
 import { processCover } from "@/recipes/cover-image";
 import { isCoverType } from "@/recipes/schema";
 import type { AttachmentImpact, FinalizeResponse } from "@/storage/api";
@@ -56,6 +57,12 @@ async function removeQuietly(storage: Storage, keys: readonly string[]): Promise
  * A recipe cover (S24) is processed like an avatar but only scaled down to fit 1600 px, and stays
  * unattached: the recipe's next save applies it (`adopt_recipe_cover`), and the expiry job retires
  * a cover no save adopted.
+ *
+ * A pet photo (S31) is processed like a recipe cover and then made the pet's photo
+ * (`set_pet_photo`). A pet medical attachment (S31) is checked like a task attachment (images
+ * re-encoded without metadata, PDFs by signature) and then attached to its medical entry
+ * (`attach_pet_medical_file`). Both re-check the person's rights with their own session at that
+ * moment; a refusal leaves the file unused and the expiry job retires it.
  */
 export async function POST(request: Request, { params }: FileRouteContext): Promise<Response> {
   const input = await readStorageMutation(request, attachmentFinalizeSchema, MAX_BODY_BYTES);
@@ -73,22 +80,37 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
   if (!upload) return failure(404, "not-found");
   const isAttachment = upload.purpose === "task_attachment";
   const isCover = upload.purpose === "recipe_cover";
+  const isPetPhoto = upload.purpose === "pet_photo";
+  const isPetAttachment = upload.purpose === "pet_medical_attachment";
   const scope: AttachmentScope = input.data.scope ?? "this";
   const done: FinalizeResponse = { file: { id: fileId.data } };
   const finish = () =>
-    isAttachment ? attach(supabase, fileId.data, scope, done) : Promise.resolve(json(200, done));
+    isAttachment
+      ? attach(supabase, fileId.data, scope, done)
+      : isPetAttachment
+        ? attachPetFile(supabase, fileId.data, done)
+        : isPetPhoto
+          ? applyPetPhoto(supabase, fileId.data, done)
+          : Promise.resolve(json(200, done));
   if (upload.status === "ready") return finish();
   if (upload.status === "expired") return failure(410, "expired");
-  if (upload.status !== "pending" || (upload.purpose !== "avatar" && !isAttachment && !isCover)) {
+  if (
+    upload.status !== "pending" ||
+    (upload.purpose !== "avatar" && !isAttachment && !isCover && !isPetPhoto && !isPetAttachment)
+  ) {
     return failure(404, "not-found");
   }
   const declaredType = upload.declared_type;
   if (
     isAttachment
       ? !isAttachmentType(declaredType)
-      : isCover
-        ? !isCoverType(declaredType)
-        : !isAvatarUploadType(declaredType)
+      : isPetAttachment
+        ? !isPetAttachmentType(declaredType)
+        : isCover
+          ? !isCoverType(declaredType)
+          : isPetPhoto
+            ? !isPetPhotoType(declaredType)
+            : !isAvatarUploadType(declaredType)
   ) {
     return failure(500, "failed");
   }
@@ -156,11 +178,13 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
     const processed =
       isAttachment && isAttachmentType(declaredType)
         ? await checkAttachment(read.bytes, declaredType)
-        : isCover && isCoverType(declaredType)
-          ? await processCover(read.bytes, declaredType)
-          : !isAttachment && !isCover && isAvatarUploadType(declaredType)
-            ? await processAvatar(read.bytes, declaredType)
-            : null;
+        : isPetAttachment && isPetAttachmentType(declaredType)
+          ? await checkAttachment(read.bytes, declaredType)
+          : (isCover && isCoverType(declaredType)) || (isPetPhoto && isPetPhotoType(declaredType))
+            ? await processCover(read.bytes, declaredType)
+            : upload.purpose === "avatar" && isAvatarUploadType(declaredType)
+              ? await processAvatar(read.bytes, declaredType)
+              : null;
     if (!processed) return failure(500, "failed");
     if (!processed.ok) return await abandon(processed.reason);
 
@@ -232,6 +256,51 @@ async function attach(
     case "not_recurring":
     case "scope_unavailable":
       return failure(409, "scope-unavailable");
+    default:
+      return failure(404, "not-found");
+  }
+}
+
+/**
+ * Attaches a finished pet medical upload to its entry (S31), re-checking the entry and the person's
+ * medical access now. A refusal leaves the file unattached (the expiry job retires it); a retry
+ * answers the same attachment.
+ */
+async function attachPetFile(
+  supabase: SupabaseClient,
+  fileId: string,
+  done: FinalizeResponse,
+): Promise<Response> {
+  const { data, error } = await supabase.rpc("attach_pet_medical_file", { p_file_id: fileId });
+  if (error) return databaseFailure("storage.pet_attach_failed", error.code);
+  const row = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  switch (row.outcome) {
+    case "attached":
+      if (typeof row.attachmentId !== "string") return failure(500, "failed");
+      return json(200, { ...done, attachment: { id: row.attachmentId, impact: null } });
+    case "not_permitted":
+      return failure(403, "not-permitted");
+    case "limit_reached":
+      return failure(409, "limit-reached");
+    default:
+      return failure(404, "not-found");
+  }
+}
+
+/** Makes a finished photo upload its pet's photo (S31), re-checking the person's right now. */
+async function applyPetPhoto(
+  supabase: SupabaseClient,
+  fileId: string,
+  done: FinalizeResponse,
+): Promise<Response> {
+  const { data, error } = await supabase.rpc("set_pet_photo", { p_file_id: fileId });
+  if (error) return databaseFailure("storage.pet_photo_failed", error.code);
+  const row = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  switch (row.outcome) {
+    case "saved":
+      return json(200, done);
+    case "not_permitted":
+      return failure(403, "not-permitted");
     default:
       return failure(404, "not-found");
   }

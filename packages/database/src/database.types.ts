@@ -460,6 +460,7 @@ export type Database = {
           preview: Json;
         }[];
       };
+      advance_all_pet_care: { Args: { p_limit: number }; Returns: number };
       advance_chores: { Args: { p_home_id: string }; Returns: number };
       advance_habit_reminders: { Args: { p_limit: number }; Returns: number };
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
@@ -520,6 +521,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      attach_pet_medical_file: { Args: { p_file_id: string }; Returns: Json };
       attach_task_file: {
         Args: { p_file_id: string; p_scope?: string };
         Returns: {
@@ -777,6 +779,15 @@ export type Database = {
         Returns: Json;
       };
       complete_job_outbox: { Args: { p_id: string; p_run_id: string }; Returns: boolean };
+      complete_pet_care_occurrence: {
+        Args: {
+          p_completed_at?: string;
+          p_expected_revision: number;
+          p_note?: string;
+          p_occurrence_id: string;
+        };
+        Returns: Json;
+      };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
       copy_meal_week: {
         Args: {
@@ -820,6 +831,15 @@ export type Database = {
           revision: number;
           volunteer_member: string;
         }[];
+      };
+      correct_pet_care_completion: {
+        Args: {
+          p_completed_at: string;
+          p_expected_revision: number;
+          p_note?: string;
+          p_occurrence_id: string;
+        };
+        Returns: Json;
       };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
       create_chore: {
@@ -1078,6 +1098,39 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_pet: { Args: { p_home_id: string; p_id: string; p_name: string }; Returns: Json };
+      create_pet_care: {
+        Args: { p_activity: Json; p_id: string; p_pet_id: string; p_schedule: Json };
+        Returns: Json;
+      };
+      create_pet_medical_attachment_intent: {
+        Args: {
+          p_content_type: string;
+          p_entry_id: string;
+          p_name: string;
+          p_request_id: string;
+          p_size: number;
+        };
+        Returns: {
+          expires_at: string;
+          file_id: string;
+          outcome: string;
+          upload_key: string;
+        }[];
+      };
+      create_pet_medical_entry: {
+        Args: { p_entry: Json; p_id: string; p_pet_id: string };
+        Returns: Json;
+      };
+      create_pet_photo_intent: {
+        Args: { p_content_type: string; p_pet_id: string; p_request_id: string; p_size: number };
+        Returns: {
+          expires_at: string;
+          file_id: string;
+          outcome: string;
+          upload_key: string;
+        }[];
+      };
       create_recipe: {
         Args: { p_content: Json; p_home_id?: string; p_id: string; p_publish?: boolean };
         Returns: {
@@ -1330,6 +1383,15 @@ export type Database = {
           outcome: string;
         }[];
       };
+      delete_pet: { Args: { p_expected_revision: number; p_pet_id: string }; Returns: Json };
+      delete_pet_care: {
+        Args: { p_activity_id: string; p_expected_revision: number };
+        Returns: Json;
+      };
+      delete_pet_medical_entry: {
+        Args: { p_entry_id: string; p_expected_revision: number };
+        Returns: Json;
+      };
       delete_recipe: {
         Args: { p_impact_token?: string; p_recipe_id: string };
         Returns: {
@@ -1419,6 +1481,10 @@ export type Database = {
         Returns: string;
       };
       deliver_habit_snooze: { Args: { p_notification_id: string }; Returns: string };
+      deliver_pet_care_reminder: {
+        Args: { p_at: string; p_occurrence_id: string };
+        Returns: string;
+      };
       deliver_recovery_ready: {
         Args: { p_objection_ends_at: string; p_recovery_id: string };
         Returns: string;
@@ -1609,6 +1675,11 @@ export type Database = {
         }[];
       };
       get_personal_points: { Args: { p_before?: number; p_limit?: number }; Returns: Json };
+      get_pet: { Args: { p_pet_id: string }; Returns: Json };
+      get_pet_care: { Args: { p_pet_id: string }; Returns: Json };
+      get_pet_care_activity: { Args: { p_activity_id: string }; Returns: Json };
+      get_pet_medical: { Args: { p_pet_id: string }; Returns: Json };
+      get_pet_medical_entry: { Args: { p_entry_id: string }; Returns: Json };
       get_point_leaderboard: { Args: { p_home_id: string; p_period?: string }; Returns: Json };
       get_point_summary: { Args: { p_home_id: string }; Returns: Json };
       get_recipe: { Args: { p_home_id?: string; p_recipe_id: string }; Returns: Json };
@@ -2067,6 +2138,16 @@ export type Database = {
           state: string;
         }[];
       };
+      list_home_pet_care: {
+        Args: {
+          p_days: number;
+          p_home_id: string;
+          p_limit: number;
+          p_pet_id: string;
+          p_who: string;
+        };
+        Returns: Json;
+      };
       list_home_vacation_days: {
         Args: { p_from: string; p_home_id: string; p_to: string };
         Returns: Json;
@@ -2111,6 +2192,8 @@ export type Database = {
         Args: { p_include_archived?: boolean; p_today?: string; p_week_start?: string };
         Returns: Json;
       };
+      list_pet_medical_access: { Args: { p_home_id: string }; Returns: Json };
+      list_pets: { Args: { p_home_id: string }; Returns: Json };
       list_point_accounts: {
         Args: { p_home_id: string };
         Returns: {
@@ -2393,6 +2476,15 @@ export type Database = {
           revision: number;
         }[];
       };
+      pet_care_notice_names: {
+        Args: { p_occurrence_ids: string[] };
+        Returns: {
+          category: string;
+          occurrence_id: string;
+          pet_name: string;
+          title: string;
+        }[];
+      };
       preview_chore_points_change: {
         Args: {
           p_action: string;
@@ -2584,6 +2676,8 @@ export type Database = {
         Args: { p_expected_role: string; p_home_id: string; p_membership_id: string };
         Returns: string;
       };
+      remove_pet_medical_attachment: { Args: { p_attachment_id: string }; Returns: Json };
+      remove_pet_photo: { Args: { p_expected_revision: number; p_pet_id: string }; Returns: Json };
       remove_task_attachment: {
         Args: { p_attachment_id: string; p_dry_run?: boolean; p_scope?: string };
         Returns: {
@@ -2644,6 +2738,10 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      reopen_pet_care_occurrence: {
+        Args: { p_expected_revision: number; p_occurrence_id: string };
+        Returns: Json;
       };
       reorder_chore_categories: { Args: { p_home_id: string; p_ids: string[] }; Returns: string };
       reorder_subtasks: { Args: { p_subtask_ids: string[]; p_task_id: string }; Returns: string };
@@ -3036,6 +3134,19 @@ export type Database = {
           revision: number;
         }[];
       };
+      set_pet_care_state: {
+        Args: { p_activity_id: string; p_expected_revision: number; p_state: string };
+        Returns: Json;
+      };
+      set_pet_medical_access: {
+        Args: { p_home_id: string; p_level: string; p_membership_id: string };
+        Returns: string;
+      };
+      set_pet_medical_details: {
+        Args: { p_details: Json; p_expected_revision: number; p_pet_id: string };
+        Returns: Json;
+      };
+      set_pet_photo: { Args: { p_file_id: string }; Returns: Json };
       set_recipe_favorite: {
         Args: { p_favorite: boolean; p_home_id?: string; p_recipe_id: string };
         Returns: string;
@@ -3174,6 +3285,10 @@ export type Database = {
         }[];
       };
       skip_meal_occurrence: { Args: { p_on: string; p_recurrence_id: string }; Returns: string };
+      skip_pet_care_occurrence: {
+        Args: { p_expected_revision: number; p_occurrence_id: string };
+        Returns: Json;
+      };
       snooze_habit_reminder: {
         Args: { p_minutes: number; p_notification_id: string };
         Returns: {
@@ -3614,6 +3729,34 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      update_pet: {
+        Args: { p_expected_revision: number; p_pet_id: string; p_profile: Json };
+        Returns: Json;
+      };
+      update_pet_care: {
+        Args: {
+          p_activity: Json;
+          p_activity_id: string;
+          p_expected_revision: number;
+          p_from?: string;
+          p_schedule?: Json;
+        };
+        Returns: Json;
+      };
+      update_pet_care_occurrence: {
+        Args: {
+          p_due_on: string;
+          p_expected_revision: number;
+          p_members: string[];
+          p_occurrence_id: string;
+          p_time: string;
+        };
+        Returns: Json;
+      };
+      update_pet_medical_entry: {
+        Args: { p_entry: Json; p_entry_id: string; p_expected_revision: number };
+        Returns: Json;
       };
       update_point_preferences: {
         Args: {

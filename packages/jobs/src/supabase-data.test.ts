@@ -229,6 +229,27 @@ describe("Supabase job data", () => {
     ).rejects.toMatchObject({ code: "unexpected_result" });
   });
 
+  it("delivers pet-care reminders, advances pet care, and refuses an unknown answer", async () => {
+    const { client, calls } = fakeClient({
+      deliver_pet_care_reminder: ok("late"),
+      advance_all_pet_care: ok(4),
+    });
+    const data = createSupabaseJobData(client);
+    await expect(data.deliverPetCareReminder("o1", "2026-11-10T06:45:00Z")).resolves.toBe("late");
+    await expect(data.advancePetCare(200)).resolves.toBe(4);
+    expect(calls).toEqual([
+      {
+        fn: "deliver_pet_care_reminder",
+        args: { p_occurrence_id: "o1", p_at: "2026-11-10T06:45:00Z" },
+      },
+      { fn: "advance_all_pet_care", args: { p_limit: 200 } },
+    ]);
+    const { client: odd } = fakeClient({ deliver_pet_care_reminder: ok("not_needed") });
+    await expect(
+      createSupabaseJobData(odd).deliverPetCareReminder("o1", "2026-11-10T06:45:00Z"),
+    ).rejects.toMatchObject({ code: "unexpected_result" });
+  });
+
   it("throws the Postgres code only", async () => {
     const { client } = fakeClient({
       get_notification_email: {

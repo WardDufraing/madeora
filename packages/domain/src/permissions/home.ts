@@ -41,6 +41,8 @@ export const delegableCapabilities = [
   "manageHomeMeals",
   "manageHomeHabits",
   "manageHomeGoals",
+  "manageHomePets",
+  "managePetMedicalAccess",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -88,6 +90,9 @@ export const homeActions = [
   "home.habits.manage",
   "home.goals.view",
   "home.goals.manage",
+  "home.pets.view",
+  "home.pets.manage",
+  "home.pets.grantMedicalAccess",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -249,6 +254,14 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // that member access. SQL: private.goal_access.
   "home.goals.view": { roles: ["owner", "administrator", "member"] },
   "home.goals.manage": { roles: ["owner"], delegatedThrough: "manageHomeGoals" },
+  // Pets (S31; matrix in the S31 brief): every current member sees the Home's pets and their basic
+  // profile; pet managers (the Owner, Administrators granted manageHomePets) add, edit, delete and
+  // restore them. Medical information is NOT a role or capability: it is a per-member level
+  // (./pets.ts) that the Owner and Administrators granted managePetMedicalAccess grant and revoke,
+  // never their own. SQL: private.pet_access, private.pet_medical_level.
+  "home.pets.view": { roles: ["owner", "administrator", "member"] },
+  "home.pets.manage": { roles: ["owner"], delegatedThrough: "manageHomePets" },
+  "home.pets.grantMedicalAccess": { roles: ["owner"], delegatedThrough: "managePetMedicalAccess" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -326,6 +339,9 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.habits.manage": can("home.habits.manage"),
     "home.goals.view": can("home.goals.view"),
     "home.goals.manage": can("home.goals.manage"),
+    "home.pets.view": can("home.pets.view"),
+    "home.pets.manage": can("home.pets.manage"),
+    "home.pets.grantMedicalAccess": can("home.pets.grantMedicalAccess"),
   };
 }
 

@@ -104,3 +104,21 @@ export {
   type GoalMemberAccess,
   type GoalPermissionProjection,
 } from "./goals";
+export {
+  canChangeMedicalAccess,
+  decidePetAction,
+  decidePetCareAction,
+  effectiveMedicalLevel,
+  petActions,
+  petCareActions,
+  petMedicalChoices,
+  petMedicalLevels,
+  petPermissions,
+  type PetAction,
+  type PetCareAction,
+  type PetCareFacts,
+  type PetFacts,
+  type PetMedicalChoice,
+  type PetMedicalLevel,
+  type PetPermissionProjection,
+} from "./pets";

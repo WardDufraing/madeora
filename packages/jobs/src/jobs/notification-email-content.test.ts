@@ -89,6 +89,44 @@ describe("buildNotificationEmail", () => {
     expect(overdue.text).toContain(`https://app.madeora.test/goals/${goalId}`);
   });
 
+  it("emails a pet-care reminder with its day, naming neither the pet nor the activity", async () => {
+    const petId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b03";
+    const activityId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b04";
+    const email = await buildNotificationEmail({
+      ...base,
+      kind: "pet_care.reminder",
+      params: {
+        homeId,
+        petId,
+        activityId,
+        occurrenceId: "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b05",
+        dueDate: "2026-11-10",
+      },
+    });
+    expect(email.subject).toContain("Reminder: pet care in \u2068De Boomgaard\u2069 on");
+    expect(email.subject).toContain("10");
+    expect(email.text).toContain(
+      `https://app.madeora.test/homes/${homeId}/pets/${petId}/care/${activityId}`,
+    );
+  });
+
+  it("mentions pet care in the vacation reminder when some continues", async () => {
+    const vacationId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b06";
+    const plain = await buildNotificationEmail({
+      ...base,
+      kind: "vacation.reminder",
+      params: { homeId, vacationId, petCare: 0 },
+    });
+    expect(plain.text).not.toContain("Pet care");
+    const care = await buildNotificationEmail({
+      ...base,
+      locale: "nl",
+      kind: "vacation.reminder",
+      params: { homeId, vacationId, petCare: 2 },
+    });
+    expect(care.text).toContain("De dierenzorg loopt door");
+  });
+
   it("emails reviewers that chores wait, naming neither the chore nor a person", async () => {
     const email = await buildNotificationEmail({
       ...base,

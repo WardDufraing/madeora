@@ -95,6 +95,7 @@ export const notificationKinds = [
   "habit.paused",
   "habit.resumed",
   "goal.reminder",
+  "pet_care.reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -124,6 +125,15 @@ export function notificationPath(
     const goalId = typeof params.goalId === "string" ? encodeURIComponent(params.goalId) : null;
     const base = homeId ? `/homes/${encodeURIComponent(homeId)}/goals` : "/goals";
     return goalId ? `${base}/${goalId}` : base;
+  }
+  // S31: a pet-care reminder leads to the activity on its pet's page.
+  if (kind === "pet_care.reminder" && homeId) {
+    const home = `/homes/${encodeURIComponent(homeId)}/pets`;
+    const petId = typeof params.petId === "string" ? encodeURIComponent(params.petId) : null;
+    const activityId =
+      typeof params.activityId === "string" ? encodeURIComponent(params.activityId) : null;
+    if (!petId) return home;
+    return activityId ? `${home}/${petId}/care/${activityId}` : `${home}/${petId}`;
   }
   if (
     kind === "recovery.former_owner_completed" ||

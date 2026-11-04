@@ -47,6 +47,7 @@ const paramsSchema = z.object({
   resumesOn: z.iso.date().nullable().optional(),
   automatic: z.boolean().nullable().optional(),
   reminder: z.enum(["lead", "overdue"]).optional(),
+  petCare: z.int().min(0).optional(),
 });
 
 /** The template for a kind whose wording depends on a parameter (the decision, the reason). */
@@ -62,6 +63,7 @@ function emailKind(kind: string, inHome: boolean, params: z.infer<typeof paramsS
   if (kind === "goal.reminder") {
     return `${kind}.${inHome ? "home" : "personal"}_${params.reminder === "overdue" ? "overdue" : "lead"}`;
   }
+  if (kind === "vacation.reminder" && (params.petCare ?? 0) > 0) return `${kind}.pet_care`;
   if (
     (kind === "chore.reassignment_answered" ||
       kind === "chore.reassignment_decided" ||

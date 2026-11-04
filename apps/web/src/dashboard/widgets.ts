@@ -270,6 +270,22 @@ const goalProgressConfig = z.strictObject({
   goalId: z.uuid().nullable().default(null),
 });
 
+/**
+ * The Pet care widget (S31 care part): a Home's open pet care from the overdue window up to today, the
+ * next 3 or the next 7 days, for all of its pets or one, everyone's or the viewer's own or the
+ * unassigned care, with Done. Home-only, like chores. A chosen pet that is gone simply has no care.
+ */
+export const petCareWidgetDays = [1, 3, 7] as const;
+export const petCareWidgetWho = ["all", "me", "unassigned"] as const;
+export const petCareWidgetCounts = [5, 10, 15] as const;
+const petCareConfig = z.strictObject({
+  /** null: every pet of the Home. */
+  petId: z.uuid().nullable().default(null),
+  days: z.union([z.literal(1), z.literal(3), z.literal(7)]).default(1),
+  who: z.enum(petCareWidgetWho).default("all"),
+  count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
+});
+
 const habitSizes = sizes(
   { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
   { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -433,6 +449,11 @@ export const widgetRegistry = {
     sizes: habitSizes,
     config: goalProgressConfig,
   },
+  "pet-care": {
+    surfaces: ["home", "home-source"],
+    sizes: choreSizes,
+    config: petCareConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -463,6 +484,7 @@ export interface WidgetConfigs {
   readonly "habit-progress": WidgetConfig<"habit-progress">;
   readonly goals: WidgetConfig<"goals">;
   readonly "goal-progress": WidgetConfig<"goal-progress">;
+  readonly "pet-care": WidgetConfig<"pet-care">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

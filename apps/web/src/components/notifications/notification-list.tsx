@@ -7,6 +7,7 @@ import { HabitReminderActions } from "@/components/habits/habit-reminder-actions
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
 import type { NotificationView } from "@/notifications/types";
 import { isPresetUnit, unitMessageKey } from "@/habits/numeric-keys";
+import { petCareCategories, type PetCareCategory } from "@/pets/care-schema";
 import { formatTaskDate } from "@/tasks/format";
 
 import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
@@ -70,6 +71,19 @@ const kindMessage = {
   "reward.replacement": "kindRewardReplacement",
 } as const;
 
+/** A pet-care category's name in the Pets messages. */
+const careCategoryKey = {
+  feeding: "careFeeding",
+  medication: "careMedication",
+  grooming: "careGrooming",
+  vet_appointment: "careVetAppointment",
+  other: "careOther",
+} as const satisfies Record<PetCareCategory, string>;
+
+function isPetCareCategory(value: string | null): value is PetCareCategory {
+  return value !== null && (petCareCategories as readonly string[]).includes(value);
+}
+
 /** Chore notices whose words follow their outcome (S21). */
 const choreOutcomeMessage = {
   "chore.claim_released": {
@@ -112,6 +126,8 @@ type MessageKey =
   | "kindHabitReminderProgress"
   | "kindGoalReminderLead"
   | "kindGoalReminderOverdue"
+  | "kindPetCareReminder"
+  | "kindVacationReminderPetCare"
   | "kindUnknown";
 
 /** The message key for a notification (exported for tests). */
@@ -120,7 +136,14 @@ export function messageKeyFor(
     Partial<
       Pick<
         NotificationView,
-        "dueDate" | "reason" | "weekly" | "resumesOn" | "automatic" | "progress" | "goalReminder"
+        | "dueDate"
+        | "reason"
+        | "weekly"
+        | "resumesOn"
+        | "automatic"
+        | "progress"
+        | "goalReminder"
+        | "petCare"
       >
     >,
 ): MessageKey {
@@ -146,6 +169,11 @@ export function messageKeyFor(
   if (item.kind === "goal.reminder") {
     return item.goalReminder === "overdue" ? "kindGoalReminderOverdue" : "kindGoalReminderLead";
   }
+  // S31: a pet-care reminder; a vacation reminder also names the pet care it does not pause.
+  if (item.kind === "pet_care.reminder") return "kindPetCareReminder";
+  if (item.kind === "vacation.reminder" && (item.petCare ?? 0) > 0) {
+    return "kindVacationReminderPetCare";
+  }
   if (item.kind === "join_request.decided") {
     return item.decision === "declined" ? "kindJoinRequestDeclined" : "kindJoinRequestApproved";
   }
@@ -164,11 +192,19 @@ export async function NotificationList({
   readonly items: readonly NotificationView[];
   readonly formats: DateTimeFormats;
 }) {
-  const [t, tn, locale] = await Promise.all([
+  const [t, tn, tp, locale] = await Promise.all([
     getTranslations("Notifications"),
     getTranslations("HabitsNumeric"),
+    getTranslations("Pets"),
     getLocale(),
   ]);
+  /** The care's title, or its category when the title is concealed from the reader. */
+  const careName = (item: NotificationView) =>
+    item.careTitle
+      ? isolate(item.careTitle)
+      : isPetCareCategory(item.careCategory)
+        ? tp(careCategoryKey[item.careCategory])
+        : t("petCareFallback");
   const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
   /** "500 / 2,000 mL": the day's point-in-time progress when the reminder was sent. */
   const progressText = (progress: NonNullable<NotificationView["progress"]>) =>
@@ -211,19 +247,25 @@ export async function NotificationList({
             habit: item.habitName ? isolate(item.habitName) : t("habitFallback"),
             goal: item.goalName ? isolate(item.goalName) : t("goalFallback"),
             progress: item.progress ? progressText(item.progress) : "",
+            pet: item.petName ? isolate(item.petName) : t("petFallback"),
+            care: careName(item),
+            count: item.petCare,
+            unassigned: item.petCareUnassigned,
           });
           const href = notificationPath(
             item.kind,
             item.homeId,
-            item.taskId
-              ? { taskId: item.taskId }
-              : item.habitId
-                ? { habitId: item.habitId }
-                : item.goalId
-                  ? { goalId: item.goalId }
-                  : item.occurrenceId
-                    ? { occurrenceId: item.occurrenceId }
-                    : {},
+            item.kind === "pet_care.reminder"
+              ? { petId: item.petId, activityId: item.careActivityId }
+              : item.taskId
+                ? { taskId: item.taskId }
+                : item.habitId
+                  ? { habitId: item.habitId }
+                  : item.goalId
+                    ? { goalId: item.goalId }
+                    : item.occurrenceId
+                      ? { occurrenceId: item.occurrenceId }
+                      : {},
           );
           const isUnread = item.readAt === null;
           return (

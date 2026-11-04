@@ -359,6 +359,27 @@ As a person or Home member who manages both a numeric habit and a measurable goa
 - I can change the start date or unlink, each with a preview. Unlinking either keeps the amount as manual progress or removes it.
 - The habit page lists the goals it counts toward. People who can see the goal see which habits feed it and how much, never who recorded each entry.
 
+### US-034 — Keep pet profiles and medical history
+
+As a Home member, I want one place for our pets' details and medical history, so anyone looking after them knows what they need, while medical information stays with the people we choose.
+
+- Owners and Administrators with the right to manage pets add a pet with only its name and fill in the rest later: species (or a custom one), breed, a birth date or an approximate age with the date it was true, sex, neutered, weight with its unit, veterinarian, diet, care instructions, notes and a photo. Every member sees these.
+- A field can be left empty, filled in, or marked Unknown; allergies and medications can also be recorded as None. Empty is never shown as None.
+- Allergies, medications, identification numbers, medical notes, the medical history and its documents are visible only to members granted medical access (View, or View and edit) for this Home, and to the Owner. Without it, nothing in the app or the trash shows whether a pet has any medical records.
+- People who may edit medical information add entries (vet visit, vaccination, treatment, test or diagnosis, surgery, other) with a date, optional details and a follow-up date, attach images or PDFs, correct and delete them. Entries after today show as Upcoming appointments; the rest form the history, newest first.
+- The Owner, and Administrators granted the right, set each other member's medical access on the member's page. It works from the member's next action, is recorded in the Home's audit log, and ends when they leave the Home.
+- Deleting a pet moves it, with its medical information, to the trash for 7 days, where only people who may manage pets and edit medical information can restore it or delete it for good; deleted medical entries and documents are in the trash only for people who may edit medical information.
+
+### US-035 — Share our pets' daily care
+
+As a Home member, I want our pets' care on a schedule with who does it, so nothing is forgotten or done twice.
+
+- People who may manage pets add care to a pet: a title, a category (feeding, medication, grooming, vet appointment, other), instructions, once on a date or repeating (daily, weekly on chosen days, monthly, yearly, every so many), an optional time and the members responsible. Care without anyone responsible shows as Unassigned.
+- Every member sees the care and marks it done; the pet's page and the care's page show what is upcoming, due, overdue, done (by whom and when) or skipped. Missed care stays overdue; nothing is marked done automatically.
+- Managers change one time only, or the schedule from a chosen time on, and pause, resume, end or delete care. The person who recorded care, or a manager, can correct when it was done or reopen it.
+- Medication, and any care marked as containing medical details, shows only its category to members without medical access: never its title, instructions or notes.
+- Responsible members can get a reminder at the time or 15 minutes, 1 hour or 1 day before. The Pet care widget shows the Home's open care with Done, and the reminder before a vacation says how much pet care continues during it.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications

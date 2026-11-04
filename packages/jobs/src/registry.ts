@@ -1,6 +1,7 @@
 import { createJobRegistry, type AnyJobDefinition } from "./definition.ts";
 import { choreClaimRelease, choreReminder, vacationReminder } from "./jobs/chores.ts";
 import { goalReminder } from "./jobs/goals.ts";
+import { petCareReminder } from "./jobs/pets.ts";
 import { habitPauseEnd, habitReminder, habitReminderSnooze } from "./jobs/habits.ts";
 import { invitationEmail } from "./jobs/invitation-email.ts";
 import { notificationEmail } from "./jobs/notification-email.ts";
@@ -31,6 +32,7 @@ export const jobs: readonly AnyJobDefinition[] = [
   habitReminderSnooze,
   habitPauseEnd,
   goalReminder,
+  petCareReminder,
 ];
 
 export const jobRegistry = createJobRegistry(jobs);
