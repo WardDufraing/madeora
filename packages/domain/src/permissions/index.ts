@@ -122,3 +122,19 @@ export {
   type PetMedicalLevel,
   type PetPermissionProjection,
 } from "./pets";
+export {
+  DEFAULT_CALENDAR_LEVEL,
+  calendarActions,
+  calendarLevel,
+  calendarLevelAllows,
+  calendarLevels,
+  calendarMemberLevels,
+  calendarPermissions,
+  canChangeCalendarLevel,
+  decideCalendarEventAction,
+  type CalendarAction,
+  type CalendarEventFacts,
+  type CalendarLevel,
+  type CalendarMemberLevel,
+  type CalendarPermissionProjection,
+} from "./calendar";

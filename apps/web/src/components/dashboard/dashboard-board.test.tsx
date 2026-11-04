@@ -150,7 +150,7 @@ describe("DashboardBoard edit mode", () => {
     renderBoard();
     await openEditor();
     const handles = screen.getAllByRole("button", { name: /^Arrange / });
-    expect(handles).toHaveLength(4);
+    expect(handles).toHaveLength(5);
     const link = screen.getByRole("link", { hidden: true, name: "Content of welcome" });
     expect(link.closest("[inert]")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
@@ -218,7 +218,7 @@ describe("DashboardBoard edit mode", () => {
     await user.click(
       within(screen.getByTestId("dashboard-selected")).getByRole("button", { name: "Remove" }),
     );
-    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(4);
     expect(screen.getByRole("status")).toHaveTextContent("Welcome removed.");
   });
 
@@ -257,8 +257,8 @@ describe("DashboardBoard edit mode", () => {
     // Home members, Tasks of a Home, the four chore widgets, Home vacation, the three points
     // widgets (S23), Recipes of a Home (S24), Shopping of a Home (S26), the Meal planner of a
     // Home (S27), Habits and Habit insights of a Home (S28), Habit progress of a Home (S29), and
-    // Goals and Goal progress of a Home (S30), and Pet care (S31).
-    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(19);
+    // Goals and Goal progress of a Home (S30), Pet care (S31), and Upcoming events of a Home (S32).
+    expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(20);
     expect(within(catalogue).getByRole("button", { name: "Add My Chores" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Home members" })).toBeDisabled();
     expect(within(catalogue).getByRole("button", { name: "Add Tasks" })).toBeDisabled();

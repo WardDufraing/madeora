@@ -23,6 +23,7 @@ import type {
   JobDataPort,
   JobServices,
   NotificationEmailRead,
+  CalendarReminderOutcome,
   PetCareReminderOutcome,
   StoredFileStatus,
   TaskReminderOutcome,
@@ -79,6 +80,8 @@ export class FakeJobData implements JobDataPort {
   /** Pets (S31): what a care reminder delivery answers, the calls, and the hourly advance. */
   petCareReminderOutcome: PetCareReminderOutcome = "notified";
   readonly petCareReminderCalls: { occurrenceId: string; at: string }[] = [];
+  calendarReminderOutcome: CalendarReminderOutcome = "notified";
+  readonly calendarReminderCalls: { eventId: string; on: string; at: string }[] = [];
   petCareCreated = 0;
   readonly petCareAdvanceCalls: number[] = [];
   readonly summaryCalls: number[] = [];
@@ -238,6 +241,16 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.petCareAdvanceCalls.push(limit);
     return Promise.resolve(this.petCareCreated);
+  }
+
+  deliverCalendarReminder(
+    eventId: string,
+    on: string,
+    at: string,
+  ): Promise<CalendarReminderOutcome> {
+    this.check();
+    this.calendarReminderCalls.push({ eventId, on, at });
+    return Promise.resolve(this.calendarReminderOutcome);
   }
 
   getStorageObjectDeletion(id: string): Promise<{ objectKey: string; done: boolean } | null> {

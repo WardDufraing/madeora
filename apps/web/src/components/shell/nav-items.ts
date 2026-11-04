@@ -66,12 +66,7 @@ export const secondaryNav: readonly NavItem[] = [
  * Sections that exist in the navigation but are not built yet. They render a "not built yet"
  * page; each module's step removes its id here when it adds the real page.
  */
-export const unbuiltSections: ReadonlySet<NavId> = new Set([
-  "calendar",
-  "photos",
-  "integrations",
-  "help",
-]);
+export const unbuiltSections: ReadonlySet<NavId> = new Set(["photos", "integrations", "help"]);
 
 /** Whether a URL segment names an unbuilt navigation section. */
 export function isUnbuiltSection(value: string): value is NavId {
@@ -92,10 +87,12 @@ export function homeIdFromPath(pathname: string): string | null {
  * chores (S20). Other sections
  * are not Home-aware yet; each module's step decides when it adds its pages. Meals opens the
  * Home's meal planner (S27), Shopping the Home's shopping lists (S26), Habits the Home's habits
- * (S28), Goals the Home's goals (S30), Pets the Home's pets (S31).
+ * (S28), Goals the Home's goals (S30), Pets the Home's pets (S31), Calendar the Home's calendar
+ * (S32).
  */
 export function contextHref(item: NavItem, homeId: string | null): string {
   if (
+    item.id === "calendar" ||
     item.id === "tasks" ||
     item.id === "chores" ||
     item.id === "shopping" ||

@@ -380,6 +380,16 @@ As a Home member, I want our pets' care on a schedule with who does it, so nothi
 - Medication, and any care marked as containing medical details, shows only its category to members without medical access: never its title, instructions or notes.
 - Responsible members can get a reminder at the time or 15 minutes, 1 hour or 1 day before. The Pet care widget shows the Home's open care with Done, and the reminder before a vacation says how much pet care continues during it.
 
+### US-036 — Keep my calendar and share chosen events with a Home
+
+As a person, I want my own calendar and a calendar for each Home, so I can plan alone and together without showing anyone what I keep private.
+
+- I add events to my personal calendar or a Home's: all-day or timed in a timezone, with a location, a description, a repeat rule, participants (a Home event) and an optional reminder at the start or 15 minutes, 1 hour or 1 day before.
+- A personal event stays mine: other members see nothing of it, not even that I am busy, unless I share that event with a Home, where they see it read-only with "Shared by" and my name. Its reminder is only for me.
+- Changing or deleting a repeating event asks: this event, this and following, or all events, and lists the affected dates first. Deleting the whole event goes to the trash for 7 days.
+- In a Home every member may add and change events; who may also delete them is set per member. The calendar shows the Home's vacations as banners I can hide, and Show tasks and Show chores lay tasks and chores over it, remembered for each calendar.
+- The Upcoming events widget shows the next events of my personal space or a Home.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications

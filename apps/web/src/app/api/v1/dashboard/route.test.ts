@@ -242,11 +242,11 @@ describe("POST /api/v1/dashboard/reset", () => {
       request("/reset", "POST", { target: personal, expectedRevision: 3 }),
     );
     expect(response.status).toBe(200);
-    expect(rpcArgs("save_dashboard")).toEqual({
-      p_layout: personalStarterLayout,
-      p_expected_revision: 3,
-      p_previous: customized,
-    });
+    // The previous layout is kept as read (compacted), for Undo.
+    const args = rpcArgs("save_dashboard");
+    expect(args?.p_layout).toEqual(personalStarterLayout);
+    expect(args?.p_expected_revision).toBe(3);
+    expect(args?.p_previous).toMatchObject({ widgets: customized.widgets });
   });
 
   it("refuses a reset of a Home dashboard by a viewer", async () => {

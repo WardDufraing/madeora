@@ -7,8 +7,9 @@ import { defaultConfig, type WidgetType } from "./widgets";
  * accounts"). A person or Home without a saved layout sees the current starter; the first save
  * stores a copy, so changing these later never touches a customized dashboard. Module steps add
  * their personal widgets here (the spec's starter set includes a calendar overview and personal
- * tasks; the personal tasks widget arrived with S19c, the calendar overview comes with S32). The personal starter never holds a Home widget, and a
- * Household Display never uses either layout.
+ * tasks; the personal tasks widget arrived with S19c, the calendar overview (Upcoming events) with
+ * S32). The personal starter never holds a Home widget, and a Household Display never uses either
+ * layout.
  *
  * Widget ids are fixed so the starter is the same on every render; they only need to be unique
  * within one layout.
@@ -33,6 +34,7 @@ const P_WELCOME = "5d1a0000-0000-4000-8000-000000000001";
 const P_ACTIONS = "5d1a0000-0000-4000-8000-000000000002";
 const P_NOTIFICATIONS = "5d1a0000-0000-4000-8000-000000000003";
 const P_TASKS = "5d1a0000-0000-4000-8000-000000000004";
+const P_EVENTS = "5d1a0000-0000-4000-8000-000000000005";
 
 export const personalStarterLayout: DashboardLayout = {
   version: LAYOUT_VERSION,
@@ -41,6 +43,7 @@ export const personalStarterLayout: DashboardLayout = {
     widget(P_ACTIONS, "quick-actions"),
     widget(P_NOTIFICATIONS, "notifications"),
     widget(P_TASKS, "tasks"),
+    widget(P_EVENTS, "upcoming-events"),
   ],
   placements: {
     lg: [
@@ -48,18 +51,21 @@ export const personalStarterLayout: DashboardLayout = {
       { id: P_ACTIONS, x: 6, y: 0, w: 6, h: 2 },
       { id: P_NOTIFICATIONS, x: 0, y: 2, w: 6, h: 4 },
       { id: P_TASKS, x: 6, y: 2, w: 6, h: 4 },
+      { id: P_EVENTS, x: 6, y: 6, w: 6, h: 4 },
     ],
     md: [
       { id: P_WELCOME, x: 0, y: 0, w: 6, h: 2 },
       { id: P_ACTIONS, x: 0, y: 2, w: 6, h: 2 },
       { id: P_NOTIFICATIONS, x: 0, y: 4, w: 6, h: 4 },
       { id: P_TASKS, x: 0, y: 8, w: 6, h: 4 },
+      { id: P_EVENTS, x: 0, y: 12, w: 6, h: 4 },
     ],
     sm: stacked([
       { id: P_WELCOME, h: 2 },
       { id: P_ACTIONS, h: 3 },
       { id: P_NOTIFICATIONS, h: 4 },
       { id: P_TASKS, h: 5 },
+      { id: P_EVENTS, h: 4 },
     ]),
   },
 };

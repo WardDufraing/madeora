@@ -43,6 +43,7 @@ export const delegableCapabilities = [
   "manageHomeGoals",
   "manageHomePets",
   "managePetMedicalAccess",
+  "manageHomeCalendar",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -93,6 +94,8 @@ export const homeActions = [
   "home.pets.view",
   "home.pets.manage",
   "home.pets.grantMedicalAccess",
+  "home.calendar.view",
+  "home.calendar.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -262,6 +265,12 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.pets.view": { roles: ["owner", "administrator", "member"] },
   "home.pets.manage": { roles: ["owner"], delegatedThrough: "manageHomePets" },
   "home.pets.grantMedicalAccess": { roles: ["owner"], delegatedThrough: "managePetMedicalAccess" },
+  // Calendar (S32; matrix in the S32 brief): every current member sees the Home's events and the
+  // personal events shared with it. Editing and deleting are a per-member level (./calendar.ts);
+  // calendar managers (the Owner, Administrators granted manageHomeCalendar) do everything and set
+  // the other members' levels, never their own. SQL: private.calendar_level.
+  "home.calendar.view": { roles: ["owner", "administrator", "member"] },
+  "home.calendar.manage": { roles: ["owner"], delegatedThrough: "manageHomeCalendar" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -342,6 +351,8 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.pets.view": can("home.pets.view"),
     "home.pets.manage": can("home.pets.manage"),
     "home.pets.grantMedicalAccess": can("home.pets.grantMedicalAccess"),
+    "home.calendar.view": can("home.calendar.view"),
+    "home.calendar.manage": can("home.calendar.manage"),
   };
 }
 

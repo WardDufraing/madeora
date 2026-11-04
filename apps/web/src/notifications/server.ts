@@ -66,6 +66,24 @@ async function reminderTitles(
   return new Map(data.map((row) => [row.task_id, row.title]));
 }
 
+/**
+ * The titles of the events named by calendar reminders, for those the viewer may still see (S32).
+ * Read with the viewer's session; a failure only drops the titles.
+ */
+async function eventTitles(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  eventIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const ids = [...new Set(eventIds)].slice(0, 100);
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase.rpc("calendar_notice_titles", { p_event_ids: ids });
+  if (error) {
+    logFailure("notifications.event_titles_failed", error.code);
+    return new Map();
+  }
+  return new Map(data.map((row) => [row.event_id, row.title]));
+}
+
 /** The newest notifications, 50 at most. */
 export const listNotifications = cache(async (): Promise<Loaded<readonly NotificationView[]>> => {
   if (!(await getVerifiedIdentity())) return { status: "ok", value: [] };
@@ -80,7 +98,7 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
     return { status: "unavailable" };
   }
   const items: NotificationView[] = [];
-  const [titles, habitNames, goalNames, careNames] = await Promise.all([
+  const [titles, habitNames, goalNames, careNames, events] = await Promise.all([
     reminderTitles(supabase, data),
     habitNoticeNames(
       data.flatMap((row) =>
@@ -106,6 +124,16 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
         isRecord(row.params) &&
         typeof row.params.occurrenceId === "string"
           ? [row.params.occurrenceId]
+          : [],
+      ),
+    ),
+    eventTitles(
+      supabase,
+      data.flatMap((row) =>
+        row.kind === "calendar.reminder" &&
+        isRecord(row.params) &&
+        typeof row.params.eventId === "string"
+          ? [row.params.eventId]
           : [],
       ),
     ),
@@ -145,6 +173,9 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       petCare: count(params.petCare),
       petCareUnassigned: count(params.petCareUnassigned),
       onDate: typeof params.onDate === "string" ? params.onDate : null,
+      eventId: typeof params.eventId === "string" ? params.eventId : null,
+      eventOn: typeof params.on === "string" ? params.on : null,
+      eventTitle: typeof params.eventId === "string" ? (events.get(params.eventId) ?? null) : null,
       weekly: params.weekly === true,
       progress: readProgress(params.progress),
       resumesOn: typeof params.resumesOn === "string" ? params.resumesOn : null,

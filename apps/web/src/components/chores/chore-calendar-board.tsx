@@ -11,9 +11,9 @@ import {
   byDate,
   choreCalendarQueryString,
   isMovable,
+  choreStateKey,
   itemStates,
   type ChoreCalendarQuery,
-  type ChoreItemState,
 } from "@/chores/calendar";
 import { choresPath } from "@/chores/format";
 import type { DateTimeFormats } from "@/invitations/format";
@@ -52,18 +52,7 @@ export interface VacationDay {
   readonly away: number;
 }
 
-export const stateKey = {
-  overdue: "calendarStateOverdue",
-  pending: "calendarStatePending",
-  rework: "calendarStateRework",
-  completed: "calendarStateCompleted",
-  skipped: "calendarStateSkipped",
-  expired: "calendarStateExpired",
-  paused: "calendarStatePaused",
-  review: "calendarStateReview",
-  awaiting: "calendarStateAwaiting",
-  planned: "calendarStatePlanned",
-} as const satisfies Record<ChoreItemState, string>;
+export const stateKey = choreStateKey;
 
 /**
  * The Chores calendar's grid, agenda and day panel (S21). Every chore shows its state in words.

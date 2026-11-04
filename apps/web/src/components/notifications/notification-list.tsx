@@ -127,6 +127,7 @@ type MessageKey =
   | "kindGoalReminderLead"
   | "kindGoalReminderOverdue"
   | "kindPetCareReminder"
+  | "kindCalendarReminder"
   | "kindVacationReminderPetCare"
   | "kindUnknown";
 
@@ -171,6 +172,8 @@ export function messageKeyFor(
   }
   // S31: a pet-care reminder; a vacation reminder also names the pet care it does not pause.
   if (item.kind === "pet_care.reminder") return "kindPetCareReminder";
+  // S32: an event reminder, with the title only while the reader may see the event.
+  if (item.kind === "calendar.reminder") return "kindCalendarReminder";
   if (item.kind === "vacation.reminder" && (item.petCare ?? 0) > 0) {
     return "kindVacationReminderPetCare";
   }
@@ -249,6 +252,7 @@ export async function NotificationList({
             progress: item.progress ? progressText(item.progress) : "",
             pet: item.petName ? isolate(item.petName) : t("petFallback"),
             care: careName(item),
+            event: item.eventTitle ? isolate(item.eventTitle) : t("eventFallback"),
             count: item.petCare,
             unassigned: item.petCareUnassigned,
           });
@@ -257,15 +261,17 @@ export async function NotificationList({
             item.homeId,
             item.kind === "pet_care.reminder"
               ? { petId: item.petId, activityId: item.careActivityId }
-              : item.taskId
-                ? { taskId: item.taskId }
-                : item.habitId
-                  ? { habitId: item.habitId }
-                  : item.goalId
-                    ? { goalId: item.goalId }
-                    : item.occurrenceId
-                      ? { occurrenceId: item.occurrenceId }
-                      : {},
+              : item.kind === "calendar.reminder"
+                ? { eventId: item.eventId, on: item.eventOn }
+                : item.taskId
+                  ? { taskId: item.taskId }
+                  : item.habitId
+                    ? { habitId: item.habitId }
+                    : item.goalId
+                      ? { goalId: item.goalId }
+                      : item.occurrenceId
+                        ? { occurrenceId: item.occurrenceId }
+                        : {},
           );
           const isUnread = item.readAt === null;
           return (

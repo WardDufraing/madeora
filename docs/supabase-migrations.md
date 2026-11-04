@@ -765,6 +765,32 @@ From here pets can have **care**: feeding, medication, grooming and other care o
 
 2. In the app, open a pet in a Home you own, add care **Breakfast** (Feeding, daily) and a **Medication**. Signed in as a member without pet medical access, the pet's Care section shows Breakfast and only the word "Medication" for the other one; mark Breakfast done, and as the owner its page shows who did it.
 
+## Check S32 calendar (`20261118090000_calendar.sql`)
+
+From here every person and Home has a **Calendar**: personal and Home events, recurring events with the three edit and delete scopes, sharing a personal event with a Home, calendar access levels, Home vacation banners, Show tasks and Show chores, event reminders and an Upcoming events widget. Apply it after the S31 care file. It adds one job kind (`calendar-event-reminder`) to the existing jobs. No new provider or schedule.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.calendar_events') as events_table,
+     to_regclass('private.calendar_event_shares') as shares_table,
+     has_table_privilege('authenticated', 'private.calendar_events', 'select')
+       as members_can_read_events_table,
+     has_function_privilege('authenticated', 'public.list_calendar(date, date, uuid, text)', 'execute')
+       as members_can_read_the_calendar,
+     has_function_privilege('authenticated',
+       'public.deliver_calendar_reminder(uuid, date, timestamp with time zone)', 'execute')
+       as members_can_run_the_job,
+     has_function_privilege('service_role',
+       'public.deliver_calendar_reminder(uuid, date, timestamp with time zone)', 'execute')
+       as the_job_can_run;
+   ```
+
+   It must show both tables, **true** for `members_can_read_the_calendar` and `the_job_can_run`, and **false** for `members_can_read_events_table` and `members_can_run_the_job`.
+
+2. In the app, open **Calendar** in your personal space, add an event and share it with a Home. Signed in as another member of that Home, the Home's calendar shows it with "Shared by" and your name; an event you did not share does not show there at all.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

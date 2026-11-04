@@ -121,6 +121,20 @@ export type ChoreItemState =
   | "awaiting"
   | "planned";
 
+/** The Chores messages that put each state in words. */
+export const choreStateKey = {
+  overdue: "calendarStateOverdue",
+  pending: "calendarStatePending",
+  rework: "calendarStateRework",
+  completed: "calendarStateCompleted",
+  skipped: "calendarStateSkipped",
+  expired: "calendarStateExpired",
+  paused: "calendarStatePaused",
+  review: "calendarStateReview",
+  awaiting: "calendarStateAwaiting",
+  planned: "calendarStatePlanned",
+} as const satisfies Record<ChoreItemState, string>;
+
 export function itemStates(item: ChoreAgendaItem): ChoreItemState[] {
   const states: ChoreItemState[] = [];
   if (item.projected) states.push("planned");

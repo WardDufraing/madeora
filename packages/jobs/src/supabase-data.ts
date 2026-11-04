@@ -54,6 +54,7 @@ const habitSnoozeOutcomes = ["notified", "cancelled", "stale", "not_due"] as con
 const habitPauseEndOutcomes = ["notified", "still_paused", "stale", "not_due"] as const;
 const goalReminderOutcomes = ["notified", "late", "inactive", "stale", "not_due"] as const;
 const petCareReminderOutcomes = ["notified", "late", "inactive", "stale", "not_due"] as const;
+const calendarReminderOutcomes = ["notified", "late", "stale", "not_due"] as const;
 
 function fileStatus(operation: string, value: string | null): StoredFileStatus {
   const status = oneOf(fileStatuses, value);
@@ -309,6 +310,18 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       const { data, error } = await client.rpc("advance_all_pet_care", { p_limit: limit });
       if (error) throw new JobStoreError("advance_all_pet_care", error.code);
       return data;
+    },
+
+    async deliverCalendarReminder(eventId, on, at) {
+      const { data, error } = await client.rpc("deliver_calendar_reminder", {
+        p_event_id: eventId,
+        p_on: on,
+        p_at: at,
+      });
+      if (error) throw new JobStoreError("deliver_calendar_reminder", error.code);
+      const outcome = oneOf(calendarReminderOutcomes, data);
+      if (!outcome) throw new JobStoreError("deliver_calendar_reminder", "unexpected_result");
+      return outcome;
     },
 
     async getStorageObjectDeletion(deletionId) {

@@ -29,6 +29,7 @@ export function useCapabilityLabels(): {
     manageHomeGoals: t("capManageHomeGoals"),
     manageHomePets: t("capManageHomePets"),
     managePetMedicalAccess: t("capManagePetMedicalAccess"),
+    manageHomeCalendar: t("capManageHomeCalendar"),
   };
   const descriptions: { readonly [C in DelegableCapability]: string } = {
     manageHomeSettings: t("capManageHomeSettingsDescription"),
@@ -48,6 +49,7 @@ export function useCapabilityLabels(): {
     manageHomeGoals: t("capManageHomeGoalsDescription"),
     manageHomePets: t("capManageHomePetsDescription"),
     managePetMedicalAccess: t("capManagePetMedicalAccessDescription"),
+    manageHomeCalendar: t("capManageHomeCalendarDescription"),
   };
   return { name: (c) => names[c], description: (c) => descriptions[c] };
 }

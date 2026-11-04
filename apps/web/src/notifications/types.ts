@@ -65,6 +65,13 @@ export interface NotificationView {
   readonly petCare: number;
   readonly petCareUnassigned: number;
   readonly onDate: string | null;
+  /**
+   * An event reminder's event, the occurrence's rule date, and the title read with the viewer's own
+   * access now (S32); null when they may no longer see it.
+   */
+  readonly eventId: string | null;
+  readonly eventOn: string | null;
+  readonly eventTitle: string | null;
   readonly weekly: boolean;
   /** A numeric habit's progress when a reminder was sent (S29); null for other habits. */
   readonly progress: {

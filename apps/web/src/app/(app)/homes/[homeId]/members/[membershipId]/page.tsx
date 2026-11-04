@@ -13,6 +13,7 @@ import { CapabilitiesForm } from "@/components/members/manage/capabilities-form"
 import { MemberRoleForm } from "@/components/members/manage/member-role-form";
 import { NominateOwner } from "@/components/members/manage/nominate-owner";
 import { RemoveMember } from "@/components/members/manage/remove-member";
+import { CalendarAccessForm } from "@/components/calendar/calendar-access-form";
 import { MedicalAccessForm } from "@/components/pets/medical-access-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
@@ -24,6 +25,7 @@ import { getDateTimeFormats } from "@/invitations/server";
 import { getHomeDirectory } from "@/members/directory";
 import { getCapabilityGrants, getOwnershipTransfer } from "@/members/manage-server";
 import { readMedicalAccess } from "@/pets/data";
+import { readCalendarAccess } from "@/calendar/data";
 
 interface MemberPageProps {
   readonly params: Promise<{ readonly homeId: string; readonly membershipId: string }>;
@@ -75,13 +77,16 @@ export default async function MemberPage({ params }: MemberPageProps) {
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
   }
   const { home, membership } = context;
-  const [directory, formats, transfer, medicalAccess, tPets] = await Promise.all([
-    getHomeDirectory(home.id),
-    getDateTimeFormats(),
-    getOwnershipTransfer(home.id),
-    readMedicalAccess(home.id),
-    getTranslations("Pets"),
-  ]);
+  const [directory, formats, transfer, medicalAccess, tPets, calendarAccess, tCalendar] =
+    await Promise.all([
+      getHomeDirectory(home.id),
+      getDateTimeFormats(),
+      getOwnershipTransfer(home.id),
+      readMedicalAccess(home.id),
+      getTranslations("Pets"),
+      readCalendarAccess(home.id),
+      getTranslations("Calendar"),
+    ]);
   if (directory.status === "not-found") redirect(HOME_UNAVAILABLE_PATH);
   if (directory.status === "unavailable") {
     return (
@@ -117,7 +122,14 @@ export default async function MemberPage({ params }: MemberPageProps) {
       ? (medicalAccess.value.members.find((entry) => entry.membershipId === member.membershipId) ??
         null)
       : null;
-  const nothingToDo = !Object.values(can).some(Boolean) && !medical?.canChange;
+  // The Home calendar level (S32): shown only to calendar managers.
+  const calendar =
+    calendarAccess.status === "ok" && calendarAccess.value.canManage
+      ? (calendarAccess.value.members.find((entry) => entry.membershipId === member.membershipId) ??
+        null)
+      : null;
+  const nothingToDo =
+    !Object.values(can).some(Boolean) && !medical?.canChange && !calendar?.canChange;
 
   return (
     <>
@@ -196,6 +208,26 @@ export default async function MemberPage({ params }: MemberPageProps) {
             ) : (
               <p className="text-body text-fg-muted" data-testid="pet-access-fixed">
                 {medical.role === "owner" ? tPets("accessOwner") : tPets("accessFixed")}
+              </p>
+            )}
+          </Card>
+        ) : null}
+
+        {calendar ? (
+          <Card
+            title={tCalendar("accessSection")}
+            description={tCalendar("accessSectionHint", { name })}
+          >
+            {calendar.canChange && calendar.level !== "manage" ? (
+              <CalendarAccessForm
+                homeId={home.id}
+                membershipId={member.membershipId}
+                memberName={name}
+                level={calendar.level}
+              />
+            ) : (
+              <p className="text-body text-fg-muted" data-testid="calendar-access-fixed">
+                {tCalendar("accessFixed")}
               </p>
             )}
           </Card>

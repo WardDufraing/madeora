@@ -48,6 +48,7 @@ const paramsSchema = z.object({
   automatic: z.boolean().nullable().optional(),
   reminder: z.enum(["lead", "overdue"]).optional(),
   petCare: z.int().min(0).optional(),
+  onDate: z.iso.date().optional(),
 });
 
 /** The template for a kind whose wording depends on a parameter (the decision, the reason). */
@@ -57,7 +58,9 @@ function emailKind(kind: string, inHome: boolean, params: z.infer<typeof paramsS
     return `${kind}.${inHome ? "home" : "personal"}${params.dueDate ? "_due" : ""}`;
   }
   if (kind === "chore.claim_released" && params.reason) return `${kind}.${params.reason}`;
-  if (kind === "habit.reminder") return `${kind}.${inHome ? "home" : "personal"}`;
+  if (kind === "habit.reminder" || kind === "calendar.reminder") {
+    return `${kind}.${inHome ? "home" : "personal"}`;
+  }
   if (kind === "habit.paused") return `${kind}.${params.resumesOn ? "dated" : "open"}`;
   if (kind === "habit.resumed") return `${kind}.${params.automatic ? "ended" : "manual"}`;
   if (kind === "goal.reminder") {
@@ -120,7 +123,7 @@ export async function buildNotificationEmail(
     homeName,
     url,
     date: endsAt,
-    day: params.data.dueDate ?? params.data.resumesOn ?? null,
+    day: params.data.dueDate ?? params.data.resumesOn ?? params.data.onDate ?? null,
     timeZone,
   });
 }

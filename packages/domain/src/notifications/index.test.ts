@@ -62,6 +62,13 @@ describe("notificationPath", () => {
     );
     expect(notificationPath("pet_care.reminder", "h1", { petId })).toBe(`/homes/h1/pets/${petId}`);
     expect(notificationPath("pet_care.reminder", "h1", {})).toBe("/homes/h1/pets");
+    expect(notificationPath("calendar.reminder", "h1", { eventId: "e1", on: "2026-11-17" })).toBe(
+      "/homes/h1/calendar/events/e1?on=2026-11-17",
+    );
+    expect(notificationPath("calendar.reminder", null, { eventId: "e1", on: "soon" })).toBe(
+      "/calendar/events/e1",
+    );
+    expect(notificationPath("calendar.reminder", null, {})).toBe("/calendar");
   });
 
   it("leads a claim or reassignment notice to its occurrence, or to the chores page", () => {
@@ -152,7 +159,8 @@ describe("notificationKinds", () => {
           name.endsWith("_points_rewards.sql") ||
           name.endsWith("_habits.sql") ||
           name.endsWith("_goals.sql") ||
-          name.endsWith("_pet_care.sql"),
+          name.endsWith("_pet_care.sql") ||
+          name.endsWith("_calendar.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -160,9 +168,9 @@ describe("notificationKinds", () => {
     // notification category count.
     const written = new Set([
       ...[...sql.matchAll(/'((?:recovery|join_request|storage)\.[a-z_]+)'/g)].map((m) => m[1]),
-      ...[...sql.matchAll(/'reminders', '((?:task|chore|habit|goal|pet_care)\.[a-z_]+)'/g)].map(
-        (m) => m[1],
-      ),
+      ...[
+        ...sql.matchAll(/'reminders', '((?:task|chore|habit|goal|pet_care|calendar)\.[a-z_]+)'/g),
+      ].map((m) => m[1]),
       ...[...sql.matchAll(/'approvals', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'chores', '(chore\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/'(?:chores|reminders)', '(vacation\.[a-z_]+)'/g)].map((m) => m[1]),

@@ -286,6 +286,18 @@ const petCareConfig = z.strictObject({
   count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
 });
 
+/**
+ * The Upcoming events widget (S32; MOD §4.2, PS L427): the next 3, 5 or 10 calendar occurrences of
+ * its context within 7, 14 or 30 days. Personal: the viewer's own personal events; Home and source
+ * Home: Home events and personal events shared with that Home. Never anyone's unshared event.
+ */
+export const upcomingEventsDays = [7, 14, 30] as const;
+export const upcomingEventsCounts = [3, 5, 10] as const;
+const upcomingEventsConfig = z.strictObject({
+  days: z.union([z.literal(7), z.literal(14), z.literal(30)]).default(7),
+  count: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(5),
+});
+
 const habitSizes = sizes(
   { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
   { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
@@ -454,6 +466,15 @@ export const widgetRegistry = {
     sizes: choreSizes,
     config: petCareConfig,
   },
+  "upcoming-events": {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: sizes(
+      { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 8 },
+      { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 8 },
+      { h: 4, minH: 3, maxH: 8 },
+    ),
+    config: upcomingEventsConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -485,6 +506,7 @@ export interface WidgetConfigs {
   readonly goals: WidgetConfig<"goals">;
   readonly "goal-progress": WidgetConfig<"goal-progress">;
   readonly "pet-care": WidgetConfig<"pet-care">;
+  readonly "upcoming-events": WidgetConfig<"upcoming-events">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

@@ -17,6 +17,7 @@ export const trashModules = [
   "habits",
   "goals",
   "pets",
+  "calendar",
 ] as const;
 export type TrashModule = (typeof trashModules)[number];
 export const trashItemTypes = [
@@ -42,6 +43,7 @@ export const trashItemTypes = [
   "pet_medical_entry",
   "pet_medical_attachment",
   "pet_care_activity",
+  "calendar_event",
 ] as const;
 export type TrashItemType = (typeof trashItemTypes)[number];
 

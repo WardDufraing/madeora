@@ -86,6 +86,8 @@ describe("widget registry", () => {
       { type: "goal-progress", needsSource: false },
       { type: "goal-progress", needsSource: true },
       { type: "pet-care", needsSource: true },
+      { type: "upcoming-events", needsSource: false },
+      { type: "upcoming-events", needsSource: true },
     ]);
     expect(catalogueFor("home").map((entry) => entry.type)).toEqual([
       "welcome",
@@ -109,6 +111,7 @@ describe("widget registry", () => {
       "goals",
       "goal-progress",
       "pet-care",
+      "upcoming-events",
     ]);
   });
 
@@ -341,7 +344,7 @@ describe("editing", () => {
       widgets: layout.widgets.map((w) => (w.type === "welcome" ? { ...w, hidden: true } : w)),
     };
     const visible = visiblePlacements(hidden, "sm");
-    expect(visible).toHaveLength(3);
+    expect(visible).toHaveLength(4);
     expect(visible[0]).toMatchObject({ y: 0 });
   });
 

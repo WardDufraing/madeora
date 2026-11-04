@@ -19,6 +19,8 @@ import {
   recipeWidgetModes,
   parseConfig,
   defaultConfig,
+  upcomingEventsCounts,
+  upcomingEventsDays,
   weeklyPointsViews,
   widgetRegistry,
 } from "@/dashboard/widgets";
@@ -301,6 +303,33 @@ export function WidgetSettings({
         />
       );
     }
+    case "upcoming-events":
+      return (
+        <div className="flex flex-col gap-4">
+          <SelectField
+            label={t("settingUpcomingDays")}
+            value={String(config.days)}
+            options={upcomingEventsDays.map((days) => ({
+              value: String(days),
+              label: t("settingUpcomingDaysOption", { days }),
+            }))}
+            onChange={(event) => {
+              set("days", Number(event.currentTarget.value));
+            }}
+          />
+          <SelectField
+            label={t("settingUpcomingCount")}
+            value={String(config.count)}
+            options={upcomingEventsCounts.map((count) => ({
+              value: String(count),
+              label: t("settingCountOption", { count }),
+            }))}
+            onChange={(event) => {
+              set("count", Number(event.currentTarget.value));
+            }}
+          />
+        </div>
+      );
     case "goals":
       return (
         <SelectField

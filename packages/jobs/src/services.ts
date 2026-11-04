@@ -136,6 +136,12 @@ export interface JobDataPort {
    * reminders); how many it created.
    */
   advancePetCare(limit: number): Promise<number>;
+  /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
+  deliverCalendarReminder(
+    eventId: string,
+    on: string,
+    at: string,
+  ): Promise<CalendarReminderOutcome>;
 }
 
 export type HabitReminderOutcome =
@@ -150,6 +156,8 @@ export type GoalReminderKind = "lead" | "overdue";
 export type GoalReminderOutcome = "notified" | "late" | "inactive" | "stale" | "not_due";
 
 export type PetCareReminderOutcome = "notified" | "late" | "inactive" | "stale" | "not_due";
+
+export type CalendarReminderOutcome = "notified" | "late" | "stale" | "not_due";
 
 export type ChoreClaimReleaseOutcome = "released" | "stale" | "missing";
 
