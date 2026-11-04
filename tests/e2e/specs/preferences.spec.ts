@@ -103,8 +103,12 @@ test("the display name is saved on the account: after a reload and on another de
   const account = await newAdult(page, baseURL);
   await page.goto("/settings");
   const field = page.getByRole("textbox", { name: "Display name" });
+  // Save stays disabled until the form has hydrated. Filling before that is wiped when the
+  // field receives its saved value, and a click then sends nothing.
+  const saveProfile = saveIn(page, "Profile");
+  await expect(saveProfile).toBeEnabled();
   await field.fill("  Sam Example  ");
-  await saveIn(page, "Profile").click();
+  await saveProfile.click();
   await expect(page.getByRole("status").filter({ hasText: "Display name saved." })).toBeVisible();
 
   await page.reload();
@@ -116,10 +120,13 @@ test("the display name is saved on the account: after a reload and on another de
   await expect(other.page.getByText("Welcome, \u2068Sam Example\u2069")).toBeVisible();
   await other.context.close();
 
-  // Emptying the field removes the name.
+  // Emptying the field removes the name. Wait until the saved name is in the field: a fill
+  // before hydration is replaced by it, the form is unchanged, and no confirmation appears.
   await page.goto("/settings");
+  await expect(saveProfile).toBeEnabled();
+  await expect(field).toHaveValue("Sam Example");
   await field.fill("");
-  await saveIn(page, "Profile").click();
+  await saveProfile.click();
   await expect(page.getByRole("status").filter({ hasText: "Display name saved." })).toBeVisible();
   await page.goto("/");
   await expect(page.getByText("Welcome to Madeora")).toBeVisible();

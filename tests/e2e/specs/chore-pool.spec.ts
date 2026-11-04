@@ -154,7 +154,11 @@ test("the pool: live claims, one winner, Undo, release and a handover", async ({
   await expect(request).toContainText("Water the plants");
   await expect(request).toContainText("Away this weekend");
   expect(await axeViolations(page)).toEqual([]);
-  await request.getByRole("button", { name: "Accept taking over Water the plants" }).click();
+  // Disabled until hydration. The answer is announced in the shell, so the refresh that
+  // removes this row cannot drop it.
+  const accept = request.getByRole("button", { name: "Accept taking over Water the plants" });
+  await expect(accept).toBeEnabled();
+  await accept.click();
   await expect(page.getByText("Accepted: Water the plants is yours now.").first()).toBeVisible();
   await page.goto(`${base}/${waterId}`);
   await expect(page.getByTestId("chore-assignees")).toContainText("you");

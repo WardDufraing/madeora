@@ -1,4 +1,4 @@
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 
 import { registerConfirmed, signIn, type Account } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
@@ -15,6 +15,19 @@ test.use({
   // The browser logs the deliberate refusals (a stranger's view of a file).
   allowedConsoleErrors: [/status of (403|404)/],
 });
+
+/** The checkbox ticks at once; the reload must wait until the completion has been stored. */
+async function checkAndSave(page: Page, checkbox: Locator): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      response.url().includes("/api/v1/tasks/") &&
+      response.url().endsWith("/completion") &&
+      response.ok(),
+  );
+  await checkbox.check();
+  await saved;
+}
 
 // A tiny real PNG (one pixel) and a minimal PDF.
 const PNG = Buffer.from(
@@ -212,7 +225,7 @@ test("tasks widget and calendar: filter, complete from the widget and from a day
   await expect(page.getByTestId("dashboard-editor")).toHaveCount(0);
   await expect(widget.getByTestId("task-widget-scope")).toContainText("Priority: High");
   await expect(widget.getByTestId("compact-task")).toHaveCount(1);
-  await widget.getByRole("checkbox", { name: "Completed: Call the plumber" }).check();
+  await checkAndSave(page, widget.getByRole("checkbox", { name: "Completed: Call the plumber" }));
   await page.goto("/tasks?status=all");
   await expect(page.getByTestId("task-row").filter({ hasText: "Call the plumber" })).toContainText(
     "Completed",
@@ -227,7 +240,7 @@ test("tasks widget and calendar: filter, complete from the widget and from a day
   await expect(day).toContainText("Done");
   await day.getByRole("link").click();
   const panel = page.getByTestId("calendar-day-panel");
-  await panel.getByRole("checkbox", { name: "Completed: Sort the post" }).check();
+  await checkAndSave(page, panel.getByRole("checkbox", { name: "Completed: Sort the post" }));
   await page.reload();
   await expect(
     page.getByTestId("calendar-day-panel").getByRole("checkbox", {
