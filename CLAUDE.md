@@ -156,7 +156,7 @@ Require green checks before merge. Separate production environment/secrets and r
 
 ## Definition of done
 
-A change is done only when: acceptance criteria are met; tests are added and pass; security/privacy and accessibility are checked; migration and rollback implications are documented; the independent agent returns PASS on the final diff; CI passes; the PR has required human approval; and no prohibited files were changed. For a commit the owner pushes under the docs-only exception, that review verdict and that PR approval do not apply; the commit is done when that section's path rule and `docs:` message are met. Every other change still needs the verdict and the approval.
+A change is done only when: acceptance criteria are met; tests are added and pass; security/privacy and accessibility are checked; migration and rollback implications are documented; the independent agent returns PASS on the final diff; CI passes; the PR has required human approval; and no prohibited files were changed. For a commit the owner pushes under the docs-only exception, only that review verdict and that PR approval do not apply. Mandatory-workflow steps 1–5 still apply, and so do the other conditions in the sentence above (acceptance criteria, passing tests, security, privacy, accessibility, documented migration and rollback implications, green CI, and no prohibited files changed), together with that section's path rule and `docs:` message. Every other change still needs the verdict and the approval.
 
 ## Required output at the end of each implementation task
 
