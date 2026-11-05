@@ -1,4 +1,11 @@
-import { PHOTOS_DELETE_ENDPOINT, albumEndpoint, PHOTO_ALBUMS_ENDPOINT } from "./api";
+import {
+  PHOTOS_DELETE_ENDPOINT,
+  PHOTO_DELETION_IMPACT_ENDPOINT,
+  albumEndpoint,
+  PHOTO_ALBUMS_ENDPOINT,
+} from "./api";
+import type { AlbumShareAccess } from "./schema";
+import type { DeletionImpact } from "./shapes";
 
 /** Why a photo or album change did not happen, for the interface to translate. */
 export type PhotoRequestFailure =
@@ -79,3 +86,16 @@ export const addToAlbum = (albumId: string, photoIds: readonly string[]) =>
 
 export const removeFromAlbum = (albumId: string, photoIds: readonly string[]) =>
   send<{ removed: number }>("DELETE", albumEndpoint(albumId, "photos"), { photoIds });
+
+export const shareAlbum = (
+  albumId: string,
+  shares: readonly { readonly homeId: string; readonly access: AlbumShareAccess }[],
+) => send<{ shareCount: number }>("POST", albumEndpoint(albumId, "shares"), { shares });
+
+/** Ends the album's share with one Home; never deletes a photo. */
+export const unshareAlbum = (albumId: string, homeId: string) =>
+  send<object>("DELETE", albumEndpoint(albumId, "shares"), { homeId });
+
+export const readDeletionImpact = async (photoIds: readonly string[]) =>
+  (await send<{ impact: DeletionImpact }>("POST", PHOTO_DELETION_IMPACT_ENDPOINT, { photoIds }))
+    .impact;

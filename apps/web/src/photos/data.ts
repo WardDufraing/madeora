@@ -6,7 +6,16 @@ import { createSupabaseServerClient } from "@/auth/supabase-server";
 
 import { logPhotos } from "./log";
 import { PHOTO_LIMITS } from "./schema";
-import { libraryPageSchema, photoDetailSchema, type LibraryPage, type PhotoDetail } from "./shapes";
+import {
+  deletionImpactShape,
+  libraryPageSchema,
+  photoDetailSchema,
+  widgetPhotosShape,
+  type DeletionImpact,
+  type LibraryPage,
+  type PhotoDetail,
+  type WidgetPhotos,
+} from "./shapes";
 
 /**
  * Server reads of photo libraries (S35), always with the signed-in person's own Supabase session:
@@ -61,4 +70,39 @@ export async function readPhoto(photoId: string): Promise<Read<PhotoDetail>> {
   const { data, error } = await supabase.rpc("get_photo", { p_photo_id: photoId });
   if (error) return failed("photos.read_failed", error);
   return parsed("photos.read_failed", photoDetailSchema, data);
+}
+
+/**
+ * What deleting these photos from their library would affect (S36), for the confirmation. Changes
+ * nothing; names only what the viewer may see.
+ */
+export async function readDeletionImpact(
+  photoIds: readonly string[],
+): Promise<Read<DeletionImpact>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("photo_deletion_impact", {
+    p_photo_ids: [...photoIds],
+  });
+  if (error) return failed("photos.impact_failed", error);
+  return parsed("photos.impact_failed", deletionImpactShape, data);
+}
+
+/**
+ * The photos a photo widget shows to this viewer now (S36), in its context (`homeId` null: the
+ * personal dashboard): an album, or hand-picked photos in their order. Not found when the viewer is
+ * not in the Home; an album that cannot be used here answers `available: false`, never a substitute.
+ */
+export async function readWidgetPhotos(
+  homeId: string | null,
+  source: { readonly albumId: string } | { readonly photoIds: readonly string[] },
+): Promise<Read<WidgetPhotos>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("resolve_photo_widget", {
+    // The generated types read every parameter as required; null means "not this one".
+    p_home_id: homeId as string,
+    p_album_id: ("albumId" in source ? source.albumId : null) as string,
+    p_photo_ids: ("photoIds" in source ? [...source.photoIds] : null) as string[],
+  });
+  if (error) return failed("photos.widget_failed", error);
+  return parsed("photos.widget_failed", widgetPhotosShape, data);
 }

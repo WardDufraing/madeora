@@ -14,9 +14,11 @@ import {
   PhotoRequestError,
   removeFromAlbum,
   renameAlbum,
+  shareAlbum,
+  unshareAlbum,
 } from "@/photos/request";
 import { PHOTO_LIMITS, photoUploadTypes } from "@/photos/schema";
-import type { LibraryPage, Photo } from "@/photos/shapes";
+import type { AlbumTarget, LibraryPage, Photo } from "@/photos/shapes";
 import { checkPhotoFile, PhotoUploadError, uploadPhoto } from "@/photos/upload";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,6 +27,9 @@ import { SelectField } from "@/components/ui/select-field";
 import { EmptyState } from "@/components/ui/states";
 import { TextField } from "@/components/ui/text-field";
 
+import { AlbumSharing } from "./album-sharing";
+import { LibraryDeleteDialog } from "./library-delete-dialog";
+
 export interface PhotosViewProps {
   /** The Home whose library this is; null for the person's personal library. */
   readonly homeId: string | null;
@@ -32,6 +37,8 @@ export interface PhotosViewProps {
   readonly offset: number;
   /** Whether uploads are possible here (storage is configured). */
   readonly uploadsEnabled: boolean;
+  /** The Homes the viewer belongs to, as sharing destinations (S36). */
+  readonly homes: readonly { readonly id: string; readonly name: string }[];
 }
 
 function nameOf(data: FormData): string {
@@ -48,9 +55,11 @@ interface UploadRow {
 /**
  * A photo library (S35): the grid of photos, upload with progress and per-file failures, albums
  * (a photo may be in many; taking it out of an album never deletes it), and moving photos to the
- * trash. Everything here only offers; the database decides every action again.
+ * trash. S36 adds albums shared with other Homes (sharing, contributions, "Remove from this Home"),
+ * and keeps "Remove from this album" apart from "Delete from library", which previews its impact
+ * first. Everything here only offers; the database decides every action again.
  */
-export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosViewProps) {
+export function PhotosView({ homeId, library, offset, uploadsEnabled, homes }: PhotosViewProps) {
   const t = useTranslations("Photos");
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
@@ -60,17 +69,22 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
   const [uploads, setUploads] = useState<readonly UploadRow[]>([]);
   const [message, setMessage] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState<readonly string[] | null>(null);
+  const [confirmingTarget, setConfirmingTarget] = useState<AlbumTarget | null>(null);
+  const [confirmingUnshare, setConfirmingUnshare] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [confirmingAlbumDelete, setConfirmingAlbumDelete] = useState(false);
   const [viewing, setViewing] = useState<Photo | null>(null);
   const [targetAlbum, setTargetAlbum] = useState("");
   const [busy, setBusy] = useState(false);
 
   const owner = homeId ? ({ scope: "home", homeId } as const) : ({ scope: "personal" } as const);
-  const album = library.albumId
-    ? (library.albums.find((candidate) => candidate.id === library.albumId) ?? null)
-    : null;
+  const album = library.album;
+  const canEditAlbum = album?.access === "edit" && album.owned;
   const selectedIds = [...selected];
+  const selectedPhotos = library.photos.filter((photo) => selected.has(photo.id));
+  const removable = selectedPhotos.filter((photo) => photo.canRemove === true).map((p) => p.id);
+  const deletable = selectedPhotos.filter((photo) => photo.canDelete).map((photo) => photo.id);
 
   function refresh() {
     startTransition(() => {
@@ -221,7 +235,24 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
   const hasPrevious = offset > 0;
   const hasNext = offset + library.photos.length < library.total;
   const accept = [...photoUploadTypes, ".heic", ".heif"].join(",");
-  const otherAlbums = library.albums.filter((candidate) => candidate.id !== library.albumId);
+  const targets = library.targets.filter((candidate) => candidate.id !== library.albumId);
+  const chosenTarget = targets.find((candidate) => candidate.id === targetAlbum) ?? null;
+
+  function removeSelected() {
+    if (!album) return;
+    const albumId = album.id;
+    void run(async () => {
+      await removeFromAlbum(albumId, removable);
+      return t("removedFromAlbum");
+    });
+  }
+
+  function addToTarget(target: AlbumTarget) {
+    void run(async () => {
+      await addToAlbum(target.id, selectedIds);
+      return t("addedToAlbum");
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6" data-testid="photos-view">
@@ -243,6 +274,28 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
           >
             <bdi>{candidate.name}</bdi>{" "}
             <span className="text-fg-muted">({candidate.photoCount})</span>
+            {candidate.shareCount > 0 ? (
+              <span className="text-fg-muted"> · {t("sharedBadge")}</span>
+            ) : null}
+          </Link>
+        ))}
+        {library.sharedAlbums.map((candidate) => (
+          <Link
+            key={candidate.id}
+            href={photosPath(homeId, { albumId: candidate.id })}
+            aria-current={library.albumId === candidate.id ? "page" : undefined}
+            data-testid="shared-album-link"
+            className="rounded-control border border-dashed border-line-control px-3 py-1.5 text-helper aria-[current=page]:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            <bdi>{candidate.name}</bdi>{" "}
+            <span className="text-fg-muted">({candidate.photoCount})</span>
+            <span className="text-fg-muted">
+              {" "}
+              ·{" "}
+              {candidate.ownerHomeName
+                ? t("sharedFromHome", { home: candidate.ownerHomeName })
+                : t("sharedFromPerson")}
+            </span>
           </Link>
         ))}
       </nav>
@@ -314,7 +367,33 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
           <h2 id={`${statusId}-album`} className="text-section-title font-semibold">
             <bdi>{album.name}</bdi>
           </h2>
-          {album.canEdit ? (
+          {!album.owned ? (
+            <p className="text-helper text-fg-muted" data-testid="shared-album-note">
+              {album.ownerHomeName
+                ? t("sharedAlbumNoteHome", { home: album.ownerHomeName })
+                : t("sharedAlbumNotePerson")}{" "}
+              {t(album.canContribute ? "sharedAlbumCanAdd" : "sharedAlbumViewOnly")}
+            </p>
+          ) : album.shareCount > 0 && !album.canShare ? (
+            <p className="text-helper text-fg-muted">
+              {t("sharedWithCount", { count: album.shareCount })}
+            </p>
+          ) : null}
+          {album.canRemoveShare && homeId ? (
+            <div>
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingUnshare(true);
+                }}
+                data-testid="album-remove-from-home"
+              >
+                {t("removeFromHome")}
+              </Button>
+            </div>
+          ) : null}
+          {canEditAlbum ? (
             <div className="flex flex-wrap items-end gap-2">
               <form onSubmit={onRenameAlbum} className="flex items-end gap-2" key={album.revision}>
                 <TextField
@@ -339,6 +418,25 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
               </Button>
             </div>
           ) : null}
+          {album.canShare && album.owned ? (
+            <AlbumSharing
+              album={album}
+              homes={homes.filter((home) => home.id !== homeId)}
+              busy={busy}
+              onShare={(shares) => {
+                void run(async () => {
+                  await shareAlbum(album.id, shares);
+                  return t("sharingSaved");
+                });
+              }}
+              onUnshare={(home) => {
+                void run(async () => {
+                  await unshareAlbum(album.id, home);
+                  return t("sharingStopped");
+                });
+              }}
+            />
+          ) : null}
         </section>
       ) : null}
 
@@ -349,7 +447,7 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
           aria-label={t("selectionActions")}
         >
           <p className="text-body font-semibold">{t("selected", { count: selectedIds.length })}</p>
-          {otherAlbums.length > 0 ? (
+          {targets.length > 0 ? (
             <>
               <SelectField
                 label={t("addToAlbumLabel")}
@@ -359,49 +457,56 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
                 }}
                 options={[
                   { value: "", label: t("chooseAlbum") },
-                  ...otherAlbums
-                    .filter((candidate) => candidate.canEdit)
-                    .map((candidate) => ({ value: candidate.id, label: candidate.name })),
+                  ...targets.map((candidate) => ({
+                    value: candidate.id,
+                    label: candidate.shared
+                      ? t("targetShared", {
+                          album: candidate.name,
+                          owner: candidate.ownerHomeName ?? t("targetPersonal"),
+                        })
+                      : candidate.name,
+                  })),
                 ]}
               />
               <Button
                 variant="secondary"
-                disabled={busy || targetAlbum === ""}
+                disabled={busy || chosenTarget === null}
                 onClick={() => {
-                  void run(async () => {
-                    await addToAlbum(targetAlbum, selectedIds);
-                    return t("addedToAlbum");
-                  });
+                  if (!chosenTarget) return;
+                  if (chosenTarget.shared) setConfirmingTarget(chosenTarget);
+                  else addToTarget(chosenTarget);
                 }}
               >
                 {t("addToAlbum")}
               </Button>
             </>
           ) : null}
-          {album?.canEdit ? (
+          {album && removable.length > 0 ? (
             <Button
               variant="secondary"
               disabled={busy}
+              data-testid="photos-remove-from-album"
               onClick={() => {
-                void run(async () => {
-                  await removeFromAlbum(album.id, selectedIds);
-                  return t("removedFromAlbum");
-                });
+                // In an album others see through a share, say first who loses these photos.
+                if (!album.owned || album.shareCount > 0) setConfirmingRemove(true);
+                else removeSelected();
               }}
             >
               {t("removeFromAlbum")}
             </Button>
           ) : null}
-          <Button
-            variant="destructive"
-            disabled={busy}
-            onClick={() => {
-              setConfirmingDelete(true);
-            }}
-            data-testid="photos-delete"
-          >
-            {t("delete")}
-          </Button>
+          {deletable.length > 0 ? (
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setDeleting(deletable);
+              }}
+              data-testid="photos-delete"
+            >
+              {t("deleteFromLibrary")}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -508,20 +613,102 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
         ) : null}
       </Dialog>
 
-      <Dialog
-        open={confirmingDelete}
+      <LibraryDeleteDialog
+        photoIds={deleting}
+        busy={busy}
         onClose={() => {
-          setConfirmingDelete(false);
+          setDeleting(null);
         }}
-        title={t("deleteTitle", { count: selectedIds.length })}
-        description={t("deleteDescription")}
+        onConfirm={(photoIds) => {
+          setDeleting(null);
+          void run(async () => {
+            const result = await deletePhotos(photoIds);
+            return result.skipped > 0
+              ? t("deletedSome", { deleted: result.deleted, skipped: result.skipped })
+              : t("deleted", { count: result.deleted });
+          });
+        }}
+      />
+
+      <Dialog
+        open={confirmingTarget !== null}
+        onClose={() => {
+          setConfirmingTarget(null);
+        }}
+        title={t("addSharedTitle", { album: confirmingTarget?.name ?? "" })}
+        description={t("addSharedDescription")}
         closeLabel={t("close")}
         footer={
           <>
             <Button
               variant="secondary"
               onClick={() => {
-                setConfirmingDelete(false);
+                setConfirmingTarget(null);
+              }}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              loading={busy}
+              data-testid="add-shared-confirm"
+              onClick={() => {
+                const target = confirmingTarget;
+                setConfirmingTarget(null);
+                if (target) addToTarget(target);
+              }}
+            >
+              {t("addToAlbum")}
+            </Button>
+          </>
+        }
+      />
+
+      <Dialog
+        open={confirmingRemove}
+        onClose={() => {
+          setConfirmingRemove(false);
+        }}
+        title={t("removeSharedTitle", { count: removable.length })}
+        description={t("removeSharedDescription")}
+        closeLabel={t("close")}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirmingRemove(false);
+              }}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              loading={busy}
+              data-testid="remove-shared-confirm"
+              onClick={() => {
+                setConfirmingRemove(false);
+                removeSelected();
+              }}
+            >
+              {t("removeFromAlbum")}
+            </Button>
+          </>
+        }
+      />
+
+      <Dialog
+        open={confirmingUnshare}
+        onClose={() => {
+          setConfirmingUnshare(false);
+        }}
+        title={t("removeFromHomeTitle")}
+        description={t("removeFromHomeDescription")}
+        closeLabel={t("close")}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirmingUnshare(false);
               }}
             >
               {t("cancel")}
@@ -529,18 +716,18 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled }: PhotosVi
             <Button
               variant="destructive"
               loading={busy}
-              data-testid="photos-delete-confirm"
+              data-testid="album-remove-from-home-confirm"
               onClick={() => {
-                setConfirmingDelete(false);
+                setConfirmingUnshare(false);
+                if (!album || !homeId) return;
                 void run(async () => {
-                  const result = await deletePhotos(selectedIds);
-                  return result.skipped > 0
-                    ? t("deletedSome", { deleted: result.deleted, skipped: result.skipped })
-                    : t("deleted", { count: result.deleted });
+                  await unshareAlbum(album.id, homeId);
+                  router.push(photosPath(homeId));
+                  return t("removedFromHome");
                 });
               }}
             >
-              {t("delete")}
+              {t("removeFromHome")}
             </Button>
           </>
         }

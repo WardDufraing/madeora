@@ -202,6 +202,12 @@ describe("message dictionaries", () => {
       // Vacation states, changes, reasons, decisions, events and participant actions, looked up
       // by the value the database answers (S22).
       // The shopping repeat frequencies and list access modes (S26).
+      Photos: [
+        ...withPrefix("access_", ["view", "contribute"]),
+        ...withPrefix("widgetSource_", ["photo", "photos", "album"]),
+        ...withPrefix("widgetMode_", ["static", "slideshow"]),
+        ...withPrefix("widgetFit_", ["contain", "cover"]),
+      ],
       Shopping: [
         ...withPrefix("frequency_", ["daily", "weekly", "monthly"]),
         ...withPrefix("access_", ["edit", "check", "view"]),

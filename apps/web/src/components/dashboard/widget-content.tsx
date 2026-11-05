@@ -22,6 +22,7 @@ import {
 import { GoalProgressWidget, GoalsWidget } from "@/components/goals/goal-widgets";
 import { PetCareWidget } from "@/components/pets/pet-care-widget";
 import { UpcomingEventsWidget } from "@/components/calendar/upcoming-events-widget";
+import { PhotoWidget } from "@/components/photos/photo-widget";
 import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
@@ -834,6 +835,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "goal-progress": t("widgetGoalProgress"),
     "pet-care": t("widgetPetCare"),
     "upcoming-events": t("widgetUpcomingEvents"),
+    photos: t("widgetPhotos"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -1143,6 +1145,38 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: titles["upcoming-events"], home: isolate(home.name) }),
         sourceName: home.name,
         body: <UpcomingEventsWidget home={home} config={config} formats={scope.formats} />,
+        unavailable: false,
+      };
+    }
+    case "photos": {
+      const parsed = widgetRegistry.photos.config.safeParse(widget.config);
+      const config = parsed.success ? parsed.data : widgetRegistry.photos.config.parse({});
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles.photos,
+          sourceName: null,
+          body: <PhotoWidget homeId={scope.home.id} config={config} />,
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: t("widgetPersonalPhotos"),
+          sourceName: null,
+          body: <PhotoWidget homeId={null} config={config} />,
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles.photos, home: isolate(home.name) }),
+        sourceName: home.name,
+        body: <PhotoWidget homeId={home.id} config={config} />,
         unavailable: false,
       };
     }

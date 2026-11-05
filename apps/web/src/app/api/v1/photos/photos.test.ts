@@ -237,6 +237,9 @@ describe("the library", () => {
     total: 0,
     photos: [],
     albums: [],
+    album: null,
+    sharedAlbums: [],
+    targets: [],
   };
 
   it("answers a page, and 404 for a library the person may not see", async () => {

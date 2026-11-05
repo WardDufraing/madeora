@@ -27,6 +27,7 @@ import {
 
 import { GoalProgressWidgetSettings } from "@/components/goals/goal-widget-settings";
 import { PetCareWidgetSettings } from "@/components/pets/pet-care-widget-settings";
+import { PhotoWidgetSettings } from "@/components/photos/photo-widget-settings";
 import { HabitInsightsWidgetSettings } from "@/components/habits/habit-insights-widget-settings";
 import { ShoppingWidgetSettings } from "@/components/shopping/shopping-widget-settings";
 
@@ -344,6 +345,16 @@ export function WidgetSettings({
           }}
         />
       );
+    case "photos": {
+      const parsed = widgetRegistry.photos.config.safeParse(widget.config);
+      return (
+        <PhotoWidgetSettings
+          config={parsed.success ? parsed.data : widgetRegistry.photos.config.parse({})}
+          homeId={contextHomeId}
+          onChange={onChange}
+        />
+      );
+    }
     case "pet-care": {
       const parsed = widgetRegistry["pet-care"].config.safeParse(widget.config);
       return (
