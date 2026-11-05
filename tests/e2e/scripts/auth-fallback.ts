@@ -90,6 +90,26 @@ function run(
   return result.stdout;
 }
 
+/** Runs a command that needs the network again when it fails (the Go module proxy drops streams now and then). */
+function runWithRetry(
+  command: string,
+  args: readonly string[],
+  options: Parameters<typeof run>[2] = {},
+  attempts = 3,
+): string {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return run(command, args, options);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      log(
+        `${command} ${args[0] ?? ""} failed (attempt ${String(attempt)} of ${String(attempts)}); trying again`,
+      );
+      spawnSync("sleep", [String(attempt * 5)]);
+    }
+  }
+}
+
 /** Builds GoTrue and Mailpit once with Go (downloaded through the Go module proxy) and caches them. */
 function ensureBinaries(): { gotrue: string; migrations: string; mailpit: string } {
   const gotrueDir = join(cacheDir, `gotrue-${GOTRUE_COMMIT.slice(0, 12)}`);
@@ -103,10 +123,14 @@ function ensureBinaries(): { gotrue: string; migrations: string; mailpit: string
       `building Supabase Auth (GoTrue ${GOTRUE_COMMIT.slice(0, 12)}); this takes a few minutes once`,
     );
     const info = JSON.parse(
-      run("go", ["mod", "download", "-json", `github.com/supabase/auth@${GOTRUE_COMMIT}`], {
-        cwd: tmpdir(),
-        env: goEnv,
-      }),
+      runWithRetry(
+        "go",
+        ["mod", "download", "-json", `github.com/supabase/auth@${GOTRUE_COMMIT}`],
+        {
+          cwd: tmpdir(),
+          env: goEnv,
+        },
+      ),
     ) as { Dir: string };
     rmSync(gotrueDir, { recursive: true, force: true });
     mkdirSync(dirname(gotrueDir), { recursive: true });
@@ -119,16 +143,20 @@ function ensureBinaries(): { gotrue: string; migrations: string; mailpit: string
       goMod,
       readFileSync(goMod, "utf8").replace(/^replace github\.com\/joho\/godotenv .*$/m, ""),
     );
-    run("go", ["get", "github.com/joho/godotenv@v1.5.1"], { cwd: gotrueDir, env: goEnv });
-    run("go", ["build", "-o", gotrue, "."], { cwd: gotrueDir, env: goEnv });
+    runWithRetry("go", ["get", "github.com/joho/godotenv@v1.5.1"], { cwd: gotrueDir, env: goEnv });
+    runWithRetry("go", ["build", "-o", gotrue, "."], { cwd: gotrueDir, env: goEnv });
   }
   if (!existsSync(mailpit)) {
     log(`building Mailpit ${MAILPIT_VERSION}`);
     const info = JSON.parse(
-      run("go", ["mod", "download", "-json", `github.com/axllent/mailpit@${MAILPIT_VERSION}`], {
-        cwd: tmpdir(),
-        env: goEnv,
-      }),
+      runWithRetry(
+        "go",
+        ["mod", "download", "-json", `github.com/axllent/mailpit@${MAILPIT_VERSION}`],
+        {
+          cwd: tmpdir(),
+          env: goEnv,
+        },
+      ),
     ) as { Dir: string };
     rmSync(mailpitDir, { recursive: true, force: true });
     run("cp", ["-R", info.Dir, mailpitDir]);
@@ -140,7 +168,7 @@ function ensureBinaries(): { gotrue: string; migrations: string; mailpit: string
       join(mailpitDir, "server/ui/dist/index.html"),
       "<!doctype html><title>Mailpit</title>",
     );
-    run("go", ["build", "-o", mailpit, "."], { cwd: mailpitDir, env: goEnv });
+    runWithRetry("go", ["build", "-o", mailpit, "."], { cwd: mailpitDir, env: goEnv });
   }
   return { gotrue, migrations: join(gotrueDir, "migrations"), mailpit };
 }
