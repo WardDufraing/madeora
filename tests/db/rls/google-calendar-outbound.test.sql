@@ -191,6 +191,10 @@ select tests.assert_true((public.get_google_calendar_event(tests.gevent('fam-1')
   and not (public.get_google_calendar_event(tests.gevent('fam-1'), tests.i('home-a')) ->> 'editable')::boolean,
   'And his view of it carries no change and is not editable');
 select tests.act_as('alice');
+select tests.assert_true((public.get_google_calendar_event(tests.gevent('ev-a')) -> 'pendingCreate') = 'false'::jsonb
+  and (public.get_google_calendar_event(tests.gevent('ev-a')) -> 'change') = 'null'::jsonb
+  and (public.get_google_calendar_event(tests.gevent('ev-a')) ->> 'editable')::boolean,
+  'The owner''s event without a waiting change answers pendingCreate false, never null');
 select tests.assert_true((public.update_google_calendar_event(tests.gevent('ev-a'), 'event', tests.rev('ev-a') + 1,
   tests.body('X', '2026-12-03')) ->> 'outcome') = 'stale', 'An edit from an older page is refused');
 select tests.assert_true((public.update_google_calendar_event(tests.gevent('hol-1'), 'event', tests.rev('hol-1'),

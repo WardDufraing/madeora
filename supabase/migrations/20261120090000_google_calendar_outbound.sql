@@ -505,7 +505,7 @@ returns jsonb
         'lastSyncedAt', v_calendar.last_synced_at,
         'revision', case when v_own then v_event.revision end,
         'editable', v_own and v_calendar.access_role in ('owner', 'writer') and v_connection.status = 'connected',
-        'pendingCreate', v_own and v_change.action = 'create',
+        'pendingCreate', coalesce(v_own and v_change.action = 'create', false),
         'change', case when v_change.id is not null then pg_catalog.jsonb_build_object(
           'id', v_change.id,
           'action', v_change.action,
