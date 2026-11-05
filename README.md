@@ -1,6 +1,6 @@
 # Madeora
 
-Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, Home membership and invitations, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, personal and Home goals, private personal points and rewards, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
+Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, Home membership and invitations, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, personal and Home goals, native personal and Home calendars, Home pets and pet care, private personal points and rewards, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
 
 ## Repository
 
@@ -33,7 +33,9 @@ The repository currently contains working code for the application shell and the
 - Personal and Home meal planning with configurable slots, recipe and custom meals, recurring series, occurrence edits, copy/print views, reviewed shopping-list transfers and dashboard widgets.
 - Personal and Home shopping lists with configurable access, categories, live check-offs, recurring items, moves and copies, trash recovery and dashboard widgets.
 - Personal and Home habits with daily, weekday, weekly-target and numeric daily-target tracking, localized quantities and unit conversions, append-only corrections, pauses, reminders, streaks, milestones, insights, vacation integration and dashboard widgets.
-- Personal and Home goals with measurable or completion targets, append-only progress and corrections, achievements and reopen flows, deadlines and reminders, recurring weekly/monthly/yearly series, period history, trash recovery and dashboard widgets.
+- Personal and Home goals with measurable or completion targets, append-only progress and corrections, achievements and reopen flows, deadlines and reminders, recurring weekly/monthly/yearly series, habit-to-goal progress links within one context, period history, trash recovery and dashboard widgets.
+- Native personal and Home calendars with private or shared events, all-day and timed recurrence, scoped series edits, reminders, chosen personal-to-Home sharing, vacation/task/chore overlays, trash recovery and an upcoming-events widget.
+- Home pet profiles, privacy-separated medical details and documents, per-member medical access, scheduled care with assignments and reminders, vacation-aware care counts, trash recovery and a pet-care widget.
 - Private personal points ledgers and self-defined rewards, with previewed adjustments, one-time reversals, redemption limits, fulfillment outcomes and a personal-only dashboard widget, kept separate from every Home ledger.
 - Notifications and notification preferences.
 - Private file storage, trash and recovery.
@@ -53,7 +55,7 @@ This list describes feature areas present in the repository; it does not certify
 - [Production setup](docs/production-setup.md) and [production migrations](docs/production-migrations.md): production environment setup and database migration reference.
 - [Provider cost register](docs/provider-cost-register.md): free-tier checks for external services.
 - [Architecture decision records](docs/adr/): accepted technical decisions.
-- [Step roadmap](plans/roadmap.md): step order evidenced in this repository, through [S30b recurring goals](plans/steps/S30b-brief.md).
+- [Step roadmap](plans/roadmap.md): step order evidenced in this repository, through [S32 native calendar](plans/steps/S32-brief.md).
 - [Provider setup guides](docs/): service-specific configuration and operational instructions.
 
 ## Repository rules
