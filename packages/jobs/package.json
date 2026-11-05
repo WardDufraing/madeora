@@ -17,6 +17,7 @@
     "@madeora/database": "workspace:*",
     "@madeora/domain": "workspace:*",
     "@madeora/email": "workspace:*",
+    "@madeora/google-calendar": "workspace:*",
     "@madeora/observability": "workspace:*",
     "@madeora/storage": "workspace:*",
     "@supabase/supabase-js": "2.117.2",

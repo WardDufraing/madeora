@@ -3,6 +3,8 @@ import { z } from "zod";
 import { calendarLevels, calendarMemberLevels } from "@madeora/domain/permissions";
 import { recurrenceFrequencies } from "@madeora/domain/tasks";
 
+import { googleWarningSchema } from "@/google-calendar/shapes";
+
 /**
  * The shapes the calendar reads answer with (S32), checked on the server before anything is shown,
  * so a database change cannot reach the interface unnoticed. Client-safe.
@@ -30,6 +32,10 @@ export const occurrenceSchema = z.object({
   recurring: z.boolean(),
   changed: z.boolean(),
   participants: z.array(z.uuid()),
+  /** Where it comes from (S33): a Madeora event, or a read-only event synced from Google Calendar. */
+  source: z.enum(["madeora", "google"]).default("madeora"),
+  /** A Google event's calendar name; null for Madeora events. */
+  calendar: z.string().nullable().default(null),
 });
 export type Occurrence = z.output<typeof occurrenceSchema>;
 
@@ -64,6 +70,8 @@ export const calendarListSchema = z.object({
   showTasks: z.boolean(),
   showChores: z.boolean(),
   vacations: z.array(vacationBannerSchema),
+  /** Google calendars behind this view that are not up to date (S33). */
+  googleWarnings: z.array(googleWarningSchema).default([]),
 });
 export type CalendarList = z.output<typeof calendarListSchema>;
 
@@ -73,6 +81,7 @@ export const upcomingSchema = z.object({
   canCreate: z.boolean(),
   more: z.boolean(),
   occurrences: z.array(occurrenceSchema),
+  googleWarnings: z.array(googleWarningSchema).default([]),
 });
 export type Upcoming = z.output<typeof upcomingSchema>;
 

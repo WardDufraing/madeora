@@ -3,6 +3,7 @@
  * are covered by tests/db/rls/notifications.test.sql.
  */
 import type { EmailTransport, OutgoingEmail, SendResult } from "@madeora/email";
+import type { BeginResult, SyncStore } from "@madeora/google-calendar";
 import {
   StorageUnavailableError,
   type ObjectFacts,
@@ -87,6 +88,30 @@ export class FakeJobData implements JobDataPort {
   readonly summaryCalls: number[] = [];
   readonly fileCalls: { operation: "expire" | "purge"; fileId: string }[] = [];
   readonly deletions = new Map<string, { objectKey: string; done: boolean }>();
+
+  /** Google Calendar (S33): what a run's start answers, the calls, and the automatic queue. */
+  googleBegin: BeginResult = { outcome: "missing" };
+  readonly googleCalls: string[] = [];
+  googleQueued = 0;
+  readonly googleSync: SyncStore = {
+    begin: (connectionId) => {
+      this.check();
+      this.googleCalls.push(`begin:${connectionId}`);
+      return Promise.resolve(this.googleBegin);
+    },
+    applyCalendars: () => Promise.resolve([]),
+    applyEvents: () => Promise.resolve(0),
+    finishCalendar: () => Promise.resolve(true),
+    finish: (_connectionId, _lease, outcome) => {
+      this.googleCalls.push(`finish:${outcome}`);
+      return Promise.resolve(true);
+    },
+  };
+
+  queueGoogleCalendarSyncs(): Promise<number> {
+    this.check();
+    return Promise.resolve(this.googleQueued);
+  }
 
   private check(): void {
     if (this.unavailable) throw new Error("database unavailable");
@@ -344,6 +369,7 @@ export function fakeServices(
     mail: new FakeMail(),
     appUrl: "https://app.madeora.test",
     objects: null,
+    googleCalendar: null,
     ...overrides,
   } as JobServices & { data: FakeJobData; mail: FakeMail | null };
 }

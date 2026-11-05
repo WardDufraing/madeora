@@ -1,4 +1,9 @@
 import { createMailpitTransport, createResendTransport, type EmailTransport } from "@madeora/email";
+import {
+  createGoogleCalendarClient,
+  googleCalendarConfigFromEnv,
+  type GoogleCalendarEnv,
+} from "@madeora/google-calendar";
 import { createObjectStore, storageConfigFromEnv, type StorageEnv } from "@madeora/storage";
 
 import type { JobsSupabaseClient } from "../supabase-store.ts";
@@ -18,20 +23,25 @@ export function createWorkerMail(env: WorkerEnv): EmailTransport | null {
 }
 
 /**
- * What the jobs run with: narrow database functions, the email transport and the app address, and
- * the object store (S15) where storage is configured.
+ * What the jobs run with: narrow database functions, the email transport and the app address, the
+ * object store (S15) where storage is configured, and the Google Calendar client (S33) where it is.
  */
 export function createJobServices(
   client: JobsSupabaseClient,
   env: WorkerEnv,
   storageEnv: StorageEnv,
+  googleEnv: GoogleCalendarEnv = {},
 ): JobServices {
   const mail = createWorkerMail(env);
   const storage = storageConfigFromEnv(storageEnv);
+  const google = googleCalendarConfigFromEnv(googleEnv);
   return {
     data: createSupabaseJobData(client),
     mail,
     appUrl: mail ? (env.APP_URL ?? null) : null,
     objects: storage ? createObjectStore(storage) : null,
+    googleCalendar: google
+      ? { client: createGoogleCalendarClient(google), tokenKey: google.tokenKey }
+      : null,
   };
 }

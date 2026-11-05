@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { schedules, task } from "@trigger.dev/sdk";
 
 import type { Database } from "@madeora/database";
+import { parseGoogleCalendarEnv } from "@madeora/google-calendar";
 import { parseStorageEnv } from "@madeora/storage";
 
 import type { AnyJobDefinition } from "../definition.ts";
@@ -15,6 +16,7 @@ import { choreClaimRelease, choreReminder, vacationReminder } from "../jobs/chor
 import { goalReminder } from "../jobs/goals.ts";
 import { petCareReminder } from "../jobs/pets.ts";
 import { calendarEventReminder } from "../jobs/calendar.ts";
+import { googleCalendarSync } from "../jobs/google-calendar.ts";
 import { habitPauseEnd, habitReminder, habitReminderSnooze } from "../jobs/habits.ts";
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
@@ -40,7 +42,12 @@ function createServices() {
   return {
     client,
     store: createSupabaseJobStore(client),
-    services: createJobServices(client, env, parseStorageEnv(process.env)),
+    services: createJobServices(
+      client,
+      env,
+      parseStorageEnv(process.env),
+      parseGoogleCalendarEnv(process.env),
+    ),
     logger: jobLogger(env.APP_ENV),
   };
 }
@@ -88,6 +95,7 @@ export const habitPauseEndTask = jobTask(habitPauseEnd);
 export const goalReminderTask = jobTask(goalReminder);
 export const petCareReminderTask = jobTask(petCareReminder);
 export const calendarEventReminderTask = jobTask(calendarEventReminder);
+export const googleCalendarSyncTask = jobTask(googleCalendarSync);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
@@ -134,6 +142,9 @@ export const choreDigest = schedules.task({
   },
 });
 
+/** How many connections one sweep queues for their automatic sync; the rest wait for the next one. */
+const GOOGLE_SYNC_QUEUE_BATCH = 100;
+
 export const outboxDispatch = schedules.task({
   id: "outbox-dispatch",
   cron: "*/5 * * * *",
@@ -143,13 +154,17 @@ export const outboxDispatch = schedules.task({
   // Below the 120-second claim lease, so a sweep never holds rows past their lease.
   maxDuration: 90,
   run: async () => {
-    const { client, store, logger } = getServices();
+    const { client, store, logger, services } = getServices();
     return sweepOutbox({
       store,
       client: triggerDispatchClient,
       registry: jobRegistry,
       logger,
       batchSize: DISPATCH_BATCH_SIZE,
+      // Google Calendar (S33): connections due for their 15-minute sync; no extra schedule or run.
+      prepare: async () => ({
+        googleCalendarSyncs: await services.data.queueGoogleCalendarSyncs(GOOGLE_SYNC_QUEUE_BATCH),
+      }),
       stats: async () => {
         const { data, error } = await client.rpc("job_outbox_stats");
         if (error) throw new JobStoreError("job_outbox_stats", error.code);

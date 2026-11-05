@@ -21,6 +21,7 @@
     "@madeora/email": "workspace:*",
     "@madeora/icons": "workspace:*",
     "@madeora/observability": "workspace:*",
+    "@madeora/google-calendar": "workspace:*",
     "@madeora/storage": "workspace:*",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",

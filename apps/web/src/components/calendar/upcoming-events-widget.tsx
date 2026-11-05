@@ -2,7 +2,8 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { readUpcoming } from "@/calendar/data";
-import { calendarHref, clockTime, eventPath, newEventPath } from "@/calendar/format";
+import { calendarHref, clockTime, newEventPath, occurrencePath } from "@/calendar/format";
+import { GoogleWarnings } from "@/components/google-calendar/google-warnings";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import type { WidgetConfigs } from "@/dashboard/widgets";
 import type { DateTimeFormats } from "@/invitations/format";
@@ -49,17 +50,22 @@ export async function UpcomingEventsWidget({
     </Link>
   ) : null;
   if (value.occurrences.length === 0) {
+    // A Google calendar that is not up to date is named even here: "nothing ahead" may not be true.
     return (
-      <EmptyState
-        title={t("widgetEmptyTitle")}
-        description={t("widgetEmpty", { days: config.days })}
-        action={add}
-      />
+      <div className="flex flex-col gap-3">
+        <GoogleWarnings warnings={value.googleWarnings} names={names} formats={formats} compact />
+        <EmptyState
+          title={t("widgetEmptyTitle")}
+          description={t("widgetEmpty", { days: config.days })}
+          action={add}
+        />
+      </div>
     );
   }
   const date = (day: string) => formatTaskDate(day, formats);
   return (
     <div className="flex flex-col gap-3">
+      <GoogleWarnings warnings={value.googleWarnings} names={names} formats={formats} compact />
       <ul className="flex flex-col gap-2" data-testid="upcoming-events">
         {value.occurrences.map((occurrence) => {
           const when =
@@ -73,12 +79,15 @@ export async function UpcomingEventsWidget({
           return (
             <li key={`${occurrence.eventId}:${occurrence.on ?? ""}`} className="text-body">
               <Link
-                href={eventPath(homeId, occurrence.eventId, occurrence.on)}
+                href={occurrencePath(homeId, occurrence)}
                 className="flex flex-col underline-offset-2 hover:underline"
               >
-                <bdi className="font-medium text-fg">{occurrence.title}</bdi>
+                <bdi className="font-medium text-fg">{occurrence.title || t("untitledGoogle")}</bdi>
                 <span className="text-helper text-fg-muted">
                   {when}
+                  {occurrence.source === "google"
+                    ? ` · ${t("fromGoogle", { calendar: occurrence.calendar ?? "" })}`
+                    : ""}
                   {occurrence.kind === "shared"
                     ? ` · ${sharedName ? t("sharedBy", { name: sharedName }) : t("sharedByFormer")}`
                     : ""}

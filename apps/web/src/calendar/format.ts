@@ -23,6 +23,25 @@ export function eventPath(homeId: string | null, eventId: string, on?: string | 
   return on ? `${path}?on=${on}` : path;
 }
 
+/** Where an occurrence in a list leads: its event page, or a Google event's read-only page (S33). */
+export function occurrencePath(
+  homeId: string | null,
+  occurrence: {
+    readonly source: "madeora" | "google";
+    readonly eventId: string;
+    readonly on: string | null;
+  },
+): string {
+  return occurrence.source === "google"
+    ? googleEventPath(homeId, occurrence.eventId)
+    : eventPath(homeId, occurrence.eventId, occurrence.on);
+}
+
+/** A Google event's read-only page (S33). */
+export function googleEventPath(homeId: string | null, eventId: string): string {
+  return `${calendarPath(homeId)}/google/${eventId}`;
+}
+
 /** The edit page of an event (or one occurrence of it, `on`). */
 export function editEventPath(homeId: string | null, eventId: string, on?: string | null): string {
   const path = `${calendarPath(homeId)}/events/${eventId}/edit`;

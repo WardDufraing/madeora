@@ -14,6 +14,7 @@ import type {
   NotificationEmailRead,
   StoredFileStatus,
 } from "./services.ts";
+import { createGoogleSyncStore } from "./google-sync-store.ts";
 import { JobStoreError, type JobsSupabaseClient } from "./supabase-store.ts";
 
 function language(value: string | null): EmailLanguage {
@@ -309,6 +310,14 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
     async advancePetCare(limit) {
       const { data, error } = await client.rpc("advance_all_pet_care", { p_limit: limit });
       if (error) throw new JobStoreError("advance_all_pet_care", error.code);
+      return data;
+    },
+
+    googleSync: createGoogleSyncStore(client),
+
+    async queueGoogleCalendarSyncs(limit) {
+      const { data, error } = await client.rpc("queue_google_calendar_syncs", { p_limit: limit });
+      if (error) throw new JobStoreError("queue_google_calendar_syncs", error.code);
       return data;
     },
 

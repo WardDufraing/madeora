@@ -97,6 +97,7 @@ export const notificationKinds = [
   "goal.reminder",
   "pet_care.reminder",
   "calendar.reminder",
+  "google_calendar.authorization_expired",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -153,6 +154,8 @@ export function notificationPath(
   }
   if (kind.startsWith("join_request.decided")) return "/";
   if (kind.startsWith("storage.personal_")) return "/settings/storage";
+  // S33: an expired Google Calendar authorization leads to its settings, to reconnect.
+  if (kind === "google_calendar.authorization_expired") return "/settings/google-calendar";
   if (!homeId) return "/";
   const home = `/homes/${encodeURIComponent(homeId)}`;
   if (kind === "join_request.received") return `${home}/invitations`;

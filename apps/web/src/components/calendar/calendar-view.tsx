@@ -7,15 +7,17 @@ import {
   bannerSpan,
   calendarHref,
   calendarViewWindow,
-  eventPath,
   newEventPath,
+  occurrencePath,
   occurrencesByDate,
   occurrenceTimes,
   type CalendarViewWindow,
 } from "@/calendar/format";
 import { calendarPageQuerySchema, calendarViews, type CalendarView } from "@/calendar/schema";
 import type { Occurrence, VacationBanner } from "@/calendar/shapes";
+import { GoogleWarnings } from "@/components/google-calendar/google-warnings";
 import { PageHeader } from "@/components/shell/page-header";
+import { settingsPath as googleSettingsPath } from "@/google-calendar/schema";
 import { cx } from "@/components/ui/cx";
 import { ErrorState } from "@/components/ui/states";
 import type { DateTimeFormats } from "@/invitations/format";
@@ -245,6 +247,14 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
           ) : null}
         </div>
 
+        <GoogleWarnings warnings={value.googleWarnings} names={names} formats={formats} />
+        {homeId === null ? (
+          <p className="text-helper text-fg-muted">
+            <Link href={googleSettingsPath} className="font-medium text-accent-fg underline">
+              {t("googleSettingsLink")}
+            </Link>
+          </p>
+        ) : null}
         {value.truncated ? (
           <p className="text-body text-warning" role="status">
             {t("truncated")}
@@ -406,6 +416,9 @@ async function OccurrenceItem({
           ? t("timeUntil", { end: times.end })
           : t("allDayContinues");
   const notes: string[] = [];
+  if (occurrence.source === "google") {
+    notes.push(t("fromGoogle", { calendar: occurrence.calendar ?? "" }));
+  }
   if (occurrence.kind === "shared") {
     const name = occurrence.sharedBy ? names.get(occurrence.sharedBy) : null;
     notes.push(name ? t("sharedBy", { name }) : t("sharedByFormer"));
@@ -415,13 +428,19 @@ async function OccurrenceItem({
     notes.push(t("ownZone", { zone: occurrence.timezone }));
   }
   return (
-    <li className="text-body" data-testid="calendar-event" data-kind={occurrence.kind}>
+    <li
+      className="text-body"
+      data-testid="calendar-event"
+      data-kind={occurrence.kind}
+      data-source={occurrence.source}
+    >
       <Link
-        href={eventPath(homeId, occurrence.eventId, occurrence.on)}
+        href={occurrencePath(homeId, occurrence)}
         className="flex flex-col rounded-control px-1 text-fg underline-offset-2 hover:underline"
       >
         <span>
-          <span className="text-fg-muted">{when}</span> <bdi>{occurrence.title}</bdi>
+          <span className="text-fg-muted">{when}</span>{" "}
+          <bdi>{occurrence.title || t("untitledGoogle")}</bdi>
         </span>
         {notes.length > 0 ? (
           <span className="text-helper text-fg-muted">{notes.join(" · ")}</span>

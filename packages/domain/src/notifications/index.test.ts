@@ -15,6 +15,9 @@ describe("notificationPath", () => {
     expect(notificationPath("recovery.owner_approved", homeId)).toBe(`/homes/${homeId}`);
     expect(notificationPath("recovery.member_requested", homeId)).toBe(`/homes/${homeId}`);
     expect(notificationPath("join_request.received", homeId)).toBe(`/homes/${homeId}/invitations`);
+    expect(notificationPath("google_calendar.authorization_expired", null)).toBe(
+      "/settings/google-calendar",
+    );
     expect(notificationPath("chore.approval_requested", homeId)).toBe(
       `/homes/${homeId}/chores/approvals`,
     );
@@ -160,6 +163,7 @@ describe("notificationKinds", () => {
           name.endsWith("_habits.sql") ||
           name.endsWith("_goals.sql") ||
           name.endsWith("_pet_care.sql") ||
+          // Also S33's "_google_calendar.sql".
           name.endsWith("_calendar.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
@@ -177,6 +181,8 @@ describe("notificationKinds", () => {
       // S23 audit actions use other prefixes (rewards., point_entry.), so these are all notices.
       ...[...sql.matchAll(/'((?:points|reward)\.[a-z_]+)'/g)].map((m) => m[1]),
       // S28 habit audit actions share the prefix; pause notices go through habit_notify_pause.
+      // S33: the Google Calendar notice is a security one.
+      ...[...sql.matchAll(/'security', '(google_calendar\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/habit_notify_pause\(v_habit, '(habit\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
