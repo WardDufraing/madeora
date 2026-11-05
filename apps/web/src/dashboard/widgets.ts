@@ -310,6 +310,33 @@ const choreSizes = sizes(
   { h: 5, minH: 3, maxH: 10 },
 );
 
+/**
+ * The photo widget (S36; spec "Confirmed photo widget selection and slideshow controls"): one photo,
+ * hand-picked photos (kept in their order, never extended with new uploads) or one album (which
+ * follows its later permitted changes). On the personal dashboard it shows personal photos and
+ * albums; on a Home dashboard or bound to a Home, that Home's photos, its albums and albums shared
+ * with it. Each viewer sees only what they may see now; a source that is gone shows an explicit
+ * state, never a substitute.
+ */
+export const photoWidgetSources = ["photo", "photos", "album"] as const;
+export const photoWidgetModes = ["static", "slideshow"] as const;
+export const photoWidgetIntervals = [5, 10, 30, 60, 300] as const;
+export const photoWidgetFits = ["contain", "cover"] as const;
+/** Hand-picked photos in one widget; the database uses the same number. */
+export const PHOTO_WIDGET_MAX_PHOTOS = 50;
+const photosConfig = z.strictObject({
+  source: z.enum(photoWidgetSources).default("album"),
+  albumId: z.uuid().nullable().default(null),
+  /** 'photo' uses the first only; 'photos' all of them, in this order. */
+  photoIds: z.array(z.uuid()).max(PHOTO_WIDGET_MAX_PHOTOS).default([]),
+  mode: z.enum(photoWidgetModes).default("slideshow"),
+  /** Seconds between pictures in a slideshow. */
+  interval: z
+    .union([z.literal(5), z.literal(10), z.literal(30), z.literal(60), z.literal(300)])
+    .default(10),
+  fit: z.enum(photoWidgetFits).default("contain"),
+});
+
 export const widgetRegistry = {
   welcome: {
     surfaces: ["personal", "home"],
@@ -475,6 +502,15 @@ export const widgetRegistry = {
     ),
     config: upcomingEventsConfig,
   },
+  photos: {
+    surfaces: ["personal", "home", "home-source"],
+    sizes: sizes(
+      { w: 4, h: 4, minW: 3, maxW: 12, minH: 3, maxH: 10 },
+      { w: 3, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 10 },
+      { h: 4, minH: 3, maxH: 8 },
+    ),
+    config: photosConfig,
+  },
 } as const satisfies { readonly [type: string]: WidgetDefinition };
 
 export type WidgetType = keyof typeof widgetRegistry;
@@ -507,6 +543,7 @@ export interface WidgetConfigs {
   readonly "goal-progress": WidgetConfig<"goal-progress">;
   readonly "pet-care": WidgetConfig<"pet-care">;
   readonly "upcoming-events": WidgetConfig<"upcoming-events">;
+  readonly photos: WidgetConfig<"photos">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

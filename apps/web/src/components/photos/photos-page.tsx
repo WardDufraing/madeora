@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { StorageUsageView } from "@/components/storage/storage-usage";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
+import { listMyHomes } from "@/homes/server";
 import { readLibrary } from "@/photos/data";
 import { storageEnabled } from "@/storage/server";
 import { getHomeStorageUsage, getMyStorageUsage } from "@/storage/usage";
@@ -25,13 +26,14 @@ export async function PhotosPage({
   readonly albumId: string | null;
   readonly offset: number;
 }) {
-  const [t, library, locale, usage] = await Promise.all([
+  const [t, library, locale, usage, myHomes] = await Promise.all([
     getTranslations("Photos"),
     readLibrary(home?.id ?? null, albumId, offset),
     getLocale(),
     // A Home's storage is for its storage managers (S15); anyone else gets no figures here and sees
     // the pool named if an upload does not fit.
     home ? getHomeStorageUsage(home.id) : getMyStorageUsage(),
+    listMyHomes(),
   ]);
   if (library.status === "not-found") notFound();
   if (library.status !== "ok") {
@@ -45,6 +47,11 @@ export async function PhotosPage({
         library={library.value}
         offset={offset}
         uploadsEnabled={storageEnabled()}
+        homes={
+          myHomes.status === "ok"
+            ? myHomes.homes.map((candidate) => ({ id: candidate.id, name: candidate.name }))
+            : []
+        }
       />
       <section aria-labelledby="photos-storage" className="mt-8 flex max-w-3xl flex-col gap-3">
         <h2 id="photos-storage" className="text-section-title font-semibold">

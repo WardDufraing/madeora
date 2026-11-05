@@ -867,6 +867,29 @@ From here people can keep photos in their personal library or a Home's, group th
 
 2. In the app, open **Photos** in your personal space: it shows "No photos yet". Uploading needs storage; until it is configured the page says uploading is not available yet.
 
+## Check S36 photo sharing (`20261122090000_photo_sharing.sql`)
+
+From here an album can be shared with other Homes (view or add photos), removed from a Home without deleting any photo, and shown in a photo widget (ADR 0046). Apply it after the S35 file. It adds no job, variable or schedule.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.photo_album_shares') as shares_table,
+     has_table_privilege('authenticated', 'private.photo_album_shares', 'select')
+       as people_can_read_shares_table,
+     has_function_privilege('authenticated', 'public.share_photo_album(uuid, jsonb)', 'execute')
+       as people_can_share_albums,
+     has_function_privilege('authenticated', 'public.resolve_photo_widget(uuid, uuid, uuid[])', 'execute')
+       as people_can_read_photo_widgets,
+     has_function_privilege('anon', 'public.unshare_photo_album(uuid, uuid)', 'execute')
+       as signed_out_can_unshare;
+   ```
+
+   It must show the table, **true** for `people_can_share_albums` and `people_can_read_photo_widgets`, and **false** for `people_can_read_shares_table` and `signed_out_can_unshare`.
+
+2. In the app, open an album in your personal **Photos**: it shows **Sharing with other Homes**.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

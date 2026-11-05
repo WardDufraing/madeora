@@ -2617,6 +2617,7 @@ export type Database = {
           title: string;
         }[];
       };
+      photo_deletion_impact: { Args: { p_photo_ids: string[] }; Returns: Json };
       preview_chore_points_change: {
         Args: {
           p_action: string;
@@ -2947,6 +2948,10 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      resolve_photo_widget: {
+        Args: { p_album_id: string; p_home_id: string; p_photo_ids: string[] };
+        Returns: Json;
       };
       resolve_reward_redemption: {
         Args: {
@@ -3439,6 +3444,7 @@ export type Database = {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
       };
+      share_photo_album: { Args: { p_album_id: string; p_shares: Json }; Returns: Json };
       share_recipe: {
         Args: { p_can_edit: boolean; p_home_id: string; p_recipe_id: string };
         Returns: string;
@@ -3627,6 +3633,7 @@ export type Database = {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;
       };
+      unshare_photo_album: { Args: { p_album_id: string; p_home_id: string }; Returns: Json };
       unshare_recipe: { Args: { p_home_id: string; p_recipe_id: string }; Returns: string };
       update_calendar_event: {
         Args: {

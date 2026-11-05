@@ -38,6 +38,7 @@ export function useWidgetLabels(): {
     "goal-progress": t("widgetGoalProgress"),
     "pet-care": t("widgetPetCare"),
     "upcoming-events": t("widgetUpcomingEvents"),
+    photos: t("widgetPhotos"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -64,6 +65,7 @@ export function useWidgetLabels(): {
     "goal-progress": t("widgetGoalProgressDescription"),
     "pet-care": t("widgetPetCareDescription"),
     "upcoming-events": t("widgetUpcomingEventsDescription"),
+    photos: t("widgetPhotosDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),
@@ -76,6 +78,7 @@ export function useWidgetLabels(): {
     goals: t("widgetPersonalGoals"),
     "goal-progress": t("widgetPersonalGoalProgress"),
     "upcoming-events": t("widgetPersonalUpcomingEvents"),
+    photos: t("widgetPersonalPhotos"),
   };
   return {
     name: (type) => names[type],

@@ -37,6 +37,12 @@ export const PHOTO_LIMITS = {
   page: 60,
   maxOffset: 100_000,
   batch: 100,
+  /** Homes one album is shared with (S36). */
+  sharesPerAlbum: 20,
+  /** Hand-picked photos in one widget (S36). */
+  widgetPhotos: 50,
+  /** The newest photos of an album a widget shows (S36). */
+  widgetAlbumPhotos: 100,
 } as const;
 
 export const photoVariants = ["master", "full", "display", "thumb"] as const;
@@ -98,3 +104,46 @@ export const deletePhotosSchema = z.strictObject({
 });
 
 export const photoFinalizeSchema = z.strictObject({});
+
+/** What a Home may do with an album shared with it (S36): browse, or also add photos. */
+export const albumShareAccesses = ["view", "contribute"] as const;
+export type AlbumShareAccess = (typeof albumShareAccesses)[number];
+
+/** Shares to add or change: each a Home the person belongs to, at most once. */
+export const shareAlbumSchema = z.strictObject({
+  shares: z
+    .array(z.strictObject({ homeId: z.uuid(), access: z.enum(albumShareAccesses) }))
+    .min(1)
+    .max(PHOTO_LIMITS.sharesPerAlbum)
+    .refine((shares) => new Set(shares.map((share) => share.homeId)).size === shares.length, {
+      message: "Each Home at most once",
+    }),
+});
+export type ShareAlbumInput = z.infer<typeof shareAlbumSchema>;
+
+/** Ends an album's share with one Home ("Remove from this Home"); never deletes a photo. */
+export const unshareAlbumSchema = z.strictObject({ homeId: z.uuid() });
+
+/** Photos whose library deletion is previewed. */
+export const deletionImpactSchema = z.strictObject({
+  photoIds: z.array(z.uuid()).min(1).max(PHOTO_LIMITS.batch),
+});
+
+/**
+ * A photo widget's source, as the widget asks for it: its context (`homeId`, absent on the personal
+ * dashboard) and exactly one of an album or hand-picked photos (comma-separated, in order).
+ */
+export const photoWidgetQuerySchema = z
+  .strictObject({
+    homeId: z.uuid().optional(),
+    albumId: z.uuid().optional(),
+    photoIds: z
+      .string()
+      .optional()
+      .transform((value) => (value === undefined || value === "" ? undefined : value.split(",")))
+      .pipe(z.array(z.uuid()).min(1).max(PHOTO_LIMITS.widgetPhotos).optional()),
+  })
+  .refine((query) => (query.albumId === undefined) !== (query.photoIds === undefined), {
+    message: "Exactly one source",
+  });
+export type PhotoWidgetQuery = z.output<typeof photoWidgetQuerySchema>;
