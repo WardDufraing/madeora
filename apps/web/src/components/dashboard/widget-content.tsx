@@ -21,6 +21,7 @@ import {
 } from "@/components/habits/habit-widgets";
 import { GoalProgressWidget, GoalsWidget } from "@/components/goals/goal-widgets";
 import { PetCareWidget } from "@/components/pets/pet-care-widget";
+import { UpcomingEventsWidget } from "@/components/calendar/upcoming-events-widget";
 import { MealWidget } from "@/components/meals/meal-widget";
 import { ShoppingWidget } from "@/components/shopping/shopping-widget";
 import { HomeVacationWidget } from "@/components/vacations/vacation-widget";
@@ -832,6 +833,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     goals: t("widgetGoals"),
     "goal-progress": t("widgetGoalProgress"),
     "pet-care": t("widgetPetCare"),
+    "upcoming-events": t("widgetUpcomingEvents"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -1107,6 +1109,40 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         title: t("widgetFromHome", { widget: titles[type], home: isolate(home.name) }),
         sourceName: home.name,
         body: render(home),
+        unavailable: false,
+      };
+    }
+    case "upcoming-events": {
+      const parsed = widgetRegistry["upcoming-events"].config.safeParse(widget.config);
+      const config = parsed.success
+        ? parsed.data
+        : widgetRegistry["upcoming-events"].config.parse({});
+      if (scope.kind === "home") {
+        return {
+          id: widget.id,
+          title: titles["upcoming-events"],
+          sourceName: null,
+          body: <UpcomingEventsWidget home={scope.home} config={config} formats={scope.formats} />,
+          unavailable: false,
+        };
+      }
+      if (!widget.source) {
+        return {
+          id: widget.id,
+          title: t("widgetPersonalUpcomingEvents"),
+          sourceName: null,
+          body: <UpcomingEventsWidget home={null} config={config} formats={scope.formats} />,
+          unavailable: false,
+        };
+      }
+      // On the personal dashboard bound to a Home: only one the viewer belongs to now.
+      const home = scope.homes.find((candidate) => candidate.id === widget.source?.homeId);
+      if (!home) return unavailable;
+      return {
+        id: widget.id,
+        title: t("widgetFromHome", { widget: titles["upcoming-events"], home: isolate(home.name) }),
+        sourceName: home.name,
+        body: <UpcomingEventsWidget home={home} config={config} formats={scope.formats} />,
         unavailable: false,
       };
     }

@@ -24,6 +24,7 @@ const moduleKey = {
   habits: "moduleHabits",
   goals: "moduleGoals",
   pets: "modulePets",
+  calendar: "moduleCalendar",
 } as const;
 const itemTypeKey = {
   sample: "itemTypeSample",
@@ -48,6 +49,7 @@ const itemTypeKey = {
   pet_medical_entry: "itemTypePetMedicalEntry",
   pet_medical_attachment: "itemTypePetMedicalAttachment",
   pet_care_activity: "itemTypePetCareActivity",
+  calendar_event: "itemTypeCalendarEvent",
 } as const;
 
 /** Filters by module, item type and deletion date (spec: the central trash view offers all three). */

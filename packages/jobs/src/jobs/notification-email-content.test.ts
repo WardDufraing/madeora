@@ -110,6 +110,32 @@ describe("buildNotificationEmail", () => {
     );
   });
 
+  it("emails an event reminder with its day and never its title, in a Home or personal", async () => {
+    const eventId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b07";
+    const home = await buildNotificationEmail({
+      ...base,
+      kind: "calendar.reminder",
+      params: { homeId, eventId, on: "2026-11-17", onDate: "2026-11-17" },
+    });
+    expect(home.subject).toContain("Reminder: an event in \u2068De Boomgaard\u2069 on");
+    expect(home.subject).toContain("17");
+    expect(home.text).toContain(
+      `https://app.madeora.test/homes/${homeId}/calendar/events/${eventId}?on=2026-11-17`,
+    );
+    const personal = await buildNotificationEmail({
+      ...base,
+      homeId: null,
+      homeName: null,
+      locale: "nl",
+      kind: "calendar.reminder",
+      params: { eventId, on: "2026-11-17", onDate: "2026-11-17" },
+    });
+    expect(personal.subject).toContain("Herinnering: een van je afspraken op");
+    expect(personal.text).toContain(
+      `https://app.madeora.test/calendar/events/${eventId}?on=2026-11-17`,
+    );
+  });
+
   it("mentions pet care in the vacation reminder when some continues", async () => {
     const vacationId = "4b1e7c2a-3d5f-4e6a-9b8c-0d1e2f3a4b06";
     const plain = await buildNotificationEmail({

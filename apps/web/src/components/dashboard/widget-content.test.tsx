@@ -77,6 +77,19 @@ vi.mock("@/chores/widget-data", () => ({
   },
   loadChoreApprovalsWidget: () => Promise.resolve(state.approvals),
 }));
+vi.mock("@/calendar/data", () => ({
+  readUpcoming: () =>
+    Promise.resolve({
+      status: "ok",
+      value: {
+        timezone: "UTC",
+        today: "2027-01-01",
+        canCreate: true,
+        more: false,
+        occurrences: [],
+      },
+    }),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const noOptions = { lists: [], labels: [], members: [] };

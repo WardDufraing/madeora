@@ -66,12 +66,15 @@ describe("navigation items", () => {
 
   it("points Dashboard at the open Home, and leaves every other item alone", () => {
     const [dashboard, calendar] = primaryNav;
-    if (!dashboard || !calendar) throw new Error("navigation items missing");
+    const photos = primaryNav.find((item) => item.id === "photos");
+    if (!dashboard || !calendar || !photos) throw new Error("navigation items missing");
     expect(contextHref(dashboard, HOME)).toBe(`/homes/${HOME}`);
     expect(contextHref(dashboard, null)).toBe("/?context=personal");
     expect(isActive(contextHref(dashboard, null), "/")).toBe(true);
     expect(isActive(contextHref(dashboard, null), "/settings")).toBe(false);
-    expect(contextHref(calendar, HOME)).toBe("/calendar");
+    expect(contextHref(calendar, HOME)).toBe(`/homes/${HOME}/calendar`);
+    expect(contextHref(calendar, null)).toBe("/calendar");
+    expect(contextHref(photos, HOME)).toBe("/photos");
   });
 
   it("marks a Home's dashboard active only on that page, not on its settings", () => {

@@ -96,6 +96,7 @@ export const notificationKinds = [
   "habit.resumed",
   "goal.reminder",
   "pet_care.reminder",
+  "calendar.reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -134,6 +135,15 @@ export function notificationPath(
       typeof params.activityId === "string" ? encodeURIComponent(params.activityId) : null;
     if (!petId) return home;
     return activityId ? `${home}/${petId}/care/${activityId}` : `${home}/${petId}`;
+  }
+  // S32: an event reminder leads to the occurrence, in its Home or the personal calendar.
+  if (kind === "calendar.reminder") {
+    const base = homeId ? `/homes/${encodeURIComponent(homeId)}/calendar` : "/calendar";
+    const eventId = typeof params.eventId === "string" ? encodeURIComponent(params.eventId) : null;
+    if (!eventId) return base;
+    const on =
+      typeof params.on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.on) ? params.on : null;
+    return `${base}/events/${eventId}${on ? `?on=${on}` : ""}`;
   }
   if (
     kind === "recovery.former_owner_completed" ||

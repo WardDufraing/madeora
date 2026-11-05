@@ -56,6 +56,7 @@ const matrix: readonly {
       ["manageHomeGoals"],
       ["manageHomePets"],
       ["managePetMedicalAccess"],
+      ["manageHomeCalendar"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -126,6 +127,10 @@ const matrix: readonly {
           "home.pets.view": true,
           "home.pets.manage": owner || (admin && has("manageHomePets")),
           "home.pets.grantMedicalAccess": owner || (admin && has("managePetMedicalAccess")),
+          // Every member sees the calendar; editing and deleting are a per-member level
+          // (./calendar.ts); calendar managers set it.
+          "home.calendar.view": true,
+          "home.calendar.manage": owner || (admin && has("manageHomeCalendar")),
         },
       };
     }),

@@ -596,6 +596,13 @@ export type Database = {
           task_id: string;
         }[];
       };
+      calendar_notice_titles: {
+        Args: { p_event_ids: string[] };
+        Returns: {
+          event_id: string;
+          title: string;
+        }[];
+      };
       cancel_ownership_recoveries: {
         Args: { p_home_id: string };
         Returns: {
@@ -842,6 +849,10 @@ export type Database = {
         Returns: Json;
       };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
+      create_calendar_event: {
+        Args: { p_event: Json; p_home_id?: string; p_id: string };
+        Returns: Json;
+      };
       create_chore: {
         Args: {
           p_assignment: Json;
@@ -1325,6 +1336,16 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
       };
+      delete_calendar_event: {
+        Args: {
+          p_dry_run?: boolean;
+          p_event_id: string;
+          p_expected_revision: number;
+          p_on?: string;
+          p_scope?: string;
+        };
+        Returns: Json;
+      };
       delete_chore_absence: {
         Args: { p_expected_revision: number; p_id: string };
         Returns: {
@@ -1464,6 +1485,10 @@ export type Database = {
           revision: number;
         }[];
       };
+      deliver_calendar_reminder: {
+        Args: { p_at: string; p_event_id: string; p_on: string };
+        Returns: string;
+      };
       deliver_chore_reminder: {
         Args: { p_occurrence_id: string; p_revision: number; p_user_id: string };
         Returns: string;
@@ -1553,6 +1578,14 @@ export type Database = {
           p_outcome: string;
         };
         Returns: boolean;
+      };
+      get_calendar_event: {
+        Args: { p_event_id: string; p_home_id?: string; p_on?: string; p_zone?: string };
+        Returns: Json;
+      };
+      get_calendar_upcoming: {
+        Args: { p_count: number; p_days: number; p_home_id?: string; p_zone?: string };
+        Returns: Json;
       };
       get_chore_claim_policy: { Args: { p_chore_id: string }; Returns: Json };
       get_chore_claim_state: { Args: { p_occurrence_id: string }; Returns: Json };
@@ -1807,6 +1840,10 @@ export type Database = {
       };
       leave_home: { Args: { p_home_id: string }; Returns: string };
       list_absence_review: { Args: { p_id: string }; Returns: Json };
+      list_calendar: {
+        Args: { p_from: string; p_home_id?: string; p_to: string; p_zone?: string };
+        Returns: Json;
+      };
       list_chore_absences: { Args: { p_home_id: string }; Returns: Json };
       list_chore_approvals: {
         Args: { p_home_id: string; p_limit?: number };
@@ -2062,6 +2099,7 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_home_calendar_access: { Args: { p_home_id: string }; Returns: Json };
       list_home_chore_history: {
         Args: {
           p_approval?: string;
@@ -2947,6 +2985,19 @@ export type Database = {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
       };
+      set_calendar_event_shares: {
+        Args: { p_event_id: string; p_expected_revision: number; p_home_ids: string[] };
+        Returns: Json;
+      };
+      set_calendar_preferences: {
+        Args: {
+          p_home_id?: string;
+          p_show_chores?: boolean;
+          p_show_tasks?: boolean;
+          p_show_vacations?: boolean;
+        };
+        Returns: string;
+      };
       set_chore_claim_policy: {
         Args: {
           p_auto_release_hours?: number;
@@ -3103,6 +3154,10 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      set_home_calendar_access: {
+        Args: { p_home_id: string; p_level: string; p_membership_id: string };
+        Returns: string;
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
       set_my_goal_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
@@ -3449,6 +3504,18 @@ export type Database = {
         Returns: string;
       };
       unshare_recipe: { Args: { p_home_id: string; p_recipe_id: string }; Returns: string };
+      update_calendar_event: {
+        Args: {
+          p_dry_run?: boolean;
+          p_event: Json;
+          p_event_id: string;
+          p_expected_revision: number;
+          p_new_id?: string;
+          p_on?: string;
+          p_scope?: string;
+        };
+        Returns: Json;
+      };
       update_chore: {
         Args: {
           p_category_id?: string;

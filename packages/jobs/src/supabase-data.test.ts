@@ -250,6 +250,28 @@ describe("Supabase job data", () => {
     ).rejects.toMatchObject({ code: "unexpected_result" });
   });
 
+  it("delivers calendar event reminders and refuses an unknown answer", async () => {
+    const { client, calls } = fakeClient({ deliver_calendar_reminder: ok("stale") });
+    const data = createSupabaseJobData(client);
+    await expect(
+      data.deliverCalendarReminder("e1", "2026-11-10", "2026-11-10T08:45:00Z"),
+    ).resolves.toBe("stale");
+    expect(calls).toEqual([
+      {
+        fn: "deliver_calendar_reminder",
+        args: { p_event_id: "e1", p_on: "2026-11-10", p_at: "2026-11-10T08:45:00Z" },
+      },
+    ]);
+    const { client: odd } = fakeClient({ deliver_calendar_reminder: ok("inactive") });
+    await expect(
+      createSupabaseJobData(odd).deliverCalendarReminder(
+        "e1",
+        "2026-11-10",
+        "2026-11-10T08:45:00Z",
+      ),
+    ).rejects.toMatchObject({ code: "unexpected_result" });
+  });
+
   it("throws the Postgres code only", async () => {
     const { client } = fakeClient({
       get_notification_email: {

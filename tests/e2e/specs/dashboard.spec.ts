@@ -120,12 +120,19 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
     ["quick-actions", true],
     ["notifications", false],
     ["tasks", false],
+    ["upcoming-events", false],
     ["welcome", false],
   ]);
 
   // Remove everything: an honest empty dashboard.
   await customize(page);
-  for (const name of ["Notifications", "Welcome", "Quick actions", "Personal tasks"]) {
+  for (const name of [
+    "Notifications",
+    "Welcome",
+    "Quick actions",
+    "Personal tasks",
+    "My upcoming events",
+  ]) {
     panel = await select(page, name);
     await panel.getByRole("button", { name: "Remove" }).click();
   }

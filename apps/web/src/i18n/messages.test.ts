@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { accentPalette } from "@madeora/design-tokens";
 import { createTranslator } from "next-intl";
 
+import { choreStateKey } from "@/chores/calendar";
 import { stateKey } from "@/components/recovery/recovery-state-text";
 import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
@@ -145,6 +146,8 @@ describe("message dictionaries", () => {
       HabitsNumeric: unitMessageKeys,
       // Each recovery state's sentence and staff label, looked up by state (S12b).
       Recovery: [...Object.values(stateKey), ...Object.values(staffStateKey)],
+      // A chore's state in words, looked up by state (S21; the main Calendar's overlay too, S32).
+      Chores: Object.values(choreStateKey),
       // Points and rewards (S23): kinds, policies, periods, blocks and states, looked up by the
       // value the database answers.
       Dashboard: [

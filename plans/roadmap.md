@@ -48,12 +48,15 @@ Two briefs are not numbered steps: `plans/steps/graphify-brief.md` (Graphify eva
 | S30b | Recurring goals                                                 | `plans/steps/S30b-brief.md`                    |
 | S30c | Habit-to-goal links                                             | `plans/steps/S30c-brief.md`                    |
 | S31  | Pets: profiles, medical history, medical access and care        | `plans/steps/S31-brief.md`                     |
+| S32  | Native calendar                                                 | `plans/steps/S32-brief.md`                     |
 
 S28b was added on Ward's decision (2026-10-28). It is not in the earlier briefs. It sits after S28 and before S29. The S23 heading says "Points and rewards"; "(Home)" is added in this table so it is not read as the personal ledger.
 
 Ward split S30 in three (2026-10-29, `plans/steps/S30-brief.md` L6): S30 goals core, S30b recurring goal series and S30c habit-to-goal links.
 
 Ward kept S31 as one step (2026-11-04, `plans/steps/S31-brief.md`, "Scope"): pet profiles, medical history and medical access, and care schedules, reminders, the pet-care widget and pet care in the vacation reminder.
+
+Ward kept S32 as one step (2026-11-04, `plans/steps/S32-brief.md`, "Scope"): the native calendar together with the main calendar's Show tasks and Show chores overlays and event reminders.
 
 S00 appears only as the seed commit and as review carry-overs (`plans/steps/S01-brief.md` L3–L4, `plans/steps/S02-brief.md` L4). There is no S00 brief. What S00 contained, beyond that seed, is not recorded here.
 

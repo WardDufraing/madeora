@@ -70,6 +70,8 @@ export const notificationKinds = [
   "goal.reminder.personal_overdue",
   "vacation.reminder.pet_care",
   "pet_care.reminder",
+  "calendar.reminder.home",
+  "calendar.reminder.personal",
 ] as const;
 
 export type NotificationEmailKind = (typeof notificationKinds)[number];
@@ -533,6 +535,20 @@ const en: Catalogue = {
     body: "You are responsible for pet care in {home} on {date}. Open Madeora to see what to do, and mark it done once it is.",
     button: "Open the pet care",
   },
+  "calendar.reminder.home": {
+    subject: "Reminder: an event in {home} on {date}",
+    preview: "Open Madeora to see the event.",
+    heading: "An event in {home} on {date}",
+    body: "You have a reminder for an event in {home} on {date}. Open Madeora to see which event it is.",
+    button: "Open the event",
+  },
+  "calendar.reminder.personal": {
+    subject: "Reminder: one of your events on {date}",
+    preview: "Open Madeora to see the event.",
+    heading: "One of your events on {date}",
+    body: "You have a reminder for one of your events on {date}. Open Madeora to see which event it is.",
+    button: "Open the event",
+  },
 };
 
 const nl: Catalogue = {
@@ -983,6 +999,20 @@ const nl: Catalogue = {
     heading: "Dierenzorg in {home} op {date}",
     body: "Je bent verantwoordelijk voor dierenzorg in {home} op {date}. Open Madeora om te zien wat er moet gebeuren, en markeer het als gedaan zodra het gebeurd is.",
     button: "Open de dierenzorg",
+  },
+  "calendar.reminder.home": {
+    subject: "Herinnering: een afspraak in {home} op {date}",
+    preview: "Open Madeora om de afspraak te zien.",
+    heading: "Een afspraak in {home} op {date}",
+    body: "Je hebt een herinnering voor een afspraak in {home} op {date}. Open Madeora om te zien welke afspraak het is.",
+    button: "Open de afspraak",
+  },
+  "calendar.reminder.personal": {
+    subject: "Herinnering: een van je afspraken op {date}",
+    preview: "Open Madeora om de afspraak te zien.",
+    heading: "Een van je afspraken op {date}",
+    body: "Je hebt een herinnering voor een van je afspraken op {date}. Open Madeora om te zien welke afspraak het is.",
+    button: "Open de afspraak",
   },
 };
 

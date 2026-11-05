@@ -61,6 +61,9 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     petCare: 0,
     petCareUnassigned: 0,
     onDate: null,
+    eventId: null,
+    eventOn: null,
+    eventTitle: null,
     weekly: false,
     progress: null,
     resumesOn: null,
@@ -308,6 +311,33 @@ describe("NotificationList", () => {
     expect(within(named as HTMLElement).getByRole("link", { name: "Open" })).toHaveAttribute(
       "href",
       `/homes/${HOME_ID}/pets/${petId}/care/${careActivityId}`,
+    );
+  });
+
+  it("names an event reminder's event only while the reader may see it, and links to the occurrence", async () => {
+    const eventId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00d0";
+    await show([
+      item({
+        kind: "calendar.reminder",
+        eventId,
+        eventOn: "2027-03-28",
+        onDate: "2027-03-28",
+        eventTitle: "Dentist",
+      }),
+      item({
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00d1",
+        kind: "calendar.reminder",
+        eventId,
+        eventOn: "2027-03-28",
+        onDate: "2027-03-28",
+      }),
+    ]);
+    const [named, hidden] = screen.getAllByTestId("notification");
+    expect(named).toHaveTextContent("Reminder: \u2068Dentist\u2069 on 28/03/2027.");
+    expect(hidden).toHaveTextContent("Reminder: an event on 28/03/2027.");
+    expect(within(named as HTMLElement).getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      `/homes/${HOME_ID}/calendar/events/${eventId}?on=2027-03-28`,
     );
   });
 
