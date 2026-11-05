@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { readCalendar, readEvent } from "@/calendar/data";
+import { readGoogleWriteTargets } from "@/google-calendar/data";
+import { getGoogleCalendarServer } from "@/google-calendar/server";
 import { calendarPath, clockTime, editEventPath } from "@/calendar/format";
 import type { EventDetail } from "@/calendar/shapes";
 import { PageHeader } from "@/components/shell/page-header";
@@ -253,7 +255,7 @@ export async function NewEventPage({
   home,
   searchParams,
 }: EventContext & { readonly searchParams: SearchParams }) {
-  const [t, data, allowed] = await Promise.all([
+  const [t, data, allowed, googleTargets] = await Promise.all([
     getTranslations("Calendar"),
     formData(home),
     // Whether the person may add events here now (always in the Personal space).
@@ -264,6 +266,8 @@ export async function NewEventPage({
           isoDate(new Date(), home.timeZone),
         )
       : null,
+    // S34: a personal event can be saved to one of the person's writable Google calendars instead.
+    !home && getGoogleCalendarServer() !== null ? readGoogleWriteTargets() : null,
   ]);
   if (!data || (allowed && allowed.status !== "ok")) return <Failed />;
   if (allowed?.status === "ok" && !allowed.value.canCreate) {
@@ -283,6 +287,7 @@ export async function NewEventPage({
         homes={data.homes}
         dateFormat={data.formats.dateFormat}
         initialDate={occurrenceParam(searchParams, "date") ?? data.today}
+        {...(googleTargets ? { googleTargets } : {})}
       />
     </>
   );

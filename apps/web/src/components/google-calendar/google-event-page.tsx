@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
-import { calendarPath, clockTime } from "@/calendar/format";
+import { calendarPath, clockTime, googleEventPath } from "@/calendar/format";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/states";
@@ -13,6 +13,8 @@ import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import { getHomeDirectory } from "@/members/directory";
 import { formatTaskDate } from "@/tasks/format";
+
+import { GoogleChangePanel, GoogleEventActions } from "./google-event-actions";
 
 function whenText(
   event: GoogleEvent,
@@ -34,10 +36,11 @@ function whenText(
 }
 
 /**
- * A Google event's read-only page (S33): what, when (in the context's timezone, and the event's own when
- * that differs), where, which Google calendar, who shared it, and whether that calendar is up to date.
- * Editing in Madeora comes with S34; the owner gets the link to open it in Google Calendar. One the
- * person may not see here answers the same "not found" as one that does not exist.
+ * A Google event's page (S33): what, when (in the context's timezone, and the event's own when that
+ * differs), where, which Google calendar, who shared it, and whether that calendar is up to date. Its
+ * owner (S34) also sees the change waiting for Google or the conflict to resolve, and Edit (writable
+ * calendars) and Delete with its two choices; everyone else sees it read-only. One the person may not
+ * see here answers the same "not found" as one that does not exist.
  */
 export async function GoogleEventPage({
   home,
@@ -68,6 +71,14 @@ export async function GoogleEventPage({
       ? (directory.members.find((m) => m.membershipId === event.sharedBy)?.name ?? null)
       : null;
   const upToDate = event.state === "synced";
+  const owner = event.kind === "personal" && event.revision !== null;
+  const conflict = event.change?.state === "conflict";
+  const note = [
+    event.privateInGoogle ? tg("privateInGoogle") : null,
+    owner ? (event.editable ? null : tg("readOnlyCalendar")) : tg("readOnly"),
+  ]
+    .filter((part) => part !== null)
+    .join(" ");
 
   return (
     <>
@@ -100,6 +111,9 @@ export async function GoogleEventPage({
               </>
             ) : null}
           </p>
+        ) : null}
+        {owner && event.change ? (
+          <GoogleChangePanel change={event.change} calendar={event.calendar} />
         ) : null}
         <Card>
           <dl className="grid gap-x-6 gap-y-3 text-body sm:grid-cols-[auto_1fr]">
@@ -147,10 +161,7 @@ export async function GoogleEventPage({
               <bdi>{event.description}</bdi>
             </p>
           ) : null}
-          <p className="mt-4 text-helper text-fg-muted">
-            {event.privateInGoogle ? `${tg("privateInGoogle")} ` : ""}
-            {tg("readOnly")}
-          </p>
+          {note ? <p className="mt-4 text-helper text-fg-muted">{note}</p> : null}
           {event.link ? (
             <a
               href={event.link}
@@ -163,6 +174,19 @@ export async function GoogleEventPage({
             </a>
           ) : null}
         </Card>
+        {owner && event.revision !== null ? (
+          <GoogleEventActions
+            homeId={homeId}
+            eventId={event.eventId}
+            revision={event.revision}
+            recurring={event.recurring}
+            editable={event.editable}
+            calendar={event.calendar}
+            conflict={conflict}
+            dateFormat={formats.dateFormat}
+            editHref={`${googleEventPath(null, event.eventId)}/edit`}
+          />
+        ) : null}
       </div>
     </>
   );

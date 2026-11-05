@@ -982,6 +982,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      create_google_calendar_event: {
+        Args: { p_calendar_id: string; p_event: Json; p_request_id: string };
+        Returns: Json;
+      };
       create_habit: {
         Args: {
           p_description?: string;
@@ -1390,6 +1394,16 @@ export type Database = {
           outcome: string;
         }[];
       };
+      delete_google_calendar_event: {
+        Args: {
+          p_destination: string;
+          p_dry_run?: boolean;
+          p_event_id: string;
+          p_revision: number;
+          p_scope: string;
+        };
+        Returns: Json;
+      };
       delete_habit: {
         Args: { p_expected_revision: number; p_id: string };
         Returns: {
@@ -1519,6 +1533,7 @@ export type Database = {
         Args: { p_days: number; p_starts_on: string; p_vacation_id: string };
         Returns: string;
       };
+      discard_google_calendar_change: { Args: { p_change_id: string }; Returns: string };
       disconnect_google_calendar: { Args: Record<PropertyKey, never>; Returns: string };
       edit_meal_occurrence: {
         Args: {
@@ -1768,6 +1783,11 @@ export type Database = {
           goal_id: string;
           title: string;
         }[];
+      };
+      google_push_changes: { Args: { p_connection_id: string; p_lease: string }; Returns: Json };
+      google_push_result: {
+        Args: { p_change_id: string; p_lease: string; p_result: Json; p_version: number };
+        Returns: Json;
       };
       google_sync_apply_events: {
         Args: { p_calendar_id: string; p_events: Json; p_full: boolean; p_lease: string };
@@ -2859,6 +2879,10 @@ export type Database = {
         Returns: boolean;
       };
       reset_notification_quiet_hours: { Args: { p_home_id?: string }; Returns: boolean };
+      resolve_google_calendar_conflict: {
+        Args: { p_change_id: string; p_choice: string };
+        Returns: string;
+      };
       resolve_personal_reward_redemption: {
         Args: {
           p_dry_run?: boolean;
@@ -2894,6 +2918,7 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
         Returns: string;
       };
+      restore_google_calendar_event: { Args: { p_exclusion_id: string }; Returns: string };
       restore_meal_occurrence: {
         Args: { p_on: string; p_recurrence_id: string };
         Returns: {
@@ -2911,6 +2936,7 @@ export type Database = {
           outcome: string;
         }[];
       };
+      retry_google_calendar_change: { Args: { p_change_id: string }; Returns: string };
       reverse_personal_point_entry: {
         Args: { p_dry_run?: boolean; p_entry_id: string; p_reason: string };
         Returns: {
@@ -3154,6 +3180,7 @@ export type Database = {
         };
         Returns: string;
       };
+      set_google_calendar_write_target: { Args: { p_calendar_id?: string }; Returns: string };
       set_habit_celebrations: { Args: { p_enabled: boolean }; Returns: string };
       set_habit_checkin_note: {
         Args: { p_checkin_id: string; p_expected_revision: number; p_note?: string };
@@ -3707,6 +3734,16 @@ export type Database = {
       update_goal_settings: {
         Args: { p_home_id: string; p_member_access: string };
         Returns: string;
+      };
+      update_google_calendar_event: {
+        Args: {
+          p_dry_run?: boolean;
+          p_event: Json;
+          p_event_id: string;
+          p_revision: number;
+          p_scope: string;
+        };
+        Returns: Json;
       };
       update_habit: {
         Args: {

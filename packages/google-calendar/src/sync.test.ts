@@ -9,7 +9,10 @@ import {
   type EventPage,
   type EventPageRequest,
   type GoogleCalendarClient,
+  type GoogleEventBody,
+  type WrittenEvent,
 } from "./client.ts";
+import type { PushChange, PushResult } from "./push.ts";
 import { sealRefreshToken } from "./crypto.ts";
 import type { NormalizedCalendar, NormalizedEvent } from "./normalize.ts";
 import {
@@ -146,6 +149,19 @@ class FakeStore implements SyncStore {
     return Promise.resolve(true);
   }
 
+  // Changes waiting for Google (push.test.ts covers sending them): none here unless a test adds one.
+  pending: PushChange[] = [];
+  results: PushResult[] = [];
+  pushChanges(_id: string, lease: string) {
+    if (lease !== this.lease) return Promise.resolve(null);
+    return Promise.resolve(this.pending);
+  }
+  pushResult(_change: string, lease: string, _version: number, result: PushResult) {
+    if (lease !== this.lease) return Promise.resolve(null);
+    this.results.push(result);
+    return Promise.resolve({ state: result.outcome === "done" ? "done" : "waiting" });
+  }
+
   titles(calendarId: string): string[] {
     return [...(this.calendars.get(calendarId)?.events.values() ?? [])]
       .map(({ event }) => ("title" in event ? (event.title ?? "") : ""))
@@ -218,6 +234,38 @@ class FakeGoogle implements GoogleCalendarClient {
     this.requests.push(request);
     const answer = this.lister(request);
     return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
+  }
+  writes: string[] = [];
+  writeError: Error | null = null;
+  getEvent() {
+    return Promise.resolve(null);
+  }
+  insertEvent(_access: string, _calendar: string, body: GoogleEventBody): Promise<WrittenEvent> {
+    this.writes.push(`insert ${body.id ?? ""}`);
+    if (this.writeError) return Promise.reject(this.writeError);
+    return Promise.resolve({
+      event: null,
+      resource: {
+        id: body.id ?? "",
+        etag: '"1"',
+        status: "confirmed",
+        summary: null,
+        location: null,
+        description: null,
+        visibility: null,
+        transparency: null,
+        colorId: null,
+        start: null,
+        end: null,
+        recurrence: [],
+      },
+    });
+  }
+  patchEvent(): Promise<WrittenEvent> {
+    return Promise.reject(new Error("unused"));
+  }
+  deleteEvent() {
+    return Promise.resolve();
   }
 }
 
@@ -394,5 +442,58 @@ describe("google calendar sync", () => {
     const store = new FakeStore();
     store.lease = "other-run";
     await expect(run(store, new FakeGoogle())).resolves.toBe("busy");
+  });
+
+  it("sends waiting changes before reading Google", async () => {
+    const store = new FakeStore();
+    const google = new FakeGoogle();
+    store.pending = [
+      {
+        id: "10000000-0000-4000-8000-0000000000c1",
+        version: 1,
+        googleCalendarId: "primary@gmail.com",
+        calendarTimeZone: "Europe/Brussels",
+        action: "create",
+        scope: "event",
+        googleEventId: "madeoraabc",
+        seriesId: null,
+        fields: ["title", "location", "description", "time"],
+        base: null,
+        mine: { title: "New", allDay: true, startsOn: "2026-12-01", endsOn: "2026-12-01" },
+        repeat: null,
+      },
+    ];
+    google.lister = () => {
+      google.writes.push("list");
+      return { items: [], nextPageToken: null, nextSyncToken: "s" };
+    };
+    await expect(run(store, google)).resolves.toBe("synced");
+    expect(google.writes).toEqual(["insert madeoraabc", "list"]);
+    expect(store.results[0]?.outcome).toBe("done");
+  });
+
+  it("ends as authorization expired when Google refuses a change's token, keeping the change", async () => {
+    const store = new FakeStore();
+    const google = new FakeGoogle();
+    store.pending = [
+      {
+        id: "10000000-0000-4000-8000-0000000000c2",
+        version: 1,
+        googleCalendarId: "primary@gmail.com",
+        calendarTimeZone: null,
+        action: "create",
+        scope: "event",
+        googleEventId: "madeoradef",
+        seriesId: null,
+        fields: ["title", "location", "description", "time"],
+        base: null,
+        mine: { title: "New", allDay: true, startsOn: "2026-12-01", endsOn: "2026-12-01" },
+        repeat: null,
+      },
+    ];
+    google.writeError = new GoogleAuthorizationError("unauthorized");
+    await expect(run(store, google)).resolves.toBe("authorization_expired");
+    expect(store.results).toEqual([]);
+    expect(store.finished).toEqual(["authorization_expired"]);
   });
 });

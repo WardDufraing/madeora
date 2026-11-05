@@ -8,8 +8,8 @@ import { choreStateKey } from "@/chores/calendar";
 import { stateKey } from "@/components/recovery/recovery-state-text";
 import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
-import { connectNotices } from "@/google-calendar/schema";
-import { googleStates } from "@/google-calendar/shapes";
+import { connectNotices, googleScopes } from "@/google-calendar/schema";
+import { changeActions, changeStates, googleFields, googleStates } from "@/google-calendar/shapes";
 import { unitMessageKeys } from "@/habits/numeric-keys";
 
 import { locales } from "./locales";
@@ -210,7 +210,17 @@ describe("message dictionaries", () => {
       GoogleCalendar: [
         ...withPrefix("notice_", connectNotices),
         ...withPrefix("warning_", googleStates),
+        // S34: change states, scopes, fields and removed-event kinds, by their codes.
+        ...withPrefix("preview_", ["change", "delete", "remove"]),
+        ...withPrefix("scope_", googleScopes),
+        ...withPrefix("pending_", changeActions),
+        ...withPrefix("failed_", changeActions),
+        ...withPrefix("field_", googleFields),
+        ...changeStates.flatMap((state) => withPrefix(`changeRow_${state}_`, changeActions)),
+        ...withPrefix("hidden_", ["event", "series", "following"]),
       ],
+      // S34: an owner's Google event state on calendar lists.
+      Calendar: withPrefix("googleState_", ["saving", "deleting", "conflict", "failed"]),
       Vacations: [
         ...withPrefix("status_", ["upcoming", "active", "ended", "cancelled"]),
         ...withPrefix("absence_", ["upcoming", "active", "ended"]),

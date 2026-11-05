@@ -8,16 +8,20 @@ import { useState, useTransition } from "react";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SelectField } from "@/components/ui/select-field";
 import {
   GOOGLE_CALENDAR_ENDPOINT,
   GOOGLE_SYNC_ENDPOINT,
+  GOOGLE_TARGET_ENDPOINT,
   GoogleRequestError,
   googleCalendarEndpoint,
+  googleChangeEndpoint,
+  googleHiddenEndpoint,
   sendGoogleRequest,
 } from "@/google-calendar/api";
 
 /** Sends a request, then refreshes the server-rendered page so it shows the database's state. */
-function useGoogleMutation<Input>(scope: string, send: (input: Input) => Promise<unknown>) {
+export function useGoogleMutation<Input>(scope: string, send: (input: Input) => Promise<unknown>) {
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
   const mutation = useMutation<unknown, GoogleRequestError, Input>({
@@ -38,7 +42,14 @@ function useGoogleMutation<Input>(scope: string, send: (input: Input) => Promise
   return { ...mutation, busy: mutation.isPending || refreshing };
 }
 
-function Failure({ error }: { readonly error: GoogleRequestError | null }) {
+/** A refused request in words. `event`: about one event, whose "not found" means it is gone. */
+export function Failure({
+  error,
+  about = "connection",
+}: {
+  readonly error: GoogleRequestError | null;
+  readonly about?: "connection" | "event";
+}) {
   const t = useTranslations("GoogleCalendar");
   if (!error) return null;
   const key = {
@@ -47,9 +58,22 @@ function Failure({ error }: { readonly error: GoogleRequestError | null }) {
     unavailable: "failureUnavailable",
     "invalid-home": "failureInvalidHome",
     "too-many": "failureTooMany",
-    "not-found": "failureNotFound",
+    "not-found": about === "event" ? "failureEventNotFound" : "failureNotFound",
     unauthenticated: "failureSignedOut",
     network: "failureNetwork",
+    "read-only": "failureReadOnly",
+    stale: "failureStale",
+    busy: "failureBusy",
+    "conflict-open": "failureConflictOpen",
+    "series-limit": "failureSeriesLimit",
+    "invalid-scope": "failureStale",
+    "limit-reached": "failureLimitReached",
+    "invalid-dates": "failureInvalidDates",
+    "nonexistent-time": "failureNonexistentTime",
+    "pending-changes": "failurePendingChanges",
+    "not-in-conflict": "failureStale",
+    "in-conflict": "failureConflictOpen",
+    "not-failed": "failureStale",
   } as const;
   const message = error.code in key ? t(key[error.code as keyof typeof key]) : t("failureFailed");
   return (
@@ -255,5 +279,136 @@ export function CalendarChoicesForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * S34: where new personal events go by default: Madeora only, or one of the writable Google calendars
+ * the person syncs. The new-event form still lets them choose each time.
+ */
+export function WriteTargetForm({
+  current,
+  calendars,
+}: {
+  readonly current: string | null;
+  readonly calendars: readonly { readonly id: string; readonly name: string }[];
+}) {
+  const t = useTranslations("GoogleCalendar");
+  const [value, setValue] = useState(current ?? "");
+  const [saved, setSaved] = useState(false);
+  const save = useGoogleMutation("google-calendar:target", async (calendarId: string | null) => {
+    await sendGoogleRequest("PUT", GOOGLE_TARGET_ENDPOINT, { calendarId });
+    setSaved(true);
+  });
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSaved(false);
+        save.mutate(value === "" ? null : value);
+      }}
+      data-testid="google-target-form"
+    >
+      <Failure error={save.error} />
+      {saved && !save.isPending ? (
+        <FormAlert tone="success" announce>
+          {t("saved")}
+        </FormAlert>
+      ) : null}
+      <SelectField
+        label={t("targetLabel")}
+        description={t("targetHint")}
+        value={value}
+        onChange={(event) => {
+          setValue(event.target.value);
+        }}
+        options={[
+          { value: "", label: t("targetMadeora") },
+          ...calendars.map((calendar) => ({ value: calendar.id, label: calendar.name })),
+        ]}
+        data-testid="google-target"
+      />
+      <div>
+        <Button type="submit" loading={save.busy} data-testid="google-target-save">
+          {t("save")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** S34: Try again or Discard on a change Google refused (from the settings list). */
+export function ChangeRetryActions({
+  changeId,
+  create,
+}: {
+  readonly changeId: string;
+  readonly create: boolean;
+}) {
+  const t = useTranslations("GoogleCalendar");
+  const act = useGoogleMutation(`google-change:${changeId}`, (action: "retry" | "discard") =>
+    sendGoogleRequest("POST", googleChangeEndpoint(changeId), { action }),
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      <Failure error={act.error} about="event" />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          loading={act.busy}
+          onClick={() => {
+            act.mutate("retry");
+          }}
+          data-testid="google-change-retry"
+        >
+          {t("retry")}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={act.busy}
+          onClick={() => {
+            act.mutate("discard");
+          }}
+          data-testid="google-change-discard"
+        >
+          {create ? t("discardCreate") : t("discard")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** S34: brings an event removed from Madeora back (Google never changed). */
+export function RestoreHiddenButton({
+  exclusionId,
+  title,
+}: {
+  readonly exclusionId: string;
+  readonly title: string;
+}) {
+  const t = useTranslations("GoogleCalendar");
+  const restore = useGoogleMutation(`google-hidden:${exclusionId}`, () =>
+    sendGoogleRequest("DELETE", googleHiddenEndpoint(exclusionId), {}),
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      <Failure error={restore.error} about="event" />
+      <div>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={restore.busy}
+          aria-label={t("restoreNamed", { title })}
+          onClick={() => {
+            restore.mutate(undefined);
+          }}
+          data-testid="google-hidden-restore"
+        >
+          {t("restore")}
+        </Button>
+      </div>
+    </div>
   );
 }

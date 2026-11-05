@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: await pageTitle(t("eventPageTitle")) };
 }
 
-/** One of the person's own Google events on their personal calendar (S33), read-only. */
+/** One of the person's own Google events on their personal calendar (S33); its owner can change it (S34). */
 export default async function Page({ params }: PageProps) {
   const { userId } = await requireIdentity();
   return (

@@ -1,6 +1,6 @@
 # Google Calendar: owner guide
 
-S33 lets each person connect their Google Calendar in **Settings › Google Calendar**. The code works without any of the steps below: until the three variables are set, that page says "Google Calendar is not available in this environment yet" and nothing contacts Google. Background: [ADR 0043](adr/0043-google-calendar-connect.md).
+S33 lets each person connect their Google Calendar in **Settings › Google Calendar**; S34 lets them change those events from Madeora ([ADR 0044](adr/0044-google-calendar-outbound-conflicts.md)). The code works without any of the steps below: until the three variables are set, that page says "Google Calendar is not available in this environment yet" and nothing contacts Google. Background: [ADR 0043](adr/0043-google-calendar-connect.md).
 
 Everything here is free: the Google Calendar API has no charge and needs no billing account. If Google asks for a card, a billing account or the free trial at any point, **stop and tell Claude** (€0 rule).
 
@@ -13,7 +13,7 @@ This uses a **new, separate** Google Cloud project, not the `Madeora` project of
 
 ## 1. Apply the migration
 
-Apply `supabase/migrations/20261119090000_google_calendar.sql` exactly as described in [`docs/supabase-migrations.md`](supabase-migrations.md) ("Apply a migration"): on `madeora-preview` when the S33 pull request is ready for testing, on `madeora-production` just before you merge the release that contains it. Then run "Check S33 Google Calendar" from that guide.
+Apply `supabase/migrations/20261119090000_google_calendar.sql` exactly as described in [`docs/supabase-migrations.md`](supabase-migrations.md) ("Apply a migration"): on `madeora-preview` when the S33 pull request is ready for testing, on `madeora-production` just before you merge the release that contains it. Then run "Check S33 Google Calendar" from that guide. For S34, apply `supabase/migrations/20261120090000_google_calendar_outbound.sql` the same way, after the S33 file, and run "Check S34 Google Calendar changes". S34 needs no new variable, scope or Google setting: the `calendar.events` permission from step 2 already allows writing.
 
 ## 2. Create the project and turn on the Calendar API
 
@@ -91,7 +91,9 @@ Check: the three variables are listed with hidden values, and the Trigger.dev **
 1. Sign in to the app as one of your test users and open **Settings › Google Calendar** (or **Settings**, card **Google Calendar**, **Manage Google Calendar**).
 2. Click **Connect Google Calendar**. Google shows "Google hasn't verified this app": click **Continue** (expected in Testing). Tick both calendar permissions and click **Continue**.
 3. You return to the page with "Google Calendar is connected". Within about 5 minutes (the next dispatcher run) the account shows "Last synced …" and your calendars are listed, with the primary one syncing and shown on your personal calendar.
-4. Open **Calendar**: your Google events appear, marked "From Google Calendar". Opening one shows it read-only with **Open in Google Calendar**.
-5. To share a calendar with a Home, tick that Home under the calendar and click **Save**; another member of that Home then sees its events (except ones marked private in Google).
+4. Open **Calendar**: your Google events appear, marked "From Google Calendar". Opening one of yours shows **Edit** and **Delete** (other people see it read-only).
+5. (S34) Click **Edit**, change the title and save: the event shows "Your changes are waiting to be saved to Google". Within about 5 minutes (or after **Sync now** in Settings) the message is gone and Google Calendar shows the new title. Add an event from **Calendar › New event** with **Save to** set to a Google calendar: it appears in Google after the next sync.
+6. (S34) To see a conflict: edit an event's title in Madeora, then, before the next sync, change the same title in Google Calendar. After **Sync now** the event page shows both versions and waits until you click **Keep Madeora's version** or **Keep Google's version**.
+7. To share a calendar with a Home, tick that Home under the calendar and click **Save**; another member of that Home then sees its events (except ones marked private in Google).
 
 If the page says "This connect attempt expired or did not match", start again from the page (do not reuse an old Google tab). If it says "Google did not give Madeora access to your calendars", connect again and leave both permissions ticked. If Google shows `redirect_uri_mismatch`, compare the redirect URI in step 4 with the address in your browser, character for character.

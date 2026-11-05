@@ -8,7 +8,8 @@ import { getVerifiedIdentity, type VerifiedIdentity } from "@/auth/identity";
 import type { GoogleCalendarErrorCode } from "./api";
 import { logGoogleCalendar } from "./data";
 
-const BODY_BYTES = 8 * 1024;
+// An event's description may be a few thousand characters of multi-byte text, as on the native routes.
+const BODY_BYTES = 32 * 1024;
 
 /** A JSON answer that no cache may keep. */
 export function json(status: number, body: object): Response {
@@ -44,4 +45,50 @@ export function databaseFailure(event: string, error: { readonly code?: string }
   if (error.code === "42501") return failure(401, "unauthenticated");
   logGoogleCalendar(event, error.code);
   return failure(500, "failed");
+}
+
+/**
+ * S34: the database outcomes of changing Google events, as HTTP refusals (null: not a refusal). The same
+ * `not_found` for an event the person cannot change as for one that does not exist.
+ */
+export function outcomeFailure(outcome: unknown): Response | null {
+  switch (outcome) {
+    case "not_found":
+      return failure(404, "not-found");
+    case "read_only":
+      return failure(409, "read-only");
+    case "authorization_expired":
+      return failure(409, "authorization-expired");
+    case "limit_reached":
+      return failure(409, "limit-reached");
+    case "invalid_dates":
+      return failure(400, "invalid-dates");
+    case "nonexistent_time":
+      return failure(400, "nonexistent-time");
+    case "stale":
+      return failure(409, "stale");
+    case "busy":
+      return failure(409, "busy");
+    case "conflict_open":
+      return failure(409, "conflict-open");
+    case "series_limit":
+      return failure(409, "series-limit");
+    case "invalid_scope":
+      return failure(400, "invalid-scope");
+    case "pending_changes":
+      return failure(409, "pending-changes");
+    case "not_in_conflict":
+      return failure(409, "not-in-conflict");
+    case "in_conflict":
+      return failure(409, "in-conflict");
+    case "not_failed":
+      return failure(409, "not-failed");
+    default:
+      return null;
+  }
+}
+
+/** The `outcome` of a JSON answer from the database, or null. */
+export function outcomeOf(data: unknown): unknown {
+  return typeof data === "object" && data !== null && "outcome" in data ? data.outcome : data;
 }

@@ -88,6 +88,7 @@ export async function UpcomingEventsWidget({
                   {occurrence.source === "google"
                     ? ` · ${t("fromGoogle", { calendar: occurrence.calendar ?? "" })}`
                     : ""}
+                  {occurrence.googleState ? ` · ${t(`googleState_${occurrence.googleState}`)}` : ""}
                   {occurrence.kind === "shared"
                     ? ` · ${sharedName ? t("sharedBy", { name: sharedName }) : t("sharedByFormer")}`
                     : ""}

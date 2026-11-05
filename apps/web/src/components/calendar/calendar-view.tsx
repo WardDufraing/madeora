@@ -418,6 +418,7 @@ async function OccurrenceItem({
   const notes: string[] = [];
   if (occurrence.source === "google") {
     notes.push(t("fromGoogle", { calendar: occurrence.calendar ?? "" }));
+    if (occurrence.googleState) notes.push(t(`googleState_${occurrence.googleState}`));
   }
   if (occurrence.kind === "shared") {
     const name = occurrence.sharedBy ? names.get(occurrence.sharedBy) : null;
