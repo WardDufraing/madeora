@@ -100,6 +100,8 @@ export function createLocalJobRunner(options: LocalJobRunnerOptions): LocalJobRu
     mail: createMailpitTransport({ url: options.mailpitUrl, from: options.from }),
     appUrl: options.appUrl,
     objects: options.storage ? createObjectStore(options.storage) : null,
+    // Never Google from tests: a queued Google Calendar sync fails as not configured.
+    googleCalendar: null,
   };
   const dispatchClient = createLocalDispatchClient({ store, services, logger });
   return {

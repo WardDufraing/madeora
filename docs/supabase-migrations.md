@@ -791,6 +791,32 @@ From here every person and Home has a **Calendar**: personal and Home events, re
 
 2. In the app, open **Calendar** in your personal space, add an event and share it with a Home. Signed in as another member of that Home, the Home's calendar shows it with "Shared by" and your name; an event you did not share does not show there at all.
 
+## Check S33 Google Calendar (`20261119090000_google_calendar.sql`)
+
+From here a person can connect Google Calendar (Settings › Google Calendar) and see its events on their personal calendar and in the Homes they choose. Apply it after the S32 calendar file. It adds one job kind (`google-calendar-sync`) to the existing jobs and needs the three `GOOGLE_CALENDAR_*` variables to do anything ([`google-calendar-setup.md`](google-calendar-setup.md)); without them the app says Google Calendar is not available.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.google_calendar_connections') as connections_table,
+     to_regclass('private.google_calendar_events') as events_table,
+     has_table_privilege('authenticated', 'private.google_calendar_events', 'select')
+       as members_can_read_events_table,
+     has_function_privilege('authenticated', 'public.get_google_calendar_connection()', 'execute')
+       as people_can_read_their_connection,
+     has_function_privilege('authenticated',
+       'public.google_sync_begin(uuid, uuid, integer)', 'execute')
+       as people_can_run_the_job,
+     has_function_privilege('service_role',
+       'public.google_sync_begin(uuid, uuid, integer)', 'execute')
+       as the_job_can_run;
+   ```
+
+   It must show both tables, **true** for `people_can_read_their_connection` and `the_job_can_run`, and **false** for `members_can_read_events_table` and `people_can_run_the_job`.
+
+2. In the app, open **Calendar** in your personal space: it still shows your events as before. With the variables set, follow step 8 of the setup guide.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

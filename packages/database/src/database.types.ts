@@ -1519,6 +1519,7 @@ export type Database = {
         Args: { p_days: number; p_starts_on: string; p_vacation_id: string };
         Returns: string;
       };
+      disconnect_google_calendar: { Args: Record<PropertyKey, never>; Returns: string };
       edit_meal_occurrence: {
         Args: {
           p_entry_id: string;
@@ -1638,6 +1639,11 @@ export type Database = {
       get_goal_series: { Args: { p_series_id: string }; Returns: Json };
       get_goal_series_periods: { Args: { p_before?: string; p_series_id: string }; Returns: Json };
       get_goals: { Args: { p_home_id?: string; p_query?: string; p_view?: string }; Returns: Json };
+      get_google_calendar_connection: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_google_calendar_event: {
+        Args: { p_event_id: string; p_home_id?: string; p_zone?: string };
+        Returns: Json;
+      };
       get_habit: { Args: { p_habit_id: string }; Returns: Json };
       get_habit_calendar: { Args: { p_habit_id: string; p_month: string }; Returns: Json };
       get_habit_checkins: { Args: { p_before?: string; p_habit_id: string }; Returns: Json };
@@ -1762,6 +1768,32 @@ export type Database = {
           goal_id: string;
           title: string;
         }[];
+      };
+      google_sync_apply_events: {
+        Args: { p_calendar_id: string; p_events: Json; p_full: boolean; p_lease: string };
+        Returns: number;
+      };
+      google_sync_begin: {
+        Args: { p_connection_id: string; p_lease: string; p_lease_seconds: number };
+        Returns: Json;
+      };
+      google_sync_calendars: {
+        Args: { p_calendars: Json; p_connection_id: string; p_lease: string };
+        Returns: Json;
+      };
+      google_sync_finish: {
+        Args: { p_connection_id: string; p_lease: string; p_outcome: string };
+        Returns: boolean;
+      };
+      google_sync_finish_calendar: {
+        Args: {
+          p_calendar_id: string;
+          p_error?: string;
+          p_full: boolean;
+          p_lease: string;
+          p_sync_token?: string;
+        };
+        Returns: boolean;
       };
       habit_notice_names: {
         Args: { p_habit_ids: string[] };
@@ -2611,6 +2643,7 @@ export type Database = {
           outcome: string;
         }[];
       };
+      queue_google_calendar_syncs: { Args: { p_limit: number }; Returns: number };
       reactivate_habit: {
         Args: {
           p_dry_run?: boolean;
@@ -2797,6 +2830,7 @@ export type Database = {
           status: string;
         }[];
       };
+      request_google_calendar_sync: { Args: Record<PropertyKey, never>; Returns: string };
       request_ownership_recovery: {
         Args: { p_home_id: string; p_request_id: string; p_statement: string };
         Returns: {
@@ -2980,6 +3014,10 @@ export type Database = {
           revision: number;
         }[];
       };
+      save_google_calendar_connection: {
+        Args: { p_account: string; p_scopes: string[]; p_token: string };
+        Returns: string;
+      };
       send_chore_summaries: { Args: { p_limit: number }; Returns: number };
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
@@ -3106,6 +3144,15 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      set_google_calendar_settings: {
+        Args: {
+          p_calendar_id: string;
+          p_home_ids: string[];
+          p_show_personal: boolean;
+          p_sync: boolean;
+        };
+        Returns: string;
       };
       set_habit_celebrations: { Args: { p_enabled: boolean }; Returns: string };
       set_habit_checkin_note: {

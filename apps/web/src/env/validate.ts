@@ -7,14 +7,16 @@ import {
 } from "@madeora/config/env/public";
 import { serverEnvSchema, type ServerEnv } from "@madeora/config/env/server";
 
+import { parseGoogleCalendarEnv } from "@madeora/google-calendar";
+
 import { parseWebStorageSettings } from "@/storage/config";
 
 const startupSchema = serverEnvSchema.extend(publicEnvSchema.shape);
 const productionStartupSchema = serverEnvSchema.extend(productionPublicEnvSchema.shape);
 
 /**
- * Validates every required server and public variable, and the storage settings when storage is
- * on (S15). Production also requires the Turnstile site key (ADR 0008). Throws
+ * Validates every required server and public variable, the storage settings when storage is on
+ * (S15) and the Google Calendar settings when any is set (S33). Production also requires the Turnstile site key (ADR 0008). Throws
  * EnvValidationError naming the failures.
  */
 export function validateStartupEnv(source: EnvSource): ServerEnv & PublicEnv {
@@ -23,5 +25,6 @@ export function validateStartupEnv(source: EnvSource): ServerEnv & PublicEnv {
       ? parseEnv(productionStartupSchema, source)
       : parseEnv(startupSchema, source);
   parseWebStorageSettings(source);
+  parseGoogleCalendarEnv(source);
   return env;
 }

@@ -38,6 +38,7 @@ const kindMessage = {
   "join_request.received": "kindJoinRequestReceived",
   "storage.personal_warning": "kindStoragePersonalWarning",
   "storage.personal_critical": "kindStoragePersonalCritical",
+  "google_calendar.authorization_expired": "kindGoogleCalendarExpired",
   "storage.home_warning": "kindStorageHomeWarning",
   "storage.home_critical": "kindStorageHomeCritical",
   "chore.approval_requested": "kindChoreApprovalRequested",
@@ -128,6 +129,7 @@ type MessageKey =
   | "kindGoalReminderOverdue"
   | "kindPetCareReminder"
   | "kindCalendarReminder"
+  | "kindGoogleCalendarExpired"
   | "kindVacationReminderPetCare"
   | "kindUnknown";
 

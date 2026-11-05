@@ -6,6 +6,7 @@ import {
   editEventPath,
   eventPath,
   newEventPath,
+  occurrencePath,
   occurrencesByDate,
   occurrenceTimes,
 } from "./format";
@@ -28,6 +29,18 @@ describe("addresses", () => {
     expect(calendarHref(null, "month")).toBe("/calendar");
     expect(calendarHref("h1", "week", "2026-11-04")).toBe(
       "/homes/h1/calendar?view=week&date=2026-11-04",
+    );
+  });
+
+  it("lead a Google event to its read-only page (S33)", () => {
+    expect(occurrencePath("h1", occurrence({ source: "google", eventId: "g1", on: null }))).toBe(
+      "/homes/h1/calendar/google/g1",
+    );
+    expect(occurrencePath(null, occurrence({ source: "google", eventId: "g1" }))).toBe(
+      "/calendar/google/g1",
+    );
+    expect(occurrencePath(null, occurrence({ eventId: "e1", on: "2026-11-17" }))).toBe(
+      "/calendar/events/e1?on=2026-11-17",
     );
   });
 });

@@ -89,9 +89,21 @@ export const triggerDispatchClient: DispatchClient = {
 export interface SweepDependencies extends DispatchOptions {
   /** Backlog counts for the log line; failures to read them never fail the sweep. */
   readonly stats?: () => Promise<Readonly<Record<string, number>>>;
+  /**
+   * Work queued just before the rows are claimed, so it dispatches in the same sweep: the automatic
+   * Google Calendar sync (S33). Its failure is logged and never fails the sweep.
+   */
+  readonly prepare?: () => Promise<Readonly<Record<string, number>>>;
 }
 
 export async function sweepOutbox(dependencies: SweepDependencies): Promise<DispatchSummary> {
+  if (dependencies.prepare) {
+    try {
+      dependencies.logger.info("jobs.outbox.prepared", await dependencies.prepare());
+    } catch {
+      dependencies.logger.warn("jobs.outbox.prepare_failed");
+    }
+  }
   const summary = await dispatchOutbox(dependencies);
   if (dependencies.stats) {
     try {

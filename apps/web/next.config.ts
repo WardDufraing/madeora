@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
     "@madeora/domain",
     "@madeora/design-tokens",
     "@madeora/email",
+    "@madeora/google-calendar",
     "@madeora/icons",
     "@madeora/observability",
     "@madeora/storage",

@@ -87,6 +87,7 @@ vi.mock("@/calendar/data", () => ({
         canCreate: true,
         more: false,
         occurrences: [],
+        googleWarnings: [],
       },
     }),
 }));

@@ -5,6 +5,7 @@
  * `@madeora/email`.
  */
 import type { EmailTransport } from "@madeora/email";
+import type { GoogleCalendarClient, SyncStore } from "@madeora/google-calendar";
 import type { ObjectStore } from "@madeora/storage";
 
 export type EmailLanguage = "en" | "nl";
@@ -136,6 +137,16 @@ export interface JobDataPort {
    * reminders); how many it created.
    */
   advancePetCare(limit: number): Promise<number>;
+  /**
+   * google-calendar-sync (S33): the service-role sync functions, each rechecking the connection's
+   * lease (`google_sync_*`).
+   */
+  readonly googleSync: SyncStore;
+  /**
+   * outbox-dispatch (S33): queues the automatic sync of connections whose last run is over 15 minutes
+   * old; how many it queued.
+   */
+  queueGoogleCalendarSyncs(limit: number): Promise<number>;
   /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
   deliverCalendarReminder(
     eventId: string,
@@ -175,4 +186,12 @@ export interface JobServices {
   readonly appUrl: string | null;
   /** The object store (S15), or null where storage is off (`STORAGE_DRIVER` unset or `off`). */
   readonly objects: ObjectStore | null;
+  /**
+   * Google Calendar (S33): the OAuth and Calendar client and the refresh-token key, or null where the
+   * integration is off (`GOOGLE_CALENDAR_*` unset).
+   */
+  readonly googleCalendar: {
+    readonly client: GoogleCalendarClient;
+    readonly tokenKey: Buffer;
+  } | null;
 }

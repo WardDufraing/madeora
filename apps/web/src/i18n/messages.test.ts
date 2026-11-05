@@ -8,6 +8,8 @@ import { choreStateKey } from "@/chores/calendar";
 import { stateKey } from "@/components/recovery/recovery-state-text";
 import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
+import { connectNotices } from "@/google-calendar/schema";
+import { googleStates } from "@/google-calendar/shapes";
 import { unitMessageKeys } from "@/habits/numeric-keys";
 
 import { locales } from "./locales";
@@ -203,6 +205,11 @@ describe("message dictionaries", () => {
       Shopping: [
         ...withPrefix("frequency_", ["daily", "weekly", "monthly"]),
         ...withPrefix("access_", ["edit", "check", "view"]),
+      ],
+      // S33: notices after the OAuth callback and sync states, by their codes.
+      GoogleCalendar: [
+        ...withPrefix("notice_", connectNotices),
+        ...withPrefix("warning_", googleStates),
       ],
       Vacations: [
         ...withPrefix("status_", ["upcoming", "active", "ended", "cancelled"]),

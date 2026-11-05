@@ -49,6 +49,7 @@ Two briefs are not numbered steps: `plans/steps/graphify-brief.md` (Graphify eva
 | S30c | Habit-to-goal links                                             | `plans/steps/S30c-brief.md`                    |
 | S31  | Pets: profiles, medical history, medical access and care        | `plans/steps/S31-brief.md`                     |
 | S32  | Native calendar                                                 | `plans/steps/S32-brief.md`                     |
+| S33  | Google Calendar connect and inbound sync                        | `plans/steps/S33-brief.md`                     |
 
 S28b was added on Ward's decision (2026-10-28). It is not in the earlier briefs. It sits after S28 and before S29. The S23 heading says "Points and rewards"; "(Home)" is added in this table so it is not read as the personal ledger.
 
