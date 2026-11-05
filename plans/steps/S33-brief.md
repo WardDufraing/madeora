@@ -59,7 +59,7 @@ Out (S34): writing to Google (create, edit, delete), conflicts, "Remove from Mad
 ## Progress
 
 - 5 Nov: brief written; model switched to Opus; branch created.
-- 5 Nov: database, `@madeora/google-calendar`, the sync job, the web routes, settings page, calendar views, messages (en/nl), notification kind, tests and docs built. 
+- 5 Nov: database, `@madeora/google-calendar`, the sync job, the web routes, settings page, calendar views, messages (en/nl), notification kind, tests and docs built.
 - 5 Nov: full suite run; independent review CHANGES_REQUIRED (1 HIGH lint, 3 MEDIUM); all HIGH and MEDIUM and four LOW fixed and verified (`reviews/steps/S33-review.md`). Waiting for Ward's consent to commit, push and open the PR.
 
 ## Files
