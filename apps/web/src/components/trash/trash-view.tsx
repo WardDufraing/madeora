@@ -79,6 +79,8 @@ const itemTypeKey = {
   pet_medical_attachment: "itemTypePetMedicalAttachment",
   pet_care_activity: "itemTypePetCareActivity",
   calendar_event: "itemTypeCalendarEvent",
+  photo: "itemTypePhoto",
+  photo_album: "itemTypePhotoAlbum",
 } as const;
 function conflictMessage(kind: string) {
   switch (kind) {
@@ -126,6 +128,8 @@ function conflictMessage(kind: string) {
       return "conflictPetCareLimit";
     case "calendar_limit":
       return "conflictCalendarLimit";
+    case "album_limit":
+      return "conflictPhotoAlbumLimit";
     default:
       return "conflictOther";
   }

@@ -2,6 +2,8 @@ import { StorageUnavailableError } from "@madeora/storage";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { isPetAttachmentType, isPetPhotoType } from "@/pets/schema";
+import { processPhoto } from "@/photos/photo-image";
+import { isPhotoUploadType } from "@/photos/schema";
 import { processCover } from "@/recipes/cover-image";
 import { isCoverType } from "@/recipes/schema";
 import type { AttachmentImpact, FinalizeResponse } from "@/storage/api";
@@ -82,6 +84,7 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
   const isCover = upload.purpose === "recipe_cover";
   const isPetPhoto = upload.purpose === "pet_photo";
   const isPetAttachment = upload.purpose === "pet_medical_attachment";
+  const isPhoto = upload.purpose === "photo";
   const scope: AttachmentScope = input.data.scope ?? "this";
   const done: FinalizeResponse = { file: { id: fileId.data } };
   const finish = () =>
@@ -96,7 +99,12 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
   if (upload.status === "expired") return failure(410, "expired");
   if (
     upload.status !== "pending" ||
-    (upload.purpose !== "avatar" && !isAttachment && !isCover && !isPetPhoto && !isPetAttachment)
+    (upload.purpose !== "avatar" &&
+      !isAttachment &&
+      !isCover &&
+      !isPetPhoto &&
+      !isPetAttachment &&
+      !isPhoto)
   ) {
     return failure(404, "not-found");
   }
@@ -104,13 +112,15 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
   if (
     isAttachment
       ? !isAttachmentType(declaredType)
-      : isPetAttachment
-        ? !isPetAttachmentType(declaredType)
-        : isCover
-          ? !isCoverType(declaredType)
-          : isPetPhoto
-            ? !isPetPhotoType(declaredType)
-            : !isAvatarUploadType(declaredType)
+      : isPhoto
+        ? !isPhotoUploadType(declaredType)
+        : isPetAttachment
+          ? !isPetAttachmentType(declaredType)
+          : isCover
+            ? !isCoverType(declaredType)
+            : isPetPhoto
+              ? !isPetPhotoType(declaredType)
+              : !isAvatarUploadType(declaredType)
   ) {
     return failure(500, "failed");
   }
@@ -173,6 +183,18 @@ export async function POST(request: Request, { params }: FileRouteContext): Prom
     }
     if (read.status === "too-large" || read.bytes.byteLength !== upload.declared_size) {
       return await abandon("mismatch");
+    }
+    if (isPhoto && isPhotoUploadType(declaredType)) {
+      return await finalizePhotoUpload(storage, supabase, {
+        userId: input.identity.userId,
+        fileId: fileId.data,
+        uploadKey: upload.upload_key,
+        bytes: read.bytes,
+        declaredType,
+        abandon,
+        release,
+        done,
+      });
     }
     // By purpose, never by type: an avatar PNG and an attachment PNG are processed differently.
     const processed =
@@ -316,4 +338,77 @@ function impactOf(value: unknown): AttachmentImpact | null {
     full: count("full"),
     completed: count("completed"),
   };
+}
+
+/**
+ * Stores a photo (S35): re-encodes the verified upload into an optimized WebP master and three
+ * derivatives (no metadata, the original is not kept), puts all four under the keys the database
+ * generated for this upload, and finalizes them together, so the pool is charged for all four under
+ * its lock. A failure after the objects were written removes them; the database also queues them.
+ */
+async function finalizePhotoUpload(
+  storage: Storage,
+  supabase: SupabaseClient,
+  context: {
+    readonly userId: string;
+    readonly fileId: string;
+    readonly uploadKey: string;
+    readonly bytes: Uint8Array;
+    readonly declaredType: Parameters<typeof processPhoto>[1];
+    readonly abandon: (code: "mismatch" | "invalid-image" | "invalid-file") => Promise<Response>;
+    readonly release: () => Promise<void>;
+    readonly done: FinalizeResponse;
+  },
+): Promise<Response> {
+  const processed = await processPhoto(context.bytes, context.declaredType);
+  if (!processed.ok) return await context.abandon(processed.reason);
+  const { data: keys, error } = await supabase.rpc("get_photo_upload_keys", {
+    p_file_id: context.fileId,
+  });
+  if (error) {
+    await context.release();
+    return databaseFailure("storage.photo_keys_failed", error.code);
+  }
+  const keyOf = new Map(keys.map((row) => [row.kind, row.object_key]));
+  const stored = processed.variants.map((variant) => ({ variant, key: keyOf.get(variant.kind) }));
+  if (stored.some((entry) => entry.key === undefined) || stored.length !== 4) {
+    await context.release();
+    return failure(500, "failed");
+  }
+  const allKeys = stored.flatMap((entry) => (entry.key ? [entry.key] : []));
+  await Promise.all(
+    stored.map((entry) =>
+      entry.key
+        ? storage.objects.put(entry.key, entry.variant.bytes, "image/webp")
+        : Promise.resolve(),
+    ),
+  );
+  const outcome = await storage.finalizer.finalizePhoto(
+    context.userId,
+    context.fileId,
+    processed.variants.map((variant) => ({
+      kind: variant.kind,
+      size: variant.bytes.byteLength,
+      width: variant.width,
+      height: variant.height,
+      sha256: variant.sha256,
+    })),
+  );
+  if (outcome === "ready") {
+    await removeQuietly(storage, [context.uploadKey]);
+    return json(200, context.done);
+  }
+  // The database has already marked the upload failed and queued every object; removing them now
+  // only frees space sooner. 'not_found' means the upload is no longer this request's to clean up.
+  if (outcome !== "not_found") await removeQuietly(storage, [context.uploadKey, ...allKeys]);
+  switch (outcome) {
+    case "storage_full":
+      return failure(409, "storage-full");
+    case "expired":
+      return failure(410, "expired");
+    case "not_found":
+      return failure(404, "not-found");
+    default:
+      return failure(500, "failed");
+  }
 }

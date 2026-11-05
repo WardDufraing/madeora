@@ -16,6 +16,8 @@ interface State {
   rpc: Mock<Rpc>;
   objects: Objects;
   finalize: Mock;
+  finalizePhoto: Mock;
+  processPhoto: Mock;
   storageOn: boolean;
   process: Mock;
   check: Mock;
@@ -28,6 +30,8 @@ const state = vi.hoisted((): State => ({
   rpc: vi.fn(),
   objects: { head: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn() },
   finalize: vi.fn(),
+  finalizePhoto: vi.fn(),
+  processPhoto: vi.fn(),
   storageOn: true,
   process: vi.fn(),
   check: vi.fn(),
@@ -44,8 +48,14 @@ vi.mock("@/auth/supabase-server", () => ({
 }));
 vi.mock("@/storage/server", () => ({
   getStorage: () =>
-    state.storageOn ? { objects: state.objects, finalizer: { finalize: state.finalize } } : null,
+    state.storageOn
+      ? {
+          objects: state.objects,
+          finalizer: { finalize: state.finalize, finalizePhoto: state.finalizePhoto },
+        }
+      : null,
 }));
+vi.mock("@/photos/photo-image", () => ({ processPhoto: state.processPhoto }));
 vi.mock("@/storage/avatar-image", () => ({ processAvatar: state.process }));
 vi.mock("@/recipes/cover-image", () => ({ processCover: state.process }));
 vi.mock("@/tasks/attachment-file", () => ({ checkAttachment: state.check }));
@@ -58,6 +68,10 @@ const UPLOAD_KEY = `u/${"a".repeat(64)}`;
 const OBJECT_KEY = `u/${"b".repeat(64)}`;
 const BYTES = new Uint8Array(2048);
 const PROCESSED = new Uint8Array([1, 2, 3]);
+const PHOTO_KEYS = (["master", "full", "display", "thumb"] as const).map((kind, index) => ({
+  kind,
+  object_key: `u/${String(index + 1).repeat(64)}`,
+}));
 const ATTACHMENT_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0a01";
 
 function upload(extra: Record<string, unknown> = {}) {
@@ -90,6 +104,9 @@ function finalize(fileId = FILE_ID, body: unknown = {}) {
 function withUpload(row: Record<string, unknown> | null) {
   state.rpc.mockImplementation((name) => {
     if (name === "get_my_upload") return Promise.resolve({ data: row ? [row] : [], error: null });
+    if (name === "get_photo_upload_keys") {
+      return Promise.resolve({ data: PHOTO_KEYS, error: null });
+    }
     if (name === "claim_my_upload") return Promise.resolve({ data: state.claim, error: null });
     if (name === "attach_task_file") return Promise.resolve({ data: [state.attach], error: null });
     if (name === "attach_pet_medical_file") {
@@ -112,6 +129,17 @@ beforeEach(() => {
   state.objects.put.mockResolvedValue(undefined);
   state.objects.delete.mockResolvedValue(undefined);
   state.finalize.mockReset().mockResolvedValue("ready");
+  state.finalizePhoto.mockReset().mockResolvedValue("ready");
+  state.processPhoto.mockReset().mockResolvedValue({
+    ok: true,
+    variants: PHOTO_KEYS.map((entry, index) => ({
+      kind: entry.kind,
+      bytes: new Uint8Array(10 * (index + 1)),
+      width: 100,
+      height: 50,
+      sha256: String(index + 1).repeat(64),
+    })),
+  });
   state.process.mockReset().mockResolvedValue({
     ok: true,
     bytes: PROCESSED,
@@ -462,5 +490,77 @@ describe("POST /api/v1/files/{fileId}/finalize for pets (S31)", () => {
     state.objects.head.mockResolvedValue({ size: 2048, contentType: "image/jpeg" });
     state.petAnswer = { outcome: "not_permitted" };
     expect((await finalize()).status).toBe(403);
+  });
+});
+
+describe("a photo (S35)", () => {
+  const photo = () => {
+    withUpload(upload({ purpose: "photo", declared_type: "image/heic", declared_size: 2048 }));
+  };
+  beforeEach(() => {
+    state.objects.head.mockResolvedValue({ size: 2048, contentType: "image/heic" });
+  });
+
+  it("stores the master and the three derivatives under the generated keys, then finalizes them together", async () => {
+    photo();
+    const response = await finalize();
+    expect(response.status).toBe(200);
+    expect(state.processPhoto).toHaveBeenCalledWith(BYTES, "image/heic");
+    expect(state.objects.put).toHaveBeenCalledTimes(4);
+    for (const entry of PHOTO_KEYS) {
+      expect(state.objects.put).toHaveBeenCalledWith(
+        entry.object_key,
+        expect.any(Uint8Array),
+        "image/webp",
+      );
+    }
+    expect(state.finalizePhoto).toHaveBeenCalledWith("user-a", FILE_ID, [
+      { kind: "master", size: 10, width: 100, height: 50, sha256: "1".repeat(64) },
+      { kind: "full", size: 20, width: 100, height: 50, sha256: "2".repeat(64) },
+      { kind: "display", size: 30, width: 100, height: 50, sha256: "3".repeat(64) },
+      { kind: "thumb", size: 40, width: 100, height: 50, sha256: "4".repeat(64) },
+    ]);
+    // The raw upload is removed once the photo is stored: the original is not kept.
+    expect(state.objects.delete).toHaveBeenCalledWith(UPLOAD_KEY);
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
+  it("abandons an upload that is not a usable picture and stores nothing", async () => {
+    photo();
+    state.processPhoto.mockResolvedValue({ ok: false, reason: "invalid-image" });
+    const response = await finalize();
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "invalid-image" });
+    expect(state.objects.put).not.toHaveBeenCalled();
+    expect(state.finalizePhoto).not.toHaveBeenCalled();
+    expect(state.rpc).toHaveBeenCalledWith("abandon_my_upload", {
+      p_file_id: FILE_ID,
+      p_reason: "invalid_image",
+    });
+  });
+
+  it("refuses a size that differs from the declaration before reading it", async () => {
+    photo();
+    state.objects.head.mockResolvedValue({ size: 9999, contentType: "image/heic" });
+    expect((await finalize()).status).toBe(422);
+    expect(state.objects.get).not.toHaveBeenCalled();
+    expect(state.processPhoto).not.toHaveBeenCalled();
+  });
+
+  it("answers a full pool and removes everything it wrote", async () => {
+    photo();
+    state.finalizePhoto.mockResolvedValue("storage_full");
+    const response = await finalize();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "storage-full" });
+    for (const entry of PHOTO_KEYS)
+      expect(state.objects.delete).toHaveBeenCalledWith(entry.object_key);
+    expect(state.objects.delete).toHaveBeenCalledWith(UPLOAD_KEY);
+  });
+
+  it("is idempotent for a photo that is already ready", async () => {
+    withUpload(upload({ purpose: "photo", status: "ready", declared_type: "image/heic" }));
+    expect((await finalize()).status).toBe(200);
+    expect(state.objects.get).not.toHaveBeenCalled();
   });
 });

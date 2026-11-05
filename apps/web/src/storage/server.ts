@@ -16,6 +16,21 @@ export interface UploadFinalizer {
     fileId: string,
     facts: { readonly contentType: string; readonly size: number; readonly sha256: string },
   ): Promise<FinalizeOutcome>;
+  /** Finalizes a photo upload with its four stored pictures (`public.finalize_photo`). */
+  finalizePhoto(
+    userId: string,
+    fileId: string,
+    variants: readonly PhotoVariantFacts[],
+  ): Promise<FinalizeOutcome>;
+}
+
+/** The four pictures of a photo, as the server measured them (S35). */
+export interface PhotoVariantFacts {
+  readonly kind: "master" | "full" | "display" | "thumb";
+  readonly size: number;
+  readonly width: number;
+  readonly height: number;
+  readonly sha256: string;
 }
 
 export interface Storage {
@@ -67,6 +82,17 @@ export function getStorage(): Storage | null {
         if (error) throw new Error(`finalize_upload failed: ${error.code}`);
         const outcome = outcomes.find((value) => value === data);
         if (!outcome) throw new Error("finalize_upload: unexpected result");
+        return outcome;
+      },
+      async finalizePhoto(userId, fileId, variants) {
+        const { data, error } = await service.rpc("finalize_photo", {
+          p_user_id: userId,
+          p_file_id: fileId,
+          p_variants: variants.map((variant) => ({ ...variant })),
+        });
+        if (error) throw new Error(`finalize_photo failed: ${error.code}`);
+        const outcome = outcomes.find((value) => value === data);
+        if (!outcome) throw new Error("finalize_photo: unexpected result");
         return outcome;
       },
     },

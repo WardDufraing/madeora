@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
     "@madeora/observability",
     "@madeora/storage",
   ],
+  // Image decoding for photos (S35): the HEIC decoder and its WebAssembly bundle are loaded from
+  // node_modules at run time, not bundled, like sharp.
+  serverExternalPackages: ["heic-decode", "libheif-js"],
   poweredByHeader: false,
   reactStrictMode: true,
 };

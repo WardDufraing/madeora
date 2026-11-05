@@ -396,6 +396,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      add_photos_to_album: { Args: { p_album_id: string; p_photo_ids: string[] }; Returns: Json };
       add_shopping_items: {
         Args: { p_items: Json; p_list_id: string };
         Returns: {
@@ -538,6 +539,13 @@ export type Database = {
           object_key: string;
           sha256: string;
           size_bytes: number;
+        }[];
+      };
+      authorize_photo_read: {
+        Args: { p_photo_id: string; p_variant: string };
+        Returns: {
+          content_type: string;
+          object_key: string;
         }[];
       };
       authorize_sign_in_method_change: {
@@ -1146,6 +1154,19 @@ export type Database = {
           upload_key: string;
         }[];
       };
+      create_photo_album: {
+        Args: { p_home_id: string; p_id: string; p_name: string };
+        Returns: Json;
+      };
+      create_photo_intent: {
+        Args: { p_content_type: string; p_home_id: string; p_request_id: string; p_size: number };
+        Returns: {
+          expires_at: string;
+          file_id: string;
+          outcome: string;
+          upload_key: string;
+        }[];
+      };
       create_recipe: {
         Args: { p_content: Json; p_home_id?: string; p_id: string; p_publish?: boolean };
         Returns: {
@@ -1427,6 +1448,11 @@ export type Database = {
         Args: { p_entry_id: string; p_expected_revision: number };
         Returns: Json;
       };
+      delete_photo_album: {
+        Args: { p_album_id: string; p_expected_revision: number };
+        Returns: Json;
+      };
+      delete_photos: { Args: { p_photo_ids: string[] }; Returns: Json };
       delete_recipe: {
         Args: { p_impact_token?: string; p_recipe_id: string };
         Returns: {
@@ -1564,6 +1590,10 @@ export type Database = {
       expire_upload: { Args: { p_file_id: string }; Returns: string };
       fail_job_outbox: {
         Args: { p_error_code: string; p_id: string; p_permanent: boolean };
+        Returns: string;
+      };
+      finalize_photo: {
+        Args: { p_file_id: string; p_user_id: string; p_variants: Json };
         Returns: string;
       };
       finalize_upload: {
@@ -1734,6 +1764,14 @@ export type Database = {
       get_pet_care_activity: { Args: { p_activity_id: string }; Returns: Json };
       get_pet_medical: { Args: { p_pet_id: string }; Returns: Json };
       get_pet_medical_entry: { Args: { p_entry_id: string }; Returns: Json };
+      get_photo: { Args: { p_photo_id: string }; Returns: Json };
+      get_photo_upload_keys: {
+        Args: { p_file_id: string };
+        Returns: {
+          kind: string;
+          object_key: string;
+        }[];
+      };
       get_point_leaderboard: { Args: { p_home_id: string; p_period?: string }; Returns: Json };
       get_point_summary: { Args: { p_home_id: string }; Returns: Json };
       get_recipe: { Args: { p_home_id?: string; p_recipe_id: string }; Returns: Json };
@@ -2284,6 +2322,10 @@ export type Database = {
       };
       list_pet_medical_access: { Args: { p_home_id: string }; Returns: Json };
       list_pets: { Args: { p_home_id: string }; Returns: Json };
+      list_photo_library: {
+        Args: { p_album_id: string; p_home_id: string; p_offset: number };
+        Returns: Json;
+      };
       list_point_accounts: {
         Args: { p_home_id: string };
         Returns: {
@@ -2769,6 +2811,10 @@ export type Database = {
       };
       remove_pet_medical_attachment: { Args: { p_attachment_id: string }; Returns: Json };
       remove_pet_photo: { Args: { p_expected_revision: number; p_pet_id: string }; Returns: Json };
+      remove_photos_from_album: {
+        Args: { p_album_id: string; p_photo_ids: string[] };
+        Returns: Json;
+      };
       remove_task_attachment: {
         Args: { p_attachment_id: string; p_dry_run?: boolean; p_scope?: string };
         Returns: {
@@ -2794,6 +2840,10 @@ export type Database = {
       rename_dashboard_template: {
         Args: { p_name: string; p_template_id: string };
         Returns: string;
+      };
+      rename_photo_album: {
+        Args: { p_album_id: string; p_expected_revision: number; p_name: string };
+        Returns: Json;
       };
       rename_shopping_category: {
         Args: { p_expected_revision: number; p_id: string; p_name: string };
