@@ -44,6 +44,7 @@ export const delegableCapabilities = [
   "manageHomePets",
   "managePetMedicalAccess",
   "manageHomeCalendar",
+  "manageHomePhotos",
 ] as const;
 export type DelegableCapability = (typeof delegableCapabilities)[number];
 
@@ -96,6 +97,9 @@ export const homeActions = [
   "home.pets.grantMedicalAccess",
   "home.calendar.view",
   "home.calendar.manage",
+  "home.photos.view",
+  "home.photos.upload",
+  "home.photos.manage",
 ] as const;
 export type HomeAction = (typeof homeActions)[number];
 
@@ -271,6 +275,14 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // the other members' levels, never their own. SQL: private.calendar_level.
   "home.calendar.view": { roles: ["owner", "administrator", "member"] },
   "home.calendar.manage": { roles: ["owner"], delegatedThrough: "manageHomeCalendar" },
+  // Photos (S35; matrix in the S35 brief): every current member sees the Home's photo library and
+  // uploads to it; the uploader deletes their own photos and manages the albums they created (a
+  // per-item rule the database decides); photo managers (the Owner, Administrators granted
+  // manageHomePhotos) delete any photo and manage every album. SQL: private.photo_access,
+  // private.can_change_photo_item.
+  "home.photos.view": { roles: ["owner", "administrator", "member"] },
+  "home.photos.upload": { roles: ["owner", "administrator", "member"] },
+  "home.photos.manage": { roles: ["owner"], delegatedThrough: "manageHomePhotos" },
 };
 
 const allowed: HomeDecision = { allowed: true };
@@ -353,6 +365,9 @@ export function homePermissions(membership: HomeMembershipFacts): HomePermission
     "home.pets.grantMedicalAccess": can("home.pets.grantMedicalAccess"),
     "home.calendar.view": can("home.calendar.view"),
     "home.calendar.manage": can("home.calendar.manage"),
+    "home.photos.view": can("home.photos.view"),
+    "home.photos.upload": can("home.photos.upload"),
+    "home.photos.manage": can("home.photos.manage"),
   };
 }
 

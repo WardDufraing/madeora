@@ -66,7 +66,7 @@ export const secondaryNav: readonly NavItem[] = [
  * Sections that exist in the navigation but are not built yet. They render a "not built yet"
  * page; each module's step removes its id here when it adds the real page.
  */
-export const unbuiltSections: ReadonlySet<NavId> = new Set(["photos", "integrations", "help"]);
+export const unbuiltSections: ReadonlySet<NavId> = new Set(["integrations", "help"]);
 
 /** Whether a URL segment names an unbuilt navigation section. */
 export function isUnbuiltSection(value: string): value is NavId {
@@ -99,7 +99,8 @@ export function contextHref(item: NavItem, homeId: string | null): string {
     item.id === "meals" ||
     item.id === "habits" ||
     item.id === "goals" ||
-    item.id === "pets"
+    item.id === "pets" ||
+    item.id === "photos"
   ) {
     return homeId !== null ? `/homes/${homeId}/${item.id}` : item.href;
   }

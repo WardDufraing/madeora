@@ -57,6 +57,7 @@ const matrix: readonly {
       ["manageHomePets"],
       ["managePetMedicalAccess"],
       ["manageHomeCalendar"],
+      ["manageHomePhotos"],
     ].map((granted) => {
       const owner = role === "owner";
       const admin = role === "administrator";
@@ -131,6 +132,10 @@ const matrix: readonly {
           // (./calendar.ts); calendar managers set it.
           "home.calendar.view": true,
           "home.calendar.manage": owner || (admin && has("manageHomeCalendar")),
+          // Every member sees and uploads photos; photo managers delete any photo.
+          "home.photos.view": true,
+          "home.photos.upload": true,
+          "home.photos.manage": owner || (admin && has("manageHomePhotos")),
         },
       };
     }),

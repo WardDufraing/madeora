@@ -844,6 +844,29 @@ From here a person can create, change and delete their Google events from Madeor
 
 2. In the app, open a Google event of yours: it shows **Edit** and **Delete**. With the variables set, follow steps 8.5 and 8.6 of [`google-calendar-setup.md`](google-calendar-setup.md).
 
+## Check S35 photo libraries (`20261121090000_photos.sql`)
+
+From here people can keep photos in their personal library or a Home's, group them in albums and delete them to the trash (ADR 0045). Apply it after the S34 file. It adds no job, variable or schedule: the purge of deleted photos rides the existing `storage-file-purge` and `trash-entry-purge` jobs, and uploads need storage (`STORAGE_DRIVER=s3`, see [`file-storage.md`](file-storage.md)).
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.photos') as photos_table,
+     to_regclass('private.photo_albums') as albums_table,
+     has_table_privilege('authenticated', 'private.photos', 'select') as people_can_read_photos_table,
+     has_function_privilege('authenticated', 'public.list_photo_library(uuid, uuid, integer)', 'execute')
+       as people_can_list_their_library,
+     has_function_privilege('authenticated', 'public.finalize_photo(uuid, uuid, jsonb)', 'execute')
+       as people_can_finalize_photos,
+     has_function_privilege('service_role', 'public.finalize_photo(uuid, uuid, jsonb)', 'execute')
+       as the_server_can_finalize_photos;
+   ```
+
+   It must show both tables, **true** for `people_can_list_their_library` and `the_server_can_finalize_photos`, and **false** for `people_can_read_photos_table` and `people_can_finalize_photos`.
+
+2. In the app, open **Photos** in your personal space: it shows "No photos yet". Uploading needs storage; until it is configured the page says uploading is not available yet.
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:
