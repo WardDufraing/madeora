@@ -22,6 +22,13 @@ test.use({
 const dashboardHeading = (page: Page) =>
   page.getByRole("main").getByRole("heading", { level: 1, name: "Dashboard" });
 
+// This job has no setup project that signs in first, so a test's first landing on `/` can meet
+// a cold `next start` while the other tests start in parallel: the first render loads every
+// dashboard widget's server code, and a fresh browser also reports its time zone once, which
+// refreshes the page. On CI runners that can take longer than the default 5 seconds, so a fresh
+// Google account's first landing gets more time. The assertion itself is unchanged.
+const FIRST_LOAD = { timeout: 30_000 };
+
 /** A Google account email that belongs to no Madeora account yet. */
 const newGoogleEmail = () => `g-${randomUUID()}@gmail.test`;
 
@@ -68,7 +75,7 @@ test("a first Google sign-in creates one account and opens the personal dashboar
 }) => {
   const googleEmail = newGoogleEmail();
   await signInWithGoogle(page, googleEmail);
-  await expect(dashboardHeading(page)).toBeVisible();
+  await expect(dashboardHeading(page)).toBeVisible(FIRST_LOAD);
   await expect(page).toHaveURL(/\/$/);
 
   // The account is a Google-only account: Google cannot be removed.
@@ -180,7 +187,7 @@ test("the last sign-in method cannot be unlinked, and Google needs a fresh passw
 }) => {
   // A Google-only account: the page offers no unlink, and Supabase Auth's API refuses it too.
   await signInWithGoogle(page, newGoogleEmail());
-  await expect(dashboardHeading(page)).toBeVisible();
+  await expect(dashboardHeading(page)).toBeVisible(FIRST_LOAD);
   expect(await unlinkThroughApi(page)).toBeGreaterThanOrEqual(400);
   await page.goto("/settings");
   await expect(methods(page).getByText(/Linked to the Google account/)).toBeVisible();
