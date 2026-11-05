@@ -9,7 +9,8 @@
  *   - a full pass over the window (30 days back, 365 days ahead, recurring events expanded) when there is
  *     no token or the last full pass is over a day old; the database then removes what it did not see.
  * Every page is applied idempotently (upsert on calendar and Google id), so a retried run or a repeated
- * page never duplicates an event. Google refusing the refresh token ends the run as
+ * page never duplicates an event. Before the pull, the person's waiting changes are sent (push.ts, S34),
+ * so the pull that follows reads Google's answer to them. Google refusing the refresh token ends the run as
  * `authorization_expired`: syncing stops and the person is asked to reconnect.
  */
 import {
@@ -20,6 +21,7 @@ import {
 } from "./client.ts";
 import { SealError, openRefreshToken } from "./crypto.ts";
 import type { NormalizedCalendar, NormalizedEvent } from "./normalize.ts";
+import { PushLeaseLost, pushChanges, type PushStore } from "./push.ts";
 
 export const SYNC_LIMITS = {
   eventsPerCalendar: 5000,
@@ -41,7 +43,7 @@ export interface SyncCalendar {
 }
 
 /** The database functions the run uses (service role, each rechecking the lease). */
-export interface SyncStore {
+export interface SyncStore extends PushStore {
   begin(connectionId: string, lease: string, leaseSeconds: number): Promise<BeginResult>;
   /** Null when the lease is no longer held. */
   applyCalendars(
@@ -167,6 +169,17 @@ export async function syncConnection(
 
   const chosen = await store.applyCalendars(connectionId, lease, calendars);
   if (chosen === null) return "lease_lost";
+
+  try {
+    const pushed = await pushChanges(store, google, accessToken, connectionId, lease);
+    if (pushed.sent > 0 || pushed.waiting > 0) {
+      logger.info("google_calendar.push.done", { sent: pushed.sent, waiting: pushed.waiting });
+    }
+  } catch (error) {
+    if (error instanceof PushLeaseLost) return "lease_lost";
+    if (error instanceof GoogleAuthorizationError) return expire();
+    throw error;
+  }
 
   const now = dependencies.now();
   const window = {

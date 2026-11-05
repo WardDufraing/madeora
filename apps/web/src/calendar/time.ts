@@ -63,3 +63,12 @@ export function nextValidTime(date: string, time: string, timeZone: string): str
   }
   return null;
 }
+
+/** An instant's local date and time of day in a zone (`{ date: "YYYY-MM-DD", time: "HH:mm" }`). */
+export function localDateTime(
+  instant: string,
+  timeZone: string,
+): { readonly date: string; readonly time: string } {
+  const [date = "", time = ""] = wallClockOf(Date.parse(instant), timeZone).split("T");
+  return { date, time };
+}

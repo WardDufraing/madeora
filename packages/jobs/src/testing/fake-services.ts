@@ -102,6 +102,8 @@ export class FakeJobData implements JobDataPort {
     applyCalendars: () => Promise.resolve([]),
     applyEvents: () => Promise.resolve(0),
     finishCalendar: () => Promise.resolve(true),
+    pushChanges: () => Promise.resolve([]),
+    pushResult: () => Promise.resolve({ state: "done" }),
     finish: (_connectionId, _lease, outcome) => {
       this.googleCalls.push(`finish:${outcome}`);
       return Promise.resolve(true);

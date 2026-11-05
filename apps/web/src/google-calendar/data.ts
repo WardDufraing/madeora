@@ -64,3 +64,25 @@ export async function readGoogleEvent(
   }
   return { status: "ok", value: parsed.data };
 }
+
+/** The Google calendars a new personal event can be saved to (S34), and the person's default; null for none. */
+export interface GoogleWriteTargets {
+  readonly calendars: readonly { readonly id: string; readonly name: string }[];
+  readonly defaultId: string | null;
+}
+
+export async function readGoogleWriteTargets(): Promise<GoogleWriteTargets | null> {
+  const found = await readGoogleConnection();
+  if (found.status !== "ok" || found.value === null || found.value.status !== "connected") {
+    return null;
+  }
+  const calendars = found.value.calendars
+    .filter((calendar) => calendar.writable && calendar.sync && calendar.available)
+    .map(({ id, name }) => ({ id, name }));
+  if (calendars.length === 0) return null;
+  const defaultId = found.value.writeCalendarId;
+  return {
+    calendars,
+    defaultId: calendars.some((calendar) => calendar.id === defaultId) ? defaultId : null,
+  };
+}

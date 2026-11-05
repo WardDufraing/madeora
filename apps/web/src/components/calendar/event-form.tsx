@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { EVENTS_ENDPOINT, eventEndpoint, sendCalendarRequest } from "@/calendar/api";
-import { eventPath } from "@/calendar/format";
+import { calendarPath, eventPath, googleEventPath } from "@/calendar/format";
 import {
   CALENDAR_LIMITS,
   calendarReminders,
@@ -17,6 +17,7 @@ import {
 } from "@/calendar/schema";
 import { previewSchema, type EventDetail, type Preview } from "@/calendar/shapes";
 import { localTimeKind, nextValidTime } from "@/calendar/time";
+import { Failure, useGoogleMutation } from "@/components/google-calendar/google-calendar-actions";
 import { RadioOption } from "@/components/settings/radio-option";
 import {
   noRepeat,
@@ -29,6 +30,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SelectField } from "@/components/ui/select-field";
 import { TextArea } from "@/components/ui/text-area";
 import { TextField } from "@/components/ui/text-field";
+import { GOOGLE_EVENTS_ENDPOINT, sendGoogleRequest } from "@/google-calendar/api";
+import type { GoogleWriteTargets } from "@/google-calendar/data";
+import { createGoogleEventSchema } from "@/google-calendar/schema";
 import type { DateFormat } from "@/preferences/schema";
 import { formatTaskDate } from "@/tasks/format";
 
@@ -62,6 +66,8 @@ interface FormValues {
   participants: string[];
   shares: string[];
   scope: EventScope;
+  /** S34, a new personal event: "" saves it in Madeora, a calendar id saves it to that Google calendar. */
+  target: string;
 }
 
 const fieldNames = [
@@ -131,7 +137,8 @@ function repeatDraftOf(event: EventDetail, from: string | null): RepeatDraft {
  * default, changeable to any IANA zone), location, description, repeat, participants (a Home event)
  * or the Homes a personal event is shared with. A recurring event is changed for this event, this
  * and following events, or all events, and every such change first shows the occurrences it affects;
- * nothing changes before the person confirms. The database checks everything again.
+ * nothing changes before the person confirms. The database checks everything again. A new personal event
+ * can instead be saved to one of the person's writable Google calendars (S34; no reminder or shares there).
  */
 export function EventForm({
   homeId,
@@ -143,6 +150,7 @@ export function EventForm({
   initialDate,
   event,
   on,
+  googleTargets,
 }: {
   readonly homeId: string | null;
   readonly defaultTimeZone: string;
@@ -157,6 +165,8 @@ export function EventForm({
   readonly event?: EventDetail;
   /** Editing a recurring event from one occurrence. */
   readonly on?: string;
+  /** S34: the Google calendars a new personal event may be saved to. */
+  readonly googleTargets?: GoogleWriteTargets;
 }) {
   const t = useTranslations("Calendar");
   const scopeLabel = {
@@ -199,12 +209,19 @@ export function EventForm({
       participants: [...((occurrence ?? event?.series)?.participants ?? [])],
       shares: [...sharesOf],
       scope: initialScope,
+      target: !event && !homeId ? (googleTargets?.defaultId ?? "") : "",
     },
   });
   const errors = form.formState.errors;
-  const [allDay, startsOn, startTime, timezone, scope] = useWatch({
+  const [allDay, startsOn, startTime, timezone, scope, target] = useWatch({
     control: form.control,
-    name: ["allDay", "startsOn", "startTime", "timezone", "scope"],
+    name: ["allDay", "startsOn", "startTime", "timezone", "scope", "target"],
+  });
+  const toGoogle = !event && !homeId && target !== "";
+  const googleSave = useGoogleMutation(`google-create:${id}`, async (body: object) => {
+    const answer = await sendGoogleRequest("POST", GOOGLE_EVENTS_ENDPOINT, body);
+    const created = typeof answer.eventId === "string" ? answer.eventId : null;
+    router.push(created ? googleEventPath(null, created) : calendarPath(null));
   });
 
   const save = useCalendarMutation(
@@ -306,6 +323,27 @@ export function EventForm({
       ...(homeId ? { participants: values.participants } : {}),
       ...(!homeId && withRepeat ? { shares: values.shares } : {}),
     };
+    if (!event && !homeId && values.target !== "") {
+      const google = createGoogleEventSchema.safeParse({
+        requestId: id,
+        calendarId: values.target,
+        event: { ...fields, reminder: undefined, shares: undefined },
+      });
+      if (!google.success) {
+        let first: Field | null = null;
+        for (const issue of google.error.issues) {
+          const key = issue.path[0] === "event" ? issue.path[1] : null;
+          if (isField(key) && !form.getFieldState(key).error) {
+            form.setError(key, { message: values[key] === "" ? "required" : issue.message });
+            first ??= key;
+          }
+        }
+        if (first) form.setFocus(first);
+        return;
+      }
+      googleSave.mutate(google.data);
+      return;
+    }
     const parsed = event
       ? updateEventSchema.safeParse({
           revision: event.revision,
@@ -352,6 +390,22 @@ export function EventForm({
       data-testid="event-form"
     >
       <CalendarFailureAlert error={save.error} />
+      <Failure error={googleSave.error} about="event" />
+      {!event && !homeId && googleTargets ? (
+        <SelectField
+          label={t("fieldSaveTo")}
+          description={toGoogle ? t("fieldSaveToGoogleHint") : t("fieldSaveToHint")}
+          options={[
+            { value: "", label: t("saveToMadeora") },
+            ...googleTargets.calendars.map((calendar) => ({
+              value: calendar.id,
+              label: t("saveToGoogle", { calendar: calendar.name }),
+            })),
+          ]}
+          data-testid="event-save-to"
+          {...form.register("target")}
+        />
+      ) : null}
       {recurring && occurrence ? (
         <fieldset className="flex flex-col gap-1" data-testid="event-scope">
           <legend className="mb-1 text-body font-semibold text-fg">{t("scopeLegend")}</legend>
@@ -496,7 +550,7 @@ export function EventForm({
           {t("occurrenceOnly", { date: on ? date(on) : "" })}
         </p>
       )}
-      {scope === "only" ? null : (
+      {scope === "only" || toGoogle ? null : (
         <SelectField
           label={t("fieldReminder")}
           description={homeId ? t("fieldReminderHomeHint") : t("fieldReminderPersonalHint")}
@@ -536,7 +590,7 @@ export function EventForm({
           ) : null}
         </fieldset>
       ) : null}
-      {!homeId && homes.length > 0 && scope !== "only" ? (
+      {!homeId && homes.length > 0 && scope !== "only" && !toGoogle ? (
         <fieldset>
           <legend className="mb-1 text-body font-medium text-fg">{t("fieldShares")}</legend>
           <p className="mb-2 text-helper text-fg-muted">{t("fieldSharesHint")}</p>
@@ -608,7 +662,7 @@ export function EventForm({
           {t("cancel")}
         </Button>
         {!preview ? (
-          <Button type="submit" loading={save.busy} data-testid="event-save">
+          <Button type="submit" loading={save.busy || googleSave.busy} data-testid="event-save">
             {event ? (recurring ? t("reviewChange") : t("save")) : t("create")}
           </Button>
         ) : null}

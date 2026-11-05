@@ -50,6 +50,7 @@ Two briefs are not numbered steps: `plans/steps/graphify-brief.md` (Graphify eva
 | S31  | Pets: profiles, medical history, medical access and care        | `plans/steps/S31-brief.md`                     |
 | S32  | Native calendar                                                 | `plans/steps/S32-brief.md`                     |
 | S33  | Google Calendar connect and inbound sync                        | `plans/steps/S33-brief.md`                     |
+| S34  | Google Calendar outbound changes and conflicts                  | `plans/steps/S34-brief.md`                     |
 
 S28b was added on Ward's decision (2026-10-28). It is not in the earlier briefs. It sits after S28 and before S29. The S23 heading says "Points and rewards"; "(Home)" is added in this table so it is not read as the personal ledger.
 
@@ -65,7 +66,7 @@ S20's brief uses S20b and S20c as parts of that one step (`plans/steps/S20-brief
 
 ## Later numbers, cited only
 
-These have no brief in the repo. The phrase is copied from the citation. Where two files describe the same number differently, both are quoted and the scope is uncertain. No dates are known. Numbers that never appear are not listed: S34, S36, S39, S46, S47 and S48 are not cited anywhere in the repository.
+These have no brief in the repo. The phrase is copied from the citation. Where two files describe the same number differently, both are quoted and the scope is uncertain. No dates are known. Numbers that never appear are not listed: S36, S39, S46, S47 and S48 are not cited anywhere in the repository.
 
 | Step | What the citation says                                                                                               | Source                                                                                                                                                                                     | Certainty                                                                                                                                                                                                                                                                                   |
 | ---- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

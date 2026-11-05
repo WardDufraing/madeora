@@ -36,6 +36,8 @@ export const occurrenceSchema = z.object({
   source: z.enum(["madeora", "google"]).default("madeora"),
   /** A Google event's calendar name; null for Madeora events. */
   calendar: z.string().nullable().default(null),
+  /** S34: a Google event's change state, for its owner only (null: in sync). */
+  googleState: z.enum(["saving", "deleting", "conflict", "failed"]).nullable().default(null),
 });
 export type Occurrence = z.output<typeof occurrenceSchema>;
 

@@ -28,6 +28,10 @@ function google(overrides: Partial<GoogleCalendarClient> = {}): GoogleCalendarCl
     primaryCalendarId: () => Promise.resolve("a@gmail.com"),
     listCalendars: () => Promise.resolve([]),
     listEvents: () => Promise.reject(new Error("unused")),
+    getEvent: () => Promise.reject(new Error("unused")),
+    insertEvent: () => Promise.reject(new Error("unused")),
+    patchEvent: () => Promise.reject(new Error("unused")),
+    deleteEvent: () => Promise.reject(new Error("unused")),
     ...overrides,
   };
 }

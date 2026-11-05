@@ -13,10 +13,40 @@
  *   `{ outcome: "saved" }`; `unavailable` (409), `invalid-home` (400), `too-many` (409).
  * - `GET /api/v1/calendar/google-events/:id?homeId=` → `200 { event }`; one the person may not see
  *   answers `404 not-found`, exactly like a missing one.
+ *
+ * S34 (changes from Madeora; each waits for Google and is sent by the sync job):
+ * - `PUT …/google-calendar/target` `{ calendarId | null }` → `{ outcome: "saved" }`; `read-only` (409).
+ * - `PUT …/google-calendar/calendars/:id` may also answer `pending-changes` (409).
+ * - `POST /api/v1/calendar/google-events` `{ requestId, calendarId, event }` → `201 { eventId }`
+ *   (`200` for the same request again); `read-only`, `authorization-expired`, `limit-reached` (409),
+ *   `invalid-dates`, `nonexistent-time` (400).
+ * - `PATCH /api/v1/calendar/google-events/:id` `{ scope, revision, event, dryRun? }` → `{ outcome: "saved"
+ *   | "unchanged" }` or `{ outcome: "preview", count, dates, beyondWindow }`; `stale`, `busy`,
+ *   `conflict-open`, `series-limit` (409), `invalid-scope` (400), and the create errors.
+ * - `DELETE /api/v1/calendar/google-events/:id` `{ scope, destination, revision, dryRun? }` →
+ *   `{ outcome: "removed" | "deleting" }` or a preview.
+ * - `POST /api/v1/integrations/google-calendar/changes/:id` `{ action: "resolve", choice } | { action:
+ *   "retry" } | { action: "discard" }` → `{ outcome }`; `not-in-conflict`, `in-conflict`, `not-failed` (409).
+ * - `DELETE /api/v1/integrations/google-calendar/hidden/:id` `{}` → `{ outcome: "restored" }`.
  */
 export const GOOGLE_CALENDAR_ENDPOINT = "/api/v1/integrations/google-calendar";
 export const GOOGLE_CONNECT_ENDPOINT = `${GOOGLE_CALENDAR_ENDPOINT}/connect`;
 export const GOOGLE_SYNC_ENDPOINT = `${GOOGLE_CALENDAR_ENDPOINT}/sync`;
+
+export const GOOGLE_TARGET_ENDPOINT = `${GOOGLE_CALENDAR_ENDPOINT}/target`;
+export const GOOGLE_EVENTS_ENDPOINT = "/api/v1/calendar/google-events";
+
+export function googleEventEndpoint(eventId: string): string {
+  return `${GOOGLE_EVENTS_ENDPOINT}/${encodeURIComponent(eventId)}`;
+}
+
+export function googleChangeEndpoint(changeId: string): string {
+  return `${GOOGLE_CALENDAR_ENDPOINT}/changes/${encodeURIComponent(changeId)}`;
+}
+
+export function googleHiddenEndpoint(exclusionId: string): string {
+  return `${GOOGLE_CALENDAR_ENDPOINT}/hidden/${encodeURIComponent(exclusionId)}`;
+}
 
 export function googleCalendarEndpoint(calendarId: string): string {
   return `${GOOGLE_CALENDAR_ENDPOINT}/calendars/${encodeURIComponent(calendarId)}`;
@@ -35,6 +65,19 @@ export type GoogleCalendarErrorCode =
   | "unavailable"
   | "invalid-home"
   | "too-many"
+  | "read-only"
+  | "stale"
+  | "busy"
+  | "conflict-open"
+  | "series-limit"
+  | "invalid-scope"
+  | "limit-reached"
+  | "invalid-dates"
+  | "nonexistent-time"
+  | "pending-changes"
+  | "not-in-conflict"
+  | "in-conflict"
+  | "not-failed"
   | "failed";
 
 export interface GoogleCalendarErrorResponse {
@@ -62,12 +105,25 @@ const errorCodes: readonly string[] = [
   "unavailable",
   "invalid-home",
   "too-many",
+  "read-only",
+  "stale",
+  "busy",
+  "conflict-open",
+  "series-limit",
+  "invalid-scope",
+  "limit-reached",
+  "invalid-dates",
+  "nonexistent-time",
+  "pending-changes",
+  "not-in-conflict",
+  "in-conflict",
+  "not-failed",
   "failed",
 ];
 
 /** Sends one request; answers the JSON body or throws a GoogleRequestError. */
 export async function sendGoogleRequest(
-  method: "POST" | "PUT" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   url: string,
   body: unknown,
 ): Promise<Record<string, unknown>> {

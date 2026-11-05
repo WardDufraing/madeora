@@ -4,10 +4,14 @@ import Link from "next/link";
 
 import { requireIdentity } from "@/auth/identity";
 import { FormAlert } from "@/components/auth/form-alert";
+import { googleEventPath } from "@/calendar/format";
 import {
   CalendarChoicesForm,
+  ChangeRetryActions,
   DisconnectButton,
+  RestoreHiddenButton,
   SyncNowButton,
+  WriteTargetForm,
 } from "@/components/google-calendar/google-calendar-actions";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
@@ -20,6 +24,7 @@ import type { GoogleConnection } from "@/google-calendar/shapes";
 import { pageTitle } from "@/i18n/page-title";
 import { formatDateTime, type DateTimeFormats } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
+import { formatTaskDate } from "@/tasks/format";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("GoogleCalendar");
@@ -43,8 +48,10 @@ const noticeTone: Record<ConnectNotice, "success" | "info" | "error"> = {
 
 /**
  * Google Calendar settings (S33): connect, the account and its sync state, Sync now, Reconnect,
- * Disconnect, and each calendar's choices (sync, personal calendar, Homes). Read with the person's own
- * session: the database answers only their own connection. Every action is checked again on the server.
+ * Disconnect, and each calendar's choices (sync, personal calendar, Homes). S34 adds where new events go,
+ * the changes still waiting for Google (and conflicts), and the events removed from Madeora with Restore.
+ * Read with the person's own session: the database answers only their own connection. Every action is
+ * checked again on the server.
  */
 export default async function GoogleCalendarSettingsPage({
   searchParams,
@@ -122,6 +129,9 @@ function Connected({
   const expired = connection.status === "authorization_expired";
   const synced = connection.calendars.filter((c) => c.sync).length;
   const canSyncMore = synced < connection.limits.syncedCalendars;
+  const writable = connection.calendars
+    .filter((c) => c.writable && c.sync && c.available)
+    .map(({ id, name }) => ({ id, name }));
   return (
     <>
       <Card title={t("accountTitle")}>
@@ -184,6 +194,14 @@ function Connected({
                       homes={connection.homes}
                       canSync={canSyncMore}
                     />
+                    {calendar.openChanges > 0 ? (
+                      <p className="text-helper text-fg-muted">
+                        {t("calendarOpenChanges", { count: calendar.openChanges })}
+                      </p>
+                    ) : null}
+                    {calendar.sync && !calendar.writable ? (
+                      <p className="text-helper text-fg-muted">{t("calendarReadOnly")}</p>
+                    ) : null}
                   </>
                 )}
               </li>
@@ -196,6 +214,66 @@ function Connected({
           </p>
         ) : null}
       </Card>
+      {connection.listed && writable.length > 0 && !expired ? (
+        <Card title={t("targetTitle")}>
+          <WriteTargetForm current={connection.writeCalendarId} calendars={writable} />
+        </Card>
+      ) : null}
+      {connection.changes.length > 0 ? (
+        <Card title={t("changesTitle")} description={t("changesHint")}>
+          <ul className="flex flex-col divide-y divide-line" data-testid="google-changes">
+            {connection.changes.map((change) => (
+              <li
+                key={change.id}
+                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+                data-state={change.state}
+              >
+                <p className="text-body">
+                  {change.eventId ? (
+                    <Link
+                      href={googleEventPath(null, change.eventId)}
+                      className="font-medium text-accent-fg underline"
+                    >
+                      <bdi>{change.title || t("untitled")}</bdi>
+                    </Link>
+                  ) : (
+                    <bdi className="font-medium">{change.title || t("untitled")}</bdi>
+                  )}
+                  <span className="block text-helper text-fg-muted">
+                    {t(`changeRow_${change.state}_${change.action}`, { calendar: change.calendar })}
+                  </span>
+                </p>
+                {change.state === "failed" ? (
+                  <ChangeRetryActions changeId={change.id} create={change.action === "create"} />
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+      {connection.hidden.length > 0 ? (
+        <Card title={t("hiddenTitle")} description={t("hiddenHint")}>
+          <ul className="flex flex-col divide-y divide-line" data-testid="google-hidden">
+            {connection.hidden.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"
+              >
+                <p className="text-body">
+                  <bdi className="font-medium">{item.title || t("untitled")}</bdi>
+                  <span className="block text-helper text-fg-muted">
+                    {t(`hidden_${item.kind}`, {
+                      date: formatTaskDate(item.startsOn, formats),
+                      calendar: item.calendar,
+                    })}
+                  </span>
+                </p>
+                <RestoreHiddenButton exclusionId={item.id} title={item.title || t("untitled")} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
     </>
   );
 }

@@ -817,6 +817,33 @@ From here a person can connect Google Calendar (Settings › Google Calendar) an
 
 2. In the app, open **Calendar** in your personal space: it still shows your events as before. With the variables set, follow step 8 of the setup guide.
 
+## Check S34 Google Calendar changes (`20261120090000_google_calendar_outbound.sql`)
+
+From here a person can create, change and delete their Google events from Madeora, and conflicts wait for their choice (ADR 0044). Apply it after the S33 file. It adds no job, variable or schedule: changes ride the existing `google-calendar-sync` runs.
+
+1. In the SQL Editor, run:
+
+   ```sql
+   select
+     to_regclass('private.google_calendar_changes') as changes_table,
+     to_regclass('private.google_calendar_exclusions') as exclusions_table,
+     has_table_privilege('authenticated', 'private.google_calendar_changes', 'select')
+       as people_can_read_changes_table,
+     has_function_privilege('authenticated',
+       'public.resolve_google_calendar_conflict(uuid, text)', 'execute')
+       as people_can_resolve_their_conflicts,
+     has_function_privilege('authenticated',
+       'public.google_push_changes(uuid, uuid)', 'execute')
+       as people_can_send_changes,
+     has_function_privilege('service_role',
+       'public.google_push_changes(uuid, uuid)', 'execute')
+       as the_job_can_send_changes;
+   ```
+
+   It must show both tables, **true** for `people_can_resolve_their_conflicts` and `the_job_can_send_changes`, and **false** for `people_can_read_changes_table` and `people_can_send_changes`.
+
+2. In the app, open a Google event of yours: it shows **Edit** and **Delete**. With the variables set, follow steps 8.5 and 8.6 of [`google-calendar-setup.md`](google-calendar-setup.md).
+
 ## If a migration file changed after you applied it
 
 This can happen on `madeora-preview` when a pull request is changed after you tested it. Claude says so in the pull request. Preview data is synthetic, so the fix is to undo the file and apply it again:

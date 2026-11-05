@@ -3,8 +3,9 @@
  * Google. Server-only: it holds the client secret. Access tokens live in memory for one operation and are
  * never stored or logged; errors carry codes only, never a response body.
  *
- * Scopes (architecture.md §31, the narrowest pair that reads the calendar list and reads, and in S34
- * writes, events): `calendar.calendarlist.readonly` and `calendar.events`.
+ * Scopes (architecture.md §31, the narrowest pair that reads the calendar list and reads and writes
+ * events): `calendar.calendarlist.readonly` and `calendar.events`. Writes (S34) use Google's etags
+ * (If-Match), so a change never overwrites a newer Google version.
  */
 import { z } from "zod";
 
@@ -89,6 +90,49 @@ export interface EventPageRequest {
   readonly timeMax: Date;
 }
 
+/** The parts of a Google event resource that writing needs (master events carry `recurrence`). */
+export interface GoogleEventResource {
+  readonly id: string;
+  readonly etag: string | null;
+  readonly status: string | null;
+  readonly summary: string | null;
+  readonly location: string | null;
+  readonly description: string | null;
+  readonly visibility: string | null;
+  readonly transparency: string | null;
+  readonly colorId: string | null;
+  readonly start: GoogleWhen | null;
+  readonly end: GoogleWhen | null;
+  readonly recurrence: readonly string[];
+}
+
+export interface GoogleWhen {
+  readonly date?: string | undefined;
+  readonly dateTime?: string | undefined;
+  readonly timeZone?: string | undefined;
+}
+
+/** A body for insert or patch (Google's event resource, only what Madeora writes). */
+export interface GoogleEventBody {
+  readonly id?: string;
+  readonly status?: "confirmed";
+  readonly summary?: string;
+  readonly location?: string;
+  readonly description?: string;
+  readonly visibility?: string;
+  readonly transparency?: string;
+  readonly colorId?: string;
+  readonly start?: GoogleWhen;
+  readonly end?: GoogleWhen;
+  readonly recurrence?: readonly string[];
+}
+
+export interface WrittenEvent {
+  /** Null when Google answered with an event Madeora cannot store (it is then read again by the sync). */
+  readonly event: NormalizedEvent | null;
+  readonly resource: GoogleEventResource;
+}
+
 export interface GoogleCalendarClient {
   authorizationUrl(input: {
     readonly redirectUri: string;
@@ -106,6 +150,28 @@ export interface GoogleCalendarClient {
   primaryCalendarId(accessToken: string): Promise<string>;
   listCalendars(accessToken: string): Promise<readonly NormalizedCalendar[]>;
   listEvents(accessToken: string, request: EventPageRequest): Promise<EventPage>;
+  /** Null when Google answers 404 or 410 (gone). A cancelled event comes back with status "cancelled". */
+  getEvent(accessToken: string, calendarId: string, eventId: string): Promise<WrittenEvent | null>;
+  /** 409: an event with that id exists already (GoogleHttpError). */
+  insertEvent(
+    accessToken: string,
+    calendarId: string,
+    body: GoogleEventBody,
+  ): Promise<WrittenEvent>;
+  /** `etag` makes it conditional (If-Match): 412 when Google has a newer version. */
+  patchEvent(
+    accessToken: string,
+    calendarId: string,
+    eventId: string,
+    body: GoogleEventBody,
+    etag: string | null,
+  ): Promise<WrittenEvent>;
+  deleteEvent(
+    accessToken: string,
+    calendarId: string,
+    eventId: string,
+    etag: string | null,
+  ): Promise<void>;
 }
 
 const tokenAnswer = z.object({
@@ -114,6 +180,49 @@ const tokenAnswer = z.object({
   scope: z.string().optional(),
 });
 const oauthError = z.object({ error: z.string() });
+const when = z.object({
+  date: z.string().optional(),
+  dateTime: z.string().optional(),
+  timeZone: z.string().optional(),
+});
+const resource = z.object({
+  id: z.string().min(1).max(1024),
+  etag: z.string().max(200).optional(),
+  status: z.string().optional(),
+  summary: z.string().optional(),
+  location: z.string().optional(),
+  description: z.string().optional(),
+  visibility: z.string().optional(),
+  transparency: z.string().optional(),
+  colorId: z.string().optional(),
+  start: when.optional(),
+  end: when.optional(),
+  recurrence: z.array(z.string().max(2048)).max(50).optional(),
+});
+
+function written(json: unknown, status: number): WrittenEvent {
+  const parsed = resource.safeParse(json);
+  if (!parsed.success) throw new GoogleHttpError(status, "bad_answer");
+  const raw = parsed.data;
+  return {
+    event: normalizeEvent(json),
+    resource: {
+      id: raw.id,
+      etag: raw.etag ?? null,
+      status: raw.status ?? null,
+      summary: raw.summary ?? null,
+      location: raw.location ?? null,
+      description: raw.description ?? null,
+      visibility: raw.visibility ?? null,
+      transparency: raw.transparency ?? null,
+      colorId: raw.colorId ?? null,
+      start: raw.start ?? null,
+      end: raw.end ?? null,
+      recurrence: raw.recurrence ?? [],
+    },
+  };
+}
+
 const apiError = z.object({
   error: z.object({ errors: z.array(z.object({ reason: z.string() })).optional() }).optional(),
 });
@@ -178,12 +287,25 @@ export function createGoogleCalendarClient(
     accessToken: string,
     path: string,
     query: URLSearchParams | null,
+    write: {
+      readonly method: "POST" | "PATCH" | "DELETE";
+      readonly body?: unknown;
+      readonly etag?: string | null;
+    } | null = null,
   ): Promise<unknown> {
     const url = `${API_URL}${path}${query ? `?${query.toString()}` : ""}`;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    };
+    if (write?.body !== undefined) headers["Content-Type"] = "application/json";
+    if (write?.etag) headers["If-Match"] = write.etag;
     const response = await send(url, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      method: write?.method ?? "GET",
+      headers,
+      ...(write?.body !== undefined ? { body: JSON.stringify(write.body) } : {}),
     });
+    if (response.ok && response.status === 204) return null;
     const json = await readJson(response);
     if (response.ok) return json;
     if (response.status === 401) throw new GoogleAuthorizationError("unauthorized");
@@ -311,5 +433,47 @@ export function createGoogleCalendarClient(
         nextSyncToken: parsed.data.nextSyncToken ?? null,
       };
     },
+
+    async getEvent(accessToken, calendarId, eventId) {
+      try {
+        const json = await api(accessToken, eventPath(calendarId, eventId), null);
+        return written(json, 200);
+      } catch (error) {
+        if (error instanceof GoogleHttpError && (error.status === 404 || error.status === 410)) {
+          return null;
+        }
+        throw error;
+      }
+    },
+
+    async insertEvent(accessToken, calendarId, body) {
+      const json = await api(
+        accessToken,
+        `/calendars/${encodeURIComponent(calendarId)}/events`,
+        null,
+        {
+          method: "POST",
+          body,
+        },
+      );
+      return written(json, 200);
+    },
+
+    async patchEvent(accessToken, calendarId, eventId, body, etag) {
+      const json = await api(accessToken, eventPath(calendarId, eventId), null, {
+        method: "PATCH",
+        body,
+        etag,
+      });
+      return written(json, 200);
+    },
+
+    async deleteEvent(accessToken, calendarId, eventId, etag) {
+      await api(accessToken, eventPath(calendarId, eventId), null, { method: "DELETE", etag });
+    },
   };
+}
+
+function eventPath(calendarId: string, eventId: string): string {
+  return `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
 }

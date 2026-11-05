@@ -42,6 +42,8 @@ export async function PUT(request: Request, context: Context): Promise<Response>
       return failure(400, "invalid-home");
     case "too_many":
       return failure(409, "too-many");
+    case "pending_changes":
+      return failure(409, "pending-changes");
     default:
       logGoogleCalendar("google_calendar.settings_failed", "unexpected_outcome");
       return failure(500, "failed");
