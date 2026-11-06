@@ -15,7 +15,7 @@ Production deploys from the `production` branch only. Pull requests and `main` d
 - The GitHub repository and Vercel Hobby plan have non-commercial limits; review [provider costs](provider-cost-register.md) before production is used commercially.
 - Make sure the free Supabase project capacity is available. Supabase Free permits two active projects per organization; pause an unused project if needed. Do not upgrade or add billing without the owner's decision.
 
-Keep these values handy during setup: production URL, Supabase project URL and publishable key, Turnstile site key, R2 credentials, production Resend keys, and Trigger.dev project ref. Store secrets directly in their provider's secret settings.
+Keep these values handy during setup: production URL, Supabase project URL and publishable key, Turnstile site key, R2 credentials, production Resend keys, Trigger.dev project ref, and—when Google Calendar is enabled—the separate Calendar OAuth client and token-encryption key. Store secrets directly in their provider's secret settings.
 
 ## 1. Repository and release branch
 
@@ -40,7 +40,7 @@ Create a separate project; do not point production at `madeora-preview`.
 
 1. In Supabase create project `madeora-production` in the **Madeora** organization, region **Central EU (Frankfurt)** (`eu-central-1`). Generate a strong database password and keep it in Supabase's password manager/settings; it is not needed in Vercel.
 2. Keep the project on the Free plan unless the owner separately approves a paid plan. Supabase Free may pause an inactive project; see Operations below.
-3. Under **Authentication → Sign In / Providers** configure Email with email confirmations enabled, minimum password length `12`, default password requirements, and phone sign-in disabled. Keep **Allow new users to sign up** off until step 10.
+3. Under **Authentication → Sign In / Providers** configure Email with email confirmations enabled, minimum password length `12`, default password requirements, and phone sign-in disabled. Keep **Allow new users to sign up** off until the production smoke checks in step 13 are complete.
 4. Under **Authentication → URL Configuration**, set Site URL to `https://www.madeora.studio` and add the exact redirect `https://www.madeora.studio/**`. Remove unrelated redirect entries from this production project.
 5. Configure the production confirmation and recovery email templates using `supabase/templates/confirmation.html` and `supabase/templates/recovery.html` (see [email setup](email-setup.md)).
 6. Copy the project's **Publishable key** (starts `sb_publishable_`) and project URL from **Project Settings → API Keys / Data API**. The URL must end at `.supabase.co`; do not include `/rest/v1`.
@@ -63,7 +63,7 @@ Follow [email setup](email-setup.md) for the full Resend domain-verification and
 1. Verify `mail.madeora.studio` in Resend and add its DNS records without replacing the website's root or `www` records.
 2. Use a separate production Resend sending key for Supabase SMTP and another production app sending key for Trigger.dev.
 3. Configure Supabase Production SMTP with `smtp.resend.com`, port `465`, username `resend`, sender `no-reply@mail.madeora.studio`, sender name `Madeora`, and the production Supabase SMTP key as password.
-4. Set the app email variables in Trigger.dev (step 8). In Vercel set only `EMAIL_TRANSPORT=resend`; do not put `RESEND_API_KEY` or `EMAIL_FROM` in Vercel.
+4. Set the app email variables in Trigger.dev (step 9). In Vercel set only `EMAIL_TRANSPORT=resend`; do not put `RESEND_API_KEY` or `EMAIL_FROM` in Vercel.
 5. Keep sign-up closed until a confirmation email has been tested end to end.
 
 ## 6. Google sign-in (when enabled for the release)
@@ -72,7 +72,20 @@ Follow [Google sign-in setup](google-sign-in-setup.md). Create/configure the OAu
 
 Check: Google sign-in is enabled in Supabase Production and the production OAuth redirect is listed exactly. If the release does not enable Google sign-in yet, leave the provider disabled.
 
-## 7. File storage (Cloudflare R2)
+## 7. Google Calendar integration (when enabled for the release)
+
+Follow [Google Calendar setup](google-calendar-setup.md). This is separate from Google sign-in and uses its own Google Cloud project and OAuth client.
+
+1. Create the **Madeora Calendar** Google Cloud project without enabling billing, enable the Google Calendar API, and configure an External consent screen.
+2. Add exactly the `calendar.calendarlist.readonly` and `calendar.events` scopes. During testing, add the permitted accounts as test users; do not publish the OAuth app until Google verification for the sensitive scopes is complete.
+3. Create a Web application OAuth client with the production callback `https://www.madeora.studio/api/v1/integrations/google-calendar/callback`. Do not add a JavaScript origin.
+4. Generate a production-only 32-byte base64 token-encryption key using `openssl rand -base64 32`. Changing this key later makes every stored connection unreadable and requires users to reconnect.
+5. Put `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_TOKEN_KEY` in both Vercel Production and Trigger.dev Production. The web app and jobs must use the same three production values; Preview/Staging uses separate values.
+6. Apply both Google Calendar migrations in chronological order with the other production migrations before enabling the integration.
+
+Check: the Google project has no billing account, the callback exactly matches the canonical production URL, all three variables are present and secret in both runtimes, and Trigger.dev lists `google-calendar-sync`. If the integration is not enabled for the release, leave all three variables unset.
+
+## 8. File storage (Cloudflare R2)
 
 Follow [file storage setup](file-storage.md) to create the R2 bucket and a bucket-scoped access key. The production web app and background jobs must use the same production bucket configuration; use different credentials/buckets for other environments.
 
@@ -89,7 +102,7 @@ Configure these values directly in Vercel Production and Trigger.dev Production:
 
 Never use a public bucket. The app authorizes upload/download through signed requests. Follow the repository storage guide for CORS, lifecycle, alerts, budget and smoke tests. R2 usage can be billed to the payment method attached to Cloudflare, so keep the configured usage alert and review the cost register.
 
-## 8. Trigger.dev background jobs
+## 9. Trigger.dev background jobs
 
 Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and configure its **Production** environment with:
 
@@ -102,11 +115,14 @@ Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and
 | `EMAIL_FROM`                     | `Madeora <no-reply@mail.madeora.studio>`       |
 | `RESEND_API_KEY`                 | production app sending key from Resend         |
 | `APP_URL`                        | `https://www.madeora.studio`                   |
-| `STORAGE_DRIVER`, `STORAGE_S3_*` | same production R2 values from step 7          |
+| `STORAGE_DRIVER`, `STORAGE_S3_*` | same production R2 values from step 8          |
+| `GOOGLE_CALENDAR_CLIENT_ID`       | production Calendar OAuth client ID, when enabled |
+| `GOOGLE_CALENDAR_CLIENT_SECRET`   | production Calendar OAuth client secret, when enabled |
+| `GOOGLE_CALENDAR_TOKEN_KEY`       | production token key; identical to Vercel Production |
 
 Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
 
-## 9. Vercel Production environment variables
+## 10. Vercel Production environment variables
 
 In Vercel project `madeora` → **Settings → Environment Variables**, ensure variables are scoped to **Production only** unless specified otherwise. Production must never inherit Preview credentials.
 
@@ -121,29 +137,32 @@ In Vercel project `madeora` → **Settings → Environment Variables**, ensure v
 | `EMAIL_TRANSPORT`                      | `resend` after Trigger.dev email delivery is configured; otherwise `off`                                               |
 | `STORAGE_DRIVER`, `STORAGE_S3_*`       | production R2 settings after R2 setup; otherwise `off`                                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY`            | production Supabase secret key; server-only, required for the storage upload finalization path when storage is enabled |
+| `GOOGLE_CALENDAR_CLIENT_ID`             | production Calendar OAuth client ID when the integration is enabled                                                   |
+| `GOOGLE_CALENDAR_CLIENT_SECRET`         | production Calendar OAuth client secret; Sensitive and server-only                                                    |
+| `GOOGLE_CALENDAR_TOKEN_KEY`             | production 32-byte base64 token key; Sensitive, server-only, and identical to Trigger.dev Production                  |
 
-Do not set `EMAIL_FROM`, `RESEND_API_KEY`, Trigger.dev tokens, database passwords, Turnstile secret keys, or Google OAuth client secrets in Vercel. Do not expose the Supabase secret key using a `NEXT_PUBLIC_` name.
+Do not set `EMAIL_FROM`, `RESEND_API_KEY`, Trigger.dev tokens, database passwords, Turnstile secret keys, or Google sign-in OAuth client secrets in Vercel. The separate Google Calendar client secret and token key belong in Vercel only because its server routes perform that integration; keep them Sensitive and server-only. Do not expose the Supabase secret key using a `NEXT_PUBLIC_` name.
 
 Leave `NODE_USE_ENV_PROXY` unset. Recipe URL import validates and pins a public destination address itself; enabling Node's environment-proxy support could bypass that SSRF control.
 
 Check the environment scope for each Supabase variable: Preview values point to `madeora-preview`, while Production values point to `madeora-production`. Existing production variables take effect only in a new deployment.
 
-## 10. Apply the database migrations
+## 11. Apply the database migrations
 
 A new, empty production database must receive every migration in chronological order before deploying code that uses them. Use [production migrations](production-migrations.md): either run the consolidated copyable SQL once on an empty database, or apply each individual migration once in order. Never run both paths. For later releases, apply only new migrations, oldest first, before merging the release PR into `production`.
 
 Check the verification queries in [Supabase migrations](supabase-migrations.md) and the migration guide. Stop on any SQL error; do not continue to later files.
 
-## 11. First release to Production
+## 12. First release to Production
 
 1. Confirm the required Supabase migrations have been applied and the database verification checks pass.
-2. Confirm Turnstile, domain, environment variables and any enabled Google, email, storage and job integrations are configured.
+2. Confirm Turnstile, domain, environment variables and any enabled Google sign-in, Google Calendar, email, storage and job integrations are configured.
 3. Open the release PR from `main` into `production` using [the release procedure](github-setup.md#d-how-a-release-works-production-deploys-since-s06b-adr-0008).
 4. Review the exact diff and commits, wait for every check including **Release source**, then merge the PR.
 5. In Vercel → **Deployments**, confirm the `production` deployment is **Ready** and **Current**.
 6. Deploy Trigger.dev jobs from the same commit (if not already deployed).
 
-## 12. Production smoke checks
+## 13. Production smoke checks
 
 Use a private browser window and the canonical production URL.
 
@@ -152,7 +171,8 @@ Use a private browser window and the canonical production URL.
 - Try sign-up only if it is intentionally enabled. If disabled, it should report that new accounts cannot be created.
 - Verify password recovery and confirmation emails arrive from `no-reply@mail.madeora.studio` before enabling public sign-up.
 - If Google sign-in is enabled, complete one Google sign-in and verify the linked method in Settings.
-- If storage is enabled, upload and read a profile picture; check the storage quota and confirm files remain private.
+- If Google Calendar is enabled, connect a production test user, verify an inbound event appears, create or edit one event from Madeora, run Sync now, and confirm it reaches Google. Verify an unshared calendar and a Google-private event reveal nothing in a Home.
+- If storage is enabled, upload and read a profile picture and a photo-library image; check quota accounting, album sharing/access, derivatives, trash recovery, and that files remain private.
 - If background jobs are enabled, run the `sample-ping` smoke test and check the outbox status.
 - Preview deployments must still require Vercel Authentication and must point only at `madeora-preview`.
 
@@ -163,8 +183,8 @@ Use a private browser window and the canonical production URL.
 - **Rollbacks:** use Vercel Instant Rollback for an urgent rollback, then fix source and release through Git. A rollback does not reverse a database migration; migrations are forward-only. Never run the destructive reset section in [production migrations](production-migrations.md) as a rollback.
 - **Secrets:** rotate credentials in their provider, update only the intended environment, then redeploy the app/jobs. Keep preview and production credentials separate.
 - **Costs and limits:** review [provider cost register](provider-cost-register.md), including Vercel commercial-use limits, Supabase quotas, Resend email quotas, Trigger.dev usage and Cloudflare R2 billing.
-- **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), and [Google sign-in](google-sign-in-setup.md).
+- **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), and [Google Calendar](google-calendar-setup.md).
 
 ## Never put these in Git, chat or browser-visible variables
 
-Supabase database password or secret/service-role key, Turnstile secret, Resend API key, R2 secret access key, Trigger.dev access token, Google OAuth client secret. Store each secret only in the provider/environment named by its guide.
+Supabase database password or secret/service-role key, Turnstile secret, Resend API key, R2 secret access key, Trigger.dev access token, Google sign-in OAuth client secret, Google Calendar OAuth client secret, or Google Calendar token-encryption key. Store each secret only in the provider/environment named by its guide.
