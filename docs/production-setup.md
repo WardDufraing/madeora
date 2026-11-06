@@ -106,19 +106,19 @@ Never use a public bucket. The app authorizes upload/download through signed req
 
 Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and configure its **Production** environment with:
 
-| Variable                         | Value                                          |
-| -------------------------------- | ---------------------------------------------- |
-| `APP_ENV`                        | `production`                                   |
-| `SUPABASE_URL`                   | production Supabase project URL                |
-| `SUPABASE_SERVICE_ROLE_KEY`      | production Supabase secret key (`sb_secret_…`) |
-| `EMAIL_TRANSPORT`                | `resend`                                       |
-| `EMAIL_FROM`                     | `Madeora <no-reply@mail.madeora.studio>`       |
-| `RESEND_API_KEY`                 | production app sending key from Resend         |
-| `APP_URL`                        | `https://www.madeora.studio`                   |
-| `STORAGE_DRIVER`, `STORAGE_S3_*` | same production R2 values from step 8          |
-| `GOOGLE_CALENDAR_CLIENT_ID`       | production Calendar OAuth client ID, when enabled |
-| `GOOGLE_CALENDAR_CLIENT_SECRET`   | production Calendar OAuth client secret, when enabled |
-| `GOOGLE_CALENDAR_TOKEN_KEY`       | production token key; identical to Vercel Production |
+| Variable                         | Value                                                 |
+| -------------------------------- | ----------------------------------------------------- |
+| `APP_ENV`                        | `production`                                          |
+| `SUPABASE_URL`                   | production Supabase project URL                       |
+| `SUPABASE_SERVICE_ROLE_KEY`      | production Supabase secret key (`sb_secret_…`)        |
+| `EMAIL_TRANSPORT`                | `resend`                                              |
+| `EMAIL_FROM`                     | `Madeora <no-reply@mail.madeora.studio>`              |
+| `RESEND_API_KEY`                 | production app sending key from Resend                |
+| `APP_URL`                        | `https://www.madeora.studio`                          |
+| `STORAGE_DRIVER`, `STORAGE_S3_*` | same production R2 values from step 8                 |
+| `GOOGLE_CALENDAR_CLIENT_ID`      | production Calendar OAuth client ID, when enabled     |
+| `GOOGLE_CALENDAR_CLIENT_SECRET`  | production Calendar OAuth client secret, when enabled |
+| `GOOGLE_CALENDAR_TOKEN_KEY`      | production token key; identical to Vercel Production  |
 
 Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
 
@@ -137,9 +137,9 @@ In Vercel project `madeora` → **Settings → Environment Variables**, ensure v
 | `EMAIL_TRANSPORT`                      | `resend` after Trigger.dev email delivery is configured; otherwise `off`                                               |
 | `STORAGE_DRIVER`, `STORAGE_S3_*`       | production R2 settings after R2 setup; otherwise `off`                                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY`            | production Supabase secret key; server-only, required for the storage upload finalization path when storage is enabled |
-| `GOOGLE_CALENDAR_CLIENT_ID`             | production Calendar OAuth client ID when the integration is enabled                                                   |
-| `GOOGLE_CALENDAR_CLIENT_SECRET`         | production Calendar OAuth client secret; Sensitive and server-only                                                    |
-| `GOOGLE_CALENDAR_TOKEN_KEY`             | production 32-byte base64 token key; Sensitive, server-only, and identical to Trigger.dev Production                  |
+| `GOOGLE_CALENDAR_CLIENT_ID`            | production Calendar OAuth client ID when the integration is enabled                                                    |
+| `GOOGLE_CALENDAR_CLIENT_SECRET`        | production Calendar OAuth client secret; Sensitive and server-only                                                     |
+| `GOOGLE_CALENDAR_TOKEN_KEY`            | production 32-byte base64 token key; Sensitive, server-only, and identical to Trigger.dev Production                   |
 
 Do not set `EMAIL_FROM`, `RESEND_API_KEY`, Trigger.dev tokens, database passwords, Turnstile secret keys, or Google sign-in OAuth client secrets in Vercel. The separate Google Calendar client secret and token key belong in Vercel only because its server routes perform that integration; keep them Sensitive and server-only. Do not expose the Supabase secret key using a `NEXT_PUBLIC_` name.
 
