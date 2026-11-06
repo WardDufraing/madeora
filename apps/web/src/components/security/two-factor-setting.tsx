@@ -365,7 +365,9 @@ export function TwoFactorSetting({
             alt={t("qrAlt")}
             width={180}
             height={180}
-            className="rounded-control bg-white p-2"
+            // A QR code needs a light background to scan, in either theme.
+            data-theme="light"
+            className="rounded-control bg-surface p-2"
           />
           <div className="flex flex-col gap-1">
             <p className="text-helper text-fg-muted">{t("manualSecret")}</p>
