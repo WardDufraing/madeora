@@ -53,6 +53,11 @@ Each link opens one standalone migration file. Apply each file once, oldest firs
 - [`supabase/migrations/20261117090000_pet_care.sql`](../supabase/migrations/20261117090000_pet_care.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261118090000_calendar.sql`](../supabase/migrations/20261118090000_calendar.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 
+- [`supabase/migrations/20261119090000_google_calendar.sql`](../supabase/migrations/20261119090000_google_calendar.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261120090000_google_calendar_outbound.sql`](../supabase/migrations/20261120090000_google_calendar_outbound.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261121090000_photos.sql`](../supabase/migrations/20261121090000_photos.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261122090000_photo_sharing.sql`](../supabase/migrations/20261122090000_photo_sharing.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+
 ## One copyable migration for an empty database
 
 Copy the entire SQL block below into the Supabase SQL Editor for a **new, empty** `madeora-production` database and run it once. It concatenates the individual migrations above in chronological order without changing their SQL. If it reports an error, stop and do not run a later subset on top of a partial run; inspect the database and resolve the failure first.
@@ -51496,6 +51501,4616 @@ begin
   end loop;
 end
 $$;
+
+-- ============================================================================
+-- supabase/migrations/20261119090000_google_calendar.sql
+-- ============================================================================
+-- S33: Google Calendar connect and inbound sync (brief plans/steps/S33-brief.md; ADR 0043; architecture.md
+-- §31; Modules.md §4.2 and §4.8; Project-specification §11.2 "Calendar sharing — approved privacy policy").
+--
+-- One person connects one Google account. Its refresh token is stored encrypted (AES-256-GCM in the app and
+-- the jobs, bound to the person's id); this database never sees it in clear and never returns it to anyone
+-- but the person's own server-side disconnect and the sync job. The person chooses per calendar whether it
+-- syncs, whether it shows on their personal calendar and which of their Homes see it.
+--
+-- Privacy (§11.2, option A): an unshared calendar reveals nothing to anyone else: no event, time, busy
+-- block, count, calendar name or sync state. A calendar shared with a Home shows its events in full,
+-- read-only, to that Home's current members, except events Google marks private or confidential, which only
+-- the owner ever sees. A share is tied to the owner's membership, so leaving the Home ends it.
+--
+-- Nothing here is exposed as a table. People use security-definer functions with their own session; the
+-- sync job (packages/jobs/src/jobs/google-calendar.ts) uses service-role-only functions that recheck the
+-- connection and its lease. Writing to Google, conflicts and exclusions are S34.
+
+-- Limits ---------------------------------------------------------------------------------------------------
+
+-- apps/web/src/google-calendar/schema.ts GOOGLE_CALENDAR_LIMITS and packages/google-calendar use the same.
+create function private.google_calendar_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'synced_calendars' then 20      -- calendars that sync, per connection
+    when 'listed_calendars' then 250     -- calendars kept from Google's list
+    when 'events' then 5000              -- stored events per calendar
+    when 'page_events' then 250          -- events in one applied page
+    when 'stale_minutes' then 60         -- no successful sync for longer: stale
+    when 'auto_minutes' then 15          -- the automatic sync interval
+    when 'manual_seconds' then 60        -- Sync now at most this often
+    when 'full_hours' then 24            -- a full pass at least this often (moves the window)
+    when 'lease_seconds_max' then 900
+  end;
+  $$;
+
+-- Notification kind for an expired authorization (in-app, essential: the person must reconnect).
+-- Audit: none; this is a person's own integration, never a Home action.
+
+-- Tables ---------------------------------------------------------------------------------------------------
+
+create table private.google_calendar_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  -- The account's primary calendar id (its address), shown to the person only.
+  account text not null constraint google_calendar_connections_account_check
+    check (private.calendar_single_line(account, 320)),
+  -- 'v1.<iv>.<ciphertext>.<tag>' (base64url): AES-256-GCM, associated data bound to user_id.
+  refresh_token text not null constraint google_calendar_connections_token_check
+    check (char_length(refresh_token) <= 4096
+      and refresh_token ~ '^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$'),
+  scopes text[] not null,
+  status text not null default 'connected'
+    constraint google_calendar_connections_status_check check (status in ('connected', 'authorization_expired')),
+  connected_at timestamptz not null default now(),
+  status_changed_at timestamptz not null default now(),
+  -- Set once Google's calendar list has been read (the defaults apply on that first read).
+  calendars_listed_at timestamptz,
+  -- The last run that started, and the last one that ended without a connection-wide error.
+  last_attempt_at timestamptz,
+  last_synced_at timestamptz,
+  last_error_code text constraint google_calendar_connections_error_check
+    check (last_error_code is null or last_error_code ~ '^[a-z_]{1,40}$'),
+  -- A queued run that has not started yet (shown as "Syncing…"), and the counter of manual requests.
+  sync_requested_at timestamptz,
+  sync_seq integer not null default 0,
+  -- One run at a time: the run's lease.
+  sync_lease uuid,
+  sync_lease_until timestamptz,
+  constraint google_calendar_connections_user_key unique (user_id)
+);
+
+create table private.google_calendars (
+  id uuid primary key default gen_random_uuid(),
+  connection_id uuid not null references private.google_calendar_connections (id) on delete cascade,
+  -- The connection's person, repeated so a Home share can be tied to their membership.
+  user_id uuid not null references auth.users (id) on delete cascade,
+  google_calendar_id text not null constraint google_calendars_google_id_check
+    check (private.calendar_single_line(google_calendar_id, 1024)),
+  name text not null constraint google_calendars_name_check check (private.calendar_single_line(name, 200)),
+  time_zone text,
+  access_role text not null
+    constraint google_calendars_access_role_check check (access_role in ('freeBusyReader', 'reader', 'writer', 'owner')),
+  is_primary boolean not null default false,
+  -- Still in Google's list for this account.
+  available boolean not null default true,
+  sync_enabled boolean not null default false,
+  show_personal boolean not null default false,
+  sync_token text constraint google_calendars_sync_token_check check (char_length(sync_token) <= 2048),
+  last_synced_at timestamptz,
+  full_synced_at timestamptz,
+  last_error_code text constraint google_calendars_error_check
+    check (last_error_code is null or last_error_code ~ '^[a-z_]{1,40}$'),
+  constraint google_calendars_google_key unique (connection_id, google_calendar_id),
+  constraint google_calendars_show_check check (sync_enabled or not show_personal)
+);
+create index google_calendars_user_idx on private.google_calendars (user_id);
+
+-- A calendar shared with one of its owner's Homes. Tied to the owner's membership, so leaving ends it.
+create table private.google_calendar_home_shares (
+  calendar_id uuid not null references private.google_calendars (id) on delete cascade,
+  home_id uuid not null,
+  user_id uuid not null,
+  shared_at timestamptz not null default now(),
+  constraint google_calendar_home_shares_pkey primary key (calendar_id, home_id),
+  constraint google_calendar_home_shares_membership_fkey foreign key (home_id, user_id)
+    references public.home_memberships (home_id, user_id) on delete cascade
+);
+create index google_calendar_home_shares_home_idx on private.google_calendar_home_shares (home_id);
+create index google_calendar_home_shares_member_idx on private.google_calendar_home_shares (home_id, user_id);
+
+-- One Google event instance (recurring series are read expanded). Unique per calendar and Google id, so a
+-- repeated page, a retried run or a full pass never creates a second copy. These fields are also the last
+-- synced snapshot S34 compares Madeora edits with.
+create table private.google_calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  calendar_id uuid not null references private.google_calendars (id) on delete cascade,
+  google_event_id text not null constraint google_calendar_events_google_id_check
+    check (private.calendar_single_line(google_event_id, 1024)),
+  etag text constraint google_calendar_events_etag_check check (char_length(etag) <= 200),
+  google_updated timestamptz,
+  status text not null constraint google_calendar_events_status_check check (status in ('confirmed', 'tentative')),
+  title text constraint google_calendar_events_title_check check (private.calendar_single_line(title, 200)),
+  location text constraint google_calendar_events_location_check check (private.calendar_single_line(location, 200)),
+  description text constraint google_calendar_events_description_check check (private.is_plain_text(description, 4000)),
+  all_day boolean not null,
+  -- All-day: the first and the last day (inclusive). Timed: the instants, and the zone Google gave.
+  starts_on date,
+  ends_on date,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  time_zone text constraint google_calendar_events_zone_check check (char_length(time_zone) <= 64),
+  recurring_event_id text constraint google_calendar_events_recurring_check check (char_length(recurring_event_id) <= 1024),
+  original_start text constraint google_calendar_events_original_check check (char_length(original_start) <= 64),
+  -- Google visibility private or confidential: never shown in a Home.
+  private_in_google boolean not null default false,
+  link text constraint google_calendar_events_link_check
+    check (char_length(link) <= 2048 and link ~ '^https://(www\.)?google\.com/calendar/'),
+  -- The lease of the full pass that last saw it (a full pass removes what it did not see).
+  seen_in uuid,
+  synced_at timestamptz not null default now(),
+  constraint google_calendar_events_google_key unique (calendar_id, google_event_id),
+  constraint google_calendar_events_time_shape check (
+    (all_day and starts_on is not null and ends_on is not null and ends_on >= starts_on
+      and starts_at is null and ends_at is null)
+    or (not all_day and starts_at is not null and ends_at is not null and ends_at >= starts_at
+      and starts_on is null and ends_on is null))
+);
+create index google_calendar_events_recurring_idx on private.google_calendar_events (calendar_id, recurring_event_id)
+  where recurring_event_id is not null;
+
+alter table private.google_calendar_connections enable row level security;
+alter table private.google_calendars enable row level security;
+alter table private.google_calendar_home_shares enable row level security;
+alter table private.google_calendar_events enable row level security;
+revoke all on table private.google_calendar_connections, private.google_calendars,
+  private.google_calendar_home_shares, private.google_calendar_events
+  from public, anon, authenticated, service_role;
+
+-- Visibility -------------------------------------------------------------------------------------------------
+
+-- The Google events a viewer sees in a context (p_home_id null: Personal). Personal: their own calendars
+-- that sync and show there. A Home: the calendars shared with it by current members (the share's foreign
+-- key guarantees the membership), without events private in Google. The callers check the viewer's
+-- membership of the Home first.
+create function private.google_context_events(p_user_id uuid, p_home_id uuid)
+returns table (event private.google_calendar_events, calendar private.google_calendars)
+  language sql stable security definer set search_path = '' as $$
+  select e, c from private.google_calendar_events e
+  join private.google_calendars c on c.id = e.calendar_id
+  where p_user_id is not null and c.sync_enabled and c.available and case
+    when p_home_id is null then c.user_id = p_user_id and c.show_personal
+    else not e.private_in_google and exists (
+      select 1 from private.google_calendar_home_shares s where s.calendar_id = c.id and s.home_id = p_home_id)
+      and private.home_role(p_home_id, p_user_id) is not null
+  end;
+  $$;
+
+-- Whether a Google event overlaps the local dates [p_from, p_to] in p_zone.
+create function private.google_in_window(p_event private.google_calendar_events, p_from date, p_to date, p_zone text)
+returns boolean
+  language sql stable set search_path = '' as $$
+  select case when p_event.all_day then p_event.starts_on <= p_to and p_event.ends_on >= p_from
+    else p_event.starts_at < ((p_to + 1)::timestamp at time zone p_zone)
+      and (p_event.ends_at > (p_from::timestamp at time zone p_zone)
+        or (p_event.ends_at = p_event.starts_at and p_event.starts_at >= (p_from::timestamp at time zone p_zone)))
+  end;
+  $$;
+
+create function private.google_sort_at(p_event private.google_calendar_events, p_zone text) returns timestamptz
+  language sql stable set search_path = '' as $$
+  select coalesce(p_event.starts_at, p_event.starts_on::timestamp at time zone p_zone);
+  $$;
+
+-- One Google event as an occurrence in a list, in the shape of private.calendar_occurrence_json plus its
+-- source and calendar name. `kind`: 'personal' (the viewer's own) or 'shared' (someone's, shared here).
+create function private.google_occurrence_json(
+  p_event private.google_calendar_events, p_calendar private.google_calendars, p_viewer uuid, p_home_id uuid,
+  p_zone text
+) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'eventId', p_event.id,
+    'on', null,
+    'kind', case when p_calendar.user_id = p_viewer then 'personal' else 'shared' end,
+    'sharedBy', case when p_calendar.user_id <> p_viewer then private.member_ref(p_home_id, p_calendar.user_id) end,
+    'title', coalesce(p_event.title, ''),
+    'location', p_event.location,
+    'allDay', p_event.all_day,
+    'from', case when p_event.all_day then p_event.starts_on else (p_event.starts_at at time zone p_zone)::date end,
+    'to', case when p_event.all_day then p_event.ends_on
+      when p_event.ends_at = p_event.starts_at then (p_event.starts_at at time zone p_zone)::date
+      else ((p_event.ends_at - interval '1 microsecond') at time zone p_zone)::date end,
+    'startsAt', p_event.starts_at,
+    'endsAt', p_event.ends_at,
+    'timezone', case when private.calendar_valid_zone(p_event.time_zone) then p_event.time_zone
+      when private.calendar_valid_zone(p_calendar.time_zone) then p_calendar.time_zone else p_zone end,
+    'recurring', p_event.recurring_event_id is not null,
+    'changed', false,
+    'participants', '[]'::jsonb,
+    'source', 'google',
+    'calendar', p_calendar.name
+  );
+  $$;
+
+-- A calendar's sync state as its owner sees it: 'authorization_expired', 'failed', 'syncing' (its first
+-- sync has not happened yet), 'stale' (no successful sync for over an hour) or 'synced'.
+create function private.google_calendar_state(
+  p_connection private.google_calendar_connections, p_calendar private.google_calendars
+) returns text
+  language sql stable set search_path = '' as $$
+  select case
+    when p_connection.status = 'authorization_expired' then 'authorization_expired'
+    when p_calendar.last_error_code is not null then 'failed'
+    when p_calendar.last_synced_at is null then 'syncing'
+    when p_calendar.last_synced_at < pg_catalog.now()
+      - pg_catalog.make_interval(mins => private.google_calendar_limit('stale_minutes')) then 'stale'
+    else 'synced'
+  end;
+  $$;
+
+-- The calendars behind a context that are not up to date, for its warning. The owner sees the exact state;
+-- a Home member sees someone's shared calendar only as 'syncing' or 'out_of_date', never the reason.
+create function private.google_source_warnings(p_user_id uuid, p_home_id uuid) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'calendar', x.name,
+      'own', x.own,
+      'sharedBy', case when not x.own then private.member_ref(p_home_id, x.user_id) end,
+      'state', case when x.own or x.state = 'syncing' then x.state else 'out_of_date' end,
+      'lastSyncedAt', x.last_synced_at
+    ) order by x.own desc, pg_catalog.lower(x.name), x.id), '[]'::jsonb)
+  from (
+    select c.id, c.name, c.user_id, c.last_synced_at, c.user_id = p_user_id as own,
+      private.google_calendar_state(k, c) as state
+    from private.google_calendars c
+    join private.google_calendar_connections k on k.id = c.connection_id
+    where p_user_id is not null and c.sync_enabled and c.available and case
+      when p_home_id is null then c.user_id = p_user_id and c.show_personal
+      else exists (select 1 from private.google_calendar_home_shares s where s.calendar_id = c.id and s.home_id = p_home_id)
+        and private.home_role(p_home_id, p_user_id) is not null
+    end
+  ) x
+  where x.state <> 'synced';
+  $$;
+
+-- The calendar reads, now with Google events ---------------------------------------------------------------
+-- The S32 functions, unchanged except that the Google events of the context join the native ones (same
+-- order, same limit) and the answer names the sources that are not up to date. Native occurrences carry
+-- source 'madeora'.
+
+create or replace function public.list_calendar(p_from date, p_to date, p_home_id uuid default null, p_zone text default null)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_zone text;
+    v_level text;
+    v_show_vacations boolean := false;
+    v_prefs private.calendar_view_preferences;
+    v_occurrences jsonb;
+    v_count integer;
+  begin
+    if p_from is null or p_to is null or p_to < p_from or p_to - p_from >= private.calendar_limit('window_days') then
+      raise exception 'invalid window' using errcode = '22023';
+    end if;
+    if p_home_id is not null then
+      perform private.require_calendar_home(p_home_id, v_user_id);
+      v_level := private.calendar_level(p_home_id, v_user_id);
+    end if;
+    select * into v_prefs from private.calendar_view_preferences p
+      where p.user_id = v_user_id and p.home_id is not distinct from p_home_id;
+    v_show_vacations := p_home_id is not null and coalesce(v_prefs.show_vacations, true);
+    v_zone := private.calendar_zone(p_home_id, p_zone);
+    select pg_catalog.jsonb_agg(x.item order by x.sort_at, x.sort_title, x.sort_id), count(*)
+      into v_occurrences, v_count
+      from (
+        select * from (
+          select private.calendar_occurrence_json(e, o, v_user_id, p_home_id, v_zone)
+              || '{"source": "madeora", "calendar": null}'::jsonb as item,
+            coalesce(private.calendar_start_at(o, e.timezone), o.starts_on::timestamp at time zone v_zone) as sort_at,
+            pg_catalog.lower(o.title) as sort_title, e.id as sort_id
+          from private.calendar_context_events(v_user_id, p_home_id) e
+          cross join lateral private.calendar_window(e, p_from, p_to, v_zone) o
+          union all
+          select private.google_occurrence_json(g.event, g.calendar, v_user_id, p_home_id, v_zone),
+            private.google_sort_at(g.event, v_zone), pg_catalog.lower(coalesce((g.event).title, '')), (g.event).id
+          from private.google_context_events(v_user_id, p_home_id) g
+          where private.google_in_window(g.event, p_from, p_to, v_zone)
+        ) u
+        order by 2, 3, 4
+        limit private.calendar_limit('occurrences') + 1
+      ) x;
+    return pg_catalog.jsonb_build_object(
+      'timezone', v_zone,
+      'today', (pg_catalog.now() at time zone v_zone)::date,
+      'level', v_level,
+      'canCreate', p_home_id is null or private.calendar_level_allows(v_level, 'edit'),
+      'truncated', coalesce(v_count, 0) > private.calendar_limit('occurrences'),
+      'occurrences', coalesce((select pg_catalog.jsonb_agg(v order by n) from pg_catalog.jsonb_array_elements(
+          coalesce(v_occurrences, '[]'::jsonb)) with ordinality as a(v, n)
+        where n <= private.calendar_limit('occurrences')), '[]'::jsonb),
+      'showVacations', v_show_vacations,
+      'showTasks', coalesce(v_prefs.show_tasks, false),
+      'showChores', p_home_id is not null and coalesce(v_prefs.show_chores, false),
+      'vacations', case when v_show_vacations then coalesce((
+        select pg_catalog.jsonb_agg(private.vacation_summary(v, v_user_id, (pg_catalog.now() at time zone v_zone)::date)
+          order by v.starts_on, v.ends_on, v.id)
+        from private.home_vacations v
+        where v.home_id = p_home_id and v.cancelled_at is null
+          and v.starts_on <= p_to and v.ends_on >= p_from
+          and exists (select 1 from private.home_vacation_participants p
+            where p.vacation_id = v.id and p.status = 'accepted')), '[]'::jsonb) else '[]'::jsonb end,
+      'googleWarnings', private.google_source_warnings(v_user_id, p_home_id)
+    );
+  end
+  $$;
+
+create or replace function public.get_calendar_upcoming(
+  p_days integer, p_count integer, p_home_id uuid default null, p_zone text default null
+)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_zone text;
+    v_today date;
+    v_now timestamptz := pg_catalog.now();
+    v_items jsonb;
+    v_level text;
+  begin
+    if p_days is null or p_days not in (7, 14, 30) or p_count is null or p_count not in (3, 5, 10) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_home_id is not null then
+      perform private.require_calendar_home(p_home_id, v_user_id);
+      v_level := private.calendar_level(p_home_id, v_user_id);
+    end if;
+    v_zone := private.calendar_zone(p_home_id, p_zone);
+    v_today := (v_now at time zone v_zone)::date;
+    select pg_catalog.jsonb_agg(x.item order by x.n) into v_items
+      from (
+        select u.item, pg_catalog.row_number() over (order by u.sort_at, u.sort_title, u.sort_id) as n
+        from (
+          select private.calendar_occurrence_json(e, o, v_user_id, p_home_id, v_zone)
+              || '{"source": "madeora", "calendar": null}'::jsonb as item,
+            coalesce(private.calendar_start_at(o, e.timezone), o.starts_on::timestamp at time zone v_zone) as sort_at,
+            pg_catalog.lower(o.title) as sort_title, e.id as sort_id
+          from private.calendar_context_events(v_user_id, p_home_id) e
+          cross join lateral private.calendar_window(e, v_today, v_today + p_days - 1, v_zone) o
+          where case when o.all_day then o.ends_on >= v_today
+            else private.calendar_end_at(o, e.timezone) > v_now end
+            and (o.all_day or private.calendar_start_at(o, e.timezone) < (v_today + p_days)::timestamp at time zone v_zone)
+          union all
+          select private.google_occurrence_json(g.event, g.calendar, v_user_id, p_home_id, v_zone),
+            private.google_sort_at(g.event, v_zone), pg_catalog.lower(coalesce((g.event).title, '')), (g.event).id
+          from private.google_context_events(v_user_id, p_home_id) g
+          where private.google_in_window(g.event, v_today, v_today + p_days - 1, v_zone)
+            and case when (g.event).all_day then (g.event).ends_on >= v_today
+              else (g.event).ends_at > v_now or ((g.event).ends_at = (g.event).starts_at and (g.event).starts_at >= v_now) end
+        ) u
+      ) x where x.n <= p_count + 1;
+    return pg_catalog.jsonb_build_object(
+      'timezone', v_zone,
+      'today', v_today,
+      'canCreate', p_home_id is null or private.calendar_level_allows(v_level, 'edit'),
+      'more', coalesce(pg_catalog.jsonb_array_length(v_items), 0) > p_count,
+      'occurrences', coalesce((select pg_catalog.jsonb_agg(v order by n) from pg_catalog.jsonb_array_elements(
+          coalesce(v_items, '[]'::jsonb)) with ordinality as a(v, n) where n <= p_count), '[]'::jsonb),
+      'googleWarnings', private.google_source_warnings(v_user_id, p_home_id)
+    );
+  end
+  $$;
+
+-- One Google event as the caller sees it in a context (p_home_id null: Personal). Null when the caller may
+-- not see it there or it does not exist: nothing tells these apart. Read-only in S33. The Google link and
+-- the exact sync state are the owner's only.
+create function public.get_google_calendar_event(p_event_id uuid, p_home_id uuid default null, p_zone text default null)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_event private.google_calendar_events;
+    v_calendar private.google_calendars;
+    v_connection private.google_calendar_connections;
+    v_zone text;
+    v_state text;
+  begin
+    if p_event_id is null or (p_home_id is not null and private.home_role(p_home_id, v_user_id) is null) then
+      return null;
+    end if;
+    select (g.event).* into v_event
+      from private.google_context_events(v_user_id, p_home_id) g where (g.event).id = p_event_id;
+    if v_event.id is null then
+      return null;
+    end if;
+    select * into v_calendar from private.google_calendars c where c.id = v_event.calendar_id;
+    select * into v_connection from private.google_calendar_connections k where k.id = v_calendar.connection_id;
+    v_state := private.google_calendar_state(v_connection, v_calendar);
+    v_zone := private.calendar_zone(p_home_id, p_zone);
+    return private.google_occurrence_json(v_event, v_calendar, v_user_id, p_home_id, v_zone)
+      || pg_catalog.jsonb_build_object(
+        'description', v_event.description,
+        'displayTimezone', v_zone,
+        'startsOn', v_event.starts_on,
+        'endsOn', v_event.ends_on,
+        'tentative', v_event.status = 'tentative',
+        'privateInGoogle', v_event.private_in_google,
+        'link', case when v_calendar.user_id = v_user_id then v_event.link end,
+        'state', case when v_calendar.user_id = v_user_id or v_state in ('synced', 'syncing') then v_state
+          else 'out_of_date' end,
+        'lastSyncedAt', v_calendar.last_synced_at);
+  end
+  $$;
+
+-- The person's own connection ------------------------------------------------------------------------------
+
+-- The caller's connection for the settings page: null when there is none. Never the token.
+create function public.get_google_calendar_connection() returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_connection private.google_calendar_connections;
+  begin
+    select * into v_connection from private.google_calendar_connections k where k.user_id = v_user_id;
+    if v_connection.id is null then
+      return null;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'account', v_connection.account,
+      'status', v_connection.status,
+      'connectedAt', v_connection.connected_at,
+      'lastSyncedAt', v_connection.last_synced_at,
+      'errorCode', v_connection.last_error_code,
+      'listed', v_connection.calendars_listed_at is not null,
+      'syncQueued', v_connection.sync_requested_at is not null
+        and (v_connection.last_attempt_at is null or v_connection.sync_requested_at > v_connection.last_attempt_at),
+      'canSyncNow', v_connection.status = 'connected' and (v_connection.sync_requested_at is null
+        or v_connection.sync_requested_at < pg_catalog.now()
+          - pg_catalog.make_interval(secs => private.google_calendar_limit('manual_seconds'))),
+      'calendars', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'id', c.id,
+            'name', c.name,
+            'primary', c.is_primary,
+            'accessRole', c.access_role,
+            'available', c.available,
+            'sync', c.sync_enabled,
+            'showPersonal', c.show_personal,
+            'homes', coalesce((select pg_catalog.jsonb_agg(s.home_id order by s.shared_at, s.home_id)
+              from private.google_calendar_home_shares s where s.calendar_id = c.id), '[]'::jsonb),
+            'state', case when c.sync_enabled then private.google_calendar_state(v_connection, c) end,
+            'errorCode', c.last_error_code,
+            'lastSyncedAt', c.last_synced_at
+          ) order by c.is_primary desc, c.available desc, pg_catalog.lower(c.name), c.id)
+        from private.google_calendars c where c.connection_id = v_connection.id), '[]'::jsonb),
+      'homes', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('id', h.id, 'name', h.name)
+          order by pg_catalog.lower(h.name), h.id)
+        from public.home_memberships m join public.homes h on h.id = m.home_id
+        where m.user_id = v_user_id), '[]'::jsonb),
+      'limits', pg_catalog.jsonb_build_object('syncedCalendars', private.google_calendar_limit('synced_calendars'))
+    );
+  end
+  $$;
+
+-- Queues a sync run of a connection, keyed so the same request never queues twice.
+create function private.queue_google_calendar_sync(p_connection_id uuid, p_key text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    perform private.enqueue_job('google-calendar-sync', 1, 'google-calendar-sync:' || p_connection_id::text || ':' || p_key,
+      pg_catalog.jsonb_build_object('connectionId', p_connection_id), private.request_correlation_id());
+    update private.google_calendar_connections k set sync_requested_at = pg_catalog.now()
+      where k.id = p_connection_id;
+  end
+  $$;
+
+-- Stores the caller's connection after the app's OAuth callback checked Google's answer: p_token is the
+-- refresh token encrypted by the app. The same account again keeps the calendar choices (a reconnect,
+-- authorization back to 'connected'); another account replaces the old connection and everything in it.
+-- Queues the first sync. Outcomes: 'connected', 'reconnected', 'replaced'; 22023 for a malformed value.
+create function public.save_google_calendar_connection(p_account text, p_token text, p_scopes text[]) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.google_calendar_connections;
+    v_id uuid;
+    v_outcome text;
+    v_recent boolean;
+  begin
+    if p_account is null or not private.calendar_single_line(p_account, 320)
+      or p_token is null or pg_catalog.char_length(p_token) > 4096 or p_token !~ '^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$'
+      or p_scopes is null or pg_catalog.cardinality(p_scopes) not between 1 and 10
+      or exists (select 1 from pg_catalog.unnest(p_scopes) s where s is null or s !~ '^[a-z0-9:/._-]{1,200}$') then
+      raise exception 'invalid connection' using errcode = '22023';
+    end if;
+    select * into v_existing from private.google_calendar_connections k where k.user_id = v_user_id for update;
+    -- At most one queued run a minute per person, however often this is called; otherwise the
+    -- 15-minute poll (queue_google_calendar_syncs) picks the connection up on its next pass.
+    v_recent := v_existing.sync_requested_at >= pg_catalog.now()
+      - pg_catalog.make_interval(secs => private.google_calendar_limit('manual_seconds'));
+    if v_existing.id is not null and v_existing.account = p_account then
+      update private.google_calendar_connections k set refresh_token = p_token, scopes = p_scopes,
+          status = 'connected', status_changed_at = pg_catalog.now(), connected_at = pg_catalog.now(),
+          last_error_code = null, sync_seq = k.sync_seq + 1
+        where k.id = v_existing.id;
+      v_id := v_existing.id;
+      v_outcome := 'reconnected';
+    else
+      if v_existing.id is not null then
+        delete from private.google_calendar_connections k where k.id = v_existing.id;
+        v_outcome := 'replaced';
+      else
+        v_outcome := 'connected';
+      end if;
+      insert into private.google_calendar_connections (user_id, account, refresh_token, scopes)
+        values (v_user_id, p_account, p_token, p_scopes) returning id into v_id;
+    end if;
+    if v_recent is not true then
+      perform private.queue_google_calendar_sync(v_id,
+        'connect:' || (select k.sync_seq from private.google_calendar_connections k where k.id = v_id)::text);
+    end if;
+    return v_outcome;
+  end
+  $$;
+
+-- Sync now: queues a run unless one was requested within the last minute. Outcomes: 'queued', 'too_soon',
+-- 'not_connected', 'authorization_expired'.
+create function public.request_google_calendar_sync() returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_connection private.google_calendar_connections;
+  begin
+    select * into v_connection from private.google_calendar_connections k where k.user_id = v_user_id for update;
+    if v_connection.id is null then
+      return 'not_connected';
+    end if;
+    if v_connection.status <> 'connected' then
+      return 'authorization_expired';
+    end if;
+    if v_connection.sync_requested_at >= pg_catalog.now()
+        - pg_catalog.make_interval(secs => private.google_calendar_limit('manual_seconds')) then
+      return 'too_soon';
+    end if;
+    update private.google_calendar_connections k set sync_seq = k.sync_seq + 1 where k.id = v_connection.id;
+    perform private.queue_google_calendar_sync(v_connection.id, 'manual:' || (v_connection.sync_seq + 1)::text);
+    return 'queued';
+  end
+  $$;
+
+-- One calendar's choices: whether it syncs, shows on the personal calendar and which of the caller's Homes
+-- see it (replacing the list). Turning sync off removes its events, its sync token and its Home shares;
+-- turning it on queues a sync. Outcomes: 'saved', 'not_found' (not the caller's), 'unavailable' (no longer
+-- in Google), 'invalid_home', 'too_many'; 22023 for a malformed request.
+create function public.set_google_calendar_settings(
+  p_calendar_id uuid, p_sync boolean, p_show_personal boolean, p_home_ids uuid[]
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_calendar private.google_calendars;
+    v_connection private.google_calendar_connections;
+    v_homes uuid[] := coalesce(p_home_ids, '{}');
+  begin
+    if p_calendar_id is null or p_sync is null or p_show_personal is null
+      or pg_catalog.cardinality(v_homes) > 20 or array_position(v_homes, null) is not null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_connection from private.google_calendar_connections k where k.user_id = v_user_id for update;
+    select * into v_calendar from private.google_calendars c
+      where c.id = p_calendar_id and c.connection_id = v_connection.id for update;
+    if v_calendar.id is null then
+      return 'not_found';
+    end if;
+    -- A busy-only calendar (Google's freeBusyReader) has no event details to show.
+    if p_sync and (not v_calendar.available or v_calendar.access_role = 'freeBusyReader') then
+      return 'unavailable';
+    end if;
+    if not p_sync and (p_show_personal or pg_catalog.cardinality(v_homes) > 0) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if exists (select 1 from pg_catalog.unnest(v_homes) h(id)
+        where private.home_role(h.id, v_user_id) is null) then
+      return 'invalid_home';
+    end if;
+    if p_sync and not v_calendar.sync_enabled and (select count(*) from private.google_calendars c
+        where c.connection_id = v_connection.id and c.sync_enabled) >= private.google_calendar_limit('synced_calendars') then
+      return 'too_many';
+    end if;
+    if not p_sync then
+      delete from private.google_calendar_events e where e.calendar_id = v_calendar.id;
+      delete from private.google_calendar_home_shares s where s.calendar_id = v_calendar.id;
+      update private.google_calendars c set sync_enabled = false, show_personal = false, sync_token = null,
+          last_synced_at = null, full_synced_at = null, last_error_code = null
+        where c.id = v_calendar.id;
+      return 'saved';
+    end if;
+    update private.google_calendars c set sync_enabled = true, show_personal = p_show_personal
+      where c.id = v_calendar.id;
+    delete from private.google_calendar_home_shares s
+      where s.calendar_id = v_calendar.id and s.home_id <> all (v_homes);
+    insert into private.google_calendar_home_shares (calendar_id, home_id, user_id)
+      select v_calendar.id, h.id, v_user_id from (select distinct pg_catalog.unnest(v_homes) as id) h
+      on conflict on constraint google_calendar_home_shares_pkey do nothing;
+    -- Turning a calendar on queues a run, at most once a minute (the poll covers the rest).
+    if not v_calendar.sync_enabled and v_connection.status = 'connected'
+        and (v_connection.sync_requested_at is null or v_connection.sync_requested_at < pg_catalog.now()
+          - pg_catalog.make_interval(secs => private.google_calendar_limit('manual_seconds'))) then
+      update private.google_calendar_connections k set sync_seq = k.sync_seq + 1 where k.id = v_connection.id;
+      perform private.queue_google_calendar_sync(v_connection.id, 'calendar:' || (v_connection.sync_seq + 1)::text);
+    end if;
+    return 'saved';
+  end
+  $$;
+
+-- Disconnect: removes the connection, its calendars, shares and events, and returns the encrypted token so
+-- the app can revoke it at Google (null when there was no connection). Only the caller's own.
+create function public.disconnect_google_calendar() returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_token text;
+  begin
+    delete from private.google_calendar_connections k where k.user_id = v_user_id returning k.refresh_token into v_token;
+    return v_token;
+  end
+  $$;
+
+-- The sync job (service role) ------------------------------------------------------------------------------
+
+-- The connection's row when p_lease holds it now; null otherwise.
+create function private.google_leased(p_connection_id uuid, p_lease uuid) returns private.google_calendar_connections
+  language sql stable security definer set search_path = '' as $$
+  select k from private.google_calendar_connections k
+  where k.id = p_connection_id and p_lease is not null and k.sync_lease = p_lease
+    and k.sync_lease_until > pg_catalog.now();
+  $$;
+
+-- The calendar's row when it belongs to the connection p_lease holds; null otherwise.
+-- Locks the calendar row, so a person turning sync off (set_google_calendar_settings, which locks it too)
+-- either waits for this write or is seen by it: a turned-off calendar never gets events or a token back.
+create function private.google_leased_calendar(p_calendar_id uuid, p_lease uuid) returns private.google_calendars
+  language sql volatile security definer set search_path = '' as $$
+  select c from private.google_calendars c
+  join private.google_calendar_connections k on k.id = c.connection_id
+  where c.id = p_calendar_id and p_lease is not null and k.sync_lease = p_lease and k.sync_lease_until > pg_catalog.now()
+  for update of c;
+  $$;
+
+-- Starts a run: takes the connection's lease for p_lease_seconds. Outcomes: 'ok' with the person's id and
+-- the encrypted token; 'missing' (disconnected), 'expired' (authorization expired: nothing to do until the
+-- person reconnects), 'inactive' (the account cannot be used), 'busy' (another run holds the lease).
+create function public.google_sync_begin(p_connection_id uuid, p_lease uuid, p_lease_seconds integer) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections;
+  begin
+    if p_connection_id is null or p_lease is null or p_lease_seconds is null
+      or p_lease_seconds not between 30 and private.google_calendar_limit('lease_seconds_max') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_connection from private.google_calendar_connections k where k.id = p_connection_id for update;
+    if v_connection.id is null then
+      return '{"outcome": "missing"}'::jsonb;
+    end if;
+    if v_connection.status <> 'connected' then
+      return '{"outcome": "expired"}'::jsonb;
+    end if;
+    if not private.can_receive_notifications(v_connection.user_id) then
+      -- Recorded as an attempt, so the automatic sync does not queue it again every 15 minutes.
+      update private.google_calendar_connections k set last_attempt_at = pg_catalog.now() where k.id = v_connection.id;
+      return '{"outcome": "inactive"}'::jsonb;
+    end if;
+    if v_connection.sync_lease is not null and v_connection.sync_lease <> p_lease
+        and v_connection.sync_lease_until > pg_catalog.now() then
+      return '{"outcome": "busy"}'::jsonb;
+    end if;
+    update private.google_calendar_connections k set sync_lease = p_lease,
+        sync_lease_until = pg_catalog.now() + pg_catalog.make_interval(secs => p_lease_seconds),
+        last_attempt_at = pg_catalog.now()
+      where k.id = v_connection.id;
+    return pg_catalog.jsonb_build_object('outcome', 'ok', 'userId', v_connection.user_id,
+      'token', v_connection.refresh_token);
+  end
+  $$;
+
+-- Applies Google's calendar list (all of it, [{id, name, timeZone, accessRole, primary}]) and returns the
+-- calendars to sync now: [{id, googleId, syncToken, fullDue}]. Calendars Google no longer lists become
+-- unavailable and lose their events and shares. On the first list, the primary calendar syncs and shows on
+-- the personal calendar (nothing is shared with a Home). Null when the lease is not held.
+create function public.google_sync_calendars(p_connection_id uuid, p_lease uuid, p_calendars jsonb) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections := private.google_leased(p_connection_id, p_lease);
+    v_first boolean;
+  begin
+    if v_connection.id is null then
+      return null;
+    end if;
+    if p_calendars is null or pg_catalog.jsonb_typeof(p_calendars) <> 'array'
+      or pg_catalog.jsonb_array_length(p_calendars) > private.google_calendar_limit('listed_calendars') then
+      raise exception 'invalid calendars' using errcode = '22023';
+    end if;
+    if exists (select 1 from pg_catalog.jsonb_array_elements(p_calendars) x
+        where pg_catalog.jsonb_typeof(x) <> 'object' or pg_catalog.jsonb_typeof(x -> 'id') <> 'string'
+          or pg_catalog.jsonb_typeof(x -> 'name') <> 'string' or pg_catalog.jsonb_typeof(x -> 'accessRole') <> 'string') then
+      raise exception 'invalid calendars' using errcode = '22023';
+    end if;
+    v_first := v_connection.calendars_listed_at is null;
+    insert into private.google_calendars (connection_id, user_id, google_calendar_id, name, time_zone, access_role,
+        is_primary, available, sync_enabled, show_personal)
+      select v_connection.id, v_connection.user_id, x ->> 'id', x ->> 'name',
+        case when private.calendar_valid_zone(x ->> 'timeZone') then x ->> 'timeZone' end,
+        x ->> 'accessRole', coalesce((x ->> 'primary')::boolean, false), true,
+        v_first and coalesce((x ->> 'primary')::boolean, false), v_first and coalesce((x ->> 'primary')::boolean, false)
+      from pg_catalog.jsonb_array_elements(p_calendars) x
+      on conflict on constraint google_calendars_google_key do update
+        set name = excluded.name, time_zone = excluded.time_zone, access_role = excluded.access_role,
+          is_primary = excluded.is_primary, available = true;
+    with gone as (
+      update private.google_calendars c set available = false, sync_token = null, last_synced_at = null,
+          full_synced_at = null, last_error_code = null
+        where c.connection_id = v_connection.id and c.available
+          and c.google_calendar_id not in (select x ->> 'id' from pg_catalog.jsonb_array_elements(p_calendars) x)
+        returning c.id
+    ), drop_events as (
+      delete from private.google_calendar_events e where e.calendar_id in (select id from gone)
+    )
+    delete from private.google_calendar_home_shares s where s.calendar_id in (select id from gone);
+    update private.google_calendar_connections k set calendars_listed_at = pg_catalog.now() where k.id = v_connection.id;
+    return coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', c.id, 'googleId', c.google_calendar_id, 'syncToken', c.sync_token,
+          'fullDue', c.sync_token is null or c.full_synced_at is null
+            or c.full_synced_at < pg_catalog.now() - pg_catalog.make_interval(hours => private.google_calendar_limit('full_hours')))
+        order by c.is_primary desc, c.id)
+      from (select * from private.google_calendars c
+        where c.connection_id = v_connection.id and c.sync_enabled and c.available
+        order by c.is_primary desc, c.id limit private.google_calendar_limit('synced_calendars')) c), '[]'::jsonb);
+  exception
+    when check_violation or not_null_violation or invalid_text_representation then
+      raise exception 'invalid calendars' using errcode = '22023';
+  end
+  $$;
+
+-- Applies one page of Google events to a calendar. Each item is either {id, cancelled: true} (the instance
+-- or the whole series is gone) or a normalized event (packages/google-calendar normalizeEvent). Upserts on
+-- the calendar and Google id, so a repeated page changes nothing; an unchanged etag is not rewritten. In a
+-- full pass (p_full) every row seen is marked with the lease. Answers the calendar's stored event count,
+-- or null when the lease is not held. 22023 for a malformed page (nothing applied).
+create function public.google_sync_apply_events(p_calendar_id uuid, p_lease uuid, p_full boolean, p_events jsonb)
+returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_calendar private.google_calendars := private.google_leased_calendar(p_calendar_id, p_lease);
+    v_count integer;
+  begin
+    if v_calendar.id is null or not v_calendar.sync_enabled or not v_calendar.available then
+      return null;
+    end if;
+    if p_full is null or p_events is null or pg_catalog.jsonb_typeof(p_events) <> 'array'
+      or pg_catalog.jsonb_array_length(p_events) > private.google_calendar_limit('page_events')
+      or exists (select 1 from pg_catalog.jsonb_array_elements(p_events) x
+        where pg_catalog.jsonb_typeof(x) <> 'object' or pg_catalog.jsonb_typeof(x -> 'id') <> 'string') then
+      raise exception 'invalid page' using errcode = '22023';
+    end if;
+    -- Only the last item per Google id in the page counts.
+    delete from private.google_calendar_events e
+      where e.calendar_id = v_calendar.id and exists (
+        select 1 from (select distinct on (x ->> 'id') x from pg_catalog.jsonb_array_elements(p_events)
+            with ordinality as a(x, n) order by x ->> 'id', n desc) l
+        where coalesce((l.x ->> 'cancelled')::boolean, false)
+          and (e.google_event_id = l.x ->> 'id' or e.recurring_event_id = l.x ->> 'id'));
+    insert into private.google_calendar_events as t (calendar_id, google_event_id, etag, google_updated, status, title,
+        location, description, all_day, starts_on, ends_on, starts_at, ends_at, time_zone, recurring_event_id,
+        original_start, private_in_google, link, seen_in, synced_at)
+      select v_calendar.id, x ->> 'id', x ->> 'etag', (x ->> 'updated')::timestamptz,
+        x ->> 'status', x ->> 'title', x ->> 'location', x ->> 'description', (x ->> 'allDay')::boolean,
+        (x ->> 'startsOn')::date, (x ->> 'endsOn')::date, (x ->> 'startsAt')::timestamptz, (x ->> 'endsAt')::timestamptz,
+        x ->> 'timeZone', x ->> 'recurringEventId', x ->> 'originalStart', coalesce((x ->> 'private')::boolean, false),
+        x ->> 'link', case when p_full then p_lease end, pg_catalog.now()
+      from (select distinct on (x ->> 'id') x from pg_catalog.jsonb_array_elements(p_events)
+          with ordinality as a(x, n) order by x ->> 'id', n desc) l
+      where not coalesce((x ->> 'cancelled')::boolean, false)
+      on conflict on constraint google_calendar_events_google_key do update
+        set etag = excluded.etag, google_updated = excluded.google_updated, status = excluded.status,
+          title = excluded.title, location = excluded.location, description = excluded.description,
+          all_day = excluded.all_day, starts_on = excluded.starts_on, ends_on = excluded.ends_on,
+          starts_at = excluded.starts_at, ends_at = excluded.ends_at, time_zone = excluded.time_zone,
+          recurring_event_id = excluded.recurring_event_id, original_start = excluded.original_start,
+          private_in_google = excluded.private_in_google, link = excluded.link,
+          seen_in = coalesce(excluded.seen_in, t.seen_in),
+          synced_at = case when t.etag is not distinct from excluded.etag then t.synced_at else excluded.synced_at end;
+    select count(*) into v_count from private.google_calendar_events e where e.calendar_id = v_calendar.id;
+    return v_count;
+  exception
+    when invalid_text_representation or invalid_datetime_format or datetime_field_overflow or check_violation
+      or not_null_violation or string_data_right_truncation then
+      raise exception 'invalid page' using errcode = '22023';
+  end
+  $$;
+
+-- Ends one calendar's pass. Success (p_error null): stores the new sync token and the sync time; a full pass
+-- also removes every row it did not see. Failure: records the code (the token stays, so the next run resumes;
+-- 'sync_token_invalid' clears it). True when applied, false when the lease is not held.
+create function public.google_sync_finish_calendar(
+  p_calendar_id uuid, p_lease uuid, p_full boolean, p_sync_token text default null, p_error text default null
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_calendar private.google_calendars := private.google_leased_calendar(p_calendar_id, p_lease);
+  begin
+    if v_calendar.id is null then
+      return false;
+    end if;
+    if p_full is null or (p_error is not null and p_error !~ '^[a-z_]{1,40}$')
+      or (p_error is null and (p_sync_token is null or char_length(p_sync_token) > 2048)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_error is not null then
+      update private.google_calendars c set last_error_code = p_error,
+          sync_token = case when p_error = 'sync_token_invalid' then null else c.sync_token end
+        where c.id = v_calendar.id;
+      return true;
+    end if;
+    -- Turned off (or gone from Google) during the run: its events were removed; keep no token.
+    if not v_calendar.sync_enabled or not v_calendar.available then
+      return true;
+    end if;
+    if p_full then
+      delete from private.google_calendar_events e
+        where e.calendar_id = v_calendar.id and e.seen_in is distinct from p_lease;
+    end if;
+    update private.google_calendars c set sync_token = p_sync_token, last_synced_at = pg_catalog.now(),
+        full_synced_at = case when p_full then pg_catalog.now() else c.full_synced_at end, last_error_code = null
+      where c.id = v_calendar.id;
+    return true;
+  end
+  $$;
+
+-- Ends a run and releases the lease. p_outcome: 'ok', 'authorization_expired' (Google refused the refresh
+-- token: syncing stops, the events stay with a warning, and the person is told once per connection) or a
+-- failure code for the whole connection (the next run retries). True when applied.
+create function public.google_sync_finish(p_connection_id uuid, p_lease uuid, p_outcome text) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections := private.google_leased(p_connection_id, p_lease);
+  begin
+    if p_outcome is null or p_outcome !~ '^[a-z_]{1,40}$' then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if v_connection.id is null then
+      return false;
+    end if;
+    if p_outcome = 'ok' then
+      update private.google_calendar_connections k set last_synced_at = pg_catalog.now(), last_error_code = null,
+          sync_lease = null, sync_lease_until = null
+        where k.id = v_connection.id;
+    elsif p_outcome = 'authorization_expired' then
+      update private.google_calendar_connections k set status = 'authorization_expired',
+          status_changed_at = pg_catalog.now(), last_error_code = null, sync_lease = null, sync_lease_until = null
+        where k.id = v_connection.id;
+      perform private.notify_user(v_connection.user_id, null, 'security', 'google_calendar.authorization_expired',
+        '{}'::jsonb,
+        'google-calendar-expired:' || v_connection.id::text || ':' || extract(epoch from v_connection.connected_at)::bigint::text,
+        false);
+    else
+      update private.google_calendar_connections k set last_error_code = p_outcome,
+          sync_lease = null, sync_lease_until = null
+        where k.id = v_connection.id;
+    end if;
+    return true;
+  end
+  $$;
+
+-- The automatic sync (called by the outbox dispatcher every few minutes): queues a run for up to p_limit
+-- connected accounts with a calendar to sync (or not listed yet) whose last run started over 15 minutes ago
+-- and that have none waiting, keyed by the
+-- 15-minute slot so a repeated call queues nothing twice. Answers how many it queued.
+create function public.queue_google_calendar_syncs(p_limit integer) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_interval interval := pg_catalog.make_interval(mins => private.google_calendar_limit('auto_minutes'));
+    v_slot bigint := pg_catalog.floor(extract(epoch from pg_catalog.now())
+      / (private.google_calendar_limit('auto_minutes') * 60))::bigint;
+    v_id uuid;
+    v_count integer := 0;
+  begin
+    if p_limit is null or p_limit not between 1 and 500 then
+      raise exception 'invalid limit' using errcode = '22023';
+    end if;
+    for v_id in
+      select k.id from private.google_calendar_connections k
+      where k.status = 'connected'
+        and (k.last_attempt_at is null or k.last_attempt_at < pg_catalog.now() - v_interval)
+        and (k.sync_requested_at is null or k.sync_requested_at < pg_catalog.now() - v_interval
+          or (k.last_attempt_at is not null and k.sync_requested_at <= k.last_attempt_at))
+        and (k.sync_lease_until is null or k.sync_lease_until < pg_catalog.now())
+        -- Only accounts with a calendar to sync, or not listed yet (keeps the free job budget, M3).
+        and (exists (select 1 from private.google_calendars c where c.connection_id = k.id and c.sync_enabled)
+          or not exists (select 1 from private.google_calendars c where c.connection_id = k.id))
+      order by k.last_attempt_at nulls first, k.id
+      limit p_limit
+      for update skip locked
+    loop
+      perform private.queue_google_calendar_sync(v_id, 'auto:' || v_slot::text);
+      v_count := v_count + 1;
+    end loop;
+    return v_count;
+  end
+  $$;
+
+-- Grants -------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  -- The person's own functions: signed-in people only (each rechecks the confirmed caller).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'get_google_calendar_event', 'get_google_calendar_connection', 'save_google_calendar_connection',
+      'request_google_calendar_sync', 'set_google_calendar_settings', 'disconnect_google_calendar'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- The sync job: the service role only.
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'google_sync_begin', 'google_sync_calendars', 'google_sync_apply_events', 'google_sync_finish_calendar',
+      'google_sync_finish', 'queue_google_calendar_syncs'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname like 'google%'
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname = 'queue_google_calendar_sync'
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261120090000_google_calendar_outbound.sql
+-- ============================================================================
+-- S34: Google Calendar outbound changes, conflicts and exclusions (brief plans/steps/S34-brief.md; ADR 0044;
+-- architecture.md §31; Modules.md §4.2: create in the configured target calendar, edits sync, ask-to-resolve
+-- conflicts, the two-choice deletion with an exclusion record, the three recurrence scopes).
+--
+-- The person's changes to Google events (create, edit, delete) are stored here first and sent to Google by the
+-- sync job (packages/google-calendar push.ts), which uses Google's etags so it never overwrites a newer Google
+-- version. When Google changed the same event since the version the person edited:
+--   - fields changed on only one side merge automatically (fields: title, location, description, time);
+--   - a field changed on both sides to different values is a conflict: both versions are kept, the event says
+--     so, and only its owner chooses which one wins. Nothing here (no apply, finish, retry or later page)
+--     ever ends a conflict on its own.
+-- "Remove from Madeora" writes an exclusion: the sync keeps storing the event, every read leaves it out, so a
+-- resync never shows it again; the owner can restore it.
+--
+-- Privacy (§11.2) is unchanged: only the calendar's owner sees or makes changes, conflicts and exclusions;
+-- Home members see a shared calendar's events as before, and never through a conflict a version that Google
+-- marks private (an event in conflict takes the stricter of the two privacy flags).
+
+-- Limits ---------------------------------------------------------------------------------------------------
+
+create or replace function private.google_calendar_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'synced_calendars' then 20      -- calendars that sync, per connection
+    when 'listed_calendars' then 250     -- calendars kept from Google's list
+    when 'events' then 5000              -- stored events per calendar
+    when 'page_events' then 250          -- events in one applied page
+    when 'stale_minutes' then 60         -- no successful sync for longer: stale
+    when 'auto_minutes' then 15          -- the automatic sync interval
+    when 'manual_seconds' then 60        -- Sync now at most this often
+    when 'full_hours' then 24            -- a full pass at least this often (moves the window)
+    when 'lease_seconds_max' then 900
+    when 'open_changes' then 200         -- changes waiting for Google, per connection
+    when 'push_batch' then 50            -- changes one run sends
+    when 'push_attempts' then 20         -- failed tries (Google unavailable) before a change is marked failed
+    when 'exclusions' then 1000          -- events removed from Madeora, per calendar
+  end;
+  $$;
+
+-- Tables ---------------------------------------------------------------------------------------------------
+
+-- The configured target calendar for events created in Madeora (null: Madeora only).
+alter table private.google_calendar_connections
+  add column write_calendar_id uuid references private.google_calendars (id) on delete set null;
+-- Connections from S33: their primary calendar, when it syncs and Google lets them write it.
+update private.google_calendar_connections k set write_calendar_id = c.id
+  from private.google_calendars c
+  where c.connection_id = k.id and c.is_primary and c.sync_enabled and c.available
+    and c.access_role in ('owner', 'writer');
+
+-- A Madeora-side revision of each stored Google event: every local change and every new Google version moves
+-- it, so an edit made from an older page is refused instead of silently merged.
+alter table private.google_calendar_events
+  add column revision integer not null default 1;
+
+-- One change waiting for Google. Event scope ('event': one event, or one occurrence of a series) is keyed by
+-- the Google event id; series scopes ('following', 'all') by the series id, so one event or series never has
+-- two open changes. Snapshots use the shape of packages/google-calendar normalizeEvent (title, location,
+-- description, allDay, startsOn, endsOn, startsAt, endsAt, timeZone, private, etag, status,
+-- recurringEventId, originalStart): `base` is the Google version the person changed, `mine` Madeora's,
+-- `theirs` Google's newer version in a conflict ({"deleted": true} when Google deleted it).
+create table private.google_calendar_changes (
+  id uuid primary key default gen_random_uuid(),
+  calendar_id uuid not null references private.google_calendars (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  action text not null constraint google_calendar_changes_action_check check (action in ('create', 'update', 'delete')),
+  scope text not null constraint google_calendar_changes_scope_check check (scope in ('event', 'following', 'all')),
+  google_event_id text not null constraint google_calendar_changes_event_check
+    check (private.calendar_single_line(google_event_id, 1024)),
+  series_id text constraint google_calendar_changes_series_check check (char_length(series_id) <= 1024),
+  fields text[] not null default '{}'
+    constraint google_calendar_changes_fields_check check (fields <@ array['title', 'location', 'description', 'time']),
+  base jsonb,
+  mine jsonb,
+  theirs jsonb,
+  -- A new event's repeat rule (packages/google-calendar recurrence.ts turns it into an RRULE).
+  repeat jsonb,
+  state text not null default 'pending'
+    constraint google_calendar_changes_state_check check (state in ('pending', 'conflict', 'failed')),
+  conflict_fields text[] not null default '{}',
+  error_code text constraint google_calendar_changes_error_check check (error_code is null or error_code ~ '^[a-z_]{1,40}$'),
+  attempts integer not null default 0,
+  -- Moves with every change the person makes, so a result for an older version never drops a newer one.
+  version integer not null default 1,
+  title text constraint google_calendar_changes_title_check check (private.calendar_single_line(title, 200)),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint google_calendar_changes_shape check (
+    (scope = 'event') = (series_id is null)
+    and (action <> 'create' or (scope = 'event' and base is null and mine is not null))
+    and (action = 'create' or base is not null)
+    and (action <> 'update' or mine is not null)
+    and (state <> 'conflict' or theirs is not null))
+);
+create unique index google_calendar_changes_event_key on private.google_calendar_changes (calendar_id, google_event_id)
+  where scope = 'event';
+create unique index google_calendar_changes_series_key on private.google_calendar_changes (calendar_id, series_id)
+  where scope <> 'event';
+create index google_calendar_changes_user_idx on private.google_calendar_changes (user_id, state);
+
+-- "Remove from Madeora": one event or occurrence ('event', by its Google id), a whole series ('series', by the
+-- series id) or a series from one occurrence on ('following', by the series id and that occurrence's start).
+create table private.google_calendar_exclusions (
+  id uuid primary key default gen_random_uuid(),
+  calendar_id uuid not null references private.google_calendars (id) on delete cascade,
+  kind text not null constraint google_calendar_exclusions_kind_check check (kind in ('event', 'series', 'following')),
+  google_id text not null constraint google_calendar_exclusions_id_check check (private.calendar_single_line(google_id, 1024)),
+  from_at timestamptz,
+  title text constraint google_calendar_exclusions_title_check check (private.calendar_single_line(title, 200)),
+  starts_on date not null,
+  created_at timestamptz not null default now(),
+  constraint google_calendar_exclusions_shape check ((kind = 'following') = (from_at is not null)),
+  constraint google_calendar_exclusions_key unique nulls not distinct (calendar_id, kind, google_id, from_at)
+);
+
+alter table private.google_calendar_changes enable row level security;
+alter table private.google_calendar_exclusions enable row level security;
+revoke all on table private.google_calendar_changes, private.google_calendar_exclusions
+  from public, anon, authenticated, service_role;
+
+-- Snapshots and fields ---------------------------------------------------------------------------------------
+
+-- An occurrence's original start as an instant: Google gives a date (all-day) or a date-time with offset.
+create function private.google_original_at(p_original text, p_fallback timestamptz) returns timestamptz
+  language plpgsql immutable set search_path = '' as $$
+  begin
+    if p_original is null then
+      return p_fallback;
+    end if;
+    if p_original ~ '^\d{4}-\d{2}-\d{2}$' then
+      return p_original::date::timestamp at time zone 'UTC';
+    end if;
+    return p_original::timestamptz;
+  exception when others then
+    return p_fallback;
+  end
+  $$;
+
+create function private.google_event_at(p_event private.google_calendar_events) returns timestamptz
+  language sql immutable set search_path = '' as $$
+  select private.google_original_at(p_event.original_start,
+    coalesce(p_event.starts_at, p_event.starts_on::timestamp at time zone 'UTC'));
+  $$;
+
+-- A stored event as a snapshot.
+create function private.google_snapshot(p_event private.google_calendar_events) returns jsonb
+  language sql immutable set search_path = '' as $$
+  select pg_catalog.jsonb_build_object('etag', p_event.etag, 'status', p_event.status, 'title', p_event.title,
+    'location', p_event.location, 'description', p_event.description, 'allDay', p_event.all_day,
+    'startsOn', p_event.starts_on, 'endsOn', p_event.ends_on, 'startsAt', p_event.starts_at, 'endsAt', p_event.ends_at,
+    'timeZone', p_event.time_zone, 'private', p_event.private_in_google,
+    'recurringEventId', p_event.recurring_event_id, 'originalStart', p_event.original_start);
+  $$;
+
+-- One field's value in a snapshot, comparable across both sides (instants as epoch seconds).
+create function private.google_field(p_snapshot jsonb, p_field text) returns jsonb
+  language sql immutable set search_path = '' as $$
+  select case p_field
+    when 'title' then coalesce(p_snapshot -> 'title', 'null'::jsonb)
+    when 'location' then coalesce(p_snapshot -> 'location', 'null'::jsonb)
+    when 'description' then coalesce(p_snapshot -> 'description', 'null'::jsonb)
+    when 'time' then pg_catalog.jsonb_build_object(
+      'allDay', coalesce(p_snapshot -> 'allDay', 'null'::jsonb),
+      'startsOn', coalesce(p_snapshot -> 'startsOn', 'null'::jsonb),
+      'endsOn', coalesce(p_snapshot -> 'endsOn', 'null'::jsonb),
+      'startsAt', pg_catalog.to_jsonb(extract(epoch from (p_snapshot ->> 'startsAt')::timestamptz)),
+      'endsAt', pg_catalog.to_jsonb(extract(epoch from (p_snapshot ->> 'endsAt')::timestamptz)))
+  end;
+  $$;
+
+-- The fields whose values differ between two snapshots.
+create function private.google_diff(p_a jsonb, p_b jsonb) returns text[]
+  language sql immutable set search_path = '' as $$
+  select coalesce(pg_catalog.array_agg(f order by n), '{}')
+  from pg_catalog.unnest(array['title', 'location', 'description', 'time']) with ordinality as x(f, n)
+  where private.google_field(p_a, f) is distinct from private.google_field(p_b, f);
+  $$;
+
+-- p_into with the keys of p_fields taken from p_from.
+create function private.google_take(p_into jsonb, p_from jsonb, p_fields text[]) returns jsonb
+  language sql immutable set search_path = '' as $$
+  select p_into || coalesce((select pg_catalog.jsonb_object_agg(k, coalesce(p_from -> k, 'null'::jsonb))
+    from pg_catalog.unnest(p_fields) f
+    cross join lateral pg_catalog.unnest(case f when 'time'
+      then array['allDay', 'startsOn', 'endsOn', 'startsAt', 'endsAt', 'timeZone'] else array[f] end) k), '{}'::jsonb);
+  $$;
+
+-- Writes a snapshot's values into a stored event (its etag and privacy flag too) and moves its revision.
+create function private.google_row_set(p_event_id uuid, p_snapshot jsonb) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    update private.google_calendar_events e set
+        etag = p_snapshot ->> 'etag',
+        status = coalesce(p_snapshot ->> 'status', e.status),
+        title = p_snapshot ->> 'title',
+        location = p_snapshot ->> 'location',
+        description = p_snapshot ->> 'description',
+        all_day = (p_snapshot ->> 'allDay')::boolean,
+        starts_on = (p_snapshot ->> 'startsOn')::date,
+        ends_on = (p_snapshot ->> 'endsOn')::date,
+        starts_at = (p_snapshot ->> 'startsAt')::timestamptz,
+        ends_at = (p_snapshot ->> 'endsAt')::timestamptz,
+        time_zone = p_snapshot ->> 'timeZone',
+        private_in_google = coalesce((p_snapshot ->> 'private')::boolean, e.private_in_google),
+        link = case when p_snapshot ? 'link' then p_snapshot ->> 'link' else e.link end,
+        revision = e.revision + 1,
+        synced_at = pg_catalog.now()
+      where e.id = p_event_id;
+  end
+  $$;
+
+-- Madeora's version of an event from validated values (private.calendar_values), as a snapshot.
+create function private.google_local_snapshot(p_values private.calendar_events, p_private boolean, p_etag text)
+returns jsonb
+  language sql stable set search_path = '' as $$
+  select pg_catalog.jsonb_build_object('etag', p_etag, 'status', 'confirmed', 'title', p_values.title,
+    'location', p_values.location, 'description', p_values.description, 'allDay', p_values.all_day,
+    'startsOn', case when p_values.all_day then p_values.starts_on end,
+    'endsOn', case when p_values.all_day then p_values.ends_on end,
+    'startsAt', case when not p_values.all_day then (p_values.starts_on + p_values.start_time) at time zone p_values.timezone end,
+    'endsAt', case when not p_values.all_day then (p_values.ends_on + p_values.end_time) at time zone p_values.timezone end,
+    'timeZone', case when not p_values.all_day then p_values.timezone end,
+    'private', p_private);
+  $$;
+
+-- Whether an event is removed from Madeora by one of its calendar's exclusions.
+create function private.google_excluded(p_event private.google_calendar_events) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from private.google_calendar_exclusions x
+    where x.calendar_id = p_event.calendar_id and case x.kind
+      when 'event' then x.google_id = p_event.google_event_id
+      when 'series' then x.google_id = p_event.recurring_event_id or x.google_id = p_event.google_event_id
+      else x.google_id = p_event.recurring_event_id and private.google_event_at(p_event) >= x.from_at
+    end);
+  $$;
+
+-- The open change that concerns an event, as its owner sees it: its own (event scope) or its series'.
+create function private.google_event_change(p_event private.google_calendar_events)
+returns private.google_calendar_changes
+  language sql stable security definer set search_path = '' as $$
+  select c from private.google_calendar_changes c
+  where c.calendar_id = p_event.calendar_id and (
+    (c.scope = 'event' and c.google_event_id = p_event.google_event_id)
+    or (c.scope = 'all' and c.series_id = p_event.recurring_event_id)
+    or (c.scope = 'following' and c.series_id = p_event.recurring_event_id
+      and private.google_event_at(p_event) >= private.google_original_at(c.base ->> 'originalStart',
+        (c.base ->> 'startsAt')::timestamptz)))
+  order by (c.scope = 'event') desc
+  limit 1;
+  $$;
+
+-- An event's state for its owner's views: null (in sync), 'saving', 'deleting', 'conflict' or 'failed'.
+create function private.google_change_state(p_change private.google_calendar_changes) returns text
+  language sql immutable set search_path = '' as $$
+  select case when p_change.id is null then null
+    when p_change.state = 'pending' then case when p_change.action = 'delete' then 'deleting' else 'saving' end
+    else p_change.state end;
+  $$;
+
+-- Weighs Google's newer version (p_theirs, a normalized event or {"deleted": true}) against an open change:
+--   'conflict': a field both sides changed to different values, a deletion against an edit, or the change
+--               already in conflict (it only takes the newer Google version; it never ends on its own);
+--   'merged':   the change stays, rebased on p_theirs (fields only Google changed are taken into Madeora's
+--               version);
+--   'done':     nothing is left to send (Google already has Madeora's values, or both deleted it).
+-- Event-scope changes keep the stored event in step: Madeora's version while open, Google's when done; in a
+-- conflict it takes the stricter privacy flag. The caller holds the change's calendar lock.
+create function private.google_reconcile(p_change_id uuid, p_theirs jsonb) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    c private.google_calendar_changes;
+    v_event private.google_calendar_events;
+    v_deleted boolean := coalesce((p_theirs ->> 'deleted')::boolean, false);
+    v_google text[];
+    v_overlap text[];
+    v_mine jsonb;
+    v_fields text[];
+  begin
+    select * into c from private.google_calendar_changes x where x.id = p_change_id for update;
+    if c.id is null then
+      return 'done';
+    end if;
+    if c.scope = 'event' then
+      select * into v_event from private.google_calendar_events e
+        where e.calendar_id = c.calendar_id and e.google_event_id = c.google_event_id;
+    end if;
+    if not v_deleted then
+      v_google := private.google_diff(c.base, p_theirs);
+    end if;
+
+    -- Already in conflict: only the newer Google version is kept.
+    if c.state = 'conflict' then
+      update private.google_calendar_changes x set theirs = p_theirs, updated_at = pg_catalog.now(),
+          conflict_fields = case when v_deleted then x.conflict_fields
+            else coalesce(nullif((select coalesce(pg_catalog.array_agg(f), '{}') from pg_catalog.unnest(x.fields) f
+              where private.google_field(p_theirs, f) is distinct from private.google_field(x.base, f)
+                and private.google_field(p_theirs, f) is distinct from private.google_field(x.mine, f)), '{}'),
+              x.conflict_fields) end
+        where x.id = c.id;
+      if v_event.id is not null and not v_deleted and coalesce((p_theirs ->> 'private')::boolean, false) then
+        update private.google_calendar_events e set private_in_google = true, revision = e.revision + 1
+          where e.id = v_event.id;
+      end if;
+      return 'conflict';
+    end if;
+
+    if c.action = 'create' then
+      if v_deleted then
+        delete from private.google_calendar_events e where e.id = v_event.id;
+        delete from private.google_calendar_changes x where x.id = c.id;
+        return 'done';
+      end if;
+      -- Google already has it: whatever Madeora changed since becomes an edit of Google's version.
+      v_fields := private.google_diff(p_theirs, c.mine);
+      if pg_catalog.cardinality(v_fields) = 0 then
+        if v_event.id is not null then
+          perform private.google_row_set(v_event.id, p_theirs);
+        end if;
+        delete from private.google_calendar_changes x where x.id = c.id;
+        return 'done';
+      end if;
+      update private.google_calendar_changes x set action = 'update', base = p_theirs, fields = v_fields,
+          mine = x.mine || pg_catalog.jsonb_build_object('etag', p_theirs -> 'etag', 'private', p_theirs -> 'private'),
+          updated_at = pg_catalog.now()
+        where x.id = c.id;
+      if v_event.id is not null then
+        update private.google_calendar_events e set etag = p_theirs ->> 'etag', revision = e.revision + 1
+          where e.id = v_event.id;
+      end if;
+      return 'merged';
+    end if;
+
+    if c.action = 'delete' then
+      if v_deleted then
+        if c.scope = 'event' then
+          delete from private.google_calendar_events e where e.id = v_event.id;
+        end if;
+        delete from private.google_calendar_changes x where x.id = c.id;
+        return 'done';
+      end if;
+      if pg_catalog.cardinality(v_google) = 0 then
+        update private.google_calendar_changes x set base = p_theirs, updated_at = pg_catalog.now() where x.id = c.id;
+        return 'merged';
+      end if;
+      update private.google_calendar_changes x set state = 'conflict', theirs = p_theirs, conflict_fields = v_google,
+          error_code = null, updated_at = pg_catalog.now()
+        where x.id = c.id;
+      if v_event.id is not null then
+        perform private.google_row_set(v_event.id, p_theirs);
+      end if;
+      return 'conflict';
+    end if;
+
+    -- An edit.
+    if v_deleted then
+      update private.google_calendar_changes x set state = 'conflict', theirs = p_theirs, conflict_fields = x.fields,
+          error_code = null, updated_at = pg_catalog.now()
+        where x.id = c.id;
+      return 'conflict';
+    end if;
+    select coalesce(pg_catalog.array_agg(f), '{}') into v_overlap from pg_catalog.unnest(c.fields) f
+      where f = any (v_google) and private.google_field(p_theirs, f) is distinct from private.google_field(c.mine, f);
+    if pg_catalog.cardinality(v_overlap) > 0 then
+      update private.google_calendar_changes x set state = 'conflict', theirs = p_theirs, conflict_fields = v_overlap,
+          error_code = null, updated_at = pg_catalog.now()
+        where x.id = c.id;
+      if v_event.id is not null and coalesce((p_theirs ->> 'private')::boolean, false) then
+        update private.google_calendar_events e set private_in_google = true, revision = e.revision + 1
+          where e.id = v_event.id;
+      end if;
+      return 'conflict';
+    end if;
+    -- No field changed on both sides: take Google's other changes, keep Madeora's.
+    v_mine := private.google_take(c.mine, p_theirs, (select coalesce(pg_catalog.array_agg(f), '{}')
+      from pg_catalog.unnest(v_google) f where not (f = any (c.fields))))
+      || pg_catalog.jsonb_build_object('etag', p_theirs -> 'etag', 'private', p_theirs -> 'private');
+    select coalesce(pg_catalog.array_agg(f), '{}') into v_fields from pg_catalog.unnest(c.fields) f
+      where private.google_field(p_theirs, f) is distinct from private.google_field(v_mine, f);
+    if pg_catalog.cardinality(v_fields) = 0 then
+      if v_event.id is not null then
+        perform private.google_row_set(v_event.id, p_theirs);
+      end if;
+      delete from private.google_calendar_changes x where x.id = c.id;
+      return 'done';
+    end if;
+    update private.google_calendar_changes x set base = p_theirs, mine = v_mine, fields = v_fields,
+        updated_at = pg_catalog.now()
+      where x.id = c.id;
+    if v_event.id is not null then
+      perform private.google_row_set(v_event.id, v_mine);
+    end if;
+    return 'merged';
+  end
+  $$;
+
+-- Queues a run for a connection that has new changes, unless one is already waiting to start.
+create function private.google_queue_push(p_connection_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections;
+  begin
+    select * into v_connection from private.google_calendar_connections k where k.id = p_connection_id for update;
+    if v_connection.id is null or v_connection.status <> 'connected' then
+      return;
+    end if;
+    if v_connection.sync_requested_at is not null
+        and (v_connection.last_attempt_at is null or v_connection.sync_requested_at > v_connection.last_attempt_at) then
+      return;
+    end if;
+    update private.google_calendar_connections k set sync_seq = k.sync_seq + 1 where k.id = v_connection.id;
+    perform private.queue_google_calendar_sync(v_connection.id, 'push:' || (v_connection.sync_seq + 1)::text);
+  end
+  $$;
+
+-- Visibility, now without excluded events ------------------------------------------------------------------
+
+create or replace function private.google_context_events(p_user_id uuid, p_home_id uuid)
+returns table (event private.google_calendar_events, calendar private.google_calendars)
+  language sql stable security definer set search_path = '' as $$
+  select e, c from private.google_calendar_events e
+  join private.google_calendars c on c.id = e.calendar_id
+  where p_user_id is not null and c.sync_enabled and c.available and case
+    when p_home_id is null then c.user_id = p_user_id and c.show_personal
+    else not e.private_in_google and exists (
+      select 1 from private.google_calendar_home_shares s where s.calendar_id = c.id and s.home_id = p_home_id)
+      and private.home_role(p_home_id, p_user_id) is not null
+  end
+  and not private.google_excluded(e);
+  $$;
+
+-- The occurrence shape gains `googleState`: the event's change state, for its owner only.
+create or replace function private.google_occurrence_json(
+  p_event private.google_calendar_events, p_calendar private.google_calendars, p_viewer uuid, p_home_id uuid,
+  p_zone text
+) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'eventId', p_event.id,
+    'on', null,
+    'kind', case when p_calendar.user_id = p_viewer then 'personal' else 'shared' end,
+    'sharedBy', case when p_calendar.user_id <> p_viewer then private.member_ref(p_home_id, p_calendar.user_id) end,
+    'title', coalesce(p_event.title, ''),
+    'location', p_event.location,
+    'allDay', p_event.all_day,
+    'from', case when p_event.all_day then p_event.starts_on else (p_event.starts_at at time zone p_zone)::date end,
+    'to', case when p_event.all_day then p_event.ends_on
+      when p_event.ends_at = p_event.starts_at then (p_event.starts_at at time zone p_zone)::date
+      else ((p_event.ends_at - interval '1 microsecond') at time zone p_zone)::date end,
+    'startsAt', p_event.starts_at,
+    'endsAt', p_event.ends_at,
+    'timezone', case when private.calendar_valid_zone(p_event.time_zone) then p_event.time_zone
+      when private.calendar_valid_zone(p_calendar.time_zone) then p_calendar.time_zone else p_zone end,
+    'recurring', p_event.recurring_event_id is not null,
+    'changed', false,
+    'participants', '[]'::jsonb,
+    'source', 'google',
+    'calendar', p_calendar.name,
+    'googleState', case when p_calendar.user_id = p_viewer
+      then private.google_change_state(private.google_event_change(p_event)) end
+  );
+  $$;
+
+-- One Google event as the caller sees it (S33), with what its owner needs to change it: the revision the edit
+-- page sends back, whether the calendar can be written, the series, and the open change (both versions in a
+-- conflict). Other people get exactly the S33 answer (`change` null, `editable` false).
+create or replace function public.get_google_calendar_event(p_event_id uuid, p_home_id uuid default null, p_zone text default null)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_event private.google_calendar_events;
+    v_calendar private.google_calendars;
+    v_connection private.google_calendar_connections;
+    v_change private.google_calendar_changes;
+    v_zone text;
+    v_state text;
+    v_own boolean;
+  begin
+    if p_event_id is null or (p_home_id is not null and private.home_role(p_home_id, v_user_id) is null) then
+      return null;
+    end if;
+    select (g.event).* into v_event
+      from private.google_context_events(v_user_id, p_home_id) g where (g.event).id = p_event_id;
+    if v_event.id is null then
+      return null;
+    end if;
+    select * into v_calendar from private.google_calendars c where c.id = v_event.calendar_id;
+    select * into v_connection from private.google_calendar_connections k where k.id = v_calendar.connection_id;
+    v_own := v_calendar.user_id = v_user_id;
+    v_state := private.google_calendar_state(v_connection, v_calendar);
+    v_zone := private.calendar_zone(p_home_id, p_zone);
+    if v_own then
+      v_change := private.google_event_change(v_event);
+    end if;
+    return private.google_occurrence_json(v_event, v_calendar, v_user_id, p_home_id, v_zone)
+      || pg_catalog.jsonb_build_object(
+        'description', v_event.description,
+        'displayTimezone', v_zone,
+        'startsOn', v_event.starts_on,
+        'endsOn', v_event.ends_on,
+        'tentative', v_event.status = 'tentative',
+        'privateInGoogle', v_event.private_in_google,
+        'link', case when v_own then v_event.link end,
+        'state', case when v_own or v_state in ('synced', 'syncing') then v_state else 'out_of_date' end,
+        'lastSyncedAt', v_calendar.last_synced_at,
+        'revision', case when v_own then v_event.revision end,
+        'editable', v_own and v_calendar.access_role in ('owner', 'writer') and v_connection.status = 'connected',
+        'pendingCreate', coalesce(v_own and v_change.action = 'create', false),
+        'change', case when v_change.id is not null then pg_catalog.jsonb_build_object(
+          'id', v_change.id,
+          'action', v_change.action,
+          'scope', v_change.scope,
+          'state', v_change.state,
+          'errorCode', v_change.error_code,
+          'fields', pg_catalog.to_jsonb(v_change.fields),
+          'conflictFields', pg_catalog.to_jsonb(v_change.conflict_fields),
+          'mine', v_change.mine,
+          'theirs', v_change.theirs,
+          'own', v_change.scope = 'event') end);
+  end
+  $$;
+
+-- The person's own connection, with the target calendar, open changes and removed events --------------------
+
+create or replace function public.get_google_calendar_connection() returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_connection private.google_calendar_connections;
+  begin
+    select * into v_connection from private.google_calendar_connections k where k.user_id = v_user_id;
+    if v_connection.id is null then
+      return null;
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'account', v_connection.account,
+      'status', v_connection.status,
+      'connectedAt', v_connection.connected_at,
+      'lastSyncedAt', v_connection.last_synced_at,
+      'errorCode', v_connection.last_error_code,
+      'listed', v_connection.calendars_listed_at is not null,
+      'syncQueued', v_connection.sync_requested_at is not null
+        and (v_connection.last_attempt_at is null or v_connection.sync_requested_at > v_connection.last_attempt_at),
+      'canSyncNow', v_connection.status = 'connected' and (v_connection.sync_requested_at is null
+        or v_connection.sync_requested_at < pg_catalog.now()
+          - pg_catalog.make_interval(secs => private.google_calendar_limit('manual_seconds'))),
+      'writeCalendarId', v_connection.write_calendar_id,
+      'calendars', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'id', c.id,
+            'name', c.name,
+            'primary', c.is_primary,
+            'accessRole', c.access_role,
+            'available', c.available,
+            'sync', c.sync_enabled,
+            'showPersonal', c.show_personal,
+            'homes', coalesce((select pg_catalog.jsonb_agg(s.home_id order by s.shared_at, s.home_id)
+              from private.google_calendar_home_shares s where s.calendar_id = c.id), '[]'::jsonb),
+            'state', case when c.sync_enabled then private.google_calendar_state(v_connection, c) end,
+            'errorCode', c.last_error_code,
+            'lastSyncedAt', c.last_synced_at,
+            'writable', c.access_role in ('owner', 'writer'),
+            'openChanges', (select count(*) from private.google_calendar_changes x where x.calendar_id = c.id)
+          ) order by c.is_primary desc, c.available desc, pg_catalog.lower(c.name), c.id)
+        from private.google_calendars c where c.connection_id = v_connection.id), '[]'::jsonb),
+      'homes', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('id', h.id, 'name', h.name)
+          order by pg_catalog.lower(h.name), h.id)
+        from public.home_memberships m join public.homes h on h.id = m.home_id
+        where m.user_id = v_user_id), '[]'::jsonb),
+      'changes', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'id', x.id,
+            'eventId', (select e.id from private.google_calendar_events e
+              where e.calendar_id = x.calendar_id and e.google_event_id = x.google_event_id),
+            'title', x.title,
+            'calendar', c.name,
+            'action', x.action,
+            'scope', x.scope,
+            'state', x.state,
+            'errorCode', x.error_code,
+            'updatedAt', x.updated_at
+          ) order by x.state = 'pending', x.updated_at desc, x.id)
+        from (select * from private.google_calendar_changes x where x.user_id = v_user_id
+          order by x.state = 'pending', x.updated_at desc limit 100) x
+        join private.google_calendars c on c.id = x.calendar_id), '[]'::jsonb),
+      'hidden', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'id', x.id, 'kind', x.kind, 'title', x.title, 'startsOn', x.starts_on, 'calendar', c.name
+          ) order by x.created_at desc, x.id)
+        from (select x.* from private.google_calendar_exclusions x
+          join private.google_calendars c on c.id = x.calendar_id
+          where c.connection_id = v_connection.id order by x.created_at desc limit 100) x
+        join private.google_calendars c on c.id = x.calendar_id), '[]'::jsonb),
+      'limits', pg_catalog.jsonb_build_object('syncedCalendars', private.google_calendar_limit('synced_calendars'))
+    );
+  end
+  $$;
+
+-- Turning a calendar's sync off is refused while it has changes waiting for Google ('pending_changes'), and
+-- clears it as the target calendar. Otherwise as in S33.
+create or replace function public.set_google_calendar_settings(
+  p_calendar_id uuid, p_sync boolean, p_show_personal boolean, p_home_ids uuid[]
+) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_calendar private.google_calendars;
+    v_connection private.google_calendar_connections;
+    v_homes uuid[] := coalesce(p_home_ids, '{}');
+  begin
+    if p_calendar_id is null or p_sync is null or p_show_personal is null
+      or pg_catalog.cardinality(v_homes) > 20 or array_position(v_homes, null) is not null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_connection from private.google_calendar_connections k where k.user_id = v_user_id for update;
+    select * into v_calendar from private.google_calendars c
+      where c.id = p_calendar_id and c.connection_id = v_connection.id for update;
+    if v_calendar.id is null then
+      return 'not_found';
+    end if;
+    if p_sync and (not v_calendar.available or v_calendar.access_role = 'freeBusyReader') then
+      return 'unavailable';
+    end if;
+    if not p_sync and (p_show_personal or pg_catalog.cardinality(v_homes) > 0) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if exists (select 1 from pg_catalog.unnest(v_homes) h(id)
+        where private.home_role(h.id, v_user_id) is null) then
+      return 'invalid_home';
+    end if;
+    if p_sync and not v_calendar.sync_enabled and (select count(*) from private.google_calendars c
+        where c.connection_id = v_connection.id and c.sync_enabled) >= private.google_calendar_limit('synced_calendars') then
+      return 'too_many';
+    end if;
+    if not p_sync then
+      if exists (select 1 from private.google_calendar_changes x where x.calendar_id = v_calendar.id) then
+        return 'pending_changes';
+      end if;
+      delete from private.google_calendar_events e where e.calendar_id = v_calendar.id;
+      delete from private.google_calendar_home_shares s where s.calendar_id = v_calendar.id;
+      update private.google_calendars c set sync_enabled = false, show_personal = false, sync_token = null,
+          last_synced_at = null, full_synced_at = null, last_error_code = null
+        where c.id = v_calendar.id;
+      update private.google_calendar_connections k set write_calendar_id = null
+        where k.id = v_connection.id and k.write_calendar_id = v_calendar.id;
+      return 'saved';
+    end if;
+    update private.google_calendars c set sync_enabled = true, show_personal = p_show_personal
+      where c.id = v_calendar.id;
+    delete from private.google_calendar_home_shares s
+      where s.calendar_id = v_calendar.id and s.home_id <> all (v_homes);
+    insert into private.google_calendar_home_shares (calendar_id, home_id, user_id)
+      select v_calendar.id, h.id, v_user_id from (select distinct pg_catalog.unnest(v_homes) as id) h
+      on conflict on constraint google_calendar_home_shares_pkey do nothing;
+    if not v_calendar.sync_enabled and v_connection.status = 'connected'
+        and (v_connection.sync_requested_at is null or v_connection.sync_requested_at < pg_catalog.now()
+          - pg_catalog.make_interval(secs => private.google_calendar_limit('manual_seconds'))) then
+      update private.google_calendar_connections k set sync_seq = k.sync_seq + 1 where k.id = v_connection.id;
+      perform private.queue_google_calendar_sync(v_connection.id, 'calendar:' || (v_connection.sync_seq + 1)::text);
+    end if;
+    return 'saved';
+  end
+  $$;
+
+-- The target calendar for new events: one of the caller's calendars that syncs and that Google lets them
+-- write, or null (Madeora only). Outcomes: 'saved', 'not_found', 'read_only' (not writable or not syncing).
+create function public.set_google_calendar_write_target(p_calendar_id uuid default null) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_connection private.google_calendar_connections;
+    v_calendar private.google_calendars;
+  begin
+    select * into v_connection from private.google_calendar_connections k where k.user_id = v_user_id for update;
+    if v_connection.id is null then
+      return 'not_found';
+    end if;
+    if p_calendar_id is not null then
+      select * into v_calendar from private.google_calendars c
+        where c.id = p_calendar_id and c.connection_id = v_connection.id;
+      if v_calendar.id is null then
+        return 'not_found';
+      end if;
+      if not (v_calendar.sync_enabled and v_calendar.available and v_calendar.access_role in ('owner', 'writer')) then
+        return 'read_only';
+      end if;
+    end if;
+    update private.google_calendar_connections k set write_calendar_id = p_calendar_id where k.id = v_connection.id;
+    return 'saved';
+  end
+  $$;
+
+-- Changing Google events from Madeora ----------------------------------------------------------------------
+
+-- The caller's own Google calendar that syncs, locked; null when it is not theirs, not syncing or gone.
+create function private.google_own_calendar(p_user_id uuid, p_calendar_id uuid) returns private.google_calendars
+  language sql volatile security definer set search_path = '' as $$
+  select c from private.google_calendars c
+  where c.id = p_calendar_id and c.user_id = p_user_id and c.sync_enabled and c.available
+  for update;
+  $$;
+
+-- Why Madeora cannot write to a calendar now: 'read_only' (Google's access role), 'authorization_expired', or
+-- null.
+create function private.google_write_problem(p_calendar private.google_calendars) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case when p_calendar.access_role not in ('owner', 'writer') then 'read_only'
+    when (select k.status from private.google_calendar_connections k where k.id = p_calendar.connection_id) <> 'connected'
+      then 'authorization_expired' end;
+  $$;
+
+-- The Google event id Madeora gives a new event: derived from the caller and the client's request id, so a
+-- retry finds the same event and Google's own duplicate check catches a repeated insert. Google ids use the
+-- characters a–v and 0–9.
+create function private.google_new_event_id(p_user_id uuid, p_request_id uuid) returns text
+  language sql immutable set search_path = '' as $$
+  select 'madeora' || pg_catalog.md5('google-calendar-event:' || p_user_id::text || ':' || p_request_id::text);
+  $$;
+
+-- Creates an event in one of the caller's writable Google calendars (p_event as for native events:
+-- title, location, description, allDay, startsOn, endsOn, startTime, endTime, timezone, repeat; no
+-- reminder, participants or shares). It shows in Madeora at once, marked as saving, and the sync job inserts
+-- it in Google. Answers {outcome, eventId}; outcomes: 'created', 'exists' (the same request again), 'not_found',
+-- 'read_only', 'authorization_expired', 'limit_reached', 'invalid_dates', 'nonexistent_time'. 22023 for a
+-- malformed request.
+create function public.create_google_calendar_event(p_request_id uuid, p_calendar_id uuid, p_event jsonb)
+returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_calendar private.google_calendars;
+    v_problem text;
+    v_values private.calendar_events;
+    v_google_id text;
+    v_existing uuid;
+    v_id uuid;
+    v_mine jsonb;
+  begin
+    if p_request_id is null or p_calendar_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_event ? 'participants' or p_event ? 'shares'
+        or (p_event ? 'reminder' and pg_catalog.jsonb_typeof(p_event -> 'reminder') <> 'null') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_values := private.calendar_values(p_event, true);
+    v_calendar := private.google_own_calendar(v_user_id, p_calendar_id);
+    if v_calendar.id is null then
+      return '{"outcome": "not_found"}'::jsonb;
+    end if;
+    v_problem := private.google_write_problem(v_calendar);
+    v_google_id := private.google_new_event_id(v_user_id, p_request_id);
+    select e.id into v_existing from private.google_calendar_events e
+      where e.calendar_id = v_calendar.id and (e.google_event_id = v_google_id or e.recurring_event_id = v_google_id)
+      limit 1;
+    if v_existing is not null or exists (select 1 from private.google_calendar_changes x
+        where x.calendar_id = v_calendar.id and x.google_event_id = v_google_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'exists', 'eventId', v_existing);
+    end if;
+    if v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+    v_problem := private.calendar_time_problem(v_values.all_day, v_values.starts_on, v_values.ends_on,
+      v_values.start_time, v_values.end_time, v_values.timezone);
+    if v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+    if (select count(*) from private.google_calendar_events e where e.calendar_id = v_calendar.id)
+        >= private.google_calendar_limit('events')
+      or (select count(*) from private.google_calendar_changes x where x.user_id = v_user_id)
+        >= private.google_calendar_limit('open_changes') then
+      return '{"outcome": "limit_reached"}'::jsonb;
+    end if;
+    v_mine := private.google_local_snapshot(v_values, false, null);
+    insert into private.google_calendar_events (calendar_id, google_event_id, etag, status, title, location, description,
+        all_day, starts_on, ends_on, starts_at, ends_at, time_zone, private_in_google)
+      values (v_calendar.id, v_google_id, null, 'confirmed', v_values.title, v_values.location, v_values.description,
+        v_values.all_day, (v_mine ->> 'startsOn')::date, (v_mine ->> 'endsOn')::date,
+        (v_mine ->> 'startsAt')::timestamptz, (v_mine ->> 'endsAt')::timestamptz, v_mine ->> 'timeZone', false)
+      returning id into v_id;
+    insert into private.google_calendar_changes (calendar_id, user_id, action, scope, google_event_id, fields, mine,
+        repeat, title)
+      values (v_calendar.id, v_user_id, 'create', 'event', v_google_id, array['title', 'location', 'description', 'time'],
+        v_mine, case when v_values.frequency is not null then pg_catalog.jsonb_build_object(
+          'frequency', v_values.frequency, 'interval', v_values.interval_count,
+          'weekdays', pg_catalog.to_jsonb(v_values.weekdays), 'endsOn', v_values.repeat_ends_on,
+          'count', v_values.max_count) end,
+        v_values.title);
+    perform private.google_queue_push(v_calendar.connection_id);
+    return pg_catalog.jsonb_build_object('outcome', 'created', 'eventId', v_id);
+  end
+  $$;
+
+-- The caller's own stored event they may change: visible to them (not removed from Madeora), in a calendar
+-- that syncs. Null otherwise; callers answer 'not_found' for it, as for a forged id.
+create function private.google_own_event(p_user_id uuid, p_event_id uuid) returns private.google_calendar_events
+  language sql stable security definer set search_path = '' as $$
+  select e from private.google_calendar_events e
+  join private.google_calendars c on c.id = e.calendar_id
+  where e.id = p_event_id and c.user_id = p_user_id and c.sync_enabled and c.available
+    and not private.google_excluded(e);
+  $$;
+
+-- The occurrences a series scope affects, for the dry run: the stored ones (the sync window), first 50.
+create function private.google_scope_preview(p_event private.google_calendar_events, p_scope text) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object('outcome', 'preview',
+    'count', count(*),
+    'dates', coalesce((pg_catalog.array_agg(d order by a) filter (where n <= 50))::text[], '{}'),
+    -- Google's series may go on past the synced window; those occurrences change too.
+    'beyondWindow', p_scope = 'all' or (p_scope = 'following'))
+  from (
+    select coalesce(e.starts_on, (e.starts_at at time zone coalesce(e.time_zone, 'UTC'))::date) as d,
+      private.google_event_at(e) as a,
+      pg_catalog.row_number() over (order by private.google_event_at(e)) as n
+    from private.google_calendar_events e
+    where e.calendar_id = p_event.calendar_id and not private.google_excluded(e) and case p_scope
+      when 'event' then e.id = p_event.id
+      when 'all' then e.recurring_event_id = p_event.recurring_event_id
+      else e.recurring_event_id = p_event.recurring_event_id and private.google_event_at(e) >= private.google_event_at(p_event)
+    end
+  ) x;
+  $$;
+
+-- Why the caller cannot start a change on this event now: 'conflict_open' (a conflict on it or its series
+-- waits for their choice), 'busy' (another change on it or its series is still being sent), or null.
+create function private.google_change_blocker(p_event private.google_calendar_events, p_scope text) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when bool_or(c.state = 'conflict') then 'conflict_open'
+    when count(*) > 0 then 'busy'
+  end
+  from private.google_calendar_changes c
+  where c.calendar_id = p_event.calendar_id and (
+    (c.scope = 'event' and c.google_event_id = p_event.google_event_id
+      and not (p_scope = 'event' and c.action <> 'delete' and c.state <> 'conflict'))
+    or (c.scope <> 'event' and c.series_id = p_event.recurring_event_id)
+    or (p_scope <> 'event' and c.scope = 'event' and p_event.recurring_event_id is not null and exists (
+      select 1 from private.google_calendar_events e
+      where e.calendar_id = c.calendar_id and e.google_event_id = c.google_event_id
+        and e.recurring_event_id = p_event.recurring_event_id)));
+  $$;
+
+-- Edits a Google event from Madeora (owner only, writable calendar). p_scope: 'event' (this event, or this
+-- occurrence), 'following' or 'all' (a recurring event's series). p_revision is the event's revision the page
+-- showed. p_event: title, location, description, allDay, startsOn, endsOn, startTime, endTime, timezone (no
+-- repeat). Series scopes change the text and the time of day or length, never the date or the kind of event
+-- ('series_limit'). p_dry_run answers {outcome: 'preview', count, dates, beyondWindow} and changes nothing.
+-- Outcomes: 'saved', 'unchanged', 'preview', 'not_found', 'read_only', 'authorization_expired', 'stale',
+-- 'invalid_scope', 'series_limit', 'busy', 'conflict_open', 'limit_reached', 'invalid_dates',
+-- 'nonexistent_time'. 22023 for a malformed request.
+create function public.update_google_calendar_event(
+  p_event_id uuid, p_scope text, p_revision integer, p_event jsonb, p_dry_run boolean default false
+) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_event private.google_calendar_events;
+    v_calendar private.google_calendars;
+    v_problem text;
+    v_values private.calendar_events;
+    v_current jsonb;
+    v_mine jsonb;
+    v_fields text[];
+    v_change private.google_calendar_changes;
+    v_zone text;
+  begin
+    if p_event_id is null or p_scope is null or p_scope not in ('event', 'following', 'all') or p_revision is null
+        or p_dry_run is null or (p_event ? 'repeat' and pg_catalog.jsonb_typeof(p_event -> 'repeat') <> 'null') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_values := private.calendar_values(p_event, false);
+    v_event := private.google_own_event(v_user_id, p_event_id);
+    if v_event.id is null then
+      return '{"outcome": "not_found"}'::jsonb;
+    end if;
+    v_calendar := private.google_own_calendar(v_user_id, v_event.calendar_id);
+    if v_calendar.id is null then
+      return '{"outcome": "not_found"}'::jsonb;
+    end if;
+    v_problem := private.google_write_problem(v_calendar);
+    -- Locked through its calendar: the sync job's writes take the same lock.
+    select * into v_event from private.google_calendar_events e where e.id = v_event.id;
+    if v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+    if p_scope <> 'event' and v_event.recurring_event_id is null then
+      return '{"outcome": "invalid_scope"}'::jsonb;
+    end if;
+    if v_event.revision <> p_revision then
+      return '{"outcome": "stale"}'::jsonb;
+    end if;
+    v_problem := private.calendar_time_problem(v_values.all_day, v_values.starts_on, v_values.ends_on,
+      v_values.start_time, v_values.end_time, v_values.timezone);
+    if v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+    v_current := private.google_snapshot(v_event);
+    v_mine := private.google_local_snapshot(v_values, v_event.private_in_google, v_event.etag)
+      || pg_catalog.jsonb_build_object('status', v_event.status, 'recurringEventId', v_event.recurring_event_id,
+        'originalStart', v_event.original_start);
+    v_fields := private.google_diff(v_current, v_mine);
+    if p_scope <> 'event' then
+      v_zone := coalesce(v_event.time_zone, v_calendar.time_zone, 'UTC');
+      if v_values.all_day <> v_event.all_day
+        or (v_event.all_day and v_values.starts_on <> v_event.starts_on)
+        or (not v_event.all_day and (v_values.timezone <> v_zone
+          or v_values.starts_on <> (v_event.starts_at at time zone v_zone)::date)) then
+        return '{"outcome": "series_limit"}'::jsonb;
+      end if;
+    end if;
+    if p_dry_run then
+      return private.google_scope_preview(v_event, p_scope);
+    end if;
+    v_problem := private.google_change_blocker(v_event, p_scope);
+    if v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+
+    if p_scope = 'event' then
+      select * into v_change from private.google_calendar_changes x
+        where x.calendar_id = v_event.calendar_id and x.scope = 'event' and x.google_event_id = v_event.google_event_id
+        for update;
+      if pg_catalog.cardinality(v_fields) = 0 then
+        return '{"outcome": "unchanged"}'::jsonb;
+      end if;
+      if v_change.action = 'create' and v_change.repeat is not null then
+        -- A new series waiting for Google is changed in Google once it is there.
+        return '{"outcome": "busy"}'::jsonb;
+      end if;
+      if v_change.id is not null then
+        -- Merged into the change still waiting: its base stays the Google version first edited.
+        update private.google_calendar_changes x set
+            mine = case when x.action = 'create' then v_mine - 'recurringEventId' - 'originalStart'
+              || pg_catalog.jsonb_build_object('etag', null) else v_mine end,
+            fields = case when x.action = 'create' then x.fields else private.google_diff(x.base, v_mine) end,
+            state = 'pending', error_code = null, attempts = 0, version = x.version + 1, title = v_values.title,
+            updated_at = pg_catalog.now()
+          where x.id = v_change.id;
+        if v_change.action = 'update' and pg_catalog.cardinality(private.google_diff(v_change.base, v_mine)) = 0 then
+          -- Back to Google's version: nothing left to send.
+          delete from private.google_calendar_changes x where x.id = v_change.id;
+        end if;
+      else
+        if (select count(*) from private.google_calendar_changes x where x.user_id = v_user_id)
+            >= private.google_calendar_limit('open_changes') then
+          return '{"outcome": "limit_reached"}'::jsonb;
+        end if;
+        insert into private.google_calendar_changes (calendar_id, user_id, action, scope, google_event_id, fields,
+            base, mine, title)
+          values (v_event.calendar_id, v_user_id, 'update', 'event', v_event.google_event_id, v_fields, v_current,
+            v_mine, v_values.title);
+      end if;
+      perform private.google_row_set(v_event.id, v_mine);
+    else
+      if pg_catalog.cardinality(v_fields) = 0 then
+        return '{"outcome": "unchanged"}'::jsonb;
+      end if;
+      if (select count(*) from private.google_calendar_changes x where x.user_id = v_user_id)
+          >= private.google_calendar_limit('open_changes') then
+        return '{"outcome": "limit_reached"}'::jsonb;
+      end if;
+      insert into private.google_calendar_changes (calendar_id, user_id, action, scope, google_event_id, series_id,
+          fields, base, mine, title)
+        values (v_event.calendar_id, v_user_id, 'update', p_scope, v_event.google_event_id, v_event.recurring_event_id,
+          v_fields, v_current, v_mine, v_values.title);
+      update private.google_calendar_events e set revision = e.revision + 1 where e.id = v_event.id;
+    end if;
+    perform private.google_queue_push(v_calendar.connection_id);
+    return pg_catalog.jsonb_build_object('outcome', 'saved',
+      'revision', (select e.revision from private.google_calendar_events e where e.id = v_event.id));
+  end
+  $$;
+
+-- Deletes a Google event from Madeora, after the person chose where (Modules.md §4.2, option B):
+--   p_destination 'madeora': "Remove from Madeora": an exclusion hides it (and, for a series scope, the series
+--     or the series from this occurrence on) from every Madeora view; Google is not touched; Settings can
+--     restore it. Any calendar the person syncs, even read-only.
+--   p_destination 'everywhere': "Delete everywhere": queued for Google (writable calendar only); the event
+--     stays visible as deleting until Google confirms.
+-- p_dry_run answers the preview. Outcomes: 'removed', 'deleting', 'preview', 'not_found', 'read_only',
+-- 'authorization_expired', 'stale', 'invalid_scope', 'busy', 'conflict_open', 'limit_reached'.
+create function public.delete_google_calendar_event(
+  p_event_id uuid, p_scope text, p_destination text, p_revision integer, p_dry_run boolean default false
+) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_event private.google_calendar_events;
+    v_calendar private.google_calendars;
+    v_problem text;
+  begin
+    if p_event_id is null or p_scope is null or p_scope not in ('event', 'following', 'all') or p_revision is null
+        or p_destination is null or p_destination not in ('madeora', 'everywhere') or p_dry_run is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_event := private.google_own_event(v_user_id, p_event_id);
+    if v_event.id is null then
+      return '{"outcome": "not_found"}'::jsonb;
+    end if;
+    v_calendar := private.google_own_calendar(v_user_id, v_event.calendar_id);
+    if v_calendar.id is null then
+      return '{"outcome": "not_found"}'::jsonb;
+    end if;
+    v_problem := private.google_write_problem(v_calendar);
+    select * into v_event from private.google_calendar_events e where e.id = v_event.id;
+    if p_scope <> 'event' and v_event.recurring_event_id is null then
+      return '{"outcome": "invalid_scope"}'::jsonb;
+    end if;
+    if v_event.revision <> p_revision then
+      return '{"outcome": "stale"}'::jsonb;
+    end if;
+    if p_destination = 'everywhere' and v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+    if p_dry_run then
+      return private.google_scope_preview(v_event, p_scope);
+    end if;
+    v_problem := private.google_change_blocker(v_event, p_scope);
+    if v_problem is null and exists (select 1 from private.google_calendar_changes x
+        where x.calendar_id = v_event.calendar_id and x.scope = 'event' and x.google_event_id = v_event.google_event_id) then
+      v_problem := case when exists (select 1 from private.google_calendar_changes x
+          where x.calendar_id = v_event.calendar_id and x.scope = 'event'
+            and x.google_event_id = v_event.google_event_id and x.state = 'conflict') then 'conflict_open' else 'busy' end;
+    end if;
+    if v_problem is not null then
+      return pg_catalog.jsonb_build_object('outcome', v_problem);
+    end if;
+
+    if p_destination = 'madeora' then
+      if (select count(*) from private.google_calendar_exclusions x where x.calendar_id = v_event.calendar_id)
+          >= private.google_calendar_limit('exclusions') then
+        return '{"outcome": "limit_reached"}'::jsonb;
+      end if;
+      insert into private.google_calendar_exclusions (calendar_id, kind, google_id, from_at, title, starts_on)
+        values (v_event.calendar_id,
+          case p_scope when 'event' then 'event' when 'all' then 'series' else 'following' end,
+          case when p_scope = 'event' then v_event.google_event_id else v_event.recurring_event_id end,
+          case when p_scope = 'following' then private.google_event_at(v_event) end,
+          v_event.title,
+          coalesce(v_event.starts_on, (v_event.starts_at at time zone coalesce(v_event.time_zone, 'UTC'))::date))
+        on conflict on constraint google_calendar_exclusions_key do nothing;
+      return '{"outcome": "removed"}'::jsonb;
+    end if;
+
+    if (select count(*) from private.google_calendar_changes x where x.user_id = v_user_id)
+        >= private.google_calendar_limit('open_changes') then
+      return '{"outcome": "limit_reached"}'::jsonb;
+    end if;
+    insert into private.google_calendar_changes (calendar_id, user_id, action, scope, google_event_id, series_id, base,
+        title)
+      values (v_event.calendar_id, v_user_id, 'delete', p_scope, v_event.google_event_id,
+        case when p_scope <> 'event' then v_event.recurring_event_id end, private.google_snapshot(v_event), v_event.title);
+    update private.google_calendar_events e set revision = e.revision + 1 where e.id = v_event.id;
+    perform private.google_queue_push(v_calendar.connection_id);
+    return '{"outcome": "deleting"}'::jsonb;
+  end
+  $$;
+
+-- The caller's own change, locked with its calendar; null when it is not theirs.
+create function private.google_own_change(p_user_id uuid, p_change_id uuid) returns private.google_calendar_changes
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_change private.google_calendar_changes;
+  begin
+    perform 1 from private.google_calendars c
+      join private.google_calendar_changes x on x.calendar_id = c.id
+      where x.id = p_change_id and x.user_id = p_user_id
+      for update of c;
+    select * into v_change from private.google_calendar_changes x
+      where x.id = p_change_id and x.user_id = p_user_id for update;
+    return v_change;
+  end
+  $$;
+
+-- The person's choice in a conflict (only theirs; nothing else ends one):
+--   'google':  Google's version stays; Madeora's change is dropped (a deletion Google made removes the event).
+--   'madeora': Madeora's version is sent again, based on Google's current version (its etag), so a newer Google
+--              change in between makes a new conflict instead of an overwrite. Against a deletion in Google it
+--              restores the event; for "Delete everywhere" against an edit in Google it deletes anyway.
+-- Outcomes: 'resolved', 'not_found', 'not_in_conflict'.
+create function public.resolve_google_calendar_conflict(p_change_id uuid, p_choice text) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_change private.google_calendar_changes;
+    v_event private.google_calendar_events;
+    v_deleted boolean;
+    v_connection uuid;
+  begin
+    if p_change_id is null or p_choice is null or p_choice not in ('madeora', 'google') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_change := private.google_own_change(v_user_id, p_change_id);
+    if v_change.id is null then
+      return 'not_found';
+    end if;
+    if v_change.state <> 'conflict' then
+      return 'not_in_conflict';
+    end if;
+    v_deleted := coalesce((v_change.theirs ->> 'deleted')::boolean, false);
+    if v_change.scope = 'event' then
+      select * into v_event from private.google_calendar_events e
+        where e.calendar_id = v_change.calendar_id and e.google_event_id = v_change.google_event_id;
+    end if;
+    select c.connection_id into v_connection from private.google_calendars c where c.id = v_change.calendar_id;
+
+    if p_choice = 'google' then
+      if v_event.id is not null then
+        if v_deleted then
+          delete from private.google_calendar_events e where e.id = v_event.id;
+        else
+          perform private.google_row_set(v_event.id, v_change.theirs);
+        end if;
+      end if;
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      return 'resolved';
+    end if;
+
+    if v_change.scope <> 'event' and v_deleted then
+      -- Google deleted the series: Madeora cannot recreate a series safely. The change stays as failed with
+      -- the reason, so the person discards it (or recreates the event); nothing is sent.
+      update private.google_calendar_changes x set state = 'failed', error_code = 'series_limit', theirs = null,
+          conflict_fields = '{}', version = x.version + 1, updated_at = pg_catalog.now()
+        where x.id = v_change.id;
+      return 'resolved';
+    end if;
+    if v_change.action = 'delete' and v_deleted then
+      -- Both sides now want it gone: nothing to send.
+      if v_event.id is not null then
+        delete from private.google_calendar_events e where e.id = v_event.id;
+      end if;
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      return 'resolved';
+    end if;
+    update private.google_calendar_changes x set state = 'pending', base = x.theirs, theirs = null,
+        conflict_fields = '{}', error_code = null, attempts = 0, version = x.version + 1,
+        fields = case when x.action = 'update' then
+          case when v_deleted then array['title', 'location', 'description', 'time']
+          else (select coalesce(pg_catalog.array_agg(f), '{}') from pg_catalog.unnest(array['title', 'location',
+            'description', 'time']) f where private.google_field(x.theirs, f) is distinct from private.google_field(x.mine, f)
+              and (f = any (x.fields) or x.scope = 'event')) end
+          else x.fields end,
+        updated_at = pg_catalog.now()
+      where x.id = v_change.id;
+    if v_change.action = 'update' and pg_catalog.cardinality(
+        (select x.fields from private.google_calendar_changes x where x.id = v_change.id)) = 0 then
+      -- Google already has Madeora's values.
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      if v_event.id is not null then
+        perform private.google_row_set(v_event.id, v_change.theirs);
+      end if;
+      return 'resolved';
+    end if;
+    if v_event.id is not null and v_change.action = 'update' then
+      -- The stricter privacy flag stays until Google confirms, so a Home never sees a version made private.
+      perform private.google_row_set(v_event.id, v_change.mine
+        || pg_catalog.jsonb_build_object('etag', v_change.theirs -> 'etag',
+          'private', coalesce((v_change.mine ->> 'private')::boolean, false)
+            or coalesce((v_change.theirs ->> 'private')::boolean, false)));
+    end if;
+    perform private.google_queue_push(v_connection);
+    return 'resolved';
+  end
+  $$;
+
+-- Try again after a failure. Outcomes: 'queued', 'not_found', 'not_failed'.
+create function public.retry_google_calendar_change(p_change_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_change private.google_calendar_changes;
+  begin
+    v_change := private.google_own_change(v_user_id, p_change_id);
+    if v_change.id is null then
+      return 'not_found';
+    end if;
+    if v_change.state <> 'failed' then
+      return 'not_failed';
+    end if;
+    update private.google_calendar_changes x set state = 'pending', error_code = null, attempts = 0,
+        updated_at = pg_catalog.now()
+      where x.id = v_change.id;
+    perform private.google_queue_push((select c.connection_id from private.google_calendars c where c.id = v_change.calendar_id));
+    return 'queued';
+  end
+  $$;
+
+-- Discard a change that has not reached Google (waiting or failed; a conflict needs a choice): the event goes
+-- back to Google's version (a new event that Google never got disappears). If a run already sent it, the next
+-- sync shows what Google has. Outcomes: 'discarded', 'not_found', 'in_conflict'.
+create function public.discard_google_calendar_change(p_change_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_change private.google_calendar_changes;
+    v_event private.google_calendar_events;
+  begin
+    v_change := private.google_own_change(v_user_id, p_change_id);
+    if v_change.id is null then
+      return 'not_found';
+    end if;
+    if v_change.state = 'conflict' then
+      return 'in_conflict';
+    end if;
+    select * into v_event from private.google_calendar_events e
+      where e.calendar_id = v_change.calendar_id and e.google_event_id = v_change.google_event_id;
+    if v_change.scope = 'event' and v_event.id is not null then
+      if v_change.action = 'create' then
+        delete from private.google_calendar_events e where e.id = v_event.id;
+      elsif v_change.action = 'update' then
+        perform private.google_row_set(v_event.id, v_change.base);
+      else
+        update private.google_calendar_events e set revision = e.revision + 1 where e.id = v_event.id;
+      end if;
+    elsif v_event.id is not null then
+      update private.google_calendar_events e set revision = e.revision + 1 where e.id = v_event.id;
+    end if;
+    delete from private.google_calendar_changes x where x.id = v_change.id;
+    return 'discarded';
+  end
+  $$;
+
+-- Restores an event removed from Madeora (only the calendar's owner). Outcomes: 'restored', 'not_found'.
+create function public.restore_google_calendar_event(p_exclusion_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+  begin
+    delete from private.google_calendar_exclusions x
+      using private.google_calendars c
+      where x.id = p_exclusion_id and c.id = x.calendar_id and c.user_id = v_user_id
+      returning x.id into v_id;
+    return case when v_id is null then 'not_found' else 'restored' end;
+  end
+  $$;
+
+-- The sync job: calendar list and events, now aware of changes ----------------------------------------------
+
+-- As in S33, plus: the first list makes the primary calendar the target for new events; a calendar Google no
+-- longer lists also loses its open changes and stops being the target.
+create or replace function public.google_sync_calendars(p_connection_id uuid, p_lease uuid, p_calendars jsonb) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections := private.google_leased(p_connection_id, p_lease);
+    v_first boolean;
+  begin
+    if v_connection.id is null then
+      return null;
+    end if;
+    if p_calendars is null or pg_catalog.jsonb_typeof(p_calendars) <> 'array'
+      or pg_catalog.jsonb_array_length(p_calendars) > private.google_calendar_limit('listed_calendars') then
+      raise exception 'invalid calendars' using errcode = '22023';
+    end if;
+    if exists (select 1 from pg_catalog.jsonb_array_elements(p_calendars) x
+        where pg_catalog.jsonb_typeof(x) <> 'object' or pg_catalog.jsonb_typeof(x -> 'id') <> 'string'
+          or pg_catalog.jsonb_typeof(x -> 'name') <> 'string' or pg_catalog.jsonb_typeof(x -> 'accessRole') <> 'string') then
+      raise exception 'invalid calendars' using errcode = '22023';
+    end if;
+    v_first := v_connection.calendars_listed_at is null;
+    insert into private.google_calendars (connection_id, user_id, google_calendar_id, name, time_zone, access_role,
+        is_primary, available, sync_enabled, show_personal)
+      select v_connection.id, v_connection.user_id, x ->> 'id', x ->> 'name',
+        case when private.calendar_valid_zone(x ->> 'timeZone') then x ->> 'timeZone' end,
+        x ->> 'accessRole', coalesce((x ->> 'primary')::boolean, false), true,
+        v_first and coalesce((x ->> 'primary')::boolean, false), v_first and coalesce((x ->> 'primary')::boolean, false)
+      from pg_catalog.jsonb_array_elements(p_calendars) x
+      on conflict on constraint google_calendars_google_key do update
+        set name = excluded.name, time_zone = excluded.time_zone, access_role = excluded.access_role,
+          is_primary = excluded.is_primary, available = true;
+    with gone as (
+      update private.google_calendars c set available = false, sync_token = null, last_synced_at = null,
+          full_synced_at = null, last_error_code = null
+        where c.connection_id = v_connection.id and c.available
+          and c.google_calendar_id not in (select x ->> 'id' from pg_catalog.jsonb_array_elements(p_calendars) x)
+        returning c.id
+    ), drop_events as (
+      delete from private.google_calendar_events e where e.calendar_id in (select id from gone)
+    ), drop_changes as (
+      delete from private.google_calendar_changes x where x.calendar_id in (select id from gone)
+    )
+    delete from private.google_calendar_home_shares s where s.calendar_id in (select id from gone);
+    update private.google_calendar_connections k set calendars_listed_at = pg_catalog.now(),
+        write_calendar_id = case
+          when v_first then (select c.id from private.google_calendars c
+            where c.connection_id = k.id and c.is_primary and c.sync_enabled and c.access_role in ('owner', 'writer')
+            limit 1)
+          when exists (select 1 from private.google_calendars c where c.id = k.write_calendar_id
+            and c.available and c.sync_enabled and c.access_role in ('owner', 'writer')) then k.write_calendar_id
+        end
+      where k.id = v_connection.id;
+    return coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', c.id, 'googleId', c.google_calendar_id, 'syncToken', c.sync_token,
+          'fullDue', c.sync_token is null or c.full_synced_at is null
+            or c.full_synced_at < pg_catalog.now() - pg_catalog.make_interval(hours => private.google_calendar_limit('full_hours')))
+        order by c.is_primary desc, c.id)
+      from (select * from private.google_calendars c
+        where c.connection_id = v_connection.id and c.sync_enabled and c.available
+        order by c.is_primary desc, c.id limit private.google_calendar_limit('synced_calendars')) c), '[]'::jsonb);
+  exception
+    when check_violation or not_null_violation or invalid_text_representation then
+      raise exception 'invalid calendars' using errcode = '22023';
+  end
+  $$;
+
+-- As in S33, except that an event with an open change of its own is weighed against it
+-- (private.google_reconcile) instead of being overwritten: Google's unchanged version is skipped, other changes
+-- merge or make a conflict. Every event seen in a full pass is still marked, also the skipped ones.
+create or replace function public.google_sync_apply_events(p_calendar_id uuid, p_lease uuid, p_full boolean, p_events jsonb)
+returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_calendar private.google_calendars := private.google_leased_calendar(p_calendar_id, p_lease);
+    v_count integer;
+    v_item record;
+  begin
+    if v_calendar.id is null or not v_calendar.sync_enabled or not v_calendar.available then
+      return null;
+    end if;
+    if p_full is null or p_events is null or pg_catalog.jsonb_typeof(p_events) <> 'array'
+      or pg_catalog.jsonb_array_length(p_events) > private.google_calendar_limit('page_events')
+      or exists (select 1 from pg_catalog.jsonb_array_elements(p_events) x
+        where pg_catalog.jsonb_typeof(x) <> 'object' or pg_catalog.jsonb_typeof(x -> 'id') <> 'string') then
+      raise exception 'invalid page' using errcode = '22023';
+    end if;
+    create temporary table if not exists pg_temp.google_page (id text primary key, x jsonb not null, cancelled boolean not null,
+      change_id uuid) on commit drop;
+    truncate pg_temp.google_page;
+    -- Only the last item per Google id in the page counts.
+    insert into pg_temp.google_page (id, x, cancelled, change_id)
+      select l.x ->> 'id', l.x, coalesce((l.x ->> 'cancelled')::boolean, false),
+        (select c.id from private.google_calendar_changes c
+          where c.calendar_id = v_calendar.id and c.scope = 'event' and c.google_event_id = l.x ->> 'id')
+      from (select distinct on (x ->> 'id') x from pg_catalog.jsonb_array_elements(p_events)
+          with ordinality as a(x, n) order by x ->> 'id', n desc) l;
+
+    -- Events with an open change of their own.
+    for v_item in select * from pg_temp.google_page p where p.change_id is not null loop
+      if p_full then
+        update private.google_calendar_events e set seen_in = p_lease
+          where e.calendar_id = v_calendar.id and e.google_event_id = v_item.id;
+      end if;
+      if v_item.cancelled then
+        perform private.google_reconcile(v_item.change_id, '{"deleted": true}'::jsonb);
+      elsif (v_item.x ->> 'etag') is not distinct from (select coalesce(c.base, c.theirs) ->> 'etag'
+          from private.google_calendar_changes c where c.id = v_item.change_id)
+          and exists (select 1 from private.google_calendar_changes c where c.id = v_item.change_id and c.action <> 'create') then
+        -- Google's version is the one Madeora's change is based on: nothing new.
+        null;
+      elsif exists (select 1 from private.google_calendar_changes c where c.id = v_item.change_id
+          and c.state = 'conflict' and (c.theirs ->> 'etag') is not distinct from (v_item.x ->> 'etag')) then
+        null;
+      else
+        perform private.google_reconcile(v_item.change_id, v_item.x - 'id' - 'updated' - 'cancelled');
+        update private.google_calendar_events e set
+            link = case when v_item.x ->> 'link' is not null then v_item.x ->> 'link' else e.link end,
+            recurring_event_id = v_item.x ->> 'recurringEventId', original_start = v_item.x ->> 'originalStart',
+            google_updated = (v_item.x ->> 'updated')::timestamptz,
+            seen_in = case when p_full then p_lease else e.seen_in end
+          where e.calendar_id = v_calendar.id and e.google_event_id = v_item.id;
+      end if;
+    end loop;
+
+    -- A cancelled series: occurrences with an open change of their own are weighed as deleted, the rest go.
+    for v_item in
+      select c.id as change_id from private.google_calendar_changes c
+      join private.google_calendar_events e on e.calendar_id = c.calendar_id and e.google_event_id = c.google_event_id
+      join pg_temp.google_page p on p.cancelled and p.id = e.recurring_event_id
+      where c.calendar_id = v_calendar.id and c.scope = 'event'
+    loop
+      perform private.google_reconcile(v_item.change_id, '{"deleted": true}'::jsonb);
+    end loop;
+    delete from private.google_calendar_events e
+      where e.calendar_id = v_calendar.id
+        and exists (select 1 from pg_temp.google_page p where p.cancelled and p.change_id is null
+          and (e.google_event_id = p.id or e.recurring_event_id = p.id))
+        and not exists (select 1 from private.google_calendar_changes c
+          where c.calendar_id = e.calendar_id and c.scope = 'event' and c.google_event_id = e.google_event_id);
+
+    insert into private.google_calendar_events as t (calendar_id, google_event_id, etag, google_updated, status, title,
+        location, description, all_day, starts_on, ends_on, starts_at, ends_at, time_zone, recurring_event_id,
+        original_start, private_in_google, link, seen_in, synced_at)
+      select v_calendar.id, x ->> 'id', x ->> 'etag', (x ->> 'updated')::timestamptz,
+        x ->> 'status', x ->> 'title', x ->> 'location', x ->> 'description', (x ->> 'allDay')::boolean,
+        (x ->> 'startsOn')::date, (x ->> 'endsOn')::date, (x ->> 'startsAt')::timestamptz, (x ->> 'endsAt')::timestamptz,
+        x ->> 'timeZone', x ->> 'recurringEventId', x ->> 'originalStart', coalesce((x ->> 'private')::boolean, false),
+        x ->> 'link', case when p_full then p_lease end, pg_catalog.now()
+      from pg_temp.google_page p
+      where not p.cancelled and p.change_id is null
+      on conflict on constraint google_calendar_events_google_key do update
+        set etag = excluded.etag, google_updated = excluded.google_updated, status = excluded.status,
+          title = excluded.title, location = excluded.location, description = excluded.description,
+          all_day = excluded.all_day, starts_on = excluded.starts_on, ends_on = excluded.ends_on,
+          starts_at = excluded.starts_at, ends_at = excluded.ends_at, time_zone = excluded.time_zone,
+          recurring_event_id = excluded.recurring_event_id, original_start = excluded.original_start,
+          private_in_google = excluded.private_in_google, link = excluded.link,
+          seen_in = coalesce(excluded.seen_in, t.seen_in),
+          revision = case when t.etag is not distinct from excluded.etag then t.revision else t.revision + 1 end,
+          synced_at = case when t.etag is not distinct from excluded.etag then t.synced_at else excluded.synced_at end;
+    select count(*) into v_count from private.google_calendar_events e where e.calendar_id = v_calendar.id;
+    return v_count;
+  exception
+    when invalid_text_representation or invalid_datetime_format or datetime_field_overflow or check_violation
+      or not_null_violation or string_data_right_truncation then
+      raise exception 'invalid page' using errcode = '22023';
+  end
+  $$;
+
+-- As in S33; a full pass that did not see an event with an open change of its own weighs it as deleted in
+-- Google, except a new event Google has not received yet.
+create or replace function public.google_sync_finish_calendar(
+  p_calendar_id uuid, p_lease uuid, p_full boolean, p_sync_token text default null, p_error text default null
+) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_calendar private.google_calendars := private.google_leased_calendar(p_calendar_id, p_lease);
+    v_change uuid;
+  begin
+    if v_calendar.id is null then
+      return false;
+    end if;
+    if p_full is null or (p_error is not null and p_error !~ '^[a-z_]{1,40}$')
+      or (p_error is null and (p_sync_token is null or char_length(p_sync_token) > 2048)) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if p_error is not null then
+      update private.google_calendars c set last_error_code = p_error,
+          sync_token = case when p_error = 'sync_token_invalid' then null else c.sync_token end
+        where c.id = v_calendar.id;
+      return true;
+    end if;
+    if not v_calendar.sync_enabled or not v_calendar.available then
+      return true;
+    end if;
+    if p_full then
+      for v_change in
+        select c.id from private.google_calendar_changes c
+        join private.google_calendar_events e on e.calendar_id = c.calendar_id and e.google_event_id = c.google_event_id
+        where c.calendar_id = v_calendar.id and c.scope = 'event' and c.action <> 'create'
+          and c.state <> 'conflict' and e.seen_in is distinct from p_lease
+          -- Only inside the window the full pass listed (30 days back, 365 ahead; a day's margin): an event
+          -- outside it was simply not asked for, not deleted.
+          and coalesce(e.ends_at, (e.ends_on + 1)::timestamp at time zone 'UTC') > pg_catalog.now() - interval '29 days'
+          and coalesce(e.starts_at, e.starts_on::timestamp at time zone 'UTC') < pg_catalog.now() + interval '364 days'
+      loop
+        perform private.google_reconcile(v_change, '{"deleted": true}'::jsonb);
+      end loop;
+      delete from private.google_calendar_events e
+        where e.calendar_id = v_calendar.id and e.seen_in is distinct from p_lease
+          and not exists (select 1 from private.google_calendar_changes c
+            where c.calendar_id = e.calendar_id and c.scope = 'event' and c.google_event_id = e.google_event_id);
+    end if;
+    update private.google_calendars c set sync_token = p_sync_token, last_synced_at = pg_catalog.now(),
+        full_synced_at = case when p_full then pg_catalog.now() else c.full_synced_at end, last_error_code = null
+      where c.id = v_calendar.id;
+    return true;
+  end
+  $$;
+
+-- As in S33, plus: when the person made a change while this run held the lease, a follow-up run is queued.
+create or replace function public.google_sync_finish(p_connection_id uuid, p_lease uuid, p_outcome text) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections := private.google_leased(p_connection_id, p_lease);
+  begin
+    if p_outcome is null or p_outcome !~ '^[a-z_]{1,40}$' then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if v_connection.id is null then
+      return false;
+    end if;
+    if p_outcome = 'ok' then
+      update private.google_calendar_connections k set last_synced_at = pg_catalog.now(), last_error_code = null,
+          sync_lease = null, sync_lease_until = null
+        where k.id = v_connection.id;
+    elsif p_outcome = 'authorization_expired' then
+      update private.google_calendar_connections k set status = 'authorization_expired',
+          status_changed_at = pg_catalog.now(), last_error_code = null, sync_lease = null, sync_lease_until = null
+        where k.id = v_connection.id;
+      perform private.notify_user(v_connection.user_id, null, 'security', 'google_calendar.authorization_expired',
+        '{}'::jsonb,
+        'google-calendar-expired:' || v_connection.id::text || ':' || extract(epoch from v_connection.connected_at)::bigint::text,
+        false);
+      return true;
+    else
+      update private.google_calendar_connections k set last_error_code = p_outcome,
+          sync_lease = null, sync_lease_until = null
+        where k.id = v_connection.id;
+    end if;
+    if exists (select 1 from private.google_calendar_changes x
+        join private.google_calendars c on c.id = x.calendar_id
+        where c.connection_id = v_connection.id and x.state = 'pending'
+          and x.updated_at >= v_connection.last_attempt_at) then
+      -- A run asked for during this one found the lease taken and ended: ask again.
+      update private.google_calendar_connections k set sync_requested_at = null where k.id = v_connection.id;
+      perform private.google_queue_push(v_connection.id);
+    end if;
+    return true;
+  end
+  $$;
+
+-- The changes a run sends, oldest first (pending ones of calendars that sync), with what the push needs. Null
+-- when the lease is not held.
+create function public.google_push_changes(p_connection_id uuid, p_lease uuid) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_connection private.google_calendar_connections := private.google_leased(p_connection_id, p_lease);
+  begin
+    if v_connection.id is null then
+      return null;
+    end if;
+    return coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', x.id, 'version', x.version, 'calendarId', c.id, 'googleCalendarId', c.google_calendar_id,
+          'calendarTimeZone', c.time_zone, 'action', x.action, 'scope', x.scope, 'googleEventId', x.google_event_id,
+          'seriesId', x.series_id, 'fields', pg_catalog.to_jsonb(x.fields), 'base', x.base, 'mine', x.mine,
+          'repeat', x.repeat
+        ) order by x.created_at, x.id)
+      from (select x.* from private.google_calendar_changes x
+        join private.google_calendars c on c.id = x.calendar_id
+        where c.connection_id = v_connection.id and c.sync_enabled and c.available and x.state = 'pending'
+        order by x.created_at, x.id limit private.google_calendar_limit('push_batch')) x
+      join private.google_calendars c on c.id = x.calendar_id), '[]'::jsonb);
+  end
+  $$;
+
+-- Records what Google answered for a change (p_version: the change's version that was sent):
+--   {"outcome": "done", "event": <normalized event or null>}: Google confirmed. The change ends, unless the
+--     person changed it again meanwhile (it is then rebased on Google's answer and stays). A new repeating
+--     event's placeholder goes (its occurrences come with the next pull); a deletion removes what it covered.
+--   {"outcome": "changed", "theirs": <normalized event or {"deleted": true}>}: Google has a newer version
+--     (etag mismatch, or gone): weighed by private.google_reconcile (merge or conflict).
+--   {"outcome": "failed", "code": ...}: Google refused for good; the person sees why and chooses.
+--   {"outcome": "retry", "code": ...}: Google unavailable; the change waits for the next run (failed after
+--     too many tries).
+-- Answers the change as it now stands for another try in the same run ({"state": ...}), or null when the lease
+-- is not held. 22023 for a malformed result.
+create function public.google_push_result(p_change_id uuid, p_lease uuid, p_version integer, p_result jsonb)
+returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_change private.google_calendar_changes;
+    v_calendar private.google_calendars;
+    v_outcome text := p_result ->> 'outcome';
+    v_event private.google_calendar_events;
+    v_answer jsonb;
+    v_code text := p_result ->> 'code';
+    v_reconciled text;
+    v_calendar_id uuid;
+  begin
+    if p_change_id is null or p_version is null or p_result is null or pg_catalog.jsonb_typeof(p_result) <> 'object'
+      or v_outcome is null or v_outcome not in ('done', 'changed', 'failed', 'retry')
+      or (v_outcome in ('failed', 'retry') and (v_code is null or v_code !~ '^[a-z_]{1,40}$'))
+      or (v_outcome = 'changed' and pg_catalog.jsonb_typeof(p_result -> 'theirs') <> 'object') then
+      raise exception 'invalid result' using errcode = '22023';
+    end if;
+    select x.calendar_id into v_calendar_id from private.google_calendar_changes x where x.id = p_change_id;
+    v_calendar := private.google_leased_calendar(v_calendar_id, p_lease);
+    if v_calendar.id is null then
+      return case when exists (select 1 from private.google_calendar_changes x where x.id = p_change_id)
+        then null else '{"state": "gone"}'::jsonb end;
+    end if;
+    select * into v_change from private.google_calendar_changes x where x.id = p_change_id for update;
+    if v_change.scope = 'event' then
+      select * into v_event from private.google_calendar_events e
+        where e.calendar_id = v_change.calendar_id and e.google_event_id = v_change.google_event_id;
+    end if;
+
+    if v_outcome in ('retry', 'failed') and v_change.state <> 'pending' then
+      -- A conflict (or an earlier failure) stays as it is.
+      return pg_catalog.jsonb_build_object('state', v_change.state);
+    end if;
+    if v_outcome = 'retry' then
+      update private.google_calendar_changes x set attempts = x.attempts + 1, error_code = v_code,
+          state = case when x.attempts + 1 >= private.google_calendar_limit('push_attempts') then 'failed' else x.state end,
+          updated_at = case when x.attempts + 1 >= private.google_calendar_limit('push_attempts') then pg_catalog.now()
+            else x.updated_at end
+        where x.id = v_change.id;
+      return '{"state": "waiting"}'::jsonb;
+    end if;
+    if v_outcome = 'failed' then
+      if v_change.version = p_version then
+        update private.google_calendar_changes x set state = 'failed', error_code = v_code, updated_at = pg_catalog.now()
+          where x.id = v_change.id;
+        return '{"state": "failed"}'::jsonb;
+      end if;
+      return '{"state": "waiting"}'::jsonb;
+    end if;
+    if v_outcome = 'changed' then
+      v_reconciled := private.google_reconcile(v_change.id, (p_result -> 'theirs') - 'id' - 'updated' - 'cancelled'
+        || case when coalesce((p_result -> 'theirs' ->> 'cancelled')::boolean, false) then '{"deleted": true}'::jsonb
+          else '{}'::jsonb end);
+      if v_reconciled = 'merged' then
+        select * into v_change from private.google_calendar_changes x where x.id = p_change_id;
+        return pg_catalog.jsonb_build_object('state', 'pending', 'version', v_change.version, 'base', v_change.base,
+          'mine', v_change.mine, 'fields', pg_catalog.to_jsonb(v_change.fields), 'action', v_change.action);
+      end if;
+      return pg_catalog.jsonb_build_object('state', v_reconciled);
+    end if;
+
+    -- Done.
+    if p_result ? 'event' and pg_catalog.jsonb_typeof(p_result -> 'event') = 'object'
+        and pg_catalog.jsonb_typeof(p_result -> 'event' -> 'id') <> 'string' then
+      raise exception 'invalid result' using errcode = '22023';
+    end if;
+    v_answer := case when pg_catalog.jsonb_typeof(p_result -> 'event') = 'object' then (p_result -> 'event') - 'id'
+      - 'updated' - 'cancelled' end;
+    if v_change.action = 'delete' then
+      delete from private.google_calendar_events e
+        where e.calendar_id = v_change.calendar_id and case v_change.scope
+          when 'event' then e.google_event_id = v_change.google_event_id
+          when 'all' then e.recurring_event_id = v_change.series_id
+          else e.recurring_event_id = v_change.series_id and private.google_event_at(e)
+            >= private.google_original_at(v_change.base ->> 'originalStart', (v_change.base ->> 'startsAt')::timestamptz)
+        end;
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      return '{"state": "done"}'::jsonb;
+    end if;
+    if v_change.scope <> 'event' then
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      return '{"state": "done"}'::jsonb;
+    end if;
+    if v_change.action = 'create' and v_change.repeat is not null then
+      -- The placeholder of a new series; its occurrences arrive with the pull that follows (it cannot be edited
+      -- while it waits, so there is no newer version to keep).
+      delete from private.google_calendar_events e where e.id = v_event.id;
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      return '{"state": "done"}'::jsonb;
+    end if;
+    if v_answer is null then
+      raise exception 'invalid result' using errcode = '22023';
+    end if;
+    if v_change.version = p_version then
+      if v_event.id is not null then
+        perform private.google_row_set(v_event.id, v_answer);
+      end if;
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      return '{"state": "done"}'::jsonb;
+    end if;
+    -- The person changed it again while it was being sent: Google now has the version sent; send the rest.
+    update private.google_calendar_changes x set action = 'update', base = v_answer, repeat = null,
+        fields = private.google_diff(v_answer, x.mine),
+        mine = x.mine || pg_catalog.jsonb_build_object('etag', v_answer -> 'etag'), updated_at = pg_catalog.now()
+      where x.id = v_change.id;
+    if pg_catalog.cardinality((select x.fields from private.google_calendar_changes x where x.id = v_change.id)) = 0 then
+      delete from private.google_calendar_changes x where x.id = v_change.id;
+      if v_event.id is not null then
+        perform private.google_row_set(v_event.id, v_answer);
+      end if;
+      return '{"state": "done"}'::jsonb;
+    end if;
+    if v_event.id is not null then
+      update private.google_calendar_events e set etag = v_answer ->> 'etag' where e.id = v_event.id;
+    end if;
+    return '{"state": "waiting"}'::jsonb;
+  exception
+    when invalid_text_representation or invalid_datetime_format or datetime_field_overflow or check_violation
+      or not_null_violation or string_data_right_truncation then
+      raise exception 'invalid result' using errcode = '22023';
+  end
+  $$;
+
+-- Grants -------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'get_google_calendar_event', 'get_google_calendar_connection', 'set_google_calendar_settings',
+      'set_google_calendar_write_target', 'create_google_calendar_event', 'update_google_calendar_event',
+      'delete_google_calendar_event', 'resolve_google_calendar_conflict', 'retry_google_calendar_change',
+      'discard_google_calendar_change', 'restore_google_calendar_event'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'google_sync_calendars', 'google_sync_apply_events', 'google_sync_finish_calendar', 'google_sync_finish',
+      'google_push_changes', 'google_push_result'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname like 'google%'
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261121090000_photos.sql
+-- ============================================================================
+-- S35: photo libraries and processing (brief plans/steps/S35-brief.md; ADR 0043; Modules.md §4.7;
+-- architecture.md §37).
+--
+-- A photo belongs to one library: a person's personal library (visible to that person only) or a Home's
+-- library. Albums group photos of the same library; a photo may be in many albums, and removing it from
+-- an album never deletes it. Nothing is exposed as a table: people use security-definer functions that
+-- run with their own session and recheck the confirmed caller, their current membership and their right
+-- on every call.
+--
+-- Uploads use the S15 pipeline (intent, signed PUT, server-verified finalize). Finalizing makes an
+-- optimized WebP master and three derivatives (full, display, thumb) and drops the original; the
+-- master and derivatives are four objects that count, together, as one stored file against the
+-- library's pool, move to the trash together for seven days and are purged together.
+--
+-- Home permissions (packages/domain/src/permissions/home.ts makes the same decisions): every current
+-- member sees the library and may upload; the uploader may delete their own photos and manage albums
+-- they created; the Owner and Administrators granted the new delegable capability manageHomePhotos
+-- ('manage') do all of it for everyone. A personal library is its owner's alone.
+
+-- Audit subjects, the new capability, trash types, file purpose ----------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template', 'chore_reassignment', 'chore_proposal', 'chore_volunteer_request',
+    'home_vacation', 'chore_absence', 'point_account', 'point_entry', 'reward', 'reward_redemption',
+    'point_settings', 'recipe', 'shopping_list', 'meal_plan', 'habit', 'goal', 'goal_series',
+    'pet', 'pet_medical_entry', 'pet_medical_attachment', 'pet_care_activity', 'pet_care_occurrence',
+    'calendar_event', 'photo', 'photo_album'
+  ));
+
+-- packages/domain delegableCapabilities lists the same names.
+create or replace function private.is_delegable_capability(p_capability text) returns boolean
+  language sql immutable security definer set search_path = '' as $$
+  select p_capability in (
+    'manageHomeSettings', 'manageInvitations', 'removeMembers', 'manageHomeDashboard',
+    'manageHomeTasks', 'manageHomeChores', 'approveHomeChores', 'manageHomeRewards',
+    'approveHomeRewards', 'manageHomePoints', 'manageHomeRecipes', 'manageHomeShopping',
+    'manageHomeMeals', 'manageHomeHabits', 'manageHomeGoals', 'manageHomePets',
+    'managePetMedicalAccess', 'manageHomeCalendar', 'manageHomePhotos'
+  );
+  $$;
+
+alter table private.trash_entries drop constraint trash_entries_module_check;
+alter table private.trash_entries add constraint trash_entries_module_check
+  check (module in ('sample', 'dashboard', 'tasks', 'chores', 'recipes', 'shopping', 'meals', 'habits',
+    'goals', 'pets', 'calendar', 'photos'));
+
+alter table private.trash_entries drop constraint trash_entries_item_type_check;
+alter table private.trash_entries add constraint trash_entries_item_type_check
+  check (item_type in (
+    'sample', 'dashboard_template', 'task', 'task_list', 'task_series_removal',
+    'task_attachment', 'task_series_attachment', 'chore', 'chore_occurrence', 'chore_removal',
+    'recipe', 'shopping_list', 'shopping_item', 'shopping_clear', 'meal_entry', 'habit', 'goal',
+    'goal_series', 'pet', 'pet_medical_entry', 'pet_medical_attachment', 'pet_care_activity',
+    'calendar_event', 'photo', 'photo_album'
+  ));
+
+alter table private.stored_files drop constraint stored_files_purpose_check;
+alter table private.stored_files add constraint stored_files_purpose_check
+  check (purpose in ('avatar', 'task_attachment', 'recipe_cover', 'pet_photo', 'pet_medical_attachment',
+    'photo'));
+
+-- Limits and policy ---------------------------------------------------------------------------------------
+
+-- apps/web/src/photos/schema.ts uses the same numbers.
+create function private.photo_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'album_name' then 80
+    when 'albums' then 200              -- albums per library that are not in the trash
+    when 'album_photos' then 2000       -- photos per album
+    when 'page' then 60                 -- photos in one list answer
+    when 'max_offset' then 100000
+    when 'batch' then 100               -- photo ids in one request
+    when 'max_side' then 12000
+    when 'max_pixels' then 50000000
+  end;
+  $$;
+
+-- A photo upload: JPEG, PNG, WebP, HEIC/HEIF or GIF up to 25 MB (owner decision, S35 brief); what is
+-- stored is always WebP the server made.
+create or replace function private.upload_max_bytes(p_purpose text) returns bigint
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then 5242880::bigint
+    when 'task_attachment' then 10485760::bigint  -- 10 MB (brief S19c)
+    when 'recipe_cover' then 10485760::bigint     -- 10 MB (brief S24)
+    when 'pet_photo' then 10485760::bigint        -- 10 MB (brief S31)
+    when 'pet_medical_attachment' then 10485760::bigint
+    when 'photo' then 26214400::bigint            -- 25 MB (brief S35)
+  end;
+  $$;
+
+create or replace function private.upload_type_allowed(p_purpose text, p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then p_type in ('image/jpeg', 'image/png', 'image/webp')
+    when 'task_attachment' then private.task_attachment_type(p_type)
+    when 'recipe_cover' then p_type in ('image/jpeg', 'image/png', 'image/webp')
+    when 'pet_photo' then p_type in ('image/jpeg', 'image/png', 'image/webp')
+    when 'pet_medical_attachment' then private.pet_attachment_type(p_type)
+    when 'photo' then p_type in ('image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
+      'image/gif')
+    else false
+  end;
+  $$;
+
+create or replace function private.stored_type_allowed(p_purpose text, p_type text) returns boolean
+  language sql immutable set search_path = '' as $$
+  select case p_purpose
+    when 'avatar' then p_type = 'image/webp'
+    when 'task_attachment' then private.task_attachment_type(p_type)
+    when 'recipe_cover' then p_type = 'image/webp'
+    when 'pet_photo' then p_type = 'image/webp'
+    when 'pet_medical_attachment' then private.pet_attachment_type(p_type)
+    when 'photo' then p_type = 'image/webp'
+    else false
+  end;
+  $$;
+
+-- Tables --------------------------------------------------------------------------------------------------
+
+create table private.photos (
+  id uuid primary key default gen_random_uuid(),
+  file_id uuid not null references private.stored_files (id) on delete cascade,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  -- Set null when the uploader's account is deleted: a Home keeps its photos (S40 decides the rest).
+  created_by uuid references auth.users (id) on delete set null,
+  width integer not null check (width > 0),
+  height integer not null check (height > 0),
+  created_at timestamptz not null default pg_catalog.now(),
+  deleted_at timestamptz,
+  constraint photos_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1),
+  constraint photos_file_key unique (file_id)
+);
+create index photos_user_library on private.photos (owner_user_id, created_at desc, id)
+  where owner_user_id is not null and deleted_at is null;
+create index photos_home_library on private.photos (owner_home_id, created_at desc, id)
+  where owner_home_id is not null and deleted_at is null;
+
+-- The three derivatives of a photo's file, with the keys the database generated when the upload was
+-- opened. The master is the file's own object. Sizes are filled when the upload is finalized.
+create table private.photo_variants (
+  file_id uuid not null references private.stored_files (id) on delete cascade,
+  kind text not null check (kind in ('full', 'display', 'thumb')),
+  object_key text not null constraint photo_variants_key_check check (object_key ~ '^(u|h)/[0-9a-f]{64}$'),
+  size_bytes bigint check (size_bytes > 0),
+  width integer check (width > 0),
+  height integer check (height > 0),
+  sha256 text check (sha256 ~ '^[0-9a-f]{64}$'),
+  primary key (file_id, kind),
+  constraint photo_variants_object_key_key unique (object_key)
+);
+
+create table private.photo_albums (
+  id uuid primary key,
+  owner_user_id uuid references auth.users (id) on delete cascade,
+  owner_home_id uuid references public.homes (id) on delete cascade,
+  created_by uuid references auth.users (id) on delete set null,
+  name text not null check (pg_catalog.char_length(name) between 1 and 80),
+  revision integer not null default 1,
+  created_at timestamptz not null default pg_catalog.now(),
+  updated_at timestamptz not null default pg_catalog.now(),
+  deleted_at timestamptz,
+  constraint photo_albums_one_owner check (num_nonnulls(owner_user_id, owner_home_id) = 1)
+);
+create index photo_albums_user on private.photo_albums (owner_user_id, created_at, id)
+  where owner_user_id is not null;
+create index photo_albums_home on private.photo_albums (owner_home_id, created_at, id)
+  where owner_home_id is not null;
+
+-- Membership: a photo in an album. A photo may be in many albums; both always belong to one library.
+create table private.photo_album_items (
+  album_id uuid not null references private.photo_albums (id) on delete cascade,
+  photo_id uuid not null references private.photos (id) on delete cascade,
+  added_by uuid references auth.users (id) on delete set null,
+  added_at timestamptz not null default pg_catalog.now(),
+  primary key (album_id, photo_id)
+);
+create index photo_album_items_photo on private.photo_album_items (photo_id);
+
+alter table private.photos enable row level security;
+alter table private.photo_variants enable row level security;
+alter table private.photo_albums enable row level security;
+alter table private.photo_album_items enable row level security;
+revoke all on table private.photos, private.photo_variants, private.photo_albums,
+  private.photo_album_items from public, anon, authenticated, service_role;
+
+-- Access --------------------------------------------------------------------------------------------------
+
+-- What a person may do in a Home's photo library: 'manage' (the Owner, Administrators granted
+-- manageHomePhotos), 'member' (every other current member) or null (not a member).
+create function private.photo_access(p_home_id uuid, p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_user_id is null or p_home_id is null then null
+    when private.has_home_capability(p_home_id, p_user_id, 'manageHomePhotos') then 'manage'
+    when exists (select 1 from public.home_memberships m where m.home_id = p_home_id and m.user_id = p_user_id)
+      then 'member'
+  end;
+  $$;
+
+-- Whether the person may see a library now: their own, or a Home they belong to.
+create function private.can_see_photo_library(p_owner_user_id uuid, p_owner_home_id uuid, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and (
+    coalesce(p_owner_user_id = p_user_id, false)
+    or (p_owner_home_id is not null and private.photo_access(p_owner_home_id, p_user_id) is not null)
+  );
+  $$;
+
+-- Whether the person may change something they or someone else added to a library: the library's
+-- owner (personal), the creator or a manager (Home).
+create function private.can_change_photo_item(
+  p_owner_user_id uuid, p_owner_home_id uuid, p_created_by uuid, p_user_id uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and (
+    coalesce(p_owner_user_id = p_user_id, false)
+    or (
+      p_owner_home_id is not null
+      and (
+        private.photo_access(p_owner_home_id, p_user_id) = 'manage'
+        or (coalesce(p_created_by = p_user_id, false)
+          and private.photo_access(p_owner_home_id, p_user_id) is not null)
+      )
+    )
+  );
+  $$;
+
+create function private.audit_photo(
+  p_action text, p_home_id uuid, p_subject_type text, p_subject_id uuid, p_details jsonb default '{}'::jsonb
+) returns void
+  language sql volatile security definer set search_path = '' as $$
+  select private.audit(p_action, p_home_id, p_subject_type, p_subject_id, p_details);
+  $$;
+
+-- Serializes the per-library album limit, so two creates cannot both take the last place.
+create function private.lock_photo_library(p_owner_user_id uuid, p_owner_home_id uuid) returns void
+  language sql volatile security definer set search_path = '' as $$
+  select pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('photos:' || coalesce(p_owner_home_id, p_owner_user_id)::text, 0));
+  $$;
+
+create function private.photo_albums_full(p_owner_user_id uuid, p_owner_home_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select (select count(*) from private.photo_albums a
+    where a.deleted_at is null
+      and a.owner_user_id is not distinct from p_owner_user_id
+      and a.owner_home_id is not distinct from p_owner_home_id) >= private.photo_limit('albums');
+  $$;
+
+create function private.photo_album_name(p_name text) returns text
+  language sql immutable set search_path = '' as $$
+  select pg_catalog.btrim(pg_catalog.regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+  $$;
+
+-- Uploads -------------------------------------------------------------------------------------------------
+
+-- Opens an upload in the library's pool (the person's own, or the Home's), after the caller-specific
+-- checks. The shared S15 rules: request id reuse, rate limits, capacity under the pool lock. Also
+-- generates the keys of the three derivatives. Returns the outcome and the new or retried file.
+create function private.open_photo_upload(
+  p_user_id uuid, p_home_id uuid, p_content_type text, p_size bigint, p_request_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+    v_prefix text := case when p_home_id is null then 'u' else 'h' end;
+    v_kind text;
+  begin
+    v_pool := case when p_home_id is null then private.lock_storage_pool(p_user_id, null)
+      else private.lock_storage_pool(null, p_home_id) end;
+    select * into v_existing from private.stored_files f
+      where f.created_by = p_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = 'photo' and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.pool_id = v_pool.id and v_existing.expires_at > pg_catalog.now() then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if (select count(*) from private.stored_files f
+        where f.created_by = p_user_id and f.created_at > pg_catalog.now() - interval '1 hour')
+         >= private.storage_limit('intents_per_hour')
+       or (select count(*) from private.stored_files f
+        where f.created_by = p_user_id and f.status = 'pending' and f.expires_at > pg_catalog.now())
+         >= private.storage_limit('pending_per_account') then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, 'photo', p_user_id, p_request_id, private.new_object_key(v_prefix),
+      private.new_object_key(v_prefix), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+    foreach v_kind in array array['full', 'display', 'thumb'] loop
+      insert into private.photo_variants (file_id, kind, object_key)
+        values (v_file.id, v_kind, private.new_object_key(v_prefix));
+    end loop;
+
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      p_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', 'photo', 'size', p_size)
+    );
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+-- Opens an upload of a photo into the caller's personal library (p_home_id null) or a Home's library
+-- (any current member). Outcomes: 'ok' (file id, upload key, expiry), 'not_permitted', 'storage_full',
+-- 'rate_limited', 'conflict'. 22023 for an invalid type or size.
+create function public.create_photo_intent(
+  p_home_id uuid, p_content_type text, p_size bigint, p_request_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_row record;
+  begin
+    if p_request_id is null or p_size is null or p_size <= 0
+       or p_size > private.upload_max_bytes('photo')
+       or not private.upload_type_allowed('photo', p_content_type) then
+      raise exception 'invalid upload' using errcode = '22023';
+    end if;
+    if p_home_id is not null and private.photo_access(p_home_id, v_user_id) is null then
+      return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    select * into v_row from private.open_photo_upload(v_user_id, p_home_id, p_content_type, p_size,
+      p_request_id);
+    return query select v_row.outcome, v_row.file_id, v_row.upload_key, v_row.expires_at;
+  end
+  $$;
+
+-- The objects the server writes for the caller's own pending photo upload: the master (the file's own
+-- key) and the three derivatives. Empty for anything else.
+create function public.get_photo_upload_keys(p_file_id uuid)
+returns table (kind text, object_key text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select 'master'::text, f.object_key from private.stored_files f
+        where f.id = p_file_id and f.created_by = v_user_id and f.purpose = 'photo'
+          and f.status = 'pending'
+      union all
+      select v.kind, v.object_key from private.photo_variants v
+        join private.stored_files f on f.id = v.file_id
+        where f.id = p_file_id and f.created_by = v_user_id and f.purpose = 'photo'
+          and f.status = 'pending';
+  end
+  $$;
+
+-- Finalizes a photo (the server only, after it verified and stored the four pictures): records the
+-- derivatives, finalizes the file with their total size (so all four count against the pool, under its
+-- lock) and creates the photo. p_variants is a JSON array of exactly four { kind, size, width, height,
+-- sha256 } for master, full, display and thumb. Outcomes: 'ready', 'not_found', 'expired', 'invalid',
+-- 'storage_full'. A refusal leaves the file failed with all its objects queued for removal.
+create function public.finalize_photo(p_user_id uuid, p_file_id uuid, p_variants jsonb)
+returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file private.stored_files;
+    v_pool private.storage_pools;
+    v_variant jsonb;
+    v_kinds text[] := '{}';
+    v_total bigint := 0;
+    v_master jsonb;
+    v_ok boolean := true;
+    v_outcome text;
+    v_photo private.photos;
+  begin
+    select * into v_file from private.stored_files f
+      where f.id = p_file_id and f.created_by = p_user_id and f.purpose = 'photo';
+    if not found then
+      return 'not_found';
+    end if;
+    select * into v_pool from private.storage_pools p where p.id = v_file.pool_id for update;
+    select * into v_file from private.stored_files f where f.id = p_file_id for update;
+    if v_file.status = 'ready' then
+      return case when exists (select 1 from private.photos x where x.file_id = v_file.id)
+        then 'ready' else 'not_found' end;
+    end if;
+    if v_file.status <> 'pending' then
+      return 'not_found';
+    end if;
+
+    if p_variants is null or pg_catalog.jsonb_typeof(p_variants) <> 'array'
+       or pg_catalog.jsonb_array_length(p_variants) <> 4 then
+      v_ok := false;
+    else
+      for v_variant in select * from pg_catalog.jsonb_array_elements(p_variants) loop
+        if pg_catalog.jsonb_typeof(v_variant) <> 'object'
+           or coalesce(v_variant ->> 'kind', '') not in ('master', 'full', 'display', 'thumb')
+           or (v_variant ->> 'kind') = any (v_kinds)
+           or coalesce(v_variant ->> 'size', '') !~ '^[0-9]{1,10}$'
+           or coalesce(v_variant ->> 'width', '') !~ '^[0-9]{1,5}$'
+           or coalesce(v_variant ->> 'height', '') !~ '^[0-9]{1,5}$'
+           or coalesce(v_variant ->> 'sha256', '') !~ '^[0-9a-f]{64}$' then
+          v_ok := false;
+          exit;
+        end if;
+        if (v_variant ->> 'size')::bigint < 1 or (v_variant ->> 'width')::integer < 1
+           or (v_variant ->> 'height')::integer < 1 then
+          v_ok := false;
+          exit;
+        end if;
+        v_kinds := v_kinds || (v_variant ->> 'kind');
+        v_total := v_total + (v_variant ->> 'size')::bigint;
+        if (v_variant ->> 'kind') = 'master' then
+          v_master := v_variant;
+        end if;
+      end loop;
+    end if;
+    -- The uploader must still be allowed to add to a Home library.
+    if v_ok and v_pool.owner_home_id is not null
+       and private.photo_access(v_pool.owner_home_id, p_user_id) is null then
+      v_ok := false;
+    end if;
+    if not v_ok then
+      -- Marks the file failed and queues its objects (the facts below are never valid).
+      perform public.finalize_upload(p_user_id, p_file_id, 'image/webp', 0, null);
+      return 'invalid';
+    end if;
+
+    v_outcome := public.finalize_upload(
+      p_user_id, p_file_id, 'image/webp', v_total, v_master ->> 'sha256');
+    if v_outcome <> 'ready' then
+      return v_outcome;
+    end if;
+
+    for v_variant in select * from pg_catalog.jsonb_array_elements(p_variants) loop
+      if (v_variant ->> 'kind') <> 'master' then
+        update private.photo_variants v
+          set size_bytes = (v_variant ->> 'size')::bigint, width = (v_variant ->> 'width')::integer,
+            height = (v_variant ->> 'height')::integer, sha256 = v_variant ->> 'sha256'
+          where v.file_id = p_file_id and v.kind = v_variant ->> 'kind';
+      end if;
+    end loop;
+    insert into private.photos (file_id, owner_user_id, owner_home_id, created_by, width, height)
+      values (p_file_id, v_pool.owner_user_id, v_pool.owner_home_id, p_user_id,
+        (v_master ->> 'width')::integer, (v_master ->> 'height')::integer)
+      on conflict (file_id) do nothing
+      returning * into v_photo;
+    return 'ready';
+  end
+  $$;
+
+-- Queues every object of a photo file when the file fails, is purged or is deleted outright: the
+-- derivatives are not in stored_files, so the shared S15 paths would not remove them.
+create function private.queue_photo_objects() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_key text;
+  begin
+    if tg_op = 'DELETE' then
+      if old.purpose <> 'photo' or old.status = 'purged' then
+        return old;
+      end if;
+    elsif old.purpose <> 'photo' or new.status = old.status or new.status not in ('failed', 'purged') then
+      return new;
+    end if;
+    for v_key in
+      select v.object_key from private.photo_variants v
+        where v.file_id = coalesce(old.id, new.id)
+    loop
+      perform private.queue_object_deletion(v_key,
+        case when tg_op = 'DELETE' then 'owner_deleted' else new.status end);
+    end loop;
+    return case when tg_op = 'DELETE' then old else new end;
+  end
+  $$;
+
+create trigger stored_files_photo_objects_update
+  after update of status on private.stored_files
+  for each row execute function private.queue_photo_objects();
+create trigger stored_files_photo_objects_delete
+  before delete on private.stored_files
+  for each row execute function private.queue_photo_objects();
+
+-- Reading --------------------------------------------------------------------------------------------------
+
+create function private.photo_json(p_photo private.photos, p_user_id uuid) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'id', p_photo.id, 'width', p_photo.width, 'height', p_photo.height,
+    'createdAt', p_photo.created_at,
+    'canDelete', private.can_change_photo_item(p_photo.owner_user_id, p_photo.owner_home_id,
+      p_photo.created_by, p_user_id));
+  $$;
+
+-- A library page: what the person may do, the library's albums, and one page of photos (newest first),
+-- of the whole library or of one album. p_home_id null is the caller's personal library. Null for a
+-- Home they are not in, and for an album that is not in this library or is in the trash. The answer
+-- for "no such Home" and "not your Home" is the same.
+create function public.list_photo_library(p_home_id uuid, p_album_id uuid, p_offset integer)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_manage boolean;
+    v_album private.photo_albums;
+    v_offset integer := coalesce(p_offset, 0);
+    v_photos jsonb;
+    v_total integer;
+  begin
+    if v_offset < 0 or v_offset > private.photo_limit('max_offset') then
+      raise exception 'invalid offset' using errcode = '22023';
+    end if;
+    if p_home_id is not null and private.photo_access(p_home_id, v_user_id) is null then
+      return null;
+    end if;
+    v_manage := p_home_id is null or private.photo_access(p_home_id, v_user_id) = 'manage';
+    if p_album_id is not null then
+      select * into v_album from private.photo_albums a
+        where a.id = p_album_id and a.deleted_at is null
+          and a.owner_user_id is not distinct from v_owner_user
+          and a.owner_home_id is not distinct from p_home_id;
+      if not found then
+        return null;
+      end if;
+    end if;
+
+    select pg_catalog.count(*) into v_total from private.photos p
+      where p.deleted_at is null
+        and p.owner_user_id is not distinct from v_owner_user
+        and p.owner_home_id is not distinct from p_home_id
+        and (p_album_id is null or exists (
+          select 1 from private.photo_album_items i where i.album_id = p_album_id and i.photo_id = p.id));
+    select coalesce(pg_catalog.jsonb_agg(private.photo_json(x, v_user_id) order by x.created_at desc, x.id), '[]')
+      into v_photos
+      from (
+        select p.* from private.photos p
+          where p.deleted_at is null
+            and p.owner_user_id is not distinct from v_owner_user
+            and p.owner_home_id is not distinct from p_home_id
+            and (p_album_id is null or exists (
+              select 1 from private.photo_album_items i where i.album_id = p_album_id and i.photo_id = p.id))
+          order by p.created_at desc, p.id
+          limit private.photo_limit('page') offset v_offset
+      ) x;
+
+    return pg_catalog.jsonb_build_object(
+      'homeId', p_home_id,
+      'canUpload', true,
+      'canManage', v_manage,
+      'albumId', p_album_id,
+      'albumName', v_album.name,
+      'total', v_total,
+      'photos', v_photos,
+      'albums', (
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', a.id, 'name', a.name, 'revision', a.revision,
+          'photoCount', (select pg_catalog.count(*) from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id and p.deleted_at is null where i.album_id = a.id),
+          'coverPhotoId', (select p.id from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id and p.deleted_at is null
+            where i.album_id = a.id order by i.added_at desc, p.id limit 1),
+          'canEdit', private.can_change_photo_item(a.owner_user_id, a.owner_home_id, a.created_by, v_user_id)
+        ) order by a.created_at, a.id), '[]')
+        from private.photo_albums a
+        where a.deleted_at is null
+          and a.owner_user_id is not distinct from v_owner_user
+          and a.owner_home_id is not distinct from p_home_id
+      )
+    );
+  end
+  $$;
+
+-- One photo and the albums of its library that hold it. Null when the person may not see it.
+create function public.get_photo(p_photo_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_photo private.photos;
+  begin
+    select * into v_photo from private.photos p where p.id = p_photo_id and p.deleted_at is null;
+    if not found or not private.can_see_photo_library(v_photo.owner_user_id, v_photo.owner_home_id, v_user_id) then
+      return null;
+    end if;
+    return private.photo_json(v_photo, v_user_id) || pg_catalog.jsonb_build_object(
+      'homeId', v_photo.owner_home_id,
+      'albums', (
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('id', a.id, 'name', a.name)
+          order by a.created_at, a.id), '[]')
+        from private.photo_album_items i
+        join private.photo_albums a on a.id = i.album_id and a.deleted_at is null
+        where i.photo_id = v_photo.id));
+  end
+  $$;
+
+-- The object to serve for one picture of a photo the caller may see now (variant: master, full,
+-- display or thumb). Empty for everything else, for every reason alike.
+create function public.authorize_photo_read(p_photo_id uuid, p_variant text)
+returns table (object_key text, content_type text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select case when p_variant = 'master' then f.object_key else v.object_key end, f.content_type
+      from private.photos p
+      join private.stored_files f on f.id = p.file_id and f.status = 'ready'
+      left join private.photo_variants v on v.file_id = f.id and v.kind = p_variant
+      where p.id = p_photo_id and p.deleted_at is null
+        and p_variant in ('master', 'full', 'display', 'thumb')
+        and (p_variant = 'master' or v.object_key is not null)
+        and private.can_see_photo_library(p.owner_user_id, p.owner_home_id, v_user_id);
+  end
+  $$;
+
+-- Deleting photos -------------------------------------------------------------------------------------------
+
+-- Moves photos to the trash (the whole file, derivatives included, keeps counting for seven days). Each
+-- photo the caller may not delete, or cannot see, is skipped without telling which. Their album
+-- memberships stay, so restoring a photo puts it back where it was. Returns { deleted, skipped }.
+create function public.delete_photos(p_photo_ids uuid[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+    v_photo private.photos;
+    v_deleted integer := 0;
+    v_skipped integer := 0;
+  begin
+    if p_photo_ids is null or pg_catalog.cardinality(p_photo_ids) < 1
+       or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    for v_id in select distinct u from pg_catalog.unnest(p_photo_ids) u order by u loop
+      select * into v_photo from private.photos p where p.id = v_id for update;
+      if not found or v_photo.deleted_at is not null
+         or not private.can_see_photo_library(v_photo.owner_user_id, v_photo.owner_home_id, v_user_id)
+         or not private.can_change_photo_item(v_photo.owner_user_id, v_photo.owner_home_id,
+           v_photo.created_by, v_user_id) then
+        v_skipped := v_skipped + 1;
+        continue;
+      end if;
+      update private.photos p set deleted_at = pg_catalog.now() where p.id = v_photo.id;
+      perform private.trash_move(v_user_id, 'photos', 'photo', v_photo.id, v_photo.owner_user_id,
+        v_photo.owner_home_id, 'Photo', array[v_photo.file_id]);
+      perform private.audit_photo('photo.deleted', v_photo.owner_home_id, 'photo', v_photo.id);
+      v_deleted := v_deleted + 1;
+    end loop;
+    return pg_catalog.jsonb_build_object('deleted', v_deleted, 'skipped', v_skipped);
+  end
+  $$;
+
+-- Albums --------------------------------------------------------------------------------------------------
+
+-- Creates an album in the caller's personal library (p_home_id null) or a Home's (any current member).
+-- The id comes from the client, so a retry returns the same album. Outcomes: 'created', 'exists' (the
+-- retry), 'not_permitted', 'limit'. 22023 for an invalid name.
+create function public.create_photo_album(p_id uuid, p_home_id uuid, p_name text) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_name text := private.photo_album_name(p_name);
+    v_album private.photo_albums;
+  begin
+    if p_id is null or pg_catalog.char_length(v_name) not between 1 and private.photo_limit('album_name')
+       or v_name ~ '[[:cntrl:]]' then
+      raise exception 'invalid album' using errcode = '22023';
+    end if;
+    if p_home_id is not null and private.photo_access(p_home_id, v_user_id) is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    perform private.lock_photo_library(v_owner_user, p_home_id);
+    select * into v_album from private.photo_albums a where a.id = p_id;
+    if found then
+      if v_album.created_by = v_user_id and v_album.owner_user_id is not distinct from v_owner_user
+         and v_album.owner_home_id is not distinct from p_home_id and v_album.deleted_at is null then
+        return pg_catalog.jsonb_build_object('outcome', 'exists', 'id', v_album.id);
+      end if;
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    if private.photo_albums_full(v_owner_user, p_home_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'limit');
+    end if;
+    insert into private.photo_albums (id, owner_user_id, owner_home_id, created_by, name)
+      values (p_id, v_owner_user, p_home_id, v_user_id, v_name);
+    perform private.audit_photo('photo_album.created', p_home_id, 'photo_album', p_id);
+    return pg_catalog.jsonb_build_object('outcome', 'created', 'id', p_id, 'revision', 1);
+  end
+  $$;
+
+-- The album, locked, when the caller may see its library and it is not in the trash; otherwise null.
+create function private.lock_photo_album(p_album_id uuid, p_user_id uuid) returns private.photo_albums
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_album private.photo_albums;
+  begin
+    select * into v_album from private.photo_albums a where a.id = p_album_id for update;
+    if not found or v_album.deleted_at is not null
+       or not private.can_see_photo_library(v_album.owner_user_id, v_album.owner_home_id, p_user_id) then
+      return null;
+    end if;
+    return v_album;
+  end
+  $$;
+
+-- Renames an album (its creator, a manager; the owner for a personal one). Outcomes: 'saved' (with the
+-- revision), 'stale', 'not_found', 'not_permitted'. 22023 for an invalid name.
+create function public.rename_photo_album(p_album_id uuid, p_expected_revision integer, p_name text)
+returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_name text := private.photo_album_name(p_name);
+  begin
+    if p_album_id is null or p_expected_revision is null
+       or pg_catalog.char_length(v_name) not between 1 and private.photo_limit('album_name')
+       or v_name ~ '[[:cntrl:]]' then
+      raise exception 'invalid album' using errcode = '22023';
+    end if;
+    v_album := private.lock_photo_album(p_album_id, v_user_id);
+    if v_album.id is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+      v_album.created_by, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    if v_album.revision <> p_expected_revision then
+      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_album.revision);
+    end if;
+    update private.photo_albums a set name = v_name, revision = a.revision + 1,
+        updated_at = pg_catalog.now()
+      where a.id = v_album.id returning * into v_album;
+    perform private.audit_photo('photo_album.renamed', v_album.owner_home_id, 'photo_album', v_album.id);
+    return pg_catalog.jsonb_build_object('outcome', 'saved', 'revision', v_album.revision);
+  end
+  $$;
+
+-- Deletes an album to the trash. Its photos are untouched; restoring the album restores the grouping.
+-- Outcomes: 'deleted', 'stale', 'not_found', 'not_permitted'.
+create function public.delete_photo_album(p_album_id uuid, p_expected_revision integer) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+  begin
+    if p_album_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_album := private.lock_photo_album(p_album_id, v_user_id);
+    if v_album.id is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+      v_album.created_by, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    if v_album.revision <> p_expected_revision then
+      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_album.revision);
+    end if;
+    update private.photo_albums a set deleted_at = pg_catalog.now(), revision = a.revision + 1
+      where a.id = v_album.id;
+    perform private.trash_move(v_user_id, 'photos', 'photo_album', v_album.id, v_album.owner_user_id,
+      v_album.owner_home_id, v_album.name);
+    perform private.audit_photo('photo_album.deleted', v_album.owner_home_id, 'photo_album', v_album.id);
+    return pg_catalog.jsonb_build_object('outcome', 'deleted');
+  end
+  $$;
+
+-- Adds photos of the album's own library to it (a photo may be in many albums). Photos that are not
+-- in this library, are in the trash or are already in the album are skipped without telling which.
+-- Outcomes: 'saved' (with added and skipped), 'not_found', 'not_permitted', 'limit'.
+create function public.add_photos_to_album(p_album_id uuid, p_photo_ids uuid[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_ids uuid[];
+    v_added integer;
+  begin
+    if p_album_id is null or p_photo_ids is null or pg_catalog.cardinality(p_photo_ids) < 1
+       or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_album := private.lock_photo_album(p_album_id, v_user_id);
+    if v_album.id is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+      v_album.created_by, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    select coalesce(pg_catalog.array_agg(p.id order by p.id), '{}') into v_ids
+      from private.photos p
+      where p.id = any (p_photo_ids) and p.deleted_at is null
+        and p.owner_user_id is not distinct from v_album.owner_user_id
+        and p.owner_home_id is not distinct from v_album.owner_home_id
+        and not exists (select 1 from private.photo_album_items i
+          where i.album_id = v_album.id and i.photo_id = p.id);
+    if (select pg_catalog.count(*) from private.photo_album_items i where i.album_id = v_album.id)
+       + pg_catalog.cardinality(v_ids) > private.photo_limit('album_photos') then
+      return pg_catalog.jsonb_build_object('outcome', 'limit');
+    end if;
+    insert into private.photo_album_items (album_id, photo_id, added_by)
+      select v_album.id, u, v_user_id from pg_catalog.unnest(v_ids) u;
+    get diagnostics v_added = row_count;
+    perform private.audit_photo('photo_album.photos_added', v_album.owner_home_id, 'photo_album', v_album.id,
+      pg_catalog.jsonb_build_object('count', v_added));
+    return pg_catalog.jsonb_build_object('outcome', 'saved', 'added', v_added,
+      'skipped', pg_catalog.cardinality(p_photo_ids) - v_added);
+  end
+  $$;
+
+-- Takes photos out of an album. The photos themselves are never deleted by this. Outcomes: 'saved'
+-- (with removed), 'not_found', 'not_permitted'.
+create function public.remove_photos_from_album(p_album_id uuid, p_photo_ids uuid[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_removed integer;
+  begin
+    if p_album_id is null or p_photo_ids is null or pg_catalog.cardinality(p_photo_ids) < 1
+       or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_album := private.lock_photo_album(p_album_id, v_user_id);
+    if v_album.id is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+      v_album.created_by, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    delete from private.photo_album_items i where i.album_id = v_album.id and i.photo_id = any (p_photo_ids);
+    get diagnostics v_removed = row_count;
+    perform private.audit_photo('photo_album.photos_removed', v_album.owner_home_id, 'photo_album',
+      v_album.id, pg_catalog.jsonb_build_object('count', v_removed));
+    return pg_catalog.jsonb_build_object('outcome', 'saved', 'removed', v_removed);
+  end
+  $$;
+
+-- Trash ---------------------------------------------------------------------------------------------------
+
+-- A photo's or album's entry is for the person who deleted it, and for the Owner and Administrators
+-- granted manageHomePhotos in a Home (whoever deleted it); a personal entry is its owner's alone.
+alter function private.can_see_trash_entry(private.trash_entries, uuid) rename to can_see_trash_entry_before_photos;
+
+create function private.can_see_trash_entry(p_entry private.trash_entries, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when p_entry.module <> 'photos' then private.can_see_trash_entry_before_photos(p_entry, p_user_id)
+    when p_user_id is null then false
+    when p_entry.owner_user_id is not null then p_entry.owner_user_id = p_user_id
+    else private.photo_access(p_entry.owner_home_id, p_user_id) is not null
+      and (coalesce(p_entry.deleted_by = p_user_id, false)
+        or private.photo_access(p_entry.owner_home_id, p_user_id) = 'manage')
+  end;
+  $$;
+
+alter function private.trash_conflict(private.trash_entries) rename to trash_conflict_before_photos;
+alter function private.trash_conflict_options(text) rename to trash_conflict_options_before_photos;
+alter function private.trash_resolve(private.trash_entries, text) rename to trash_resolve_before_photos;
+alter function private.trash_item_restore(private.trash_entries) rename to trash_item_restore_before_photos;
+alter function private.trash_item_purge(private.trash_entries) rename to trash_item_purge_before_photos;
+
+-- A photo's only conflict: its file was purged meanwhile ('item_missing'). An album's: its library
+-- already has 200 albums ('album_limit'); the person makes room.
+create function private.trash_conflict(p_entry private.trash_entries) returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_photo private.photos;
+    v_album private.photo_albums;
+  begin
+    if p_entry.module <> 'photos' then
+      return private.trash_conflict_before_photos(p_entry);
+    end if;
+    if p_entry.item_type = 'photo' then
+      select * into v_photo from private.photos p where p.id = p_entry.subject_id;
+      if not found or v_photo.deleted_at is null or not exists (
+        select 1 from private.stored_files f where f.id = v_photo.file_id and f.status = 'deleted') then
+        return 'item_missing';
+      end if;
+      return null;
+    end if;
+    select * into v_album from private.photo_albums a where a.id = p_entry.subject_id;
+    if not found or v_album.deleted_at is null then
+      return 'item_missing';
+    end if;
+    if private.photo_albums_full(v_album.owner_user_id, v_album.owner_home_id) then
+      return 'album_limit';
+    end if;
+    return null;
+  end
+  $$;
+
+create function private.trash_conflict_options(p_kind text) returns text[]
+  language sql immutable set search_path = '' as $$
+  select case
+    when p_kind = 'album_limit' then array[]::text[]
+    else private.trash_conflict_options_before_photos(p_kind)
+  end;
+  $$;
+
+create function private.trash_resolve(p_entry private.trash_entries, p_resolution text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_entry.module <> 'photos' then
+      perform private.trash_resolve_before_photos(p_entry, p_resolution);
+    end if;
+    -- Photos and albums have no resolvable conflict.
+  end
+  $$;
+
+-- A photo comes back with its file (still counted, never charged twice) and its album memberships; an
+-- album comes back with its photos that are not in the trash.
+create function private.trash_item_restore(p_entry private.trash_entries) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_photo private.photos;
+    v_album private.photo_albums;
+    v_file_id uuid;
+  begin
+    if p_entry.module <> 'photos' then
+      return private.trash_item_restore_before_photos(p_entry);
+    end if;
+    if p_entry.item_type = 'photo' then
+      select * into v_photo from private.photos p where p.id = p_entry.subject_id for update;
+      if not found or v_photo.deleted_at is null then
+        raise exception 'photo unavailable' using errcode = '23505';
+      end if;
+      for v_file_id in
+        select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id order by ef.file_id
+      loop
+        if not private.restore_file(v_file_id) then
+          raise exception 'photo unavailable' using errcode = '23505';
+        end if;
+      end loop;
+      update private.photos p set deleted_at = null where p.id = v_photo.id;
+      return 0;
+    end if;
+    select * into v_album from private.photo_albums a where a.id = p_entry.subject_id for update;
+    if not found or v_album.deleted_at is null then
+      raise exception 'album unavailable' using errcode = '23505';
+    end if;
+    perform private.lock_photo_library(v_album.owner_user_id, v_album.owner_home_id);
+    if private.photo_albums_full(v_album.owner_user_id, v_album.owner_home_id) then
+      raise exception 'album limit' using errcode = '23505';
+    end if;
+    update private.photo_albums a set deleted_at = null, revision = a.revision + 1, updated_at = pg_catalog.now()
+      where a.id = v_album.id;
+    return 0;
+  end
+  $$;
+
+create function private.trash_item_purge(p_entry private.trash_entries) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_file_id uuid;
+  begin
+    if p_entry.module <> 'photos' then
+      perform private.trash_item_purge_before_photos(p_entry);
+      return;
+    end if;
+    for v_file_id in
+      select ef.file_id from private.trash_entry_files ef where ef.entry_id = p_entry.id order by ef.file_id
+    loop
+      perform private.purge_file_now(v_file_id);
+    end loop;
+    if p_entry.item_type = 'photo' then
+      -- The album memberships go with it (on delete cascade).
+      delete from private.photos p where p.id = p_entry.subject_id and p.deleted_at is not null;
+    else
+      delete from private.photo_albums a where a.id = p_entry.subject_id and a.deleted_at is not null;
+    end if;
+  end
+  $$;
+
+-- Grants --------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  -- The photos API: signed-in people only (every function rechecks the confirmed caller).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'create_photo_intent', 'get_photo_upload_keys', 'list_photo_library', 'get_photo',
+      'authorize_photo_read', 'delete_photos', 'create_photo_album', 'rename_photo_album',
+      'delete_photo_album', 'add_photos_to_album', 'remove_photos_from_album'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Finalizing: the server's privileged call only (the facts are trusted).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'finalize_photo'
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and (
+      p.proname like '%photo%'
+      or p.proname in ('can_see_trash_entry', 'trash_conflict', 'trash_conflict_options', 'trash_resolve',
+        'trash_item_restore', 'trash_item_purge', 'is_delegable_capability', 'upload_max_bytes',
+        'upload_type_allowed', 'stored_type_allowed')
+    )
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261122090000_photo_sharing.sql
+-- ============================================================================
+-- S36: photo sharing and widgets (brief plans/steps/S36-brief.md; ADR 0046; Modules.md §4.7).
+--
+-- An album can be shared with other Homes, view or contribute, without copying anything: the album,
+-- its photos and their files stay where they are, and each read checks again who may see what. A
+-- photo is visible to a person when they can see its own library, or when it is in an album they can
+-- see now and still belongs there (see photo_in_album_visible). Removing a share, or an album from a
+-- Home, only ends access and memberships; it never deletes a photo. The photo widget reads through
+-- resolve_photo_widget, with the same rules.
+--
+-- Defaults (the spec leaves them to a supporting Photos specification; brief "Open in the spec"):
+-- a personal album is shared by its owner, a Home album by the Owner and Administrators granted
+-- manageHomePhotos; destinations are Homes the sharer belongs to now; contribute lets every current
+-- member of that Home add photos they may share.
+
+-- Limits --------------------------------------------------------------------------------------------------
+
+-- apps/web/src/photos/schema.ts uses the same numbers.
+create or replace function private.photo_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'album_name' then 80
+    when 'albums' then 200              -- albums per library that are not in the trash
+    when 'album_photos' then 2000       -- photos per album
+    when 'page' then 60                 -- photos in one list answer
+    when 'max_offset' then 100000
+    when 'batch' then 100               -- photo ids in one request
+    when 'max_side' then 12000
+    when 'max_pixels' then 50000000
+    when 'album_shares' then 20         -- Homes one album is shared with (S36)
+    when 'widget_photos' then 50        -- hand-picked photos in one widget (S36)
+    when 'widget_album' then 100        -- newest photos of an album a widget shows (S36)
+  end;
+  $$;
+
+-- Shares -------------------------------------------------------------------------------------------------
+
+create table private.photo_album_shares (
+  album_id uuid not null references private.photo_albums (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  access text not null check (access in ('view', 'contribute')),
+  shared_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default pg_catalog.now(),
+  updated_at timestamptz not null default pg_catalog.now(),
+  primary key (album_id, home_id)
+);
+create index photo_album_shares_home on private.photo_album_shares (home_id);
+
+alter table private.photo_album_shares enable row level security;
+revoke all on table private.photo_album_shares from public, anon, authenticated, service_role;
+
+-- Access --------------------------------------------------------------------------------------------------
+
+-- S35's rule, now also called for people outside the album's Home (share recipients): never null.
+create or replace function private.can_change_photo_item(
+  p_owner_user_id uuid, p_owner_home_id uuid, p_created_by uuid, p_user_id uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(p_user_id is not null and (
+    coalesce(p_owner_user_id = p_user_id, false)
+    or (
+      p_owner_home_id is not null
+      and (
+        coalesce(private.photo_access(p_owner_home_id, p_user_id) = 'manage', false)
+        or (coalesce(p_created_by = p_user_id, false)
+          and private.photo_access(p_owner_home_id, p_user_id) is not null)
+      )
+    )
+  ), false);
+  $$;
+
+-- The best access a person has to an album through the Homes they belong to now: 'contribute',
+-- 'view' or null.
+create function private.photo_album_share_access(p_album_id uuid, p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case
+    when pg_catalog.bool_or(s.access = 'contribute') then 'contribute'
+    when pg_catalog.count(*) > 0 then 'view'
+  end
+  from private.photo_album_shares s
+  join public.home_memberships m on m.home_id = s.home_id and m.user_id = p_user_id
+  where s.album_id = p_album_id and p_user_id is not null;
+  $$;
+
+-- Whether a person may see an album now: through its own library, or a share with a Home they are in.
+create function private.can_see_photo_album(p_album private.photo_albums, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_album.id is not null and p_album.deleted_at is null and p_user_id is not null and (
+    private.can_see_photo_library(p_album.owner_user_id, p_album.owner_home_id, p_user_id)
+    or private.photo_album_share_access(p_album.id, p_user_id) is not null
+  )), false);
+  $$;
+
+-- Whether a photo still belongs in an album's view (for everyone who sees the album): a photo of the
+-- album's own library; a personal photo while its owner can still see the album; a Home's photo while
+-- that Home still has a share. Otherwise the membership stays but shows nowhere.
+create function private.photo_in_album_visible(p_album private.photo_albums, p_photo private.photos)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_photo.id is not null and p_photo.deleted_at is null and (
+    (p_photo.owner_user_id is not distinct from p_album.owner_user_id
+      and p_photo.owner_home_id is not distinct from p_album.owner_home_id)
+    or (p_photo.owner_user_id is not null and private.can_see_photo_album(p_album, p_photo.owner_user_id))
+    or (p_photo.owner_home_id is not null and exists (
+      select 1 from private.photo_album_shares s
+      where s.album_id = p_album.id and s.home_id = p_photo.owner_home_id))
+  )), false);
+  $$;
+
+-- Whether a person may see a photo now: its own library, or an album they can see that shows it.
+create function private.can_see_photo(p_photo private.photos, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_photo.id is not null and p_photo.deleted_at is null and p_user_id is not null and (
+    private.can_see_photo_library(p_photo.owner_user_id, p_photo.owner_home_id, p_user_id)
+    or exists (
+      select 1 from private.photo_album_items i
+      join private.photo_albums a on a.id = i.album_id
+      where i.photo_id = p_photo.id
+        and private.can_see_photo_album(a, p_user_id)
+        and private.photo_in_album_visible(a, p_photo))
+  )), false);
+  $$;
+
+-- Who may change an album's shares: a personal album's owner; for a Home album, its photo managers.
+create function private.can_share_photo_album(p_album private.photo_albums, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_user_id is not null and p_album.deleted_at is null and (
+    coalesce(p_album.owner_user_id = p_user_id, false)
+    or (p_album.owner_home_id is not null and private.photo_access(p_album.owner_home_id, p_user_id) = 'manage')
+  )), false);
+  $$;
+
+-- Whether an album belongs on a library page: the person's own personal album (p_home_id null), or a
+-- Home's own album or one shared with that Home, for a current member.
+create function private.photo_album_in_context(p_album private.photo_albums, p_home_id uuid, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_album.id is not null and p_album.deleted_at is null and p_user_id is not null and case
+    when p_home_id is null then coalesce(p_album.owner_user_id = p_user_id, false)
+    else private.photo_access(p_home_id, p_user_id) is not null and (
+      coalesce(p_album.owner_home_id = p_home_id, false)
+      or exists (select 1 from private.photo_album_shares s
+        where s.album_id = p_album.id and s.home_id = p_home_id))
+  end), false);
+  $$;
+
+-- Whether a person may add photos to an album at all: its editor (S35) or a contributor by share.
+create function private.can_contribute_to_photo_album(p_album private.photo_albums, p_user_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_album.deleted_at is null and (
+    private.can_change_photo_item(p_album.owner_user_id, p_album.owner_home_id, p_album.created_by, p_user_id)
+    or private.photo_album_share_access(p_album.id, p_user_id) = 'contribute'
+  )), false);
+  $$;
+
+-- Whether a person may add this photo to this album: a photo of the album's own library (its editor);
+-- their own personal photo (editor or contributor); or a photo of a Home the album is shared with
+-- that they uploaded or manage there (editor, or contributor when that Home's share is contribute).
+create function private.can_add_photo_to_album(
+  p_album private.photo_albums, p_photo private.photos, p_user_id uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((p_photo.id is not null and p_photo.deleted_at is null and p_album.deleted_at is null
+    and private.can_see_photo_library(p_photo.owner_user_id, p_photo.owner_home_id, p_user_id)
+    and (
+      (p_photo.owner_user_id is not distinct from p_album.owner_user_id
+        and p_photo.owner_home_id is not distinct from p_album.owner_home_id
+        and private.can_change_photo_item(p_album.owner_user_id, p_album.owner_home_id, p_album.created_by,
+          p_user_id))
+      or (coalesce(p_photo.owner_user_id = p_user_id, false)
+        and private.can_contribute_to_photo_album(p_album, p_user_id))
+      or (p_photo.owner_home_id is not null
+        and p_photo.owner_home_id is distinct from p_album.owner_home_id
+        and private.can_change_photo_item(null, p_photo.owner_home_id, p_photo.created_by, p_user_id)
+        and exists (
+          select 1 from private.photo_album_shares s
+          where s.album_id = p_album.id and s.home_id = p_photo.owner_home_id
+            and (s.access = 'contribute'
+              or private.can_change_photo_item(p_album.owner_user_id, p_album.owner_home_id,
+                p_album.created_by, p_user_id))))
+    )), false);
+  $$;
+
+-- Whether a person may take this photo out of this album: the album's editor, or someone who can see
+-- the album and added the photo or may change it in its own library.
+create function private.can_remove_photo_from_album(
+  p_album private.photo_albums, p_photo private.photos, p_added_by uuid, p_user_id uuid
+) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce((private.can_change_photo_item(p_album.owner_user_id, p_album.owner_home_id, p_album.created_by,
+      p_user_id)
+    or (private.can_see_photo_album(p_album, p_user_id) and (
+      coalesce(p_added_by = p_user_id, false)
+      or private.can_change_photo_item(p_photo.owner_user_id, p_photo.owner_home_id, p_photo.created_by,
+        p_user_id)))), false);
+  $$;
+
+-- Ends one share: the share goes, and so do the memberships that only it allowed (that Home's photos,
+-- and personal photos whose owner can no longer see the album). No photo is deleted.
+create function private.end_photo_album_share(p_album_id uuid, p_home_id uuid) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_album private.photo_albums;
+  begin
+    delete from private.photo_album_shares s where s.album_id = p_album_id and s.home_id = p_home_id;
+    delete from private.photo_album_items i
+      using private.photos p
+      where i.album_id = p_album_id and p.id = i.photo_id and p.owner_home_id = p_home_id;
+    select * into v_album from private.photo_albums a where a.id = p_album_id;
+    delete from private.photo_album_items i
+      using private.photos p
+      where i.album_id = p_album_id and p.id = i.photo_id and p.owner_user_id is not null
+        and p.owner_user_id is distinct from v_album.owner_user_id
+        and not private.can_see_photo_album(v_album, p.owner_user_id);
+  end
+  $$;
+
+create function private.photo_home_name(p_home_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select h.name from public.homes h where h.id = p_home_id;
+  $$;
+
+-- Reading --------------------------------------------------------------------------------------------------
+
+-- A library page (S35, extended): the library's own albums, the albums shared with this Home (Home
+-- pages), the albums the person may add this library's photos to, the selected album with what the
+-- person may do in it, and one page of photos. An album may be the library's own or, on a Home's
+-- page, one shared with that Home; in an album only the photos that still belong there show. Null for
+-- a Home the person is not in and an album that is not on this page.
+create or replace function public.list_photo_library(p_home_id uuid, p_album_id uuid, p_offset integer)
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_owner_user uuid := case when p_home_id is null then v_user_id end;
+    v_manage boolean;
+    v_album private.photo_albums;
+    v_album_json jsonb;
+    v_offset integer := coalesce(p_offset, 0);
+    v_photos jsonb;
+    v_total integer;
+  begin
+    if v_offset < 0 or v_offset > private.photo_limit('max_offset') then
+      raise exception 'invalid offset' using errcode = '22023';
+    end if;
+    if p_home_id is not null and private.photo_access(p_home_id, v_user_id) is null then
+      return null;
+    end if;
+    v_manage := p_home_id is null or private.photo_access(p_home_id, v_user_id) = 'manage';
+
+    if p_album_id is not null then
+      select * into v_album from private.photo_albums a where a.id = p_album_id;
+      if not found or not private.photo_album_in_context(v_album, p_home_id, v_user_id)
+         or not private.can_see_photo_album(v_album, v_user_id) then
+        return null;
+      end if;
+      v_album_json := pg_catalog.jsonb_build_object(
+        'id', v_album.id,
+        'name', v_album.name,
+        'revision', v_album.revision,
+        'owned', v_album.owner_user_id is not distinct from v_owner_user
+          and v_album.owner_home_id is not distinct from p_home_id,
+        'ownerHomeName', private.photo_home_name(v_album.owner_home_id),
+        'access', case
+          when private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+            v_album.created_by, v_user_id) then 'edit'
+          else coalesce(private.photo_album_share_access(v_album.id, v_user_id), 'view') end,
+        'canContribute', private.can_contribute_to_photo_album(v_album, v_user_id),
+        'canShare', private.can_share_photo_album(v_album, v_user_id),
+        'canRemoveShare', p_home_id is not null
+          and v_album.owner_home_id is distinct from p_home_id
+          and (coalesce(private.photo_access(p_home_id, v_user_id) = 'manage', false)
+            or private.can_share_photo_album(v_album, v_user_id)),
+        -- Only the album's own library learns how many Homes see it.
+        'shareCount', case when v_album.owner_user_id is not distinct from v_owner_user
+            and v_album.owner_home_id is not distinct from p_home_id then (
+          select pg_catalog.count(*) from private.photo_album_shares s
+          where s.album_id = v_album.id) else 0 end,
+        'shares', case when private.can_share_photo_album(v_album, v_user_id) then (
+          select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'homeId', s.home_id, 'homeName', h.name, 'access', s.access) order by h.name, s.home_id), '[]')
+          from private.photo_album_shares s join public.homes h on h.id = s.home_id
+          where s.album_id = v_album.id) else '[]'::jsonb end);
+
+      select pg_catalog.count(*) into v_total
+        from private.photo_album_items i join private.photos p on p.id = i.photo_id
+        where i.album_id = v_album.id and private.photo_in_album_visible(v_album, p);
+      select coalesce(pg_catalog.jsonb_agg(private.photo_json(x.ph, v_user_id) || pg_catalog.jsonb_build_object(
+          'canRemove', private.can_remove_photo_from_album(v_album, x.ph, x.added_by, v_user_id))
+          order by (x.ph).created_at desc, (x.ph).id), '[]')
+        into v_photos
+        from (
+          select p as ph, i.added_by from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id
+            where i.album_id = v_album.id and private.photo_in_album_visible(v_album, p)
+            order by p.created_at desc, p.id
+            limit private.photo_limit('page') offset v_offset
+        ) x;
+    else
+      select pg_catalog.count(*) into v_total from private.photos p
+        where p.deleted_at is null
+          and p.owner_user_id is not distinct from v_owner_user
+          and p.owner_home_id is not distinct from p_home_id;
+      select coalesce(pg_catalog.jsonb_agg(private.photo_json(x, v_user_id) order by x.created_at desc, x.id), '[]')
+        into v_photos
+        from (
+          select p.* from private.photos p
+            where p.deleted_at is null
+              and p.owner_user_id is not distinct from v_owner_user
+              and p.owner_home_id is not distinct from p_home_id
+            order by p.created_at desc, p.id
+            limit private.photo_limit('page') offset v_offset
+        ) x;
+    end if;
+
+    return pg_catalog.jsonb_build_object(
+      'homeId', p_home_id,
+      'canUpload', true,
+      'canManage', v_manage,
+      'albumId', p_album_id,
+      'albumName', v_album.name,
+      'album', v_album_json,
+      'total', v_total,
+      'photos', v_photos,
+      'albums', (
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', a.id, 'name', a.name, 'revision', a.revision,
+          'photoCount', (select pg_catalog.count(*) from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id
+            where i.album_id = a.id and private.photo_in_album_visible(a, p)),
+          'coverPhotoId', (select p.id from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id
+            where i.album_id = a.id and private.photo_in_album_visible(a, p)
+            order by i.added_at desc, p.id limit 1),
+          'canEdit', private.can_change_photo_item(a.owner_user_id, a.owner_home_id, a.created_by, v_user_id),
+          'shareCount', (select pg_catalog.count(*) from private.photo_album_shares s where s.album_id = a.id)
+        ) order by a.created_at, a.id), '[]')
+        from private.photo_albums a
+        where a.deleted_at is null
+          and a.owner_user_id is not distinct from v_owner_user
+          and a.owner_home_id is not distinct from p_home_id
+      ),
+      -- Albums of other libraries shared with this Home (Home pages only).
+      'sharedAlbums', case when p_home_id is null then '[]'::jsonb else (
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', a.id, 'name', a.name,
+          'access', s.access,
+          'ownerHomeName', private.photo_home_name(a.owner_home_id),
+          'photoCount', (select pg_catalog.count(*) from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id
+            where i.album_id = a.id and private.photo_in_album_visible(a, p))
+        ) order by a.name, a.id), '[]')
+        from private.photo_album_shares s
+        join private.photo_albums a on a.id = s.album_id and a.deleted_at is null
+        where s.home_id = p_home_id
+      ) end,
+      -- Albums the person may add photos of this library to. 'shared' means people outside this
+      -- library will see what is added (the person is told before adding).
+      'targets', (
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', a.id, 'name', a.name,
+          'ownerHomeName', private.photo_home_name(a.owner_home_id),
+          'shared', not (a.owner_user_id is not distinct from v_owner_user
+              and a.owner_home_id is not distinct from p_home_id)
+            or exists (select 1 from private.photo_album_shares s where s.album_id = a.id)
+        ) order by (a.owner_user_id is not distinct from v_owner_user
+              and a.owner_home_id is not distinct from p_home_id) desc, a.name, a.id), '[]')
+        from private.photo_albums a
+        where a.deleted_at is null
+          -- Candidates first: the person's own albums, their Homes' albums, albums shared with their
+          -- Homes (indexed), before the per-album checks.
+          and (a.owner_user_id = v_user_id
+            or a.owner_home_id in (select m.home_id from public.home_memberships m where m.user_id = v_user_id)
+            or a.id in (select s.album_id from private.photo_album_shares s
+              join public.home_memberships m on m.home_id = s.home_id and m.user_id = v_user_id))
+          and private.can_see_photo_album(a, v_user_id)
+          and case
+            -- Personal photos: any album the person edits or contributes to.
+            when p_home_id is null then private.can_contribute_to_photo_album(a, v_user_id)
+            -- This Home's photos: its own albums the person edits, and albums shared with it that
+            -- the person contributes to or edits.
+            else (coalesce(a.owner_home_id = p_home_id, false)
+                and private.can_change_photo_item(a.owner_user_id, a.owner_home_id, a.created_by, v_user_id))
+              or exists (select 1 from private.photo_album_shares s
+                where s.album_id = a.id and s.home_id = p_home_id
+                  and (s.access = 'contribute' or private.can_change_photo_item(a.owner_user_id,
+                    a.owner_home_id, a.created_by, v_user_id)))
+          end
+      )
+    );
+  end
+  $$;
+
+-- One photo and the albums the person can see that show it. Null when the person may not see it.
+create or replace function public.get_photo(p_photo_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_photo private.photos;
+  begin
+    select * into v_photo from private.photos p where p.id = p_photo_id and p.deleted_at is null;
+    if not found or not private.can_see_photo(v_photo, v_user_id) then
+      return null;
+    end if;
+    return private.photo_json(v_photo, v_user_id) || pg_catalog.jsonb_build_object(
+      -- The owning Home only for those who are in it.
+      'homeId', case when private.can_see_photo_library(v_photo.owner_user_id, v_photo.owner_home_id,
+        v_user_id) then v_photo.owner_home_id end,
+      'albums', (
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('id', a.id, 'name', a.name)
+          order by a.created_at, a.id), '[]')
+        from private.photo_album_items i
+        join private.photo_albums a on a.id = i.album_id
+        where i.photo_id = v_photo.id
+          and private.can_see_photo_album(a, v_user_id)
+          and private.photo_in_album_visible(a, v_photo)));
+  end
+  $$;
+
+-- The object to serve for one picture of a photo the person may see now, through its library or an
+-- album share. Empty for everything else, for every reason alike.
+create or replace function public.authorize_photo_read(p_photo_id uuid, p_variant text)
+returns table (object_key text, content_type text)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select case when p_variant = 'master' then f.object_key else v.object_key end, f.content_type
+      from private.photos p
+      join private.stored_files f on f.id = p.file_id and f.status = 'ready'
+      left join private.photo_variants v on v.file_id = f.id and v.kind = p_variant
+      where p.id = p_photo_id and p.deleted_at is null
+        and p_variant in ('master', 'full', 'display', 'thumb')
+        and (p_variant = 'master' or v.object_key is not null)
+        and private.can_see_photo(p, v_user_id);
+  end
+  $$;
+
+-- Album membership ----------------------------------------------------------------------------------------
+
+-- Adds photos to an album (S35, extended): see can_add_photo_to_album. Photos the person may not add,
+-- in the trash or already in the album are skipped without telling which. Outcomes: 'saved' (with
+-- added and skipped), 'not_found', 'not_permitted', 'limit'.
+create or replace function public.add_photos_to_album(p_album_id uuid, p_photo_ids uuid[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_ids uuid[];
+    v_added integer;
+  begin
+    if p_album_id is null or p_photo_ids is null or pg_catalog.cardinality(p_photo_ids) < 1
+       or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_album from private.photo_albums a where a.id = p_album_id for update;
+    if not found or not private.can_see_photo_album(v_album, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_contribute_to_photo_album(v_album, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    select coalesce(pg_catalog.array_agg(p.id order by p.id), '{}') into v_ids
+      from private.photos p
+      where p.id = any (p_photo_ids)
+        and private.can_add_photo_to_album(v_album, p, v_user_id)
+        and not exists (select 1 from private.photo_album_items i
+          where i.album_id = v_album.id and i.photo_id = p.id);
+    if (select pg_catalog.count(*) from private.photo_album_items i where i.album_id = v_album.id)
+       + pg_catalog.cardinality(v_ids) > private.photo_limit('album_photos') then
+      return pg_catalog.jsonb_build_object('outcome', 'limit');
+    end if;
+    insert into private.photo_album_items (album_id, photo_id, added_by)
+      select v_album.id, u, v_user_id from pg_catalog.unnest(v_ids) u;
+    get diagnostics v_added = row_count;
+    perform private.audit_photo('photo_album.photos_added', v_album.owner_home_id, 'photo_album', v_album.id,
+      pg_catalog.jsonb_build_object('count', v_added));
+    return pg_catalog.jsonb_build_object('outcome', 'saved', 'added', v_added,
+      'skipped', pg_catalog.cardinality(p_photo_ids) - v_added);
+  end
+  $$;
+
+-- Takes photos out of an album ("Remove from this album"): the album's editor any photo, others the
+-- photos they added or may change. The photos themselves are never deleted by this. Outcomes: 'saved'
+-- (with removed), 'not_found', 'not_permitted' (nothing the person may remove was asked for).
+create or replace function public.remove_photos_from_album(p_album_id uuid, p_photo_ids uuid[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_removed integer;
+  begin
+    if p_album_id is null or p_photo_ids is null or pg_catalog.cardinality(p_photo_ids) < 1
+       or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_album from private.photo_albums a where a.id = p_album_id for update;
+    if not found or not private.can_see_photo_album(v_album, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    delete from private.photo_album_items i
+      using private.photos p
+      where i.album_id = v_album.id and i.photo_id = any (p_photo_ids) and p.id = i.photo_id
+        and private.can_remove_photo_from_album(v_album, p, i.added_by, v_user_id);
+    get diagnostics v_removed = row_count;
+    if v_removed = 0 and not private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+       v_album.created_by, v_user_id) and exists (
+         select 1 from private.photo_album_items i where i.album_id = v_album.id
+           and i.photo_id = any (p_photo_ids)) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    perform private.audit_photo('photo_album.photos_removed', v_album.owner_home_id, 'photo_album',
+      v_album.id, pg_catalog.jsonb_build_object('count', v_removed));
+    return pg_catalog.jsonb_build_object('outcome', 'saved', 'removed', v_removed);
+  end
+  $$;
+
+-- Deletes an album to the trash (S35, extended): every share ends first, so restoring the album never
+-- brings a share back. Its photos are untouched. Outcomes: 'deleted', 'stale', 'not_found',
+-- 'not_permitted'.
+create or replace function public.delete_photo_album(p_album_id uuid, p_expected_revision integer) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_home uuid;
+  begin
+    if p_album_id is null or p_expected_revision is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v_album := private.lock_photo_album(p_album_id, v_user_id);
+    if v_album.id is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_change_photo_item(v_album.owner_user_id, v_album.owner_home_id,
+      v_album.created_by, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    if v_album.revision <> p_expected_revision then
+      return pg_catalog.jsonb_build_object('outcome', 'stale', 'revision', v_album.revision);
+    end if;
+    for v_home in select s.home_id from private.photo_album_shares s where s.album_id = v_album.id
+      order by s.home_id loop
+      perform private.end_photo_album_share(v_album.id, v_home);
+    end loop;
+    update private.photo_albums a set deleted_at = pg_catalog.now(), revision = a.revision + 1
+      where a.id = v_album.id;
+    perform private.trash_move(v_user_id, 'photos', 'photo_album', v_album.id, v_album.owner_user_id,
+      v_album.owner_home_id, v_album.name);
+    perform private.audit_photo('photo_album.deleted', v_album.owner_home_id, 'photo_album', v_album.id);
+    return pg_catalog.jsonb_build_object('outcome', 'deleted');
+  end
+  $$;
+
+-- Sharing ---------------------------------------------------------------------------------------------------
+
+-- Shares an album with Homes, or changes their access: p_shares is a JSON array of { homeId, access }
+-- ('view' or 'contribute'), each a Home the person belongs to now and not the album's own. Only the
+-- album's sharer (see can_share_photo_album). All or nothing. Lowering contribute to view keeps what
+-- was added. Outcomes: 'saved' (with shareCount), 'not_found', 'not_permitted', 'limit'. 22023 for an
+-- invalid list.
+create function public.share_photo_album(p_album_id uuid, p_shares jsonb) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_item jsonb;
+    v_homes uuid[] := '{}';
+    v_home uuid;
+    v_count integer;
+  begin
+    if p_album_id is null or p_shares is null or pg_catalog.jsonb_typeof(p_shares) <> 'array'
+       or pg_catalog.jsonb_array_length(p_shares) < 1
+       or pg_catalog.jsonb_array_length(p_shares) > private.photo_limit('album_shares') then
+      raise exception 'invalid shares' using errcode = '22023';
+    end if;
+    for v_item in select * from pg_catalog.jsonb_array_elements(p_shares) loop
+      if pg_catalog.jsonb_typeof(v_item) <> 'object'
+         or coalesce(v_item ->> 'access', '') not in ('view', 'contribute')
+         or coalesce(v_item ->> 'homeId', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+        raise exception 'invalid shares' using errcode = '22023';
+      end if;
+      v_home := (v_item ->> 'homeId')::uuid;
+      if v_home = any (v_homes) then
+        raise exception 'invalid shares' using errcode = '22023';
+      end if;
+      v_homes := v_homes || v_home;
+    end loop;
+
+    v_album := private.lock_photo_album(p_album_id, v_user_id);
+    if v_album.id is null then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not private.can_share_photo_album(v_album, v_user_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    -- Every destination: a Home the person is in now, never the album's own.
+    if exists (select 1 from pg_catalog.unnest(v_homes) h
+        where h is not distinct from v_album.owner_home_id
+          or private.photo_access(h, v_user_id) is null) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    select pg_catalog.count(*) into v_count from (
+      select s.home_id from private.photo_album_shares s where s.album_id = v_album.id
+      union select h from pg_catalog.unnest(v_homes) h) x;
+    if v_count > private.photo_limit('album_shares') then
+      return pg_catalog.jsonb_build_object('outcome', 'limit');
+    end if;
+
+    insert into private.photo_album_shares (album_id, home_id, access, shared_by)
+      select v_album.id, (e ->> 'homeId')::uuid, e ->> 'access', v_user_id
+      from pg_catalog.jsonb_array_elements(p_shares) e
+      on conflict (album_id, home_id) do update
+        set access = excluded.access, updated_at = pg_catalog.now()
+        where private.photo_album_shares.access is distinct from excluded.access;
+    perform private.audit_photo('photo_album.shared', v_album.owner_home_id, 'photo_album', v_album.id,
+      pg_catalog.jsonb_build_object('homes', pg_catalog.cardinality(v_homes)));
+    return pg_catalog.jsonb_build_object('outcome', 'saved', 'shareCount', v_count);
+  end
+  $$;
+
+-- Ends an album's share with one Home ("Remove from this Home"): by the album's sharer, or by that
+-- Home's photo managers. Only the share and the memberships it allowed go; no photo of any library is
+-- deleted. Outcomes: 'removed', 'not_found', 'not_permitted'.
+create function public.unshare_photo_album(p_album_id uuid, p_home_id uuid) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+  begin
+    if p_album_id is null or p_home_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select * into v_album from private.photo_albums a where a.id = p_album_id for update;
+    if not found or not private.can_see_photo_album(v_album, v_user_id)
+       or not exists (select 1 from private.photo_album_shares s
+         where s.album_id = v_album.id and s.home_id = p_home_id) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_found');
+    end if;
+    if not (private.can_share_photo_album(v_album, v_user_id)
+        or coalesce(private.photo_access(p_home_id, v_user_id) = 'manage', false)) then
+      return pg_catalog.jsonb_build_object('outcome', 'not_permitted');
+    end if;
+    perform private.end_photo_album_share(v_album.id, p_home_id);
+    perform private.audit_photo('photo_album.unshared', v_album.owner_home_id, 'photo_album', v_album.id,
+      pg_catalog.jsonb_build_object('homeId', p_home_id));
+    return pg_catalog.jsonb_build_object('outcome', 'removed');
+  end
+  $$;
+
+-- Library deletion impact --------------------------------------------------------------------------------
+
+-- What deleting these photos from their library would affect, for the confirmation: how many the
+-- person may delete, their libraries, the albums the person can see that show them, the Homes the
+-- person belongs to that see them through a share, and whether albums or Homes the person cannot see
+-- are affected too (a flag, never a name or a count). Changes nothing.
+create function public.photo_deletion_impact(p_photo_ids uuid[]) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_ids uuid[];
+  begin
+    if p_photo_ids is null or pg_catalog.cardinality(p_photo_ids) < 1
+       or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('batch') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    select coalesce(pg_catalog.array_agg(p.id), '{}') into v_ids
+      from private.photos p
+      where p.id = any (p_photo_ids) and p.deleted_at is null
+        and private.can_see_photo_library(p.owner_user_id, p.owner_home_id, v_user_id)
+        and private.can_change_photo_item(p.owner_user_id, p.owner_home_id, p.created_by, v_user_id);
+    return pg_catalog.jsonb_build_object(
+      'deletable', pg_catalog.cardinality(v_ids),
+      'skipped', (select pg_catalog.count(distinct u) from pg_catalog.unnest(p_photo_ids) u) - pg_catalog.cardinality(v_ids),
+      'libraries', (
+        select coalesce(pg_catalog.jsonb_agg(x.lib order by x.lib ->> 'homeName' nulls first), '[]') from (
+          select distinct pg_catalog.jsonb_build_object('personal', p.owner_user_id is not null,
+            'homeName', private.photo_home_name(p.owner_home_id)) as lib
+          from private.photos p where p.id = any (v_ids)) x),
+      'albums', (
+        select coalesce(pg_catalog.jsonb_agg(distinct a.name), '[]')
+        from private.photo_album_items i
+        join private.photo_albums a on a.id = i.album_id
+        join private.photos p on p.id = i.photo_id
+        where i.photo_id = any (v_ids) and private.can_see_photo_album(a, v_user_id)
+          and private.photo_in_album_visible(a, p)),
+      'otherAlbums', exists (
+        select 1 from private.photo_album_items i
+        join private.photo_albums a on a.id = i.album_id and a.deleted_at is null
+        where i.photo_id = any (v_ids) and not private.can_see_photo_album(a, v_user_id)),
+      -- Homes that lose the photos: those an album shows them to through a share, and the Home
+      -- that owns an album of another library the photos were added to. Named when the person is in
+      -- them; otherwise only flagged (as is another person's personal album).
+      'sharedHomes', (
+        select coalesce(pg_catalog.jsonb_agg(distinct h.name), '[]')
+        from (
+          select s.home_id
+            from private.photo_album_items i
+            join private.photo_albums a on a.id = i.album_id and a.deleted_at is null
+            join private.photos p on p.id = i.photo_id
+            join private.photo_album_shares s on s.album_id = a.id
+            where i.photo_id = any (v_ids) and private.photo_in_album_visible(a, p)
+          union
+          select a.owner_home_id
+            from private.photo_album_items i
+            join private.photo_albums a on a.id = i.album_id and a.deleted_at is null
+            join private.photos p on p.id = i.photo_id
+            where i.photo_id = any (v_ids) and a.owner_home_id is distinct from p.owner_home_id
+              and private.photo_in_album_visible(a, p)
+        ) x
+        join public.homes h on h.id = x.home_id
+        where private.photo_access(x.home_id, v_user_id) is not null),
+      'otherHomes', exists (
+        select 1 from private.photo_album_items i
+        join private.photo_albums a on a.id = i.album_id and a.deleted_at is null
+        join private.photos p on p.id = i.photo_id
+        join private.photo_album_shares s on s.album_id = a.id
+        where i.photo_id = any (v_ids) and private.photo_in_album_visible(a, p)
+          and private.photo_access(s.home_id, v_user_id) is null)
+      or exists (
+        select 1 from private.photo_album_items i
+        join private.photo_albums a on a.id = i.album_id and a.deleted_at is null
+        join private.photos p on p.id = i.photo_id
+        where i.photo_id = any (v_ids) and private.photo_in_album_visible(a, p)
+          and ((a.owner_user_id is not null and a.owner_user_id is distinct from v_user_id)
+            or (a.owner_home_id is not null and a.owner_home_id is distinct from p.owner_home_id
+              and private.photo_access(a.owner_home_id, v_user_id) is null))));
+  end
+  $$;
+
+-- Photo widget --------------------------------------------------------------------------------------------
+
+-- The photos a photo widget shows to this viewer now, in the widget's context (p_home_id: a Home's
+-- dashboard or a Home-bound widget; null: the personal dashboard). Exactly one source: an album
+-- (the library's own or, for a Home, one shared with it; its newest 100 photos that still belong
+-- there) or hand-picked photos (kept in the chosen order; personal: the viewer's own photos; Home: the
+-- Home's photos or photos in its albums and albums shared with it). Never a substitute: 'available'
+-- false for an album the viewer cannot use here, 'missing' counts picked photos that cannot be shown.
+-- Null for a Home the viewer is not in. 22023 for an invalid source.
+create function public.resolve_photo_widget(p_home_id uuid, p_album_id uuid, p_photo_ids uuid[])
+returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_album private.photo_albums;
+    v_photos jsonb;
+    v_count integer;
+  begin
+    if (p_album_id is null) = (p_photo_ids is null)
+       or (p_photo_ids is not null and (pg_catalog.cardinality(p_photo_ids) < 1
+         or pg_catalog.cardinality(p_photo_ids) > private.photo_limit('widget_photos'))) then
+      raise exception 'invalid source' using errcode = '22023';
+    end if;
+    if p_home_id is not null and private.photo_access(p_home_id, v_user_id) is null then
+      return null;
+    end if;
+
+    if p_album_id is not null then
+      select * into v_album from private.photo_albums a where a.id = p_album_id;
+      if not found or not private.photo_album_in_context(v_album, p_home_id, v_user_id)
+         or not private.can_see_photo_album(v_album, v_user_id) then
+        return pg_catalog.jsonb_build_object('available', false, 'photos', '[]'::jsonb, 'missing', 0);
+      end if;
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', x.id, 'width', x.width, 'height', x.height) order by x.added_at desc, x.id), '[]')
+        into v_photos
+        from (
+          select p.id, p.width, p.height, i.added_at from private.photo_album_items i
+            join private.photos p on p.id = i.photo_id
+            where i.album_id = v_album.id and private.photo_in_album_visible(v_album, p)
+            order by i.added_at desc, p.id
+            limit private.photo_limit('widget_album')
+        ) x;
+      return pg_catalog.jsonb_build_object('available', true, 'photos', v_photos, 'missing', 0);
+    end if;
+
+    select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'id', p.id, 'width', p.width, 'height', p.height) order by x.position), '[]'),
+      pg_catalog.count(p.id)
+      into v_photos, v_count
+      from (select u.id, pg_catalog.min(u.position) as position
+            from pg_catalog.unnest(p_photo_ids) with ordinality as u(id, position) group by u.id) x
+      join private.photos p on p.id = x.id
+      where private.can_see_photo(p, v_user_id)
+        and case
+          when p_home_id is null then coalesce(p.owner_user_id = v_user_id, false)
+          else coalesce(p.owner_home_id = p_home_id, false) or exists (
+            select 1 from private.photo_album_items i
+            join private.photo_albums a on a.id = i.album_id
+            where i.photo_id = p.id
+              and private.photo_album_in_context(a, p_home_id, v_user_id)
+              and private.photo_in_album_visible(a, p))
+        end;
+    return pg_catalog.jsonb_build_object('available', true, 'photos', v_photos,
+      'missing', (select pg_catalog.count(distinct u) from pg_catalog.unnest(p_photo_ids) u) - v_count);
+  end
+  $$;
+
+-- Home exit ---------------------------------------------------------------------------------------------
+
+-- When someone leaves a Home (or is removed), the shares of their personal albums with that Home
+-- end: the Home no longer sees their personal photos, and they no longer see what that Home added.
+-- Their own photos stay theirs and the Home's stay the Home's; nothing is deleted.
+create function private.end_photo_shares_on_exit() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_album uuid;
+  begin
+    for v_album in
+      select s.album_id from private.photo_album_shares s
+        join private.photo_albums a on a.id = s.album_id
+        where s.home_id = old.home_id and a.owner_user_id = old.user_id
+        order by s.album_id
+    loop
+      perform private.end_photo_album_share(v_album, old.home_id);
+    end loop;
+    return old;
+  end
+  $$;
+
+create trigger home_memberships_end_photo_shares
+  after delete on public.home_memberships
+  for each row execute function private.end_photo_shares_on_exit();
+
+-- Grants --------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function regprocedure;
+begin
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'share_photo_album', 'unshare_photo_album', 'photo_deletion_impact', 'resolve_photo_widget'
+    )
+  loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+
+  -- Private helpers stay closed to the API roles (tests/db/rls/baseline.test.sql).
+  for v_function in
+    select p.oid::regprocedure from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname like '%photo%'
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+  end loop;
+end
+$$;
 ```
 
 ## Destructive reset: remove these migrations from the database
@@ -51526,7 +56141,7 @@ begin
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
-      and p.proname = any (array['abandon_my_upload', 'accept_ownership_recovery', 'acquire_recipe_lock', 'add_goal_entry', 'add_habit_contribution', 'add_shopping_items', 'add_subtask', 'add_task_comment', 'add_vacation_participants', 'adjust_personal_points', 'adjust_points', 'advance_all_pet_care', 'advance_chores', 'advance_habit_reminders', 'advance_reminder_series', 'advance_shopping', 'advance_task_series', 'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'archive_goal', 'archive_habit', 'archive_personal_reward', 'archive_reward', 'attach_pet_medical_file', 'attach_task_file', 'authorize_file_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'begin_recipe_import', 'bulk_chore_occurrences', 'bulk_update_tasks', 'calendar_notice_titles', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_goal_link_start', 'change_goal_series_target', 'change_goal_target', 'change_habit_schedule', 'change_habit_tracking', 'change_home_member_role', 'change_vacation_participation', 'claim_chore_occurrence', 'claim_job_outbox', 'claim_my_upload', 'clear_completed_shopping_items', 'complete_chore_occurrence', 'complete_habit', 'complete_job_outbox', 'complete_pet_care_occurrence', 'complete_storage_object_deletion', 'copy_meal_week', 'correct_chore_completion', 'correct_chore_volunteer_assignment', 'correct_pet_care_completion', 'count_pending_join_requests', 'create_calendar_event', 'create_chore', 'create_chore_category', 'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_goal', 'create_goal_link', 'create_goal_series', 'create_habit', 'create_home', 'create_home_invitation', 'create_home_vacation', 'create_meal_entry', 'create_meal_series', 'create_meal_slot', 'create_personal_reward', 'create_pet', 'create_pet_care', 'create_pet_medical_attachment_intent', 'create_pet_medical_entry', 'create_pet_photo_intent', 'create_recipe', 'create_recipe_cover_intent', 'create_reward', 'create_shopping_category', 'create_shopping_list', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_upload_intent', 'decide_chore_vacation_item', 'decide_join_request', 'delete_calendar_event', 'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_goal', 'delete_goal_series', 'delete_habit', 'delete_meal_entry', 'delete_pet', 'delete_pet_care', 'delete_pet_medical_entry', 'delete_recipe', 'delete_shopping_category', 'delete_shopping_item', 'delete_shopping_list', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_calendar_reminder', 'deliver_chore_reminder', 'deliver_goal_reminder', 'deliver_habit_pause_end', 'deliver_habit_reminder', 'deliver_habit_snooze', 'deliver_pet_care_reminder', 'deliver_recovery_ready', 'deliver_task_reminder', 'deliver_vacation_reminder', 'edit_meal_occurrence', 'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_upload', 'find_recipe_duplicates', 'finish_job_execution', 'get_calendar_event', 'get_calendar_upcoming', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence', 'get_chore_points', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_vacation_state', 'get_chore_volunteer_state', 'get_dashboard', 'get_goal', 'get_goal_entries', 'get_goal_events', 'get_goal_link_candidates', 'get_goal_links', 'get_goal_series', 'get_goal_series_periods', 'get_goals', 'get_habit', 'get_habit_calendar', 'get_habit_checkins', 'get_habit_contributions', 'get_habit_daily_totals', 'get_habit_events', 'get_habit_insights', 'get_habits', 'get_home_vacation', 'get_home_vacation_widget', 'get_invitation_email', 'get_meal_plan', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_personal_points', 'get_pet', 'get_pet_care', 'get_pet_care_activity', 'get_pet_medical', 'get_pet_medical_entry', 'get_point_leaderboard', 'get_point_summary', 'get_recipe', 'get_recipe_context', 'get_reward_redemption', 'get_shopping_context', 'get_shopping_list', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template', 'get_vacation_habits', 'get_weekly_points', 'goal_notice_names', 'habit_notice_names', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_absence_review', 'list_calendar', 'list_chore_absences', 'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_points', 'list_chore_pool', 'list_chore_proposals', 'list_chore_reassignment_requests', 'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_dashboard_templates', 'list_home_calendar_access', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests', 'list_home_pet_care', 'list_home_vacation_days', 'list_home_vacations', 'list_meal_recipes', 'list_my_join_requests', 'list_my_recipe_drafts', 'list_personal_reward_redemptions', 'list_personal_rewards', 'list_pet_medical_access', 'list_pets', 'list_point_accounts', 'list_point_entries', 'list_recipe_shares', 'list_recipe_tags', 'list_recipes', 'list_reward_redemptions', 'list_rewards', 'list_shopping_lists', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'list_vacation_review', 'mark_notifications_read', 'meal_slot_impact', 'move_meal_slot', 'move_shopping_category', 'move_shopping_item', 'move_shopping_list', 'move_task', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage', 'object_to_ownership_recovery', 'pause_habit', 'pet_care_notice_names', 'preview_chore_points_change', 'preview_home_invitation', 'preview_meal_copy', 'preview_meal_ingredients', 'preview_meal_series', 'propose_chore', 'publish_recipe', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'reactivate_habit', 'recipe_delete_impact', 'recipe_widget', 'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'redeem_personal_reward', 'redeem_reward', 'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'release_recipe_lock', 'remove_chore_reminder', 'remove_goal_link', 'remove_home_member', 'remove_pet_medical_attachment', 'remove_pet_photo', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_shopping_category', 'rename_subtask', 'renew_home_invitation', 'renew_recipe_lock', 'reopen_chore_occurrence', 'reopen_pet_care_occurrence', 'reorder_chore_categories', 'reorder_subtasks', 'reorder_task_lists', 'request_chore_reassignment', 'request_ownership_recovery', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'resolve_personal_reward_redemption', 'resolve_reward_redemption', 'respond_to_ownership_transfer', 'restore_meal_occurrence', 'restore_trash_entries', 'reverse_personal_point_entry', 'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission', 'review_reward_redemption', 'review_task_reminder', 'revoke_home_invitation', 'roll_goal_periods', 'save_chore_absence', 'save_dashboard', 'send_chore_summaries', 'set_administrator_capabilities', 'set_calendar_event_shares', 'set_calendar_preferences', 'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused', 'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_goal_achievement', 'set_goal_reminders', 'set_goal_series_state', 'set_habit_celebrations', 'set_habit_checkin_note', 'set_habit_day_note', 'set_habit_end', 'set_habit_quick_adds', 'set_habit_reminders', 'set_home_calendar_access', 'set_my_avatar', 'set_my_goal_reminders', 'set_my_habit_reminders', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_personal_reward_fulfillment', 'set_pet_care_state', 'set_pet_medical_access', 'set_pet_medical_details', 'set_pet_photo', 'set_recipe_favorite', 'set_recipe_rating', 'set_replacement_outcome', 'set_reward_fulfillment', 'set_shopping_item_completed', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'set_vacation_habit', 'share_dashboard_template', 'share_recipe', 'shopping_item_history', 'shopping_widget', 'skip_chore_occurrence', 'skip_meal_occurrence', 'skip_pet_care_occurrence', 'snooze_habit_reminder', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_ownership_transfer', 'start_shopping_recurrence', 'storage_stats', 'sync_goal_periods', 'task_attachment_scope_impact', 'task_reminder_titles', 'transfer_meal_ingredients', 'transfer_shopping_item', 'trash_stats', 'undo_dashboard_change', 'undo_habit_checkin', 'unshare_dashboard_template', 'unshare_recipe', 'update_calendar_event', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_goal', 'update_goal_entry', 'update_goal_series', 'update_goal_settings', 'update_habit', 'update_habit_contribution', 'update_habit_pause', 'update_habit_settings', 'update_home_vacation', 'update_meal_entry', 'update_meal_series', 'update_meal_settings', 'update_meal_slot', 'update_personal_reward', 'update_pet', 'update_pet_care', 'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences', 'update_point_settings', 'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence', 'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'])
+      and p.proname = any (array['abandon_my_upload', 'accept_ownership_recovery', 'acquire_recipe_lock', 'add_goal_entry', 'add_habit_contribution', 'add_photos_to_album', 'add_shopping_items', 'add_subtask', 'add_task_comment', 'add_vacation_participants', 'adjust_personal_points', 'adjust_points', 'advance_all_pet_care', 'advance_chores', 'advance_habit_reminders', 'advance_reminder_series', 'advance_shopping', 'advance_task_series', 'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'archive_goal', 'archive_habit', 'archive_personal_reward', 'archive_reward', 'attach_pet_medical_file', 'attach_task_file', 'authorize_file_read', 'authorize_photo_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'begin_recipe_import', 'bulk_chore_occurrences', 'bulk_update_tasks', 'calendar_notice_titles', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_goal_link_start', 'change_goal_series_target', 'change_goal_target', 'change_habit_schedule', 'change_habit_tracking', 'change_home_member_role', 'change_vacation_participation', 'claim_chore_occurrence', 'claim_job_outbox', 'claim_my_upload', 'clear_completed_shopping_items', 'complete_chore_occurrence', 'complete_habit', 'complete_job_outbox', 'complete_pet_care_occurrence', 'complete_storage_object_deletion', 'copy_meal_week', 'correct_chore_completion', 'correct_chore_volunteer_assignment', 'correct_pet_care_completion', 'count_pending_join_requests', 'create_calendar_event', 'create_chore', 'create_chore_category', 'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_goal', 'create_goal_link', 'create_goal_series', 'create_google_calendar_event', 'create_habit', 'create_home', 'create_home_invitation', 'create_home_vacation', 'create_meal_entry', 'create_meal_series', 'create_meal_slot', 'create_personal_reward', 'create_pet', 'create_pet_care', 'create_pet_medical_attachment_intent', 'create_pet_medical_entry', 'create_pet_photo_intent', 'create_photo_album', 'create_photo_intent', 'create_recipe', 'create_recipe_cover_intent', 'create_reward', 'create_shopping_category', 'create_shopping_list', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_upload_intent', 'decide_chore_vacation_item', 'decide_join_request', 'delete_calendar_event', 'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_goal', 'delete_goal_series', 'delete_google_calendar_event', 'delete_habit', 'delete_meal_entry', 'delete_pet', 'delete_pet_care', 'delete_pet_medical_entry', 'delete_photo_album', 'delete_photos', 'delete_recipe', 'delete_shopping_category', 'delete_shopping_item', 'delete_shopping_list', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_calendar_reminder', 'deliver_chore_reminder', 'deliver_goal_reminder', 'deliver_habit_pause_end', 'deliver_habit_reminder', 'deliver_habit_snooze', 'deliver_pet_care_reminder', 'deliver_recovery_ready', 'deliver_task_reminder', 'deliver_vacation_reminder', 'discard_google_calendar_change', 'disconnect_google_calendar', 'edit_meal_occurrence', 'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_photo', 'finalize_upload', 'find_recipe_duplicates', 'finish_job_execution', 'get_calendar_event', 'get_calendar_upcoming', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence', 'get_chore_points', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_vacation_state', 'get_chore_volunteer_state', 'get_dashboard', 'get_goal', 'get_goal_entries', 'get_goal_events', 'get_goal_link_candidates', 'get_goal_links', 'get_goal_series', 'get_goal_series_periods', 'get_goals', 'get_google_calendar_connection', 'get_google_calendar_event', 'get_habit', 'get_habit_calendar', 'get_habit_checkins', 'get_habit_contributions', 'get_habit_daily_totals', 'get_habit_events', 'get_habit_insights', 'get_habits', 'get_home_vacation', 'get_home_vacation_widget', 'get_invitation_email', 'get_meal_plan', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_personal_points', 'get_pet', 'get_pet_care', 'get_pet_care_activity', 'get_pet_medical', 'get_pet_medical_entry', 'get_photo', 'get_photo_upload_keys', 'get_point_leaderboard', 'get_point_summary', 'get_recipe', 'get_recipe_context', 'get_reward_redemption', 'get_shopping_context', 'get_shopping_list', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template', 'get_vacation_habits', 'get_weekly_points', 'goal_notice_names', 'google_push_changes', 'google_push_result', 'google_sync_apply_events', 'google_sync_begin', 'google_sync_calendars', 'google_sync_finish', 'google_sync_finish_calendar', 'habit_notice_names', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_absence_review', 'list_calendar', 'list_chore_absences', 'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_points', 'list_chore_pool', 'list_chore_proposals', 'list_chore_reassignment_requests', 'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_dashboard_templates', 'list_home_calendar_access', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests', 'list_home_pet_care', 'list_home_vacation_days', 'list_home_vacations', 'list_meal_recipes', 'list_my_join_requests', 'list_my_recipe_drafts', 'list_personal_reward_redemptions', 'list_personal_rewards', 'list_pet_medical_access', 'list_pets', 'list_photo_library', 'list_point_accounts', 'list_point_entries', 'list_recipe_shares', 'list_recipe_tags', 'list_recipes', 'list_reward_redemptions', 'list_rewards', 'list_shopping_lists', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'list_vacation_review', 'mark_notifications_read', 'meal_slot_impact', 'move_meal_slot', 'move_shopping_category', 'move_shopping_item', 'move_shopping_list', 'move_task', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage', 'object_to_ownership_recovery', 'pause_habit', 'pet_care_notice_names', 'photo_deletion_impact', 'preview_chore_points_change', 'preview_home_invitation', 'preview_meal_copy', 'preview_meal_ingredients', 'preview_meal_series', 'propose_chore', 'publish_recipe', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'queue_google_calendar_syncs', 'reactivate_habit', 'recipe_delete_impact', 'recipe_widget', 'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'redeem_personal_reward', 'redeem_reward', 'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'release_recipe_lock', 'remove_chore_reminder', 'remove_goal_link', 'remove_home_member', 'remove_pet_medical_attachment', 'remove_pet_photo', 'remove_photos_from_album', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_photo_album', 'rename_shopping_category', 'rename_subtask', 'renew_home_invitation', 'renew_recipe_lock', 'reopen_chore_occurrence', 'reopen_pet_care_occurrence', 'reorder_chore_categories', 'reorder_subtasks', 'reorder_task_lists', 'request_chore_reassignment', 'request_google_calendar_sync', 'request_ownership_recovery', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'resolve_google_calendar_conflict', 'resolve_personal_reward_redemption', 'resolve_photo_widget', 'resolve_reward_redemption', 'respond_to_ownership_transfer', 'restore_google_calendar_event', 'restore_meal_occurrence', 'restore_trash_entries', 'retry_google_calendar_change', 'reverse_personal_point_entry', 'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission', 'review_reward_redemption', 'review_task_reminder', 'revoke_home_invitation', 'roll_goal_periods', 'save_chore_absence', 'save_dashboard', 'save_google_calendar_connection', 'send_chore_summaries', 'set_administrator_capabilities', 'set_calendar_event_shares', 'set_calendar_preferences', 'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused', 'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_goal_achievement', 'set_goal_reminders', 'set_goal_series_state', 'set_google_calendar_settings', 'set_google_calendar_write_target', 'set_habit_celebrations', 'set_habit_checkin_note', 'set_habit_day_note', 'set_habit_end', 'set_habit_quick_adds', 'set_habit_reminders', 'set_home_calendar_access', 'set_my_avatar', 'set_my_goal_reminders', 'set_my_habit_reminders', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_personal_reward_fulfillment', 'set_pet_care_state', 'set_pet_medical_access', 'set_pet_medical_details', 'set_pet_photo', 'set_recipe_favorite', 'set_recipe_rating', 'set_replacement_outcome', 'set_reward_fulfillment', 'set_shopping_item_completed', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'set_vacation_habit', 'share_dashboard_template', 'share_photo_album', 'share_recipe', 'shopping_item_history', 'shopping_widget', 'skip_chore_occurrence', 'skip_meal_occurrence', 'skip_pet_care_occurrence', 'snooze_habit_reminder', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_ownership_transfer', 'start_shopping_recurrence', 'storage_stats', 'sync_goal_periods', 'task_attachment_scope_impact', 'task_reminder_titles', 'transfer_meal_ingredients', 'transfer_shopping_item', 'trash_stats', 'undo_dashboard_change', 'undo_habit_checkin', 'unshare_dashboard_template', 'unshare_photo_album', 'unshare_recipe', 'update_calendar_event', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_goal', 'update_goal_entry', 'update_goal_series', 'update_goal_settings', 'update_google_calendar_event', 'update_habit', 'update_habit_contribution', 'update_habit_pause', 'update_habit_settings', 'update_home_vacation', 'update_meal_entry', 'update_meal_series', 'update_meal_settings', 'update_meal_slot', 'update_personal_reward', 'update_pet', 'update_pet_care', 'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences', 'update_point_settings', 'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence', 'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'])
   loop
     execute format('drop function if exists %s cascade', routine.signature);
   end loop;
@@ -51554,7 +56169,7 @@ begin
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute
       'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000']::text[];
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000']::text[];
   end if;
 end
 $reset$;
