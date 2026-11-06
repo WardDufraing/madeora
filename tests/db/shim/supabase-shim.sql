@@ -89,7 +89,7 @@ grant all on auth.users to postgres;
 
 -- Supabase Auth's outstanding one-time links (reset, confirmation, email change).
 create table auth.one_time_tokens (
-  id uuid primary key default gen_random_uuid(),
+  id uuid primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
   token_type text not null,
   token_hash text not null,

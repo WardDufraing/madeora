@@ -1117,8 +1117,8 @@ select tests.assert_true(public.finish_account_recovery('wrong') = 'invalid', 'A
 select tests.act_as_owner();
 update auth.users set recovery_token = 'old-reset'
   where id = (select id from ids where name = 'rae');
-insert into auth.one_time_tokens (user_id, token_type, token_hash, relates_to)
-  values ((select id from ids where name = 'rae'), 'recovery_token', 'old-reset', 'rae@madeora.test');
+insert into auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to)
+  values (gen_random_uuid(), (select id from ids where name = 'rae'), 'recovery_token', 'old-reset', 'rae@madeora.test');
 select tests.act_as_anon();
 select tests.assert_true(
   public.finish_account_recovery(tests.sec_recovery_token((select id from ids where name = 'rae'), 'recovery_ready')) = 'completed',
