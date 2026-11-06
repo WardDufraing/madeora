@@ -43,6 +43,19 @@ export type InvitationEmailRead =
 
 export type EmailRecordStatus = "sent" | "failed" | "skipped" | "not_configured";
 
+/** What the security-email job (S37) reads: an email to a backup or new address, or 'skipped'. */
+export type SecurityEmailRead =
+  | {
+      readonly outcome: "ok";
+      readonly kind: "backup_verify" | "recovery_link" | "recovery_started" | "recovery_ready";
+      readonly to: string;
+      readonly locale: EmailLanguage;
+      /** The secret part of the link, or null for a notice without one; never logged. */
+      readonly token: string | null;
+      readonly expiresAt: Date | null;
+    }
+  | { readonly outcome: "skipped" };
+
 export interface JobDataPort {
   getNotificationEmail(notificationId: string): Promise<NotificationEmailRead>;
   /** False when the notification is no longer waiting for an email outcome. */
@@ -62,6 +75,15 @@ export interface JobDataPort {
     recoveryId: string,
     objectionEndsAt: Date,
   ): Promise<"notified" | "not_ready">;
+  /** security-email (S37). */
+  getSecurityEmail(emailId: string): Promise<SecurityEmailRead>;
+  /** False when the email was already recorded. Erases the link's secret. */
+  recordSecurityEmail(
+    emailId: string,
+    status: Exclude<EmailRecordStatus, "skipped">,
+  ): Promise<boolean>;
+  /** account-recovery-ready (S37): the end of a recovery's 72-hour wait. */
+  deliverAccountRecoveryReady(recoveryId: string, readyAt: Date): Promise<"notified" | "not_ready">;
   /**
    * task-reminder (S19b): delivers a reminder at its time. 'stale': a newer revision, or it is no
    * longer scheduled; 'not_sent': the task was completed or deleted, or nobody is left to remind.

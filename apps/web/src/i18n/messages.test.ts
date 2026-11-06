@@ -227,6 +227,32 @@ describe("message dictionaries", () => {
       ],
       // S34: an owner's Google event state on calendar lists.
       Calendar: withPrefix("googleState_", ["saving", "deleting", "conflict", "failed"]),
+      // S37: the two-factor actions' titles, and each session's device, by their values.
+      Security: [
+        ...["enroll", "disable", "regenerate"].flatMap((action) =>
+          ["Title", "Explanation", "Submit"].map((part) => action + part),
+        ),
+        ...withPrefix("browser.", [
+          "edge",
+          "chrome",
+          "firefox",
+          "safari",
+          "samsung",
+          "opera",
+          "other",
+        ]),
+        ...withPrefix("platform.", [
+          "windows",
+          "macos",
+          "ios",
+          "ipados",
+          "android",
+          "linux",
+          "chromeos",
+          "other",
+        ]),
+        ...withPrefix("kind.", ["phone", "tablet", "computer", "unknown"]),
+      ],
       Vacations: [
         ...withPrefix("status_", ["upcoming", "active", "ended", "cancelled"]),
         ...withPrefix("absence_", ["upcoming", "active", "ended"]),

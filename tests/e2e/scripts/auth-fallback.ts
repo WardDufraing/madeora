@@ -455,6 +455,27 @@ try {
       "A sign-in method was removed from your Madeora account",
     GOTRUE_MAILER_TEMPLATES_IDENTITY_LINKED_NOTIFICATION: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/identity-linked.html`,
     GOTRUE_MAILER_TEMPLATES_IDENTITY_UNLINKED_NOTIFICATION: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/identity-unlinked.html`,
+    // S37: authenticator-app two-factor sign-in, single-link email changes and the security
+    // emails for password, email and two-factor changes (as supabase/config.toml).
+    GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true",
+    GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true",
+    GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: "false",
+    GOTRUE_MAILER_SUBJECTS_EMAIL_CHANGE: "Confirm your new Madeora email address",
+    GOTRUE_MAILER_TEMPLATES_EMAIL_CHANGE: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/email-change.html`,
+    GOTRUE_MAILER_NOTIFICATIONS_PASSWORD_CHANGED_ENABLED: "true",
+    GOTRUE_MAILER_NOTIFICATIONS_EMAIL_CHANGED_ENABLED: "true",
+    GOTRUE_MAILER_NOTIFICATIONS_MFA_FACTOR_ENROLLED_ENABLED: "true",
+    GOTRUE_MAILER_NOTIFICATIONS_MFA_FACTOR_UNENROLLED_ENABLED: "true",
+    GOTRUE_MAILER_SUBJECTS_PASSWORD_CHANGED_NOTIFICATION: "Your Madeora password was changed",
+    GOTRUE_MAILER_SUBJECTS_EMAIL_CHANGED_NOTIFICATION: "Your Madeora account email was changed",
+    GOTRUE_MAILER_SUBJECTS_MFA_FACTOR_ENROLLED_NOTIFICATION:
+      "Two-factor sign-in was turned on for your Madeora account",
+    GOTRUE_MAILER_SUBJECTS_MFA_FACTOR_UNENROLLED_NOTIFICATION:
+      "Two-factor sign-in was turned off for your Madeora account",
+    GOTRUE_MAILER_TEMPLATES_PASSWORD_CHANGED_NOTIFICATION: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/password-changed.html`,
+    GOTRUE_MAILER_TEMPLATES_EMAIL_CHANGED_NOTIFICATION: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/email-changed.html`,
+    GOTRUE_MAILER_TEMPLATES_MFA_FACTOR_ENROLLED_NOTIFICATION: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/mfa-factor-enrolled.html`,
+    GOTRUE_MAILER_TEMPLATES_MFA_FACTOR_UNENROLLED_NOTIFICATION: `http://127.0.0.1:${String(GATEWAY_PORT)}/templates/mfa-factor-unenrolled.html`,
     // S08: Google through the stand-in, and manual linking (supabase/config.toml enables it too).
     GOTRUE_SECURITY_MANUAL_LINKING_ENABLED: "true",
     GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true",

@@ -6,6 +6,16 @@ import type { EmailLocale } from "./messages.ts";
  * evidence: who asked, who objected and why stay inside the app, visible to those entitled to it.
  */
 export const notificationKinds = [
+  "account.recovery_code_used",
+  "account.recovery_codes_regenerated",
+  "account.session_reported",
+  "account.signed_out_everywhere",
+  "account.device_trusted",
+  "account.backup_email_changed",
+  "account.backup_email_removed",
+  "account.account_recovery_codes_created",
+  "account.recovery_started",
+  "account.recovered",
   "recovery.claimant_review_started",
   "recovery.claimant_approved",
   "recovery.claimant_paused",
@@ -87,6 +97,77 @@ export interface NotificationEmailText {
 type Catalogue = Record<NotificationEmailKind, NotificationEmailText>;
 
 const en: Catalogue = {
+  "account.device_trusted": {
+    subject: "A device was trusted on your Madeora account",
+    preview: "Sign-ins there skip the authenticator code for 30 days.",
+    heading: "A device is now trusted",
+    body: "A browser was marked as trusted after a sign-in with your authenticator. For 30 days, signing in there skips the code; changes to your security settings still ask for it. If this wasn't you, revoke the trust and change your password.",
+    button: "Review devices",
+  },
+  "account.backup_email_changed": {
+    subject: "Your Madeora backup email address was confirmed",
+    preview: "It can now be used to recover your account.",
+    heading: "Backup email address confirmed",
+    body: "A backup email address was confirmed for your Madeora account. It is only used to recover the account if you lose access to this address. If you didn't do this, change your password and review account security.",
+    button: "Review account security",
+  },
+  "account.backup_email_removed": {
+    subject: "Your Madeora backup email address was removed",
+    preview: "It can no longer be used to recover your account.",
+    heading: "Backup email address removed",
+    body: "The backup email address of your Madeora account was removed. If you didn't do this, change your password and review account security.",
+    button: "Review account security",
+  },
+  "account.account_recovery_codes_created": {
+    subject: "New account recovery codes for your Madeora account",
+    preview: "Any previous account recovery codes no longer work.",
+    heading: "Account recovery codes created",
+    body: "New account recovery codes were created for your Madeora account, and any previous ones no longer work. If you didn't do this, change your password and review account security.",
+    button: "Review account security",
+  },
+  "account.recovery_started": {
+    subject: "Someone started recovering your Madeora account",
+    preview: "If this wasn't you, stop it in Settings › Security.",
+    heading: "Account recovery started",
+    body: "Someone used your backup email address and an account recovery code to start recovering your Madeora account. In 72 hours, the backup address can become your sign-in address and every device will be signed out. If this wasn't you, sign in and stop the recovery under Settings › Security, then change your password and create new recovery codes.",
+    button: "Stop or review the recovery",
+  },
+  "account.recovered": {
+    subject: "Your Madeora account was recovered",
+    preview: "Your backup address is now your sign-in address.",
+    heading: "Account recovered",
+    body: "Your Madeora account was recovered: the backup email address is now your sign-in address, every device was signed out and your recovery codes were reset. Set a new password through the reset email, then add a new backup address and recovery codes.",
+    button: "Review account security",
+  },
+  // S37: security notices about the account itself. No device, place, address or code is named.
+  "account.recovery_code_used": {
+    subject: "A recovery code was used to sign in to your Madeora account",
+    preview: "Two-factor sign-in was turned off.",
+    heading: "A recovery code was used to sign in",
+    body: "Someone signed in to your Madeora account with your password and one of your two-factor recovery codes. The authenticator was removed, your other devices were signed out and two-factor sign-in is now off. If this was you, set it up again. If it wasn't, change your password now and review your devices.",
+    button: "Review account security",
+  },
+  "account.recovery_codes_regenerated": {
+    subject: "New two-factor recovery codes for your Madeora account",
+    preview: "Your previous recovery codes no longer work.",
+    heading: "Your recovery codes were replaced",
+    body: "New two-factor recovery codes were created for your Madeora account, and the previous ones no longer work. If you didn't do this, change your password and review your devices.",
+    button: "Review account security",
+  },
+  "account.session_reported": {
+    subject: "A session was reported as suspicious on your Madeora account",
+    preview: "It was signed out.",
+    heading: "A suspicious session was signed out",
+    body: "A session of your Madeora account was reported as suspicious and signed out. To protect your account, change your password, check two-factor sign-in and review your other devices.",
+    button: "Secure my account",
+  },
+  "account.signed_out_everywhere": {
+    subject: "Your Madeora account was signed out everywhere",
+    preview: "Every device needs to sign in again.",
+    heading: "Signed out on every device",
+    body: "Every device signed in to your Madeora account was signed out. If you didn't do this, change your password and review account security.",
+    button: "Review account security",
+  },
   "recovery.claimant_review_started": {
     subject: "Madeora started reviewing your ownership request for {home}",
     preview: "Nothing changes until the review is finished.",
@@ -552,6 +633,76 @@ const en: Catalogue = {
 };
 
 const nl: Catalogue = {
+  "account.device_trusted": {
+    subject: "Er is een apparaat vertrouwd voor je Madeora-account",
+    preview: "Inloggen daar slaat de code van de authenticator 30 dagen over.",
+    heading: "Een apparaat wordt nu vertrouwd",
+    body: "Een browser is als vertrouwd gemarkeerd na inloggen met je authenticator. Inloggen daar slaat de code 30 dagen over; wijzigingen in je beveiligingsinstellingen vragen er nog steeds om. Was jij dit niet, trek het vertrouwen dan in en wijzig je wachtwoord.",
+    button: "Apparaten bekijken",
+  },
+  "account.backup_email_changed": {
+    subject: "Je reserve-e-mailadres voor Madeora is bevestigd",
+    preview: "Het kan nu worden gebruikt om je account te herstellen.",
+    heading: "Reserve-e-mailadres bevestigd",
+    body: "Er is een reserve-e-mailadres bevestigd voor je Madeora-account. Het wordt alleen gebruikt om het account te herstellen als je geen toegang meer hebt tot dit adres. Heb jij dit niet gedaan, wijzig dan je wachtwoord en bekijk je accountbeveiliging.",
+    button: "Accountbeveiliging bekijken",
+  },
+  "account.backup_email_removed": {
+    subject: "Je reserve-e-mailadres voor Madeora is verwijderd",
+    preview: "Het kan niet meer worden gebruikt om je account te herstellen.",
+    heading: "Reserve-e-mailadres verwijderd",
+    body: "Het reserve-e-mailadres van je Madeora-account is verwijderd. Heb jij dit niet gedaan, wijzig dan je wachtwoord en bekijk je accountbeveiliging.",
+    button: "Accountbeveiliging bekijken",
+  },
+  "account.account_recovery_codes_created": {
+    subject: "Nieuwe accountherstelcodes voor je Madeora-account",
+    preview: "Eventuele vorige accountherstelcodes werken niet meer.",
+    heading: "Accountherstelcodes gemaakt",
+    body: "Er zijn nieuwe accountherstelcodes gemaakt voor je Madeora-account; eventuele vorige werken niet meer. Heb jij dit niet gedaan, wijzig dan je wachtwoord en bekijk je accountbeveiliging.",
+    button: "Accountbeveiliging bekijken",
+  },
+  "account.recovery_started": {
+    subject: "Iemand is begonnen je Madeora-account te herstellen",
+    preview: "Was jij dit niet? Stop het via Instellingen › Beveiliging.",
+    heading: "Accountherstel gestart",
+    body: "Iemand heeft je reserve-e-mailadres en een accountherstelcode gebruikt om je Madeora-account te herstellen. Over 72 uur kan het reserveadres je aanmeldadres worden en worden alle apparaten uitgelogd. Was jij dit niet, meld je dan aan, stop het herstel onder Instellingen › Beveiliging, wijzig je wachtwoord en maak nieuwe herstelcodes.",
+    button: "Herstel stoppen of bekijken",
+  },
+  "account.recovered": {
+    subject: "Je Madeora-account is hersteld",
+    preview: "Je reserveadres is nu je aanmeldadres.",
+    heading: "Account hersteld",
+    body: "Je Madeora-account is hersteld: het reserve-e-mailadres is nu je aanmeldadres, alle apparaten zijn uitgelogd en je herstelcodes zijn gewist. Stel via de herstel-e-mail een nieuw wachtwoord in en voeg daarna een nieuw reserveadres en nieuwe herstelcodes toe.",
+    button: "Accountbeveiliging bekijken",
+  },
+  "account.recovery_code_used": {
+    subject: "Er is een herstelcode gebruikt om in te loggen op je Madeora-account",
+    preview: "Inloggen in twee stappen is uitgeschakeld.",
+    heading: "Er is ingelogd met een herstelcode",
+    body: "Iemand heeft ingelogd op je Madeora-account met je wachtwoord en een van je herstelcodes. De authenticator is verwijderd, je andere apparaten zijn uitgelogd en inloggen in twee stappen staat nu uit. Was jij dit, stel het dan opnieuw in. Was jij het niet, wijzig dan nu je wachtwoord en controleer je apparaten.",
+    button: "Accountbeveiliging bekijken",
+  },
+  "account.recovery_codes_regenerated": {
+    subject: "Nieuwe herstelcodes voor je Madeora-account",
+    preview: "Je vorige herstelcodes werken niet meer.",
+    heading: "Je herstelcodes zijn vervangen",
+    body: "Er zijn nieuwe herstelcodes voor inloggen in twee stappen gemaakt voor je Madeora-account. De vorige werken niet meer. Heb jij dit niet gedaan, wijzig dan je wachtwoord en controleer je apparaten.",
+    button: "Accountbeveiliging bekijken",
+  },
+  "account.session_reported": {
+    subject: "Een sessie van je Madeora-account is als verdacht gemeld",
+    preview: "Ze is uitgelogd.",
+    heading: "Een verdachte sessie is uitgelogd",
+    body: "Een sessie van je Madeora-account is als verdacht gemeld en uitgelogd. Bescherm je account: wijzig je wachtwoord, controleer inloggen in twee stappen en bekijk je andere apparaten.",
+    button: "Mijn account beveiligen",
+  },
+  "account.signed_out_everywhere": {
+    subject: "Je Madeora-account is overal uitgelogd",
+    preview: "Elk apparaat moet opnieuw inloggen.",
+    heading: "Uitgelogd op alle apparaten",
+    body: "Alle apparaten waarop je Madeora-account was ingelogd, zijn uitgelogd. Heb jij dit niet gedaan, wijzig dan je wachtwoord en bekijk je accountbeveiliging.",
+    button: "Accountbeveiliging bekijken",
+  },
   "recovery.claimant_review_started": {
     subject: "Madeora begon je eigenaarschapsverzoek voor {home} te controleren",
     preview: "Er verandert niets tot de controle klaar is.",

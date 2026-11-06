@@ -37,6 +37,20 @@ create function tests.user_id(name text) returns uuid
   $$;
 
 -- Act as a signed-in user, as the Data API does for a request carrying that user's JWT.
+-- The standing test session of a user (S37), the same id every time.
+create function tests.session_id(p_user_id uuid) returns uuid
+  language sql immutable
+  as $$ select md5('madeora-test-session:' || p_user_id::text)::uuid $$;
+
+create function tests.ensure_session(p_user_id uuid) returns void
+  language sql security definer set search_path = ''
+  as $$
+    insert into auth.sessions (id, user_id, created_at, updated_at, aal)
+      select tests.session_id(p_user_id), u.id, now(), now(), 'aal1'
+      from auth.users u where u.id = p_user_id
+      on conflict (id) do nothing
+  $$;
+
 create function tests.act_as_user(user_id uuid) returns void
   language plpgsql
   as $$
@@ -44,10 +58,14 @@ create function tests.act_as_user(user_id uuid) returns void
     if user_id is null then
       raise exception 'tests.act_as_user: user_id must not be null';
     end if;
+    -- A real access token always names its session, and S37's checks refuse a token whose session
+    -- is gone, so each test user acts in one standing session of their own.
+    perform tests.ensure_session(user_id);
     perform set_config('role', 'authenticated', true);
     perform set_config(
       'request.jwt.claims',
-      jsonb_build_object('sub', user_id, 'role', 'authenticated', 'aud', 'authenticated')::text,
+      jsonb_build_object('sub', user_id, 'role', 'authenticated', 'aud', 'authenticated',
+                         'session_id', tests.session_id(user_id))::text,
       true
     );
   end

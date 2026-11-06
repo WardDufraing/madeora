@@ -24,6 +24,7 @@ import type {
   JobDataPort,
   JobServices,
   NotificationEmailRead,
+  SecurityEmailRead,
   CalendarReminderOutcome,
   PetCareReminderOutcome,
   StoredFileStatus,
@@ -41,6 +42,11 @@ export class FakeJobData implements JobDataPort {
     [];
   readonly invitationRecords: { id: string; send: number; status: EmailRecordStatus }[] = [];
   readonly readyCalls: { recoveryId: string; endsAt: Date }[] = [];
+  /** Security emails (S37). */
+  securityEmail: SecurityEmailRead = { outcome: "skipped" };
+  readonly securityRecords: { id: string; status: EmailRecordStatus }[] = [];
+  accountRecoveryOutcome: "notified" | "not_ready" = "not_ready";
+  readonly accountRecoveryCalls: { recoveryId: string; readyAt: Date }[] = [];
   /** Reminders (S19b): what delivery answers, the calls, and how many occurrences an advance makes. */
   reminderOutcome: TaskReminderOutcome = "notified";
   readonly reminderCalls: { taskId: string; revision: number }[] = [];
@@ -143,6 +149,26 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.invitationRecords.push({ id, send, status });
     return Promise.resolve(true);
+  }
+
+  getSecurityEmail(): Promise<SecurityEmailRead> {
+    this.check();
+    return Promise.resolve(this.securityEmail);
+  }
+
+  recordSecurityEmail(id: string, status: EmailRecordStatus): Promise<boolean> {
+    this.check();
+    this.securityRecords.push({ id, status });
+    return Promise.resolve(true);
+  }
+
+  deliverAccountRecoveryReady(
+    recoveryId: string,
+    readyAt: Date,
+  ): Promise<"notified" | "not_ready"> {
+    this.check();
+    this.accountRecoveryCalls.push({ recoveryId, readyAt });
+    return Promise.resolve(this.accountRecoveryOutcome);
   }
 
   deliverRecoveryReady(recoveryId: string, endsAt: Date): Promise<"notified" | "not_ready"> {

@@ -3,9 +3,9 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
-import { getVerifiedIdentity } from "@/auth/identity";
+import { getAuthState } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
-import { safeNextPath } from "@/auth/redirects";
+import { safeNextPath, twoFactorPath } from "@/auth/redirects";
 import { AnnounceSignedOut } from "@/components/auth/announce-signed-out";
 import { FormAlert } from "@/components/auth/form-alert";
 import { GoogleSignIn, SignInDivider } from "@/components/auth/google-sign-in";
@@ -26,8 +26,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
   const next = safeNextPath(typeof params.next === "string" ? params.next : undefined);
-  const identity = await getVerifiedIdentity();
-  if (identity) redirect(next);
+  const state = await getAuthState();
+  if (state.kind === "signed-in") redirect(next);
+  // Signed in with the first step only: the second step comes next (S37).
+  if (state.kind === "second-factor") redirect(twoFactorPath(next));
 
   const [t, googleEnabled] = await Promise.all([getTranslations("Auth"), isGoogleSignInEnabled()]);
   return (

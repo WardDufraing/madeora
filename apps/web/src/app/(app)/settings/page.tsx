@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
 import { describeSignInMethods } from "@/auth/sign-in-methods";
+import { verifiedTotpFactor } from "@/auth/two-factor";
 import { FormAlert } from "@/components/auth/form-alert";
 import { AccentSetting } from "@/components/settings/accent-setting";
 import { DisplayNameSetting } from "@/components/settings/display-name-setting";
@@ -131,6 +132,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               <SignInMethodsSetting
                 userId={userId}
                 methods={describeSignInMethods(user)}
+                twoFactor={verifiedTotpFactor(user) !== null}
                 googleAvailable={googleEnabled}
                 notice={
                   params.linked === "google"
@@ -143,6 +145,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             </Card>
           </div>
         ) : null}
+        <Card title={t("securityTitle")} description={t("securityHint")}>
+          <Link
+            href="/settings/security"
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="security-link"
+          >
+            {t("securityLink")}
+          </Link>
+        </Card>
         <Card title={t("notificationsTitle")} description={t("notificationsHint")}>
           <Link
             href="/settings/notifications"

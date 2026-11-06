@@ -229,7 +229,12 @@ web3 = 30
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
-double_confirm_changes = true
+# Off (S37, spec "Confirmed secure self-service primary account email changes"): access to the old
+# inbox is not required, because people lose it. The old address is told afterwards
+# ([auth.email.notification.email_changed]), and the database requires recent reauthentication
+# before a change can start. Keep the hosted projects' "Secure email change" off too
+# (docs/adult-security-setup.md).
+double_confirm_changes = false
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
@@ -261,6 +266,11 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Reset your Madeora password"
 content_path = "./supabase/templates/recovery.html"
 
+# S37: the single link to a new account email (docs/adult-security-setup.md).
+[auth.email.template.email_change]
+subject = "Confirm your new Madeora email address"
+content_path = "./supabase/templates/email-change.html"
+
 # Security emails when a sign-in method is linked or unlinked (S08, spec: notify through verified
 # account channels). Keep the hosted projects' identical (docs/google-sign-in-setup.md).
 [auth.email.notification.identity_linked]
@@ -273,11 +283,28 @@ enabled = true
 subject = "A sign-in method was removed from your Madeora account"
 content_path = "./supabase/templates/identity-unlinked.html"
 
-# Uncomment to customize notification email template
-# [auth.email.notification.password_changed]
-# enabled = true
-# subject = "Your password has been changed"
-# content_path = "./supabase/templates/password_changed_notification.html"
+# Security emails for password, email and two-factor changes (S37, spec: notify through verified
+# account channels; the email change notice goes to the old address). Keep the hosted projects'
+# identical (docs/adult-security-setup.md).
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Your Madeora password was changed"
+content_path = "./supabase/templates/password-changed.html"
+
+[auth.email.notification.email_changed]
+enabled = true
+subject = "Your Madeora account email was changed"
+content_path = "./supabase/templates/email-changed.html"
+
+[auth.email.notification.mfa_factor_enrolled]
+enabled = true
+subject = "Two-factor sign-in was turned on for your Madeora account"
+content_path = "./supabase/templates/mfa-factor-enrolled.html"
+
+[auth.email.notification.mfa_factor_unenrolled]
+enabled = true
+subject = "Two-factor sign-in was turned off for your Madeora account"
+content_path = "./supabase/templates/mfa-factor-unenrolled.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
@@ -320,15 +347,17 @@ message_service_sid = ""
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
 auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
-# Multi-factor-authentication is available to Supabase Pro plan.
+# Optional adult two-factor sign-in (S37): authenticator apps (TOTP) only, which are free on every
+# Supabase plan. Phone MFA is a paid add-on and stays off. The database adds per-account attempt
+# limits and enforces when a factor may be added or removed (20261123090000_adult_security.sql).
 [auth.mfa]
 # Control how many MFA factors can be enrolled at once per user.
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

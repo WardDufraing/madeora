@@ -6,9 +6,12 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { isAuthError } from "@supabase/supabase-js";
+
 import { classifyAuthError, type AuthFailure } from "@/auth/auth-errors";
 import { announceSignedOut } from "@/auth/broadcast";
-import { newPasswordSchema, type NewPasswordValues } from "@/auth/schemas";
+import { newPasswordSchema, totpCode, type NewPasswordValues } from "@/auth/schemas";
+import { classifyTwoFactorError } from "@/auth/two-factor";
 import { getMemoryOnlySupabaseClient } from "@/auth/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,6 +37,8 @@ type Stage = "form" | "signOutFailed" | "done";
  * 2. The new password is saved. Supabase Auth signs out every other session of the account in the
  *    same step (it does so for any password change made from a session; re-check on Supabase
  *    upgrades, which the E2E suite does).
+ *    An account with two-factor sign-in (S37) also needs a code from its authenticator first:
+ *    Supabase Auth refuses the change until the reset session has passed it.
  * 3. The reset session itself is then ended too (`scope: global`, which also catches any session
  *    created in between), and the person signs in again. If that fails, the page says so and
  *    offers a retry; it never reports success.
@@ -47,6 +52,10 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
   const [verified, setVerified] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const tSecurity = useTranslations("Security");
   const form = useForm<NewPasswordValues>({
     resolver: zodResolver(newPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
@@ -79,8 +88,34 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
       }
       setVerified(true);
     }
+    if (needsCode) {
+      const parsed = totpCode.safeParse(code);
+      if (!parsed.success) {
+        setCodeError(messages.field(parsed.error.issues[0]?.message) ?? null);
+        return;
+      }
+      setCodeError(null);
+      const { data } = await auth.mfa.listFactors();
+      const factor = data?.totp[0]; // Supabase lists only verified TOTP factors here.
+      const { error: verifyError } = factor
+        ? await auth.mfa.challengeAndVerify({ factorId: factor.id, code: parsed.data })
+        : { error: null };
+      if (verifyError) {
+        setCode("");
+        setCodeError(
+          classifyTwoFactorError(verifyError) === "wrongCode"
+            ? tSecurity("wrongCode")
+            : tSecurity("codeTryLater"),
+        );
+        return;
+      }
+    }
     const { error } = await auth.updateUser({ password: values.password });
     if (error) {
+      if (isAuthError(error) && error.code === "insufficient_aal") {
+        setNeedsCode(true);
+        return;
+      }
       setFailure(classifyAuthError(error));
       return;
     }
@@ -159,6 +194,21 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
         error={messages.field(errors.confirmPassword?.message)}
         {...form.register("confirmPassword")}
       />
+      {needsCode ? (
+        <TextField
+          label={tSecurity("authenticatorCode")}
+          description={tSecurity("resetNeedsCode")}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={9}
+          required
+          value={code}
+          error={codeError ?? undefined}
+          onChange={(event) => {
+            setCode(event.target.value);
+          }}
+        />
+      ) : null}
       <Checkbox
         label={t("showPassword")}
         checked={showPassword}

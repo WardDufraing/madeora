@@ -21,8 +21,15 @@ export {
   renderHomeInvitationEmail,
   renderNotificationEmail,
   renderOwnershipRecoveryEmail,
+  renderSecurityEmail,
   type RenderedEmail,
 } from "./render.ts";
+export {
+  SecurityEmail,
+  securityEmailMessages,
+  type SecurityEmailKind,
+  type SecurityEmailProps,
+} from "./security-email.tsx";
 export {
   createMailpitTransport,
   createResendTransport,

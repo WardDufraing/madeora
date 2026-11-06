@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import type { AuthFailure } from "@/auth/auth-errors";
-import type { AuthFieldError } from "@/auth/schemas";
+import type { AuthFieldError, TwoFactorFieldError } from "@/auth/schemas";
 
 /** Translated texts for validation errors (from the Zod schemas) and Supabase Auth failures. */
 export function useAuthMessages(): {
@@ -11,7 +11,7 @@ export function useAuthMessages(): {
   readonly failure: (key: AuthFailure) => string;
 } {
   const t = useTranslations("Auth");
-  const fields: Record<AuthFieldError, string> = {
+  const fields: Record<AuthFieldError | TwoFactorFieldError, string> = {
     emailRequired: t("emailRequired"),
     emailInvalid: t("emailInvalid"),
     passwordRequired: t("passwordRequired"),
@@ -19,6 +19,10 @@ export function useAuthMessages(): {
     passwordTooLong: t("passwordTooLong"),
     passwordIsEmail: t("passwordIsEmail"),
     passwordsDiffer: t("passwordsDiffer"),
+    emailUnchanged: t("emailUnchanged"),
+    codeRequired: t("codeRequired"),
+    codeInvalid: t("codeInvalid"),
+    recoveryCodeInvalid: t("recoveryCodeInvalid"),
   };
   const failures: Record<AuthFailure, string> = {
     invalidCredentials: t("invalidCredentials"),
@@ -35,7 +39,7 @@ export function useAuthMessages(): {
   return {
     field: (key) => {
       if (key === undefined) return undefined;
-      return key in fields ? fields[key as AuthFieldError] : failures.unknown;
+      return key in fields ? fields[key as AuthFieldError | TwoFactorFieldError] : failures.unknown;
     },
     failure: (key) => failures[key],
   };

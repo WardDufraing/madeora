@@ -14,6 +14,7 @@ const reauth = {
   rpc: vi.fn(),
 };
 const main = {
+  getSession: vi.fn(),
   linkIdentity: vi.fn(),
   getUserIdentities: vi.fn(),
   unlinkIdentity: vi.fn(),
@@ -45,6 +46,10 @@ beforeEach(() => {
   reauth.signOut.mockResolvedValue({ error: null });
   reauth.rpc.mockResolvedValue({ data: "2026-10-14T12:10:00Z", error: null });
   main.linkIdentity.mockResolvedValue({ data: { url: "https://google.test" }, error: null });
+  // The browser's own session (S37 binds the permission to it).
+  main.getSession.mockResolvedValue({
+    data: { session: { access_token: `h.${btoa(JSON.stringify({ session_id: "s-main" }))}.s` } },
+  });
   vi.stubGlobal("location", { origin: "http://localhost", assign });
   window.sessionStorage.clear();
 });
@@ -80,6 +85,7 @@ describe("SignInMethodsSetting", () => {
     expect(reauth.rpc).toHaveBeenCalledWith("authorize_sign_in_method_change", {
       p_action: "link",
       p_provider: "google",
+      p_main_session_id: "s-main",
     });
     // The extra session is ended locally; the browser's own session is never touched.
     expect(reauth.signOut).toHaveBeenCalledWith({ scope: "local" });
@@ -141,6 +147,7 @@ describe("SignInMethodsSetting", () => {
     expect(reauth.rpc).toHaveBeenCalledWith("authorize_sign_in_method_change", {
       p_action: "unlink",
       p_provider: "google",
+      p_main_session_id: "s-main",
     });
     expect(main.unlinkIdentity).toHaveBeenCalledWith({ provider: "google", identity_id: "g-1" });
     expect(assign).toHaveBeenCalledWith(
