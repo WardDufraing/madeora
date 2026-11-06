@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 5 November 2026
+**Last reviewed:** 6 November 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
@@ -390,6 +390,32 @@ As a person, I want my own calendar and a calendar for each Home, so I can plan 
 - In a Home every member may add and change events; who may also delete them is set per member. The calendar shows the Home's vacations as banners I can hide, and Show tasks and Show chores lay tasks and chores over it, remembered for each calendar.
 - The Upcoming events widget shows the next events of my personal space or a Home.
 
+### US-037 — Connect and safely synchronize Google Calendar
+
+As a person, I want to connect chosen Google calendars and optionally show them in selected Homes, so I can coordinate existing events without exposing calendars I kept private.
+
+**Acceptance checks**
+
+- I can connect one Google account, choose which calendars synchronize, show chosen calendars in my Personal calendar and share chosen calendars with selected Homes; an unshared calendar reveals no event, busy time, name, count or sync state.
+- Google events marked private or confidential remain visible only to me, even when their calendar is shared with a Home. Other current Home members see allowed shared events read-only and see who shared them.
+- Sync uses the connected account only, reports syncing, stale, failed or expired authorization honestly, supports Sync now with rate limiting, and lets me reconnect without exposing or losing the stored event view.
+- For a Google calendar I may write to, I can create, edit or delete events from Madeora. Pending changes are visible until Google accepts them, retries are idempotent, and an external conflict waits for my explicit choice between the Madeora and Google versions.
+- Removing a Google event from Madeora hides it without deleting it from Google and can be restored; Delete everywhere removes it through Google. Recurring changes use the supported occurrence, this-and-following or whole-series scope.
+- OAuth state, refresh tokens and token encryption remain server-only; calendar access and changes never cross accounts or Homes.
+
+### US-038 — Keep and selectively share photo memories
+
+As a person or Home member, I want private photo libraries and albums that I can share deliberately, so memories are easy to revisit without weakening storage or Home boundaries.
+
+**Acceptance checks**
+
+- I can upload supported images to my Personal library, and authorized members can upload to a Home library. The app validates and processes the image into its private optimized master and derivatives, applies orientation, refuses corrupt content and does not retain the original upload.
+- Photos count against the correct Personal or Home storage allowance. I can place one photo in several albums without duplicating it, and removing it from an album does not delete it from the library.
+- Home photo-management actions respect the delegated capability. Personal photos remain private unless an album containing them is explicitly shared through the supported workflow.
+- An album can be shared with another Home as view-only or with contribution access without copying its photos. The destination learns only the shared album; leaving, removing the share or choosing Remove from this Home ends access without deleting the source photos.
+- Library deletion shows the affected albums and shares before confirmation. Trash, restore and permanent deletion retain the original context and permissions, and storage objects remain accessible only through authorized signed reads.
+- The Photos widget rechecks access for each viewer and can show an allowed photo, selected photos or an album as a static image or slideshow.
+
 ## 10. Notifications
 
 ### US-015 — Review and configure notifications
@@ -445,9 +471,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet and calendar workflows
+## Implementation evidence for chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 
