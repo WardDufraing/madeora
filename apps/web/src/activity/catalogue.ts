@@ -67,6 +67,10 @@ export const ACTIVITY_KINDS = {
     "security_alerts_changed",
     "google_sign_in_linked",
     "google_sign_in_unlinked",
+    "account_deactivated",
+    "account_reactivated",
+    "inactivity_reminder_sent",
+    "security_review_completed",
     "ownership_recovery",
   ],
   // Privacy events (privacy dashboard, guided review) arrive with S39.
@@ -84,6 +88,7 @@ export const ACTIVITY_KINDS = {
     "google_calendar.reconnected",
     "google_calendar.disconnected",
     "google_calendar.authorization_expired",
+    "google_calendar.paused",
     "google_calendar.shared",
     "google_calendar.unshared",
     "google_calendar.connect_failed",

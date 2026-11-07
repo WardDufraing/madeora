@@ -1,4 +1,5 @@
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -26,6 +27,7 @@ export interface AppShellProps {
  */
 export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: AppShellProps) {
   const t = useTranslations("Shell");
+  const tAccounts = useTranslations("Accounts");
   const tComponents = useTranslations("Components");
 
   return (
@@ -55,6 +57,13 @@ export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: 
             <ContextSwitcher homes={homes} />
             <div className="ms-auto flex items-center gap-2">
               <NotificationBell unread={unreadNotifications} />
+              <Link
+                href="/accounts"
+                className="rounded-control px-3 py-1.5 text-helper font-medium text-fg hover:bg-accent-subtle"
+                data-testid="switch-account-link"
+              >
+                {tAccounts("switchAccount")}
+              </Link>
               <SignOutButton />
             </div>
           </header>

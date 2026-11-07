@@ -231,3 +231,33 @@ export async function listMySecurityReports(): Promise<Loaded<readonly SecurityR
     })),
   };
 }
+
+/** S38: the Homes the person alone owns, which block deactivation until another Owner takes over. */
+export async function listMyDeactivationBlockers(): Promise<
+  Loaded<readonly { readonly homeId: string; readonly homeName: string }[]>
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("my_deactivation_blockers");
+  if (error) {
+    logFailure("account.blockers_failed", error.code);
+    return { status: "unavailable" };
+  }
+  return {
+    status: "ok",
+    value: data.map((row) => ({ homeId: row.home_id, homeName: row.home_name })),
+  };
+}
+
+/**
+ * S38: records this visit as account activity (at most hourly in the database) and says whether a
+ * security review is due after a long absence. A failure never blocks the page.
+ */
+export async function touchMyActivity(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("touch_my_activity");
+  if (error) {
+    logFailure("account.touch_failed", error.code);
+    return false;
+  }
+  return data;
+}

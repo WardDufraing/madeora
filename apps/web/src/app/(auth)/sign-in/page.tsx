@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import { getAuthState } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
-import { safeNextPath, twoFactorPath } from "@/auth/redirects";
+import { REACTIVATE_PATH, safeNextPath, twoFactorPath } from "@/auth/redirects";
+import { RememberDeviceChoice } from "@/components/account/remember-device-choice";
+import { SigningInAs } from "@/components/account/signing-in-as";
 import { AnnounceSignedOut } from "@/components/auth/announce-signed-out";
 import { FormAlert } from "@/components/auth/form-alert";
 import { GoogleSignIn, SignInDivider } from "@/components/auth/google-sign-in";
@@ -14,8 +16,14 @@ import { pageTitle } from "@/i18n/page-title";
 
 import { AuthPageTitle } from "../auth-page-title";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface SignInPageProps {
-  readonly searchParams: Promise<{ readonly next?: string | string[]; readonly status?: string }>;
+  readonly searchParams: Promise<{
+    readonly next?: string | string[];
+    readonly status?: string;
+    readonly account?: string | string[];
+  }>;
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,8 +38,14 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   if (state.kind === "signed-in") redirect(next);
   // Signed in with the first step only: the second step comes next (S37).
   if (state.kind === "second-factor") redirect(twoFactorPath(next));
+  if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
 
-  const [t, googleEnabled] = await Promise.all([getTranslations("Auth"), isGoogleSignInEnabled()]);
+  const [t, tAccounts, tLifecycle, googleEnabled] = await Promise.all([
+    getTranslations("Auth"),
+    getTranslations("Accounts"),
+    getTranslations("Lifecycle"),
+    isGoogleSignInEnabled(),
+  ]);
   return (
     <>
       <AuthPageTitle title={t("signInTitle")} />
@@ -43,12 +57,34 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </FormAlert>
         </>
       ) : null}
+      {params.status === "deactivated" ? (
+        <>
+          <AnnounceSignedOut />
+          <FormAlert tone="info" className="mb-4">
+            {tLifecycle("deactivatedNotice")}
+          </FormAlert>
+        </>
+      ) : null}
+      {params.status === "switched" ? (
+        <>
+          <AnnounceSignedOut />
+          <FormAlert tone="info" className="mb-4">
+            {tAccounts("switchedNotice")}
+          </FormAlert>
+        </>
+      ) : null}
+      {typeof params.account === "string" && UUID.test(params.account) ? (
+        <SigningInAs userId={params.account.toLowerCase()} />
+      ) : null}
       {params.status === "password-changed" ? (
         <FormAlert tone="success" className="mb-4">
           {t("passwordChangedNotice")}
         </FormAlert>
       ) : null}
       <SignInForm next={next} />
+      <div className="mt-4">
+        <RememberDeviceChoice />
+      </div>
       {googleEnabled ? (
         <>
           <SignInDivider />
@@ -56,6 +92,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </>
       ) : null}
       <div className="mt-6 flex flex-col gap-2 text-body">
+        <Link href="/accounts" className="font-medium text-accent-fg underline">
+          {tAccounts("chooserLink")}
+        </Link>
         <Link href="/forgot-password" className="font-medium text-accent-fg underline">
           {t("forgotPasswordLink")}
         </Link>

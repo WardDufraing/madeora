@@ -115,7 +115,12 @@ alter table private.account_security_events
     'security_report_discarded',
     'security_alerts_changed',
     'google_sign_in_linked',
-    'google_sign_in_unlinked'
+    'google_sign_in_unlinked',
+    -- S38 account lifecycle (20261125090000_account_lifecycle.sql)
+    'account_deactivated',
+    'account_reactivated',
+    'inactivity_reminder_sent',
+    'security_review_completed'
   ));
 
 alter table private.account_security_events
@@ -970,10 +975,11 @@ alter table private.account_change_grants drop constraint account_change_grants_
 alter table private.account_change_grants
   add constraint account_change_grants_action_check check (action in (
     'password', 'email', 'two_factor_enroll', 'two_factor_disable', 'recovery_codes',
-    'backup_email', 'account_recovery_codes', 'security_report'
+    'backup_email', 'account_recovery_codes', 'security_report', 'deactivate_account'
   ));
 
--- As S37, with one more action: 'security_report' (request and download a security report).
+-- As S37, with two more actions: 'security_report' (request and download a security report) and
+-- 'deactivate_account' (temporary deactivation).
 create or replace function public.authorize_account_change(p_action text, p_session_id uuid)
 returns timestamptz
   language plpgsql security definer set search_path = '' as $$
@@ -987,7 +993,7 @@ returns timestamptz
     end if;
     if p_action is null or p_action not in (
       'password', 'email', 'two_factor_enroll', 'two_factor_disable', 'recovery_codes',
-      'backup_email', 'account_recovery_codes', 'security_report'
+      'backup_email', 'account_recovery_codes', 'security_report', 'deactivate_account'
     ) then
       raise exception 'unknown action' using errcode = '22023';
     end if;

@@ -811,6 +811,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      complete_security_review: { Args: Record<PropertyKey, never>; Returns: undefined };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
       confirm_backup_email: { Args: { p_token: string }; Returns: string };
       continue_account_recovery: {
@@ -1358,6 +1359,7 @@ export type Database = {
           upload_key: string;
         }[];
       };
+      deactivate_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
       decide_chore_vacation_item: {
         Args: {
           p_confirm_away?: boolean;
@@ -1915,6 +1917,7 @@ export type Database = {
         Returns: {
           accent_color: string;
           avatar_file_id: string;
+          is_inactive: boolean;
           is_self: boolean;
           joined_at: string;
           membership_id: string;
@@ -2707,6 +2710,20 @@ export type Database = {
           two_factor: boolean;
         }[];
       };
+      my_account_state: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          deactivated_at: string;
+          review_due: boolean;
+        }[];
+      };
+      my_deactivation_blockers: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          home_id: string;
+          home_name: string;
+        }[];
+      };
       my_notification_channels: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2871,6 +2888,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      reactivate_my_account: { Args: Record<PropertyKey, never>; Returns: string };
       recipe_delete_impact: {
         Args: { p_recipe_id: string };
         Returns: {
@@ -3270,6 +3288,7 @@ export type Database = {
         }[];
       };
       send_chore_summaries: { Args: { p_limit: number }; Returns: number };
+      send_inactivity_reminders: { Args: { p_limit?: number }; Returns: number };
       session_is_trusted: { Args: Record<PropertyKey, never>; Returns: boolean };
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
@@ -3759,6 +3778,7 @@ export type Database = {
           title: string;
         }[];
       };
+      touch_my_activity: { Args: Record<PropertyKey, never>; Returns: boolean };
       transfer_meal_ingredients: {
         Args: {
           p_from: string;

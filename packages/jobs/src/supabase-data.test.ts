@@ -254,13 +254,16 @@ describe("Supabase job data", () => {
     const { client, calls } = fakeClient({
       process_sign_in_events: ok(3),
       purge_account_activity: ok(7),
+      send_inactivity_reminders: ok(2),
     });
     const data = createSupabaseJobData(client);
     await expect(data.processSignInEvents(200)).resolves.toBe(3);
     await expect(data.purgeAccountActivity()).resolves.toBe(7);
+    await expect(data.sendInactivityReminders(200)).resolves.toBe(2);
     expect(calls).toEqual([
       { fn: "process_sign_in_events", args: { p_limit: 200 } },
       { fn: "purge_account_activity", args: undefined },
+      { fn: "send_inactivity_reminders", args: { p_limit: 200 } },
     ]);
   });
 

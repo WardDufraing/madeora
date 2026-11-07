@@ -56,11 +56,12 @@ const notices = {
  */
 export default async function SecurityPage({ searchParams }: SecurityPageProps) {
   await requireIdentity();
-  const [t, tActivity, tSettings, user, security, sessions, trusted, formats, params] =
+  const [t, tActivity, tSettings, tLifecycle, user, security, sessions, trusted, formats, params] =
     await Promise.all([
       getTranslations("Security"),
       getTranslations("Activity"),
       getTranslations("Settings"),
+      getTranslations("Lifecycle"),
       getVerifiedUser(),
       getAccountSecurity(),
       getMySessions(),
@@ -104,6 +105,13 @@ export default async function SecurityPage({ searchParams }: SecurityPageProps) 
           className="text-body font-medium text-accent-fg underline"
         >
           {tActivity("alertsLink")}
+        </Link>
+        <Link
+          href="/settings/security/deactivate"
+          className="text-body font-medium text-accent-fg underline"
+          data-testid="deactivate-link"
+        >
+          {tLifecycle("deactivateLink")}
         </Link>
       </p>
       <div className="flex max-w-2xl flex-col gap-6">

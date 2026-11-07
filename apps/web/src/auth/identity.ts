@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { PATH_HEADER } from "./path-header";
-import { signInPath, twoFactorPath } from "./redirects";
+import { REACTIVATE_PATH, signInPath, twoFactorPath } from "./redirects";
 import { needsSecondFactor } from "./two-factor";
 import { createSupabaseServerClient } from "./supabase-server";
 
@@ -22,6 +22,8 @@ export interface VerifiedIdentity {
  * - `second-factor`: a valid sign-in of an account with two-factor sign-in that has not passed
  *   the authenticator code yet (S37), and is not a session of a trusted browser. It may only use
  *   the two-factor page.
+ * - `deactivated`: a fully signed-in session of an account its holder deactivated (S38). It may
+ *   only use the reactivation page; the database refuses everything else for it.
  * - `signed-in`: everything else.
  *
  * The session cookie is only a claim: `auth.getUser(token)` asks Supabase Auth to check the access
@@ -32,6 +34,7 @@ export interface VerifiedIdentity {
 export type AuthState =
   | { readonly kind: "signed-out" }
   | { readonly kind: "second-factor"; readonly user: User }
+  | { readonly kind: "deactivated"; readonly user: User }
   | { readonly kind: "signed-in"; readonly user: User };
 
 export const getAuthState = cache(async (): Promise<AuthState> => {
@@ -48,6 +51,12 @@ export const getAuthState = cache(async (): Promise<AuthState> => {
     // database records the trust against the session, so the token stays aal1.
     const trusted = await supabase.rpc("session_is_trusted");
     if (trusted.error || !trusted.data) return { kind: "second-factor", user: data.user };
+  }
+  // S38: a deactivated account. When the state cannot be read, the database's own request check
+  // still refuses the session everything, so "signed-in" never grants access by itself.
+  const account = await supabase.rpc("my_account_state");
+  if (!account.error && account.data[0]?.deactivated_at) {
+    return { kind: "deactivated", user: data.user };
   }
   return { kind: "signed-in", user: data.user };
 });
@@ -79,6 +88,7 @@ export const getVerifiedUser = cache(async (): Promise<User | null> => {
 export async function requireIdentity(): Promise<VerifiedIdentity> {
   const state = await getAuthState();
   if (state.kind === "signed-in") return { userId: state.user.id };
+  if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
   const path = (await headers()).get(PATH_HEADER);
   redirect(state.kind === "second-factor" ? twoFactorPath(path) : signInPath(path));
 }

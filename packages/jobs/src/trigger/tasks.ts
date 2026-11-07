@@ -123,14 +123,17 @@ export const taskReminderAdvance = schedules.task({
     const petCare = await services.data.advancePetCare(REMINDER_ADVANCE_BATCH);
     // S38: activity history past its 12-month retention; a cheap delete, no extra schedule.
     const activityPurged = await services.data.purgeAccountActivity();
+    // S38: long-term inactivity reminders; at most a few per account, ever.
+    const inactivityReminders = await services.data.sendInactivityReminders(REMINDER_ADVANCE_BATCH);
     logger.info("jobs.task_reminder_advance.done", {
       created,
       habits,
       goalPeriods,
       petCare,
       activityPurged,
+      inactivityReminders,
     });
-    return { created, habits, goalPeriods, petCare, activityPurged };
+    return { created, habits, goalPeriods, petCare, activityPurged, inactivityReminders };
   },
 });
 

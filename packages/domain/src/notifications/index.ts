@@ -112,6 +112,9 @@ export const notificationKinds = [
   "account.unfinished_sign_in",
   "account.signed_in",
   "account.security_report_ready",
+  "account.deactivated",
+  "account.reactivated",
+  "account.inactivity_reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 

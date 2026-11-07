@@ -30,3 +30,6 @@ export const securityReportDownloadSchema = z.strictObject({
   format: z.enum(["csv", "json"]),
 });
 export type SecurityReportFormat = z.infer<typeof securityReportDownloadSchema>["format"];
+
+/** The account lifecycle endpoints take an empty body (S38). */
+export const emptyBodySchema = z.strictObject({});

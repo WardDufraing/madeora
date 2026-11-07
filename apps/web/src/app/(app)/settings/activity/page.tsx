@@ -7,6 +7,7 @@ import { listMyActivity, listMyActivityHomes } from "@/activity/server";
 import { requireIdentity } from "@/auth/identity";
 import { ActivityFiltersForm } from "@/components/activity/activity-filters";
 import { ActivityList } from "@/components/activity/activity-list";
+import { FormAlert } from "@/components/auth/form-alert";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { pageTitle } from "@/i18n/page-title";
@@ -30,8 +31,9 @@ const PATH = "/settings/activity";
  */
 export default async function ActivityHistoryPage({ searchParams }: ActivityPageProps) {
   await requireIdentity();
-  const [t, params, formats] = await Promise.all([
+  const [t, tLifecycle, params, formats] = await Promise.all([
     getTranslations("Activity"),
+    getTranslations("Lifecycle"),
     searchParams,
     getDateTimeFormats(),
   ]);
@@ -52,6 +54,9 @@ export default async function ActivityHistoryPage({ searchParams }: ActivityPage
         </Link>
       </p>
       <div className="flex max-w-3xl flex-col gap-6">
+        {params.welcome === "back" ? (
+          <FormAlert tone="success">{tLifecycle("welcomeBack")}</FormAlert>
+        ) : null}
         <Card>
           <ActivityFiltersForm action={PATH} filters={filters} homes={homes} />
           <ActivityList

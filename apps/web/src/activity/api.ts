@@ -16,14 +16,22 @@ import type {
  * - `POST /api/v1/me/security-reports/{reportId}/download` `{ format: "csv" | "json" }`
  *   → `200` the file (`Content-Disposition: attachment`, `Cache-Control: no-store`)
  * - `POST /api/v1/me/security-reports/{reportId}/discard` `{}` → `200 { discarded }`
+ * - `POST /api/v1/me/deactivate` `{}` → `200 {}` (every session ends, this one too);
+ *   `409 sole-owner` while a Home the account alone owns has no other Owner
+ * - `POST /api/v1/me/reactivate` `{}` → `200 { since }` (the deactivated account's own session)
+ * - `POST /api/v1/me/security-review` `{}` → `200 {}`
  *
  * Errors: `401 unauthenticated`, `400 invalid`, `403 forbidden` (cross-site),
- * `403 reauthentication-required` (the report needs a fresh re-authentication), `404 not-found`,
+ * `403 reauthentication-required` (a fresh re-authentication is needed), `404 not-found`,
+ * `409 sole-owner`,
  * `413 too-large`, `415 unsupported-media-type`, `429 rate-limited`, `500 failed`.
  */
 export const ACTIVITY_ENDPOINT = "/api/v1/me/activity";
 export const SECURITY_ALERTS_ENDPOINT = "/api/v1/me/security-alerts";
 export const SECURITY_REPORTS_ENDPOINT = "/api/v1/me/security-reports";
+export const DEACTIVATE_ENDPOINT = "/api/v1/me/deactivate";
+export const REACTIVATE_ENDPOINT = "/api/v1/me/reactivate";
+export const SECURITY_REVIEW_ENDPOINT = "/api/v1/me/security-review";
 
 export type ActivityErrorCode =
   | "forbidden"
@@ -34,6 +42,7 @@ export type ActivityErrorCode =
   | "not-found"
   | "reauthentication-required"
   | "rate-limited"
+  | "sole-owner"
   | "failed";
 
 export interface ActivityErrorResponse {
@@ -42,7 +51,14 @@ export interface ActivityErrorResponse {
 }
 
 export type ActivityFailure =
-  "signedOut" | "invalid" | "notFound" | "reauthenticate" | "rateLimited" | "network" | "failed";
+  | "signedOut"
+  | "invalid"
+  | "notFound"
+  | "reauthenticate"
+  | "rateLimited"
+  | "soleOwner"
+  | "network"
+  | "failed";
 
 export class ActivityActionError extends Error {
   constructor(readonly failure: ActivityFailure) {
@@ -56,6 +72,7 @@ async function errorOf(response: Response): Promise<ActivityFailure> {
   if (response.status === 400) return "invalid";
   if (response.status === 404) return "notFound";
   if (response.status === 429) return "rateLimited";
+  if (response.status === 409) return "soleOwner";
   if (response.status === 403) {
     const body = (await response.json().catch(() => ({}))) as { error?: unknown };
     return body.error === "reauthentication-required" ? "reauthenticate" : "failed";
@@ -135,4 +152,18 @@ export async function downloadSecurityReport(
     blob: await response.blob(),
     fileName: match?.[1] ?? `madeora-security-report.${format}`,
   };
+}
+
+export async function deactivateAccount(): Promise<void> {
+  await send("POST", DEACTIVATE_ENDPOINT, {});
+}
+
+/** Returns when the account was deactivated (ISO), to show what changed since. */
+export async function reactivateAccount(): Promise<string | null> {
+  const body = await jsonOf(await send("POST", REACTIVATE_ENDPOINT, {}));
+  return typeof body.since === "string" ? body.since : null;
+}
+
+export async function completeSecurityReview(): Promise<void> {
+  await send("POST", SECURITY_REVIEW_ENDPOINT, {});
 }

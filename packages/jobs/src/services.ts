@@ -176,6 +176,11 @@ export interface JobDataPort {
   processSignInEvents(limit: number): Promise<number>;
   /** task-reminder-advance (S38): removes activity history past retention; how many entries. */
   purgeAccountActivity(): Promise<number>;
+  /**
+   * task-reminder-advance (S38): sends due long-term inactivity reminders (bounded by the
+   * reminder limit and interval); how many it sent.
+   */
+  sendInactivityReminders(limit: number): Promise<number>;
   /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
   deliverCalendarReminder(
     eventId: string,

@@ -166,7 +166,8 @@ describe("notificationKinds", () => {
           // Also S33's "_google_calendar.sql".
           name.endsWith("_calendar.sql") ||
           name.endsWith("_adult_security.sql") ||
-          name.endsWith("_activity_history.sql"),
+          name.endsWith("_activity_history.sql") ||
+          name.endsWith("_account_lifecycle.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");

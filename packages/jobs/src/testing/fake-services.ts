@@ -103,6 +103,7 @@ export class FakeJobData implements JobDataPort {
   readonly signInCalls: number[] = [];
   signInsClassified = 0;
   activityPurges = 0;
+  readonly inactivityCalls: number[] = [];
   readonly googleSync: SyncStore = {
     begin: (connectionId) => {
       this.check();
@@ -134,6 +135,12 @@ export class FakeJobData implements JobDataPort {
   purgeAccountActivity(): Promise<number> {
     this.check();
     this.activityPurges += 1;
+    return Promise.resolve(0);
+  }
+
+  sendInactivityReminders(limit: number): Promise<number> {
+    this.check();
+    this.inactivityCalls.push(limit);
     return Promise.resolve(0);
   }
 

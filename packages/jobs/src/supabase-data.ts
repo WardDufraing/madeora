@@ -381,6 +381,12 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return data;
     },
 
+    async sendInactivityReminders(limit) {
+      const { data, error } = await client.rpc("send_inactivity_reminders", { p_limit: limit });
+      if (error) throw new JobStoreError("send_inactivity_reminders", error.code);
+      return data;
+    },
+
     async deliverCalendarReminder(eventId, on, at) {
       const { data, error } = await client.rpc("deliver_calendar_reminder", {
         p_event_id: eventId,

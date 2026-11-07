@@ -28,6 +28,8 @@ export const ACCOUNT_CHANGE_ACTIONS = [
   "account_recovery_codes",
   // S38: requesting and downloading a security report.
   "security_report",
+  // S38: temporary account deactivation.
+  "deactivate_account",
 ] as const;
 export type AccountChangeAction = (typeof ACCOUNT_CHANGE_ACTIONS)[number];
 
@@ -53,6 +55,8 @@ export function sectionOf(action: AccountChangeAction): string {
       return "recovery";
     case "security_report":
       return "report";
+    case "deactivate_account":
+      return "deactivate";
   }
 }
 
@@ -62,6 +66,7 @@ export function confirmedPath(action: AccountChangeAction): string {
   if (action === "security_report") {
     return `/settings/security/activity?confirmed=${action}#${sectionOf(action)}`;
   }
+  if (action === "deactivate_account") return `/settings/security/deactivate?confirmed=${action}`;
   return `/settings/security?confirmed=${action}#${sectionOf(action)}`;
 }
 

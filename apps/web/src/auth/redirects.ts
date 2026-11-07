@@ -1,3 +1,6 @@
+/** Where a deactivated account's sign-in goes (S38): the only page it may use. */
+export const REACTIVATE_PATH = "/reactivate";
+
 /** Where people land after signing in when no (valid) destination was asked for. */
 export const DEFAULT_SIGNED_IN_PATH = "/";
 

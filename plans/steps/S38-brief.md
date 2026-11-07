@@ -6,7 +6,9 @@
 
 ## Scope
 
-Recommended split (decision card sent 2026-11-07, building on it until Ward answers):
+Ward chose **one S38 PR** (2026-11-07). Part 1 below is built (draft PR #71); part 2 follows on the same branch, including the done-condition Playwright test.
+
+Original split proposal (superseded):
 
 - **S38 (this PR):** categorized Account → Activity history, the focused Security activity view, the downloadable security report, and security notifications (mandatory vs routine sign-in alerts, Account → Security → Notifications).
 - **S38b (next):** temporary deactivation and reactivation, inactivity reminders with security review on return, multi-account switching on shared devices. The build plan's done-condition ("switching accounts clears every cache and subscription", Playwright) moves to S38b.
@@ -44,6 +46,10 @@ Platform limit: failed password attempts are invisible to Madeora on Supabase's 
 
 ## Progress
 
+- [x] Part 2: temporary deactivation and reactivation
+- [x] Part 2: inactivity reminders with security review on return
+- [x] Part 2: multi-account switching on shared devices + Playwright done-condition (`tests/e2e/specs/account-switching.spec.ts`, runs in CI)
+
 - [x] Brief and open values
 - [x] Migration + DB tests
 - [x] App: pages, route, notifications, jobs
@@ -59,3 +65,20 @@ Platform limit: failed password attempts are invisible to Madeora on Supabase's 
 ## Open after review (not fixed, for Ward or later steps)
 
 - M1 no backfill of S37 events from before this migration; M2 first-sign-in rule reads 12-month history; M3 late sweep rows can enter an already requested report; M5 CSV has no header notes (JSON has them); M6 no E2E spec, component tests English only; M7 the purge also deletes S37's `account_security_events` after 12 months (owner decision). LOWs in the review file.
+
+## Part 2 design (one-PR decision)
+
+- **Migration** `20261125090000_account_lifecycle.sql`.
+- **Deactivation** (`deactivate_my_account`): needs S37 re-authentication (`deactivate_account` permission) and no Home the person alone owns (each Home has one Owner, so transfer first; Home closure does not exist yet). Records `account_deactivated`, sends a security notice, pauses Google Calendar (status `authorization_expired`, shown as "paused"; reconnect needed), deletes every session. Memberships, roles and data stay.
+- **While deactivated:** sign-in still works (password/Google + 2FA) but the PostgREST pre-request check and Realtime policies refuse everything except `my_account_state` and `reactivate_my_account`; the app sends the session to `/reactivate`. Only security notifications are delivered. Home members see "Inactive account" in the directory (managers: reassign open work), never a reason.
+- **Reactivation:** from that fully signed-in session; records `account_reactivated`, notice, then shows Home membership history since the deactivation date. Google stays paused until reconnected; revoked access and expired invitations stay as they are.
+- **Inactivity:** `account_inactivity.last_active_at` updated by signed-in page visits (at most hourly; background jobs, integrations, token refreshes never count; backfilled from last sign-in). Hourly job sends `account.inactivity_reminder` (security category, no Home/date) after 12 months, then every 3 months, at most 3; deactivated accounts excluded. Returning after the threshold sets `review_due`: banner on every page → `/settings/security/review` (email, sign-in methods, devices, security activity) → "Everything looks right" records `security_review_completed`. Nothing is forced (2FA stays optional).
+- **Account switching:** chooser `/accounts` (signed in or out) with names and colours only, stored in localStorage (no tokens, emails, Homes). "Remember this account on this device" checkbox on sign-in (untick on shared devices). Switch/Add posts to `/auth/sign-out` (`then=switch`), which signs the current account out on this device and lands on sign-in: a full page load, so TanStack cache, Realtime sockets and pending requests of the previous account cannot survive; other tabs are told via `AnnounceSignedOut`. Remove = off this device's list (active one is also signed out).
+
+## Part 2 choices to confirm (made to keep moving)
+
+1. Switching always signs the current account out and requires the next account's own sign-in; there is no locked-but-kept session or short-lived unlock (spec allows them only "where security review permits"). Idle locking is not added.
+2. Child (username/PIN) accounts and Household Displays do not exist yet, so their switching rules apply when those are built.
+3. Reactivation keeps the session that signed in (it could do nothing until reactivation) instead of forcing a second sign-in.
+4. Ownership transfer to a currently deactivated member is not blocked yet (follow-up).
+5. Part 2 was not covered by the independent review.

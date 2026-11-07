@@ -184,6 +184,12 @@ export async function MemberDirectory({
                   </span>
                   <span className="text-helper text-fg-muted">
                     {tHomes(roleKey[member.role])}
+                    {member.isInactive ? (
+                      <span data-testid="member-inactive">
+                        {" \u{00B7} "}
+                        {manageable.size > 0 ? t("inactiveManagerHint") : t("inactive")}
+                      </span>
+                    ) : null}
                     {sharedNames.has(member.membershipId) ? (
                       <span data-testid="member-qualifier">
                         {" \u{00B7} "}

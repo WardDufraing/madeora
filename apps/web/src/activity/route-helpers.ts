@@ -3,7 +3,7 @@ import "server-only";
 import type { z } from "zod";
 
 import { checkJsonMutation, readJsonBody, refusedFields } from "@/api/json-request";
-import { getVerifiedIdentity } from "@/auth/identity";
+import { getAuthState, getVerifiedIdentity } from "@/auth/identity";
 
 import type { ActivityErrorCode, ActivityErrorResponse } from "./api";
 
@@ -30,15 +30,18 @@ export function failure(
 export async function readActivityMutation<S extends z.ZodType>(
   request: Request,
   schema: S,
+  /** Reactivation only: a deactivated account's own session is accepted too. */
+  options: { readonly deactivated?: boolean } = {},
 ): Promise<
   | { readonly ok: true; readonly data: z.output<S> }
   | { readonly ok: false; readonly response: Response }
 > {
   const refused = checkJsonMutation(request, MAX_BODY_BYTES);
   if (refused) return { ok: false, response: failure(refused.status, refused.error) };
-  if (!(await getVerifiedIdentity())) {
-    return { ok: false, response: failure(401, "unauthenticated") };
-  }
+  const allowed = options.deactivated
+    ? (await getAuthState()).kind === "deactivated"
+    : (await getVerifiedIdentity()) !== null;
+  if (!allowed) return { ok: false, response: failure(401, "unauthenticated") };
   const body = await readJsonBody(request, MAX_BODY_BYTES);
   if (!body.ok) return { ok: false, response: failure(body.status, body.error) };
   const parsed = schema.safeParse(body.body);
@@ -50,7 +53,8 @@ export async function readActivityMutation<S extends z.ZodType>(
 
 /**
  * Maps a database error: malformed input 400, unknown or someone else's record 404, a missing
- * fresh re-authentication 403, too many reports 429, a lost session 401, anything else 500.
+ * fresh re-authentication 403, a Home left without an Owner 409, too many reports 429, a lost
+ * session 401, anything else 500.
  */
 export function databaseFailure(
   event: string,
@@ -59,6 +63,7 @@ export function databaseFailure(
   if (error.code === "22023" || error.code === "22P02") return failure(400, "invalid");
   if (error.code === "P0002") return failure(404, "not-found");
   if (error.code === "54000") return failure(429, "rate-limited");
+  if (error.code === "P0001" && error.hint === "sole_owner") return failure(409, "sole-owner");
   if (error.code === "42501" && error.hint === "reauthentication_required") {
     return failure(403, "reauthentication-required");
   }

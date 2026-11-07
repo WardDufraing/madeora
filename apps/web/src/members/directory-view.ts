@@ -23,6 +23,11 @@ export interface DirectoryMember {
   readonly accentColor: AccentColor | null;
   /** The effective avatar picture (S15): the Home override, else the global one; or none. */
   readonly avatarFileId?: string | null;
+  /**
+   * S38: the account is deactivated. Shown to every member without a reason; Home managers are
+   * pointed at reassigning open work, which never happens automatically.
+   */
+  readonly isInactive?: boolean;
 }
 
 export const directorySorts = ["role", "name", "joined"] as const;
