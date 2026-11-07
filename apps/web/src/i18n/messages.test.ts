@@ -4,6 +4,14 @@ import { fileURLToPath } from "node:url";
 import { accentPalette } from "@madeora/design-tokens";
 import { createTranslator } from "next-intl";
 
+import {
+  ACTIVITY_ACTORS,
+  ACTIVITY_CATEGORIES,
+  ACTIVITY_OUTCOMES,
+  ALL_ACTIVITY_KINDS,
+  ROLE_CODES,
+  kindKey,
+} from "@/activity/catalogue";
 import { choreStateKey } from "@/chores/calendar";
 import { stateKey } from "@/components/recovery/recovery-state-text";
 import { staffStateKey } from "@/components/recovery/staff-state-label";
@@ -142,6 +150,31 @@ describe("message dictionaries", () => {
     // Navigation labels are looked up by item id (tNav(item.id)), so the ids are the keys.
     const dynamic = {
       Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
+      // Account activity (S38): event codes, categories, results, actors, roles and states, by the
+      // value the database answers.
+      Activity: [
+        ...ALL_ACTIVITY_KINDS.map((kind) => kindKey(kind)),
+        ...withPrefix("category.", ACTIVITY_CATEGORIES),
+        ...withPrefix("outcome.", ACTIVITY_OUTCOMES),
+        ...withPrefix("actor.", ACTIVITY_ACTORS),
+        ...withPrefix("role.", ROLE_CODES),
+        ...withPrefix("reportStatus.", ["ready", "expired", "discarded"]),
+        ...withPrefix("emailState.", [
+          "none",
+          "queued",
+          "sent",
+          "failed",
+          "skipped",
+          "not_configured",
+        ]),
+        ...withPrefix("notice.", [
+          "new_device_sign_in",
+          "unfinished_sign_in",
+          "signed_in",
+          "security_report_ready",
+          "other",
+        ]),
+      ],
       // Each palette colour's name, looked up by its id (S11).
       Accent: accentPalette.map((entry) => entry.id),
       // The names of the preset units, chosen by the quantity's plural form (S29).

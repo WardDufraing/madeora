@@ -169,6 +169,13 @@ export interface JobDataPort {
    * old; how many it queued.
    */
   queueGoogleCalendarSyncs(limit: number): Promise<number>;
+  /**
+   * outbox-dispatch (S38): classifies settled sign-ins for the activity history and sends the
+   * routine sign-in alerts (re-authentication sign-ins are left out); how many it classified.
+   */
+  processSignInEvents(limit: number): Promise<number>;
+  /** task-reminder-advance (S38): removes activity history past retention; how many entries. */
+  purgeAccountActivity(): Promise<number>;
   /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
   deliverCalendarReminder(
     eventId: string,

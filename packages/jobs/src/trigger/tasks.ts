@@ -121,8 +121,16 @@ export const taskReminderAdvance = schedules.task({
     const habits = await services.data.advanceHabitReminders(REMINDER_ADVANCE_BATCH);
     const goalPeriods = await services.data.rollGoalPeriods(REMINDER_ADVANCE_BATCH);
     const petCare = await services.data.advancePetCare(REMINDER_ADVANCE_BATCH);
-    logger.info("jobs.task_reminder_advance.done", { created, habits, goalPeriods, petCare });
-    return { created, habits, goalPeriods, petCare };
+    // S38: activity history past its 12-month retention; a cheap delete, no extra schedule.
+    const activityPurged = await services.data.purgeAccountActivity();
+    logger.info("jobs.task_reminder_advance.done", {
+      created,
+      habits,
+      goalPeriods,
+      petCare,
+      activityPurged,
+    });
+    return { created, habits, goalPeriods, petCare, activityPurged };
   },
 });
 
@@ -145,6 +153,9 @@ export const choreDigest = schedules.task({
   },
 });
 
+/** How many settled sign-ins one sweep classifies (S38); the rest wait for the next one. */
+const SIGN_IN_BATCH = 200;
+
 /** How many connections one sweep queues for their automatic sync; the rest wait for the next one. */
 const GOOGLE_SYNC_QUEUE_BATCH = 100;
 
@@ -165,8 +176,10 @@ export const outboxDispatch = schedules.task({
       logger,
       batchSize: DISPATCH_BATCH_SIZE,
       // Google Calendar (S33): connections due for their 15-minute sync; no extra schedule or run.
+      // S38: settled sign-ins are classified for the activity history and their alerts sent.
       prepare: async () => ({
         googleCalendarSyncs: await services.data.queueGoogleCalendarSyncs(GOOGLE_SYNC_QUEUE_BATCH),
+        signInsClassified: await services.data.processSignInEvents(SIGN_IN_BATCH),
       }),
       stats: async () => {
         const { data, error } = await client.rpc("job_outbox_stats");

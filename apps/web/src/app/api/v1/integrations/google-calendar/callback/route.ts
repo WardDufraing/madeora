@@ -51,8 +51,24 @@ export async function GET(request: Request): Promise<Response> {
   });
   if (!attempt) return back("state");
   if (url.searchParams.get("error")) return back("cancelled");
+  const supabase = await createSupabaseServerClient();
+  // S38: a verified attempt that fails is a "Google Calendar connection failed" entry in the
+  // person's own activity history (a cancelled one is not). Best effort: never blocks the answer.
+  const fail = async (notice: ConnectNotice): Promise<Response> => {
+    try {
+      const result = await supabase.rpc("record_integration_failure", {
+        p_provider: "google_calendar",
+      });
+      if (result.error) {
+        logGoogleCalendar("google_calendar.failure_not_recorded", result.error.code);
+      }
+    } catch {
+      logGoogleCalendar("google_calendar.failure_not_recorded");
+    }
+    return back(notice);
+  };
   const code = url.searchParams.get("code");
-  if (!code || code.length > 2048) return back("failed");
+  if (!code || code.length > 2048) return fail("failed");
 
   let grant;
   try {
@@ -66,7 +82,7 @@ export async function GET(request: Request): Promise<Response> {
       "google_calendar.exchange_failed",
       error instanceof GoogleAuthorizationError ? error.code : "error",
     );
-    return back("failed");
+    return fail("failed");
   }
 
   const revokeGrant = async () => {
@@ -78,11 +94,11 @@ export async function GET(request: Request): Promise<Response> {
   };
   if (!GOOGLE_CALENDAR_SCOPES.every((scope) => grant.scopes.includes(scope))) {
     await revokeGrant();
-    return back("missing_scope");
+    return fail("missing_scope");
   }
   if (!grant.refreshToken) {
     await revokeGrant();
-    return back("failed");
+    return fail("failed");
   }
 
   let account: string;
@@ -91,10 +107,9 @@ export async function GET(request: Request): Promise<Response> {
   } catch {
     logGoogleCalendar("google_calendar.primary_failed");
     await revokeGrant();
-    return back("failed");
+    return fail("failed");
   }
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("save_google_calendar_connection", {
     p_account: account,
     p_token: sealRefreshToken(grant.refreshToken, google.tokenKey, identity.userId),
@@ -103,7 +118,7 @@ export async function GET(request: Request): Promise<Response> {
   if (error || (data !== "connected" && data !== "reconnected" && data !== "replaced")) {
     logGoogleCalendar("google_calendar.save_failed", error?.code ?? "unexpected_outcome");
     await revokeGrant();
-    return back("failed");
+    return fail("failed");
   }
   return back(data);
 }

@@ -1582,6 +1582,7 @@ export type Database = {
         Returns: string;
       };
       discard_google_calendar_change: { Args: { p_change_id: string }; Returns: string };
+      discard_security_report: { Args: { p_report_id: string }; Returns: boolean };
       disconnect_google_calendar: { Args: Record<PropertyKey, never>; Returns: string };
       edit_meal_occurrence: {
         Args: {
@@ -1806,6 +1807,13 @@ export type Database = {
         }[];
       };
       get_reward_redemption: { Args: { p_redemption_id: string }; Returns: Json };
+      get_security_alert_preferences: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          every_sign_in: boolean;
+          new_device: boolean;
+        }[];
+      };
       get_security_email: {
         Args: { p_email_id: string };
         Returns: {
@@ -2323,6 +2331,46 @@ export type Database = {
           servings: number;
         }[];
       };
+      list_my_activity: {
+        Args: {
+          p_before_created_at?: string;
+          p_before_id?: string;
+          p_categories?: string[];
+          p_from?: string;
+          p_home_id?: string;
+          p_kinds?: string[];
+          p_limit?: number;
+          p_outcomes?: string[];
+          p_text?: string;
+          p_to?: string;
+        };
+        Returns: {
+          actor: string;
+          alerted: boolean;
+          browser: string;
+          category: string;
+          created_at: string;
+          details: Json;
+          device_kind: string;
+          home_id: string;
+          home_name: string;
+          id: string;
+          is_current_member: boolean;
+          is_current_session: boolean;
+          kind: string;
+          outcome: string;
+          platform: string;
+          response: string;
+          session_live: boolean;
+        }[];
+      };
+      list_my_activity_homes: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          home_id: string;
+          home_name: string;
+        }[];
+      };
       list_my_join_requests: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2347,6 +2395,29 @@ export type Database = {
           name: string;
           revision: number;
           updated_at: string;
+        }[];
+      };
+      list_my_security_notices: {
+        Args: { p_limit?: number };
+        Returns: {
+          created_at: string;
+          email_status: string;
+          id: string;
+          kind: string;
+        }[];
+      };
+      list_my_security_reports: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          created_at: string;
+          downloaded_at: string;
+          expires_at: string;
+          id: string;
+          range_from: string;
+          range_to: string;
+          snapshot_at: string;
+          status: string;
+          timezone: string;
         }[];
       };
       list_my_sessions: {
@@ -2740,6 +2811,7 @@ export type Database = {
           preview: Json;
         }[];
       };
+      process_sign_in_events: { Args: { p_limit?: number }; Returns: number };
       propose_chore: {
         Args: {
           p_category_id?: string;
@@ -2768,6 +2840,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      purge_account_activity: { Args: Record<PropertyKey, never>; Returns: number };
       purge_expired_trash_entry: { Args: { p_entry_id: string }; Returns: string };
       purge_stored_file: { Args: { p_file_id: string }; Returns: string };
       purge_trash_entries: {
@@ -2816,6 +2889,7 @@ export type Database = {
           rating_count: number;
         }[];
       };
+      record_integration_failure: { Args: { p_provider: string }; Returns: undefined };
       record_invitation_email: {
         Args: { p_invitation_id: string; p_send: number; p_status: string };
         Returns: boolean;
@@ -2984,6 +3058,10 @@ export type Database = {
           recovery_id: string;
         }[];
       };
+      request_security_report: {
+        Args: { p_from: string; p_timezone: string; p_to: string };
+        Returns: string;
+      };
       request_to_join_home: {
         Args: { p_token: string };
         Returns: {
@@ -3048,6 +3126,7 @@ export type Database = {
         Args: { p_decision: string; p_home_id: string; p_transfer_id: string };
         Returns: string;
       };
+      respond_to_sign_in: { Args: { p_event_id: string; p_response: string }; Returns: string };
       restore_google_calendar_event: { Args: { p_exclusion_id: string }; Returns: string };
       restore_meal_occurrence: {
         Args: { p_on: string; p_recurrence_id: string };
@@ -3176,6 +3255,19 @@ export type Database = {
       save_google_calendar_connection: {
         Args: { p_account: string; p_scopes: string[]; p_token: string };
         Returns: string;
+      };
+      security_report_rows: {
+        Args: { p_report_id: string };
+        Returns: {
+          actor: string;
+          browser: string;
+          created_at: string;
+          device_kind: string;
+          home_name: string;
+          kind: string;
+          outcome: string;
+          platform: string;
+        }[];
       };
       send_chore_summaries: { Args: { p_limit: number }; Returns: number };
       session_is_trusted: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -3446,6 +3538,10 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      set_security_alert_preferences: {
+        Args: { p_every_sign_in: boolean; p_new_device: boolean };
+        Returns: undefined;
       };
       set_shopping_item_completed: {
         Args: { p_completed: boolean; p_item_id: string; p_seen_completed_at?: string };

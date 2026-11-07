@@ -26,6 +26,8 @@ export const ACCOUNT_CHANGE_ACTIONS = [
   "recovery_codes",
   "backup_email",
   "account_recovery_codes",
+  // S38: requesting and downloading a security report.
+  "security_report",
 ] as const;
 export type AccountChangeAction = (typeof ACCOUNT_CHANGE_ACTIONS)[number];
 
@@ -49,11 +51,17 @@ export function sectionOf(action: AccountChangeAction): string {
     case "backup_email":
     case "account_recovery_codes":
       return "recovery";
+    case "security_report":
+      return "report";
   }
 }
 
 /** The page to return to once `action` is permitted: it opens that change without asking again. */
 export function confirmedPath(action: AccountChangeAction): string {
+  // S38: the report lives on Settings › Security › Security activity.
+  if (action === "security_report") {
+    return `/settings/security/activity?confirmed=${action}#${sectionOf(action)}`;
+  }
   return `/settings/security?confirmed=${action}#${sectionOf(action)}`;
 }
 

@@ -16,6 +16,10 @@ export const notificationKinds = [
   "account.account_recovery_codes_created",
   "account.recovery_started",
   "account.recovered",
+  "account.new_device_sign_in",
+  "account.unfinished_sign_in",
+  "account.signed_in",
+  "account.security_report_ready",
   "recovery.claimant_review_started",
   "recovery.claimant_approved",
   "recovery.claimant_paused",
@@ -97,6 +101,34 @@ export interface NotificationEmailText {
 type Catalogue = Record<NotificationEmailKind, NotificationEmailText>;
 
 const en: Catalogue = {
+  "account.new_device_sign_in": {
+    subject: "New sign-in to your Madeora account",
+    preview: "Your account was signed in to from a device it hasn't used recently.",
+    heading: "A new device signed in",
+    body: "Your Madeora account was just signed in to from a device or browser it hasn't used in the last 12 months. If this was you, there's nothing to do. If it wasn't, open Security activity in Madeora, choose Secure my account on that sign-in and change your password.",
+    button: "Review security activity",
+  },
+  "account.unfinished_sign_in": {
+    subject: "Unfinished sign-in to your Madeora account",
+    preview: "Someone got past the first step but not two-step verification.",
+    heading: "A sign-in wasn't finished",
+    body: "Someone entered your Madeora account's password, or used its Google sign-in, but didn't complete two-step verification, so they weren't let in. If this was you, there's nothing to do. If it wasn't, change your password now and open Security activity in Madeora to secure your account. This alert is always sent.",
+    button: "Review security activity",
+  },
+  "account.signed_in": {
+    subject: "Someone signed in to your Madeora account",
+    preview: "You asked to hear about every sign-in.",
+    heading: "New sign-in",
+    body: "Your Madeora account was just signed in to. You get this because alerts for every sign-in are on. If this wasn't you, open Security activity in Madeora, choose Secure my account on that sign-in and change your password.",
+    button: "Review security activity",
+  },
+  "account.security_report_ready": {
+    subject: "Your Madeora security report is ready",
+    preview: "Download it in Madeora within 24 hours.",
+    heading: "Security report ready",
+    body: "The security activity report you asked for is ready. For your protection it isn't attached: sign in to Madeora and download it from Security activity within 24 hours. If you didn't ask for a report, change your password and review your devices.",
+    button: "Open security activity",
+  },
   "account.device_trusted": {
     subject: "A device was trusted on your Madeora account",
     preview: "Sign-ins there skip the authenticator code for 30 days.",
@@ -633,6 +665,34 @@ const en: Catalogue = {
 };
 
 const nl: Catalogue = {
+  "account.new_device_sign_in": {
+    subject: "Nieuwe inlog op je Madeora-account",
+    preview: "Er is ingelogd vanaf een apparaat dat je account recent niet gebruikte.",
+    heading: "Er is ingelogd op een nieuw apparaat",
+    body: "Er is net ingelogd op je Madeora-account vanaf een apparaat of browser die het de afgelopen 12 maanden niet gebruikte. Was jij dit, dan hoef je niets te doen. Was jij het niet, open dan Beveiligingsactiviteit in Madeora, kies Mijn account beveiligen bij die inlog en wijzig je wachtwoord.",
+    button: "Beveiligingsactiviteit bekijken",
+  },
+  "account.unfinished_sign_in": {
+    subject: "Onafgemaakte inlog op je Madeora-account",
+    preview: "Iemand kwam voorbij de eerste stap, maar niet voorbij de tweestapsverificatie.",
+    heading: "Een inlog is niet afgemaakt",
+    body: "Iemand heeft het wachtwoord van je Madeora-account ingevoerd, of de Google-inlog gebruikt, maar de tweestapsverificatie niet voltooid, dus kreeg geen toegang. Was jij dit, dan hoef je niets te doen. Was jij het niet, wijzig dan meteen je wachtwoord en open Beveiligingsactiviteit in Madeora om je account te beveiligen. Deze melding wordt altijd verstuurd.",
+    button: "Beveiligingsactiviteit bekijken",
+  },
+  "account.signed_in": {
+    subject: "Er is ingelogd op je Madeora-account",
+    preview: "Je wilde van elke inlog horen.",
+    heading: "Nieuwe inlog",
+    body: "Er is net ingelogd op je Madeora-account. Je krijgt dit bericht omdat meldingen voor elke inlog aan staan. Was jij het niet, open dan Beveiligingsactiviteit in Madeora, kies Mijn account beveiligen bij die inlog en wijzig je wachtwoord.",
+    button: "Beveiligingsactiviteit bekijken",
+  },
+  "account.security_report_ready": {
+    subject: "Je Madeora-beveiligingsrapport staat klaar",
+    preview: "Download het binnen 24 uur in Madeora.",
+    heading: "Beveiligingsrapport klaar",
+    body: "Het rapport met beveiligingsactiviteit dat je hebt aangevraagd staat klaar. Voor je veiligheid zit het niet als bijlage bij deze e-mail: log in bij Madeora en download het binnen 24 uur via Beveiligingsactiviteit. Heb je geen rapport aangevraagd, wijzig dan je wachtwoord en bekijk je apparaten.",
+    button: "Beveiligingsactiviteit openen",
+  },
   "account.device_trusted": {
     subject: "Er is een apparaat vertrouwd voor je Madeora-account",
     preview: "Inloggen daar slaat de code van de authenticator 30 dagen over.",
