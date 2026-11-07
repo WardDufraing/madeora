@@ -18,9 +18,17 @@ const browser = {
     signOut: vi.fn(),
     refreshSession: vi.fn(),
     updateUser: vi.fn(),
-    mfa: { challengeAndVerify: vi.fn() },
+    getSession: vi.fn(),
+    mfa: { challengeAndVerify: vi.fn(), listFactors: vi.fn() },
   },
 };
+
+function sessionWith(aal: "aal1" | "aal2") {
+  const payload = Buffer.from(JSON.stringify({ session_id: "main-session", aal })).toString(
+    "base64url",
+  );
+  return { data: { session: { access_token: `h.${payload}.s` } } };
+}
 vi.mock("@/auth/supabase-browser", () => ({
   getSupabaseBrowserClient: () => browser,
 }));
@@ -43,6 +51,11 @@ beforeEach(() => {
   browser.auth.refreshSession.mockResolvedValue({ error: null });
   browser.auth.updateUser.mockResolvedValue({ error: null });
   browser.auth.mfa.challengeAndVerify.mockResolvedValue({ error: null });
+  browser.auth.mfa.listFactors.mockResolvedValue({
+    data: { totp: [{ id: "factor-1", status: "verified" }] },
+    error: null,
+  });
+  browser.auth.getSession.mockResolvedValue(sessionWith("aal2"));
   reauthenticate.mockResolvedValue(null);
   startGoogleReauth.mockResolvedValue({ error: null });
   fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -314,6 +327,41 @@ describe("PasswordSetting", () => {
     await userEvent.click(screen.getByRole("button", { name: "Set a password" }));
     expect(startGoogleReauth).toHaveBeenCalledWith(
       { action: "password", userId: "user-g", twoFactor: true },
+      "g@gmail.test",
+    );
+    // The code comes after Google, on the Google session (this browser's session is aal2).
+    expect(browser.auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
+  });
+
+  it("on a trusted browser, asks for the code before Google and verifies it here", async () => {
+    browser.auth.getSession.mockResolvedValue(sessionWith("aal1"));
+    const { container } = renderWithIntl(
+      <PasswordSetting {...googleOnly} twoFactor hasPassword={false} confirmed={null} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Set a password" }));
+    expect(startGoogleReauth).not.toHaveBeenCalled();
+    expect(await screen.findByText(/This browser skipped the code/)).toBeVisible();
+    expect(await axeViolations(container)).toEqual([]);
+
+    browser.auth.mfa.challengeAndVerify.mockResolvedValueOnce({
+      error: new AuthApiError("Invalid TOTP code", 422, "mfa_verification_failed"),
+    });
+    const field = screen.getByLabelText(/^Code from your authenticator app/);
+    await userEvent.type(field, "000000");
+    await userEvent.click(screen.getByRole("button", { name: "Set a password" }));
+    expect(await screen.findByText(/That code is incorrect/)).toBeVisible();
+    expect(field).toHaveValue("");
+    expect(startGoogleReauth).not.toHaveBeenCalled();
+
+    await userEvent.type(field, "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Set a password" }));
+    expect(browser.auth.mfa.challengeAndVerify).toHaveBeenLastCalledWith({
+      factorId: "factor-1",
+      code: "123456",
+    });
+    // Nothing is left to ask after Google.
+    expect(startGoogleReauth).toHaveBeenCalledWith(
+      { action: "password", userId: "user-g", twoFactor: false },
       "g@gmail.test",
     );
   });

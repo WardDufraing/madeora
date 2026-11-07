@@ -6,13 +6,21 @@ import {
   parseAccountChangeAction,
   startGoogleReauth,
   takePending,
+  verifyReauthCode,
+  browserSessionIsAal2,
 } from "./google-reauth";
 
+const mfa = () => ({ listFactors: vi.fn(), challengeAndVerify: vi.fn() });
 const reauth = {
-  auth: { signInWithOAuth: vi.fn(), exchangeCodeForSession: vi.fn(), signOut: vi.fn() },
+  auth: {
+    signInWithOAuth: vi.fn(),
+    exchangeCodeForSession: vi.fn(),
+    signOut: vi.fn(),
+    mfa: mfa(),
+  },
   rpc: vi.fn(),
 };
-const main = { auth: { getUser: vi.fn(), getSession: vi.fn() } };
+const main = { auth: { getUser: vi.fn(), getSession: vi.fn(), mfa: mfa() } };
 vi.mock("./supabase-browser", () => ({
   getGoogleReauthClient: () => reauth,
   getSupabaseBrowserClient: () => main,
@@ -36,6 +44,42 @@ beforeEach(() => {
 });
 
 describe("google reauthentication", () => {
+  it("tells a trusted browser's aal1 session from one that passed two-factor sign-in", async () => {
+    const token = (aal: string) =>
+      `h.${Buffer.from(JSON.stringify({ session_id: "s", aal })).toString("base64url")}.s`;
+    main.auth.getSession.mockResolvedValue({ data: { session: { access_token: token("aal2") } } });
+    expect(await browserSessionIsAal2()).toBe(true);
+    main.auth.getSession.mockResolvedValue({ data: { session: { access_token: token("aal1") } } });
+    expect(await browserSessionIsAal2()).toBe(false);
+    main.auth.getSession.mockResolvedValue({ data: { session: null } });
+    expect(await browserSessionIsAal2()).toBe(false);
+  });
+
+  it("verifies the code on the session it is told to, and only there", async () => {
+    for (const client of [main, reauth]) {
+      client.auth.mfa.listFactors.mockResolvedValue({
+        data: { totp: [{ id: "f-1" }] },
+        error: null,
+      });
+      client.auth.mfa.challengeAndVerify.mockResolvedValue({ error: null });
+    }
+    expect(await verifyReauthCode("google", "123456")).toEqual({ error: null, noFactor: false });
+    expect(reauth.auth.mfa.challengeAndVerify).toHaveBeenCalledWith({
+      factorId: "f-1",
+      code: "123456",
+    });
+    expect(main.auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
+
+    expect(await verifyReauthCode("browser", "654321")).toEqual({ error: null, noFactor: false });
+    expect(main.auth.mfa.challengeAndVerify).toHaveBeenCalledWith({
+      factorId: "f-1",
+      code: "654321",
+    });
+
+    main.auth.mfa.listFactors.mockResolvedValue({ data: { totp: [] }, error: null });
+    expect(await verifyReauthCode("browser", "111111")).toEqual({ error: null, noFactor: true });
+  });
+
   it("knows only the database's account-change permissions", () => {
     expect(parseAccountChangeAction("backup_email")).toBe("backup_email");
     expect(parseAccountChangeAction("admin")).toBeNull();

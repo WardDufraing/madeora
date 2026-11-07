@@ -6590,6 +6590,7 @@
     "googleConfirmTitle": "Confirm it's you",
     "googleConfirmWorking": "Confirming with Google…",
     "googleConfirmCode": "Google confirmed it's you. Now enter the 6-digit code from your authenticator app.",
+    "googleCodeFirst": "This browser skipped the code when you signed in, so enter the 6-digit code from your authenticator app first. Then Google confirms it's you.",
     "googleConfirmCancelled": "Google confirmation was cancelled. Nothing was changed.",
     "googleConfirmNothingPending": "This confirmation was not started in this browser tab, or it was already used. Start the change again from Settings › Security.",
     "googleConfirmOtherAccount": "That Google account doesn't sign in to this Madeora account. Try again and choose the Google account you sign in with.",

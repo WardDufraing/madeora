@@ -14,9 +14,9 @@ import {
   takePending,
   type GoogleReauthFailure,
   type PendingGoogleReauth,
+  verifyReauthCode,
 } from "@/auth/google-reauth";
 import { totpCodeSchema, type TotpCodeValues } from "@/auth/schemas";
-import { getSupabaseBrowserClient } from "@/auth/supabase-browser";
 import { classifyTwoFactorError } from "@/auth/two-factor";
 import { FormAlert } from "@/components/auth/form-alert";
 import { useAuthMessages } from "@/components/auth/use-auth-messages";
@@ -51,7 +51,7 @@ async function begin(): Promise<Outcome | null> {
 
 /**
  * Finishes "Confirm with Google" (S37): opens the short-lived Google session, asks for the
- * authenticator code when two-factor sign-in is on (verified on the browser's own session), asks
+ * authenticator code when two-factor sign-in is on (verified on the Google session), asks
  * the database for the permission and goes back to the change, which then needs nothing more.
  */
 export function GoogleReauthCallback() {
@@ -83,17 +83,12 @@ export function GoogleReauthCallback() {
   const onCode = form.handleSubmit(async (values) => {
     if (outcome.kind !== "code") return;
     setFailure(null);
-    const main = getSupabaseBrowserClient();
-    const { data, error: listError } = await main.auth.mfa.listFactors();
-    const factor = data?.totp[0];
-    if (listError || !factor) {
+    // On the Google session: the browser's own is aal2 here, so neither ends the other.
+    const { error, noFactor } = await verifyReauthCode("google", totpCodeSchema.parse(values).code);
+    if (noFactor) {
       setFailure(authMessages.failure("unknown"));
       return;
     }
-    const { error } = await main.auth.mfa.challengeAndVerify({
-      factorId: factor.id,
-      code: totpCodeSchema.parse(values).code,
-    });
     if (error) {
       setFailure(codeMessage(classifyTwoFactorError(error)));
       form.setValue("code", "");

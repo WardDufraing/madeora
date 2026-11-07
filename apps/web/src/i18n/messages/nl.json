@@ -6590,6 +6590,7 @@
     "googleConfirmTitle": "Bevestig dat jij het bent",
     "googleConfirmWorking": "Bevestigen met Google…",
     "googleConfirmCode": "Google heeft bevestigd dat jij het bent. Vul nu de 6-cijferige code uit je authenticator-app in.",
+    "googleCodeFirst": "Deze browser sloeg de code over toen je inlogde. Vul daarom eerst de 6-cijferige code uit je authenticator-app in. Daarna bevestigt Google dat jij het bent.",
     "googleConfirmCancelled": "De bevestiging met Google is geannuleerd. Er is niets gewijzigd.",
     "googleConfirmNothingPending": "Deze bevestiging is niet in dit browsertabblad gestart, of is al gebruikt. Begin de wijziging opnieuw via Instellingen › Beveiliging.",
     "googleConfirmOtherAccount": "Met dat Google-account meld je je niet aan bij dit Madeora-account. Probeer het opnieuw en kies het Google-account waarmee je je aanmeldt.",

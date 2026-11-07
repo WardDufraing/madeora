@@ -7,9 +7,14 @@ import { readAccessTokenClaims } from "./two-factor";
  * Confirming a sensitive change with Google (S37), for accounts that sign in only with Google and
  * so have no password to type again. The browser goes to Google (which asks which account to use)
  * and back to `/auth/reauthenticate`, which opens a short-lived session in its own client, asks
- * for the authenticator code on the browser's own session when two-factor sign-in is on, and asks
- * the database for the same one-time permission a password reauthentication gives. The database
- * checks the fresh Google sign-in, the code and that both sessions are this account's.
+ * for the authenticator code when two-factor sign-in is on, and asks the database for the same
+ * one-time permission a password reauthentication gives. The database checks the fresh Google
+ * sign-in, the code and that both sessions are this account's.
+ *
+ * Supabase Auth ends every aal1 session of the account when a code is verified. Normally the
+ * browser's own session is aal2, so the code is verified on the Google session after Google. A
+ * trusted browser's own session is aal1: the code is verified on it before leaving for Google
+ * (`twoFactor` is then false in what is pending), so neither session ends the other.
  */
 
 /** The database's account-change permissions (supabase/migrations/…_adult_security.sql). */
@@ -74,6 +79,29 @@ export function takePending(): PendingGoogleReauth | null {
   }
 }
 
+/** True when the browser's own session has passed two-factor sign-in (not a trusted browser's aal1). */
+export async function browserSessionIsAal2(): Promise<boolean> {
+  const { data } = await getSupabaseBrowserClient().auth.getSession();
+  return data.session ? readAccessTokenClaims(data.session.access_token).aal === "aal2" : false;
+}
+
+/**
+ * Verifies the authenticator code on the browser's own session (`"browser"`, before Google on a
+ * trusted browser) or on the Google session (`"google"`, after Google). `noFactor` when the
+ * account has no verified authenticator any more.
+ */
+export async function verifyReauthCode(
+  where: "browser" | "google",
+  code: string,
+): Promise<{ readonly error: unknown; readonly noFactor: boolean }> {
+  const client = where === "browser" ? getSupabaseBrowserClient() : getGoogleReauthClient();
+  const { data, error: listError } = await client.auth.mfa.listFactors();
+  const factor = data?.totp[0]; // Supabase lists only verified TOTP factors here.
+  if (listError || !factor) return { error: listError, noFactor: true };
+  const { error } = await client.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+  return { error, noFactor: false };
+}
+
 /** Leaves for Google. Resolves with an error only if it could not start. */
 export async function startGoogleReauth(
   pending: PendingGoogleReauth,
@@ -117,7 +145,7 @@ export async function openGoogleReauthSession(
 }
 
 /**
- * With the Google session open (and the code verified on the browser's own session if needed),
+ * With the Google session open (and the code verified if needed),
  * asks for the permission bound to the browser's own session, then ends the Google session.
  */
 export async function authorizeAfterGoogle(action: AccountChangeAction): Promise<boolean> {

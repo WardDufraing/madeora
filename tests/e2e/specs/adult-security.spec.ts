@@ -116,7 +116,9 @@ test.describe("two-factor sign-in", () => {
 
     await other.getByLabel(/^Code from your authenticator app/).fill("000000");
     await other.getByRole("button", { name: "Continue" }).click();
-    await expect(other.getByRole("alert")).toBeVisible();
+    // Wait for the refusal, which also empties the field, before typing the right code.
+    await expect(other.getByText(/^That code is incorrect\./)).toBeVisible();
+    await expect(other.getByLabel(/^Code from your authenticator app/)).toHaveValue("");
 
     ageVerifications(account.email);
     await other.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
@@ -189,6 +191,39 @@ test.describe("two-factor sign-in", () => {
     await other.context().close();
   });
 
+  test("a trusted browser confirms a change with the password and a code", async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    const account = await registerConfirmed(baseURL ?? "");
+    await signIn(page, account);
+    const { secret, codes } = await turnOnTwoFactor(page, account);
+
+    const other = await freshPage(browser);
+    await signInWithPassword(other, account, "/sign-in?next=%2Fsettings");
+    ageVerifications(account.email);
+    await other.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
+    await other.getByRole("checkbox", { name: /Trust this browser for 30 days/ }).check();
+    await other.getByRole("button", { name: "Continue" }).click();
+    await expect(other).toHaveURL(/\/settings$/);
+
+    // A new sign-in skips the code, so this session has not passed two-factor sign-in itself.
+    await other.context().clearCookies({ name: /^sb-/ });
+    await signInWithPassword(other, account, "/sign-in?next=%2Fsettings%2Fsecurity");
+    await expect(other).toHaveURL(/\/settings\/security$/);
+    await other.getByRole("button", { name: "New recovery codes" }).click();
+    await reauthenticate(other, account, secret);
+    await other.getByRole("button", { name: "Create new codes" }).click();
+    await expect(other.getByTestId("recovery-codes")).toBeVisible();
+    expect(await other.getByTestId("recovery-code").allTextContents()).not.toEqual(codes);
+    await other.context().close();
+
+    // The session that turned two-factor sign-in on had passed it, so it is still signed in.
+    await page.goto("/settings/security");
+    await expect(page).toHaveURL(/\/settings\/security$/);
+  });
+
   test("a recovery code works once and turns two-factor sign-in off", async ({
     page,
     browser,
@@ -201,7 +236,11 @@ test.describe("two-factor sign-in", () => {
     const lost = await freshPage(browser);
     await signInWithPassword(lost, account);
     await expect(lost).toHaveURL(/\/sign-in\/two-factor/);
-    await lost.getByRole("button", { name: "Use a recovery code instead" }).click();
+    // A click before the page has hydrated does nothing, so click until the field appears.
+    await expect(async () => {
+      await lost.getByRole("button", { name: "Use a recovery code instead" }).click();
+      await expect(lost.getByLabel(/^Recovery code/)).toBeVisible({ timeout: 1_000 });
+    }).toPass();
     await lost.getByLabel(/^Recovery code/).fill("AAAA-AAAA-AAAA");
     await lost.getByRole("button", { name: "Sign in with recovery code" }).click();
     await expect(lost.getByText(/That recovery code doesn't work/)).toBeVisible();
@@ -210,7 +249,7 @@ test.describe("two-factor sign-in", () => {
     await lost.getByRole("button", { name: "Sign in with recovery code" }).click();
     await expect(lost).toHaveURL(/\/settings\/security\?recovered=1$/);
     await expect(lost.getByText(/your authenticator was removed/)).toBeVisible();
-    await expect(lost.getByText("Off.")).toBeVisible();
+    await expect(lost.getByTestId("two-factor-setting").getByText("Off.")).toBeVisible();
     await lost.context().close();
 
     // Redeeming signed out every other session, the one that turned two-factor sign-in on too.
@@ -256,7 +295,7 @@ test.describe("password and email", () => {
     await page.getByLabel(/^New password/).fill("a different long password 9");
     await page.getByLabel(/^Repeat the new password/).fill("a different long password 9");
     await page.getByRole("button", { name: "Change password" }).click();
-    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.getByText("That password is incorrect.")).toBeVisible();
 
     // The old password still signs in.
     const fresh = await freshPage(browser);
