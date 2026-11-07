@@ -8,6 +8,7 @@ import {
   notificationSubject,
   type NotificationEmailProps,
 } from "./notification.tsx";
+import { SecurityEmail, securityEmailSubject, type SecurityEmailProps } from "./security-email.tsx";
 import {
   OwnershipRecoveryEmail,
   ownershipRecoverySubject,
@@ -53,4 +54,14 @@ export async function renderNotificationEmail(
   const element = createElement(NotificationEmail, props);
   const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
   return { subject: notificationSubject(props).subject, html, text };
+}
+
+/** Renders an account security email to a backup or new address (S37), as HTML and plain text. */
+export async function renderSecurityEmail(props: SecurityEmailProps): Promise<RenderedEmail> {
+  if (props.kind !== "recovery_started" && !props.url) {
+    throw new Error("This security email needs its link.");
+  }
+  const element = createElement(SecurityEmail, props);
+  const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
+  return { subject: securityEmailSubject(props), html, text };
 }

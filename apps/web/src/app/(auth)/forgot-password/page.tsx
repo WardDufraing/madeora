@@ -13,12 +13,21 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ForgotPasswordPage() {
-  const t = await getTranslations("Auth");
+  const [t, tRecovery] = await Promise.all([
+    getTranslations("Auth"),
+    getTranslations("AccountRecovery"),
+  ]);
   return (
     <>
       <AuthPageTitle title={t("forgotTitle")} />
       <ForgotPasswordForm />
       <p className="mt-6 text-body">
+        {/* S37: when the sign-in mailbox is lost too, the backup address is the way back in. */}
+        <Link href="/account-recovery" className="font-medium text-accent-fg underline">
+          {tRecovery("forgotLink")}
+        </Link>
+      </p>
+      <p className="mt-2 text-body">
         <Link href="/sign-in" className="font-medium text-accent-fg underline">
           {t("backToSignIn")}
         </Link>

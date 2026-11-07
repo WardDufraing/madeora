@@ -17,6 +17,16 @@ import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
  * come from the reader's language. A kind this build does not know still reads as a sentence.
  */
 const kindMessage = {
+  "account.recovery_code_used": "kindAccountRecoveryCodeUsed",
+  "account.recovery_codes_regenerated": "kindAccountRecoveryCodesRegenerated",
+  "account.session_reported": "kindAccountSessionReported",
+  "account.signed_out_everywhere": "kindAccountSignedOutEverywhere",
+  "account.device_trusted": "kindAccountDeviceTrusted",
+  "account.backup_email_changed": "kindAccountBackupEmailChanged",
+  "account.backup_email_removed": "kindAccountBackupEmailRemoved",
+  "account.account_recovery_codes_created": "kindAccountRecoveryCodesCreated",
+  "account.recovery_started": "kindAccountRecoveryStarted",
+  "account.recovered": "kindAccountRecovered",
   "recovery.owner_requested": "kindRecoveryOwnerRequested",
   "recovery.owner_review_started": "kindRecoveryOwnerReviewStarted",
   "recovery.owner_approved": "kindRecoveryOwnerApproved",

@@ -30,3 +30,11 @@ export function signInPath(path: string | null | undefined): string {
   const next = safeNextPath(path);
   return next === DEFAULT_SIGNED_IN_PATH ? "/sign-in" : `/sign-in?next=${encodeURIComponent(next)}`;
 }
+
+/** The two-factor page (S37) that returns to `path` afterwards. */
+export function twoFactorPath(path: string | null | undefined): string {
+  const next = safeNextPath(path);
+  return next === DEFAULT_SIGNED_IN_PATH
+    ? "/sign-in/two-factor"
+    : `/sign-in/two-factor?next=${encodeURIComponent(next)}`;
+}

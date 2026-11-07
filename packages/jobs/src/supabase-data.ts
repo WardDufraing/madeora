@@ -12,6 +12,7 @@ import type {
   InvitationEmailRead,
   JobDataPort,
   NotificationEmailRead,
+  SecurityEmailRead,
   StoredFileStatus,
 } from "./services.ts";
 import { createGoogleSyncStore } from "./google-sync-store.ts";
@@ -35,6 +36,13 @@ const notificationSkips = [
 ] as const;
 
 const invitationSkips = ["not_found", "superseded", "not_active"] as const;
+
+const securityEmailKinds = [
+  "backup_verify",
+  "recovery_link",
+  "recovery_started",
+  "recovery_ready",
+] as const;
 
 const fileStatuses = ["pending", "ready", "failed", "deleted", "purged", "missing"] as const;
 
@@ -147,6 +155,46 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       });
       if (error) throw new JobStoreError("record_invitation_email", error.code);
       return data;
+    },
+
+    async getSecurityEmail(emailId): Promise<SecurityEmailRead> {
+      const { data, error } = await client.rpc("get_security_email", { p_email_id: emailId });
+      if (error) throw new JobStoreError("get_security_email", error.code);
+      const [row] = data;
+      if (row?.outcome === "skipped") return { outcome: "skipped" };
+      const kind = oneOf(securityEmailKinds, row?.kind ?? undefined);
+      if (row?.outcome !== "ok" || !kind || !row.recipient_email) {
+        throw new JobStoreError("get_security_email", "unexpected_result");
+      }
+      if (kind !== "recovery_started" && !row.token) {
+        throw new JobStoreError("get_security_email", "unexpected_result");
+      }
+      return {
+        outcome: "ok",
+        kind,
+        to: row.recipient_email,
+        locale: language(row.email_locale),
+        token: row.token,
+        expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+      };
+    },
+
+    async recordSecurityEmail(emailId, status) {
+      const { data, error } = await client.rpc("record_security_email", {
+        p_email_id: emailId,
+        p_status: status satisfies Exclude<EmailRecordStatus, "skipped">,
+      });
+      if (error) throw new JobStoreError("record_security_email", error.code);
+      return data;
+    },
+
+    async deliverAccountRecoveryReady(recoveryId, readyAt) {
+      const { data, error } = await client.rpc("deliver_account_recovery_ready", {
+        p_recovery_id: recoveryId,
+        p_ready_at: readyAt.toISOString(),
+      });
+      if (error) throw new JobStoreError("deliver_account_recovery_ready", error.code);
+      return data === "notified" ? "notified" : "not_ready";
     },
 
     async deliverRecoveryReady(recoveryId, objectionEndsAt) {

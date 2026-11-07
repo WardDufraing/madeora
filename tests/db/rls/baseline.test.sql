@@ -50,7 +50,18 @@ select tests.assert_true(
         'private.is_visible_name(text,integer)',
         -- S12: the homes update policy asks whether the caller (auth.uid(), never another
         -- account) holds a capability in a Home; it reveals nothing about anyone else.
-        'private.caller_has_home_capability(uuid,text)'
+        'private.caller_has_home_capability(uuid,text)',
+        -- S37: the Realtime signal tables' policies ask whether the caller's own session is still
+        -- signed in (and past two-factor); PostgREST's pre-request check asks the same and raises.
+        -- Both read only the caller's own token and session.
+        'private.request_session_ok()',
+        'private.enforce_request_session()',
+        -- S37: the signed-out account recovery steps (lost password and mailbox). Their public
+        -- wrappers run with the visitor's rights; these check the emailed link's secret and the
+        -- recovery code themselves and reveal nothing about whether an account exists.
+        'private.start_account_recovery(text)',
+        'private.continue_account_recovery(text,text,boolean)',
+        'private.finish_account_recovery(text)'
       ]::text[])
       and (
         has_function_privilege('anon', p.oid, 'execute')
@@ -138,7 +149,11 @@ select tests.assert_true(
       -- S30: the goal reminder.
       'public.deliver_goal_reminder(uuid,integer,text,timestamptz)',
       -- S30b: period rollover.
-      'public.roll_goal_periods(integer)'
+      'public.roll_goal_periods(integer)',
+      -- S37: security emails to the backup address and the end of a recovery's wait.
+      'public.get_security_email(uuid)',
+      'public.record_security_email(uuid,text)',
+      'public.deliver_account_recovery_ready(uuid,timestamptz)'
     ]::regprocedure[]) as s(signature)
     where has_function_privilege('authenticated', s.signature, 'execute')
   ),

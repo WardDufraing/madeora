@@ -21,6 +21,7 @@ import { habitPauseEnd, habitReminder, habitReminderSnooze } from "../jobs/habit
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
+import { accountRecoveryReady, securityEmail } from "../jobs/security-email.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
 import { storageFilePurge, storageObjectDelete, storageUploadExpire } from "../jobs/storage.ts";
 import { taskReminder } from "../jobs/task-reminder.ts";
@@ -81,6 +82,8 @@ export const samplePingTask = jobTask(samplePing);
 export const notificationEmailTask = jobTask(notificationEmail);
 export const invitationEmailTask = jobTask(invitationEmail);
 export const recoveryReadyTask = jobTask(recoveryReady);
+export const securityEmailTask = jobTask(securityEmail);
+export const accountRecoveryReadyTask = jobTask(accountRecoveryReady);
 export const storageUploadExpireTask = jobTask(storageUploadExpire);
 export const storageFilePurgeTask = jobTask(storageFilePurge);
 export const storageObjectDeleteTask = jobTask(storageObjectDelete);

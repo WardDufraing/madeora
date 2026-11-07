@@ -2,10 +2,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
-import { reauthenticateSchema, type ReauthenticateValues } from "@/auth/schemas";
+import { reauthenticate } from "@/auth/reauthenticate";
+import { reauthenticationSchema, type ReauthenticationValues } from "@/auth/schemas";
 import {
   LINK_STARTED_BY_KEY,
   canUnlink,
@@ -13,7 +14,7 @@ import {
   type MethodChangeFailure,
   type SignInMethodsView,
 } from "@/auth/sign-in-methods";
-import { getMemoryOnlySupabaseClient, getSupabaseBrowserClient } from "@/auth/supabase-browser";
+import { getSupabaseBrowserClient } from "@/auth/supabase-browser";
 import { useCaptcha } from "@/components/auth/captcha";
 import { FormAlert } from "@/components/auth/form-alert";
 import { useAuthMessages } from "@/components/auth/use-auth-messages";
@@ -27,38 +28,11 @@ export interface SignInMethodsSettingProps {
   readonly googleAvailable: boolean;
   /** Set after returning from a link or unlink, to confirm what changed. */
   readonly notice: "linked" | "unlinked" | null;
+  /** The account has two-factor sign-in: reauthentication asks for a code too (S37). */
+  readonly twoFactor?: boolean;
 }
 
 type Action = "link" | "unlink";
-
-/**
- * Proves the person knows the password with a separate, memory-only sign-in, then asks the
- * database for a one-time permission with that fresh session. The browser's own session is never
- * replaced, and the extra session is signed out straight away.
- */
-async function reauthenticateFor(
-  action: Action,
-  email: string,
-  password: string,
-  captchaOptions: { readonly captchaToken?: string },
-): Promise<unknown> {
-  const client = getMemoryOnlySupabaseClient("reauthentication");
-  const { error: signInError } = await client.auth.signInWithPassword({
-    email,
-    password,
-    options: captchaOptions,
-  });
-  if (signInError) return signInError;
-  try {
-    const { error } = await client.rpc("authorize_sign_in_method_change", {
-      p_action: action,
-      p_provider: "google",
-    });
-    return error;
-  } finally {
-    await client.auth.signOut({ scope: "local" });
-  }
-}
 
 /** Settings › Sign-in methods (S08): email and password, and linking or unlinking Google. */
 export function SignInMethodsSetting({
@@ -66,16 +40,19 @@ export function SignInMethodsSetting({
   methods,
   googleAvailable,
   notice,
+  twoFactor = false,
 }: SignInMethodsSettingProps) {
   const t = useTranslations("SignInMethods");
+  const tSecurity = useTranslations("Security");
   const authMessages = useAuthMessages();
   const captcha = useCaptcha("reauthenticate");
   const [action, setAction] = useState<Action | null>(null);
-  const [failure, setFailure] = useState<MethodChangeFailure | null>(null);
+  const [failure, setFailure] = useState<MethodChangeFailure | "wrongCode" | null>(null);
   const [leaving, setLeaving] = useState(false);
-  const form = useForm<ReauthenticateValues>({
-    resolver: zodResolver(reauthenticateSchema),
-    defaultValues: { password: "" },
+  const resolver = useMemo(() => zodResolver(reauthenticationSchema(twoFactor)), [twoFactor]);
+  const form = useForm<ReauthenticationValues>({
+    resolver,
+    defaultValues: { password: "", code: "" },
   });
   const { errors, isSubmitting } = form.formState;
 
@@ -84,8 +61,9 @@ export function SignInMethodsSetting({
     if (action !== null) form.setFocus("password");
   }, [action, form]);
 
-  const failures: Record<MethodChangeFailure, string> = {
+  const failures: Record<MethodChangeFailure | "wrongCode", string> = {
     wrongPassword: t("wrongPassword"),
+    wrongCode: tSecurity("wrongCode"),
     reauthRequired: t("reauthRequired"),
     notAllowed: t("notAllowed"),
     alreadyLinked: t("linkAlreadyLinked"),
@@ -99,23 +77,39 @@ export function SignInMethodsSetting({
   function open(next: Action) {
     setAction(next);
     setFailure(null);
-    form.reset({ password: "" });
+    form.reset({ password: "", code: "" });
   }
 
   function close() {
     setAction(null);
     setFailure(null);
-    form.reset({ password: "" });
+    form.reset({ password: "", code: "" });
   }
 
-  const onSubmit = form.handleSubmit(async ({ password }) => {
+  const onSubmit = form.handleSubmit(async ({ password, code }) => {
     if (action === null || !captcha.ready) return;
     setFailure(null);
-    const reauthError = await reauthenticateFor(action, methods.email, password, captcha.options);
+    const reauthError = await reauthenticate(
+      {
+        email: methods.email,
+        password,
+        code: twoFactor ? code : null,
+        captchaOptions: captcha.options,
+      },
+      (client, sessionId) =>
+        client.rpc("authorize_sign_in_method_change", {
+          p_action: action,
+          p_provider: "google",
+          p_main_session_id: sessionId,
+        }),
+    );
     captcha.reset();
     form.setValue("password", "");
+    form.setValue("code", "");
     if (reauthError) {
-      setFailure(classifyMethodChangeError(reauthError));
+      setFailure(
+        reauthError.step === "code" ? "wrongCode" : classifyMethodChangeError(reauthError.error),
+      );
       return;
     }
 
@@ -250,6 +244,18 @@ export function SignInMethodsSetting({
             error={authMessages.field(errors.password?.message)}
             {...form.register("password")}
           />
+          {twoFactor ? (
+            <TextField
+              label={tSecurity("authenticatorCode")}
+              description={tSecurity("authenticatorCodeHint")}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={9}
+              required
+              error={authMessages.field(errors.code?.message)}
+              {...form.register("code")}
+            />
+          ) : null}
           {captcha.check}
           <div className="flex flex-wrap gap-3">
             <Button

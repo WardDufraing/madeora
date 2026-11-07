@@ -673,6 +673,19 @@ select tests.act_as('bob');
 select tests.assert_true(
   (select count(*) = 2 from public.chore_pool_signals),
   'Bob sees both of his Homes''');
+-- S37: Realtime checks each signal against this policy, so a signed-out session gets nothing more.
+select tests.act_as_owner();
+delete from auth.sessions where id = tests.session_id(tests.user_id('bob'));
+select set_config('role', 'authenticated', true), set_config('request.jwt.claims',
+  jsonb_build_object('sub', tests.user_id('bob'), 'role', 'authenticated',
+                     'session_id', tests.session_id(tests.user_id('bob')))::text, true);
+select tests.assert_true(
+  (select count(*) = 0 from public.chore_pool_signals),
+  'A signed-out session''s token no longer sees any signal');
+select tests.act_as('bob');
+select tests.assert_true(
+  (select count(*) = 2 from public.chore_pool_signals),
+  'Signed in again, Bob sees them again');
 select tests.act_as_owner();
 select tests.assert_true(
   exists (select 1 from pg_catalog.pg_publication_tables

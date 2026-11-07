@@ -531,6 +531,10 @@ export type Database = {
           outcome: string;
         }[];
       };
+      authorize_account_change: {
+        Args: { p_action: string; p_session_id: string };
+        Returns: string;
+      };
       authorize_file_read: {
         Args: { p_file_id: string };
         Returns: {
@@ -549,7 +553,7 @@ export type Database = {
         }[];
       };
       authorize_sign_in_method_change: {
-        Args: { p_action: string; p_provider: string };
+        Args: { p_action: string; p_main_session_id?: string; p_provider: string };
         Returns: string;
       };
       begin_job_execution: {
@@ -611,6 +615,9 @@ export type Database = {
           title: string;
         }[];
       };
+      cancel_account_recovery: { Args: Record<PropertyKey, never>; Returns: boolean };
+      cancel_backup_email_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      cancel_my_email_change: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_ownership_recoveries: {
         Args: { p_home_id: string };
         Returns: {
@@ -738,6 +745,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      check_request: { Args: Record<PropertyKey, never>; Returns: undefined };
       claim_chore_occurrence: {
         Args: { p_occurrence_id: string };
         Returns: {
@@ -804,6 +812,14 @@ export type Database = {
         Returns: Json;
       };
       complete_storage_object_deletion: { Args: { p_deletion_id: string }; Returns: boolean };
+      confirm_backup_email: { Args: { p_token: string }; Returns: string };
+      continue_account_recovery: {
+        Args: { p_code: string; p_lost_authenticator?: boolean; p_token: string };
+        Returns: {
+          outcome: string;
+          ready_at: string;
+        }[];
+      };
       copy_meal_week: {
         Args: {
           p_destination: string;
@@ -857,6 +873,7 @@ export type Database = {
         Returns: Json;
       };
       count_pending_join_requests: { Args: { p_home_id: string }; Returns: number };
+      create_account_recovery_codes: { Args: Record<PropertyKey, never>; Returns: string[] };
       create_calendar_event: {
         Args: { p_event: Json; p_home_id?: string; p_id: string };
         Returns: Json;
@@ -1331,6 +1348,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_two_factor_recovery_codes: { Args: Record<PropertyKey, never>; Returns: string[] };
       create_upload_intent: {
         Args: { p_content_type: string; p_purpose: string; p_request_id: string; p_size: number };
         Returns: {
@@ -1525,6 +1543,10 @@ export type Database = {
           revision: number;
         }[];
       };
+      deliver_account_recovery_ready: {
+        Args: { p_ready_at: string; p_recovery_id: string };
+        Returns: string;
+      };
       deliver_calendar_reminder: {
         Args: { p_at: string; p_event_id: string; p_on: string };
         Returns: string;
@@ -1615,6 +1637,7 @@ export type Database = {
           status: string;
         }[];
       };
+      finish_account_recovery: { Args: { p_token: string }; Returns: string };
       finish_job_execution: {
         Args: {
           p_claim_token: string;
@@ -1783,6 +1806,17 @@ export type Database = {
         }[];
       };
       get_reward_redemption: { Args: { p_redemption_id: string }; Returns: Json };
+      get_security_email: {
+        Args: { p_email_id: string };
+        Returns: {
+          email_locale: string;
+          expires_at: string;
+          kind: string;
+          outcome: string;
+          recipient_email: string;
+          token: string;
+        }[];
+      };
       get_shopping_context: {
         Args: { p_home_id?: string };
         Returns: {
@@ -2315,6 +2349,30 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_my_sessions: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          created_at: string;
+          id: string;
+          is_current: boolean;
+          last_active_at: string;
+          two_factor: boolean;
+          user_agent: string;
+        }[];
+      };
+      list_my_trusted_devices: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          browser: string;
+          created_at: string;
+          expires_at: string;
+          id: string;
+          is_current: boolean;
+          kind: string;
+          last_used_at: string;
+          platform: string;
+        }[];
+      };
       list_personal_reward_redemptions: { Args: { p_view?: string }; Returns: Json };
       list_personal_rewards: {
         Args: { p_include_archived?: boolean; p_today?: string; p_week_start?: string };
@@ -2565,6 +2623,19 @@ export type Database = {
           revision: number;
         }[];
       };
+      my_account_security: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          account_recovery_codes_left: number;
+          backup_email: string;
+          backup_email_pending: string;
+          has_password: boolean;
+          recovery_codes_left: number;
+          recovery_ready: boolean;
+          recovery_waiting_until: string;
+          two_factor: boolean;
+        }[];
+      };
       my_notification_channels: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2753,6 +2824,7 @@ export type Database = {
         Args: { p_error_code?: string; p_notification_id: string; p_status: string };
         Returns: boolean;
       };
+      record_security_email: { Args: { p_email_id: string; p_status: string }; Returns: boolean };
       redeem_personal_reward: {
         Args: {
           p_dry_run?: boolean;
@@ -2774,6 +2846,7 @@ export type Database = {
           outcome: string;
         }[];
       };
+      redeem_two_factor_recovery_code: { Args: { p_code: string }; Returns: string };
       release_chore_occurrence: {
         Args: { p_occurrence_id: string; p_undo?: boolean };
         Returns: {
@@ -2789,6 +2862,7 @@ export type Database = {
         Returns: string;
       };
       release_recipe_lock: { Args: { p_recipe_id: string; p_token: string }; Returns: boolean };
+      remove_backup_email: { Args: Record<PropertyKey, never>; Returns: boolean };
       remove_chore_reminder: {
         Args: { p_expected_revision: number; p_occurrence_id: string };
         Returns: {
@@ -2888,6 +2962,7 @@ export type Database = {
       reorder_chore_categories: { Args: { p_home_id: string; p_ids: string[] }; Returns: string };
       reorder_subtasks: { Args: { p_subtask_ids: string[]; p_task_id: string }; Returns: string };
       reorder_task_lists: { Args: { p_home_id?: string; p_list_ids: string[] }; Returns: string };
+      request_backup_email: { Args: { p_email: string }; Returns: string };
       request_chore_reassignment: {
         Args: {
           p_from_member?: string;
@@ -3063,10 +3138,13 @@ export type Database = {
           revision: number;
         }[];
       };
+      revoke_all_trusted_devices: { Args: Record<PropertyKey, never>; Returns: number };
       revoke_home_invitation: {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: string;
       };
+      revoke_my_session: { Args: { p_report?: boolean; p_session_id: string }; Returns: boolean };
+      revoke_trusted_device: { Args: { p_device_id: string }; Returns: boolean };
       roll_goal_periods: { Args: { p_limit?: number }; Returns: number };
       save_chore_absence: {
         Args: {
@@ -3100,6 +3178,7 @@ export type Database = {
         Returns: string;
       };
       send_chore_summaries: { Args: { p_limit: number }; Returns: number };
+      session_is_trusted: { Args: Record<PropertyKey, never>; Returns: boolean };
       set_administrator_capabilities: {
         Args: { p_capabilities: string[]; p_home_id: string; p_membership_id: string };
         Returns: string;
@@ -3462,6 +3541,7 @@ export type Database = {
         Args: { p_home_id?: string; p_limit?: number; p_list_ids: string[] };
         Returns: Json;
       };
+      sign_out_everywhere: { Args: Record<PropertyKey, never>; Returns: number };
       skip_chore_occurrence: {
         Args: { p_occurrence_id: string; p_reason?: string };
         Returns: {
@@ -3536,6 +3616,7 @@ export type Database = {
           statement: string;
         }[];
       };
+      start_account_recovery: { Args: { p_email: string }; Returns: undefined };
       start_ownership_transfer: {
         Args: { p_home_id: string; p_membership_id: string; p_request_id: string };
         Returns: {
@@ -3620,6 +3701,10 @@ export type Database = {
           open_entries: number;
           overdue_entries: number;
         }[];
+      };
+      trust_this_device: {
+        Args: { p_browser: string; p_kind: string; p_platform: string; p_token: string };
+        Returns: string;
       };
       undo_dashboard_change: {
         Args: { p_expected_revision: number; p_home_id?: string };
@@ -4153,6 +4238,10 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      use_trusted_device: {
+        Args: { p_browser: string; p_platform: string; p_token: string };
+        Returns: boolean;
       };
       withdraw_chore_proposal: {
         Args: { p_expected_revision: number; p_id: string };

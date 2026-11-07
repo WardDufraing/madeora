@@ -164,7 +164,8 @@ describe("notificationKinds", () => {
           name.endsWith("_goals.sql") ||
           name.endsWith("_pet_care.sql") ||
           // Also S33's "_google_calendar.sql".
-          name.endsWith("_calendar.sql"),
+          name.endsWith("_calendar.sql") ||
+          name.endsWith("_adult_security.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -183,6 +184,8 @@ describe("notificationKinds", () => {
       // S28 habit audit actions share the prefix; pause notices go through habit_notify_pause.
       // S33: the Google Calendar notice is a security one.
       ...[...sql.matchAll(/'security', '(google_calendar\.[a-z_]+)'/g)].map((m) => m[1]),
+      // S37: account security notices.
+      ...[...sql.matchAll(/'security', '(account\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/habit_notify_pause\(v_habit, '(habit\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());

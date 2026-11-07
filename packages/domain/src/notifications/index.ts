@@ -98,6 +98,16 @@ export const notificationKinds = [
   "pet_care.reminder",
   "calendar.reminder",
   "google_calendar.authorization_expired",
+  "account.recovery_code_used",
+  "account.recovery_codes_regenerated",
+  "account.session_reported",
+  "account.signed_out_everywhere",
+  "account.device_trusted",
+  "account.backup_email_changed",
+  "account.backup_email_removed",
+  "account.account_recovery_codes_created",
+  "account.recovery_started",
+  "account.recovered",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -156,6 +166,8 @@ export function notificationPath(
   if (kind.startsWith("storage.personal_")) return "/settings/storage";
   // S33: an expired Google Calendar authorization leads to its settings, to reconnect.
   if (kind === "google_calendar.authorization_expired") return "/settings/google-calendar";
+  // S37: account security notices lead to Settings › Security.
+  if (kind.startsWith("account.")) return "/settings/security";
   if (!homeId) return "/";
   const home = `/homes/${encodeURIComponent(homeId)}`;
   if (kind === "join_request.received") return `${home}/invitations`;

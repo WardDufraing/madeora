@@ -47,6 +47,14 @@ export async function registerConfirmed(baseURL: string, account = newAccount())
     token_hash: link.searchParams.get("token_hash"),
   });
   if (!response.ok) throw new Error(`confirmation failed: ${String(response.status)}`);
+  // Confirming through the API signs in too; end that session so tests see only their own.
+  const session = (await response.json()) as { access_token?: unknown };
+  if (typeof session.access_token === "string") {
+    await fetch(`${e2eEnv.supabaseUrl}/auth/v1/logout?scope=local`, {
+      method: "POST",
+      headers: { apikey: e2eEnv.publishableKey, authorization: `Bearer ${session.access_token}` },
+    });
+  }
   return account;
 }
 

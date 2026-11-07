@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1a1a1a">
+    <h1 style="font-size: 20px">Confirm your new Madeora email address</h1>
+    <p>Someone (hopefully you) asked to use this address for their Madeora account.</p>
+    <p>
+      <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=email_change"
+        >Confirm this email address</a
+      >
+    </p>
+    <p>
+      The link works once and expires after an hour. Until it is opened, the account keeps its
+      current address. If you did not ask for this, you can ignore this email.
+    </p>
+  </body>
+</html>

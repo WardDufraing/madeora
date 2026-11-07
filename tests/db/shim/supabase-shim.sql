@@ -10,8 +10,9 @@
 --   * Supabase's default grants on schema public, so RLS is the only barrier, exactly as on Supabase;
 --   * auth.users (only the columns seeds use) and auth.uid() / auth.role() / auth.jwt(), which read
 --     the same request.jwt.* settings as on Supabase;
---   * auth.identities, auth.sessions, auth.mfa_amr_claims and auth.flow_state with the columns,
---     keys and cascades Supabase Auth uses (S08 guards identities and reads sessions and link flows);
+--   * auth.identities, auth.sessions, auth.mfa_amr_claims, auth.flow_state, auth.mfa_factors and
+--     auth.mfa_challenges with the columns, keys and cascades Supabase Auth uses (S08 guards
+--     identities and reads sessions and link flows; S37 guards factors, challenges and credentials);
 --   * the `extensions` schema with pgcrypto and uuid-ossp.
 -- Runs as the cluster superuser (supabase_admin), like Supabase's own image setup.
 --
@@ -32,6 +33,10 @@ grant anon, authenticated, service_role to authenticator;
 create role postgres login createrole createdb bypassrls;
 grant anon, authenticated, service_role to postgres;
 grant all on database postgres to postgres;
+-- Supabase (its supautils extension) lets postgres set PostgREST options on authenticator
+-- (S37: pgrst.db_pre_request).
+grant authenticator to postgres with admin option, inherit false, set false;
+grant set on parameter pgrst.db_pre_request to postgres;
 
 create schema extensions;
 grant usage on schema extensions to postgres, anon, authenticated, service_role;
@@ -64,8 +69,14 @@ create table auth.users (
   last_sign_in_at timestamptz,
   confirmation_token varchar(255),
   recovery_token varchar(255),
+  recovery_sent_at timestamptz,
+  reauthentication_token varchar(255) default '',
+  reauthentication_sent_at timestamptz,
   email_change_token_new varchar(255),
   email_change varchar(255),
+  email_change_token_current varchar(255) default '',
+  email_change_sent_at timestamptz,
+  email_change_confirm_status smallint default 0,
   raw_app_meta_data jsonb,
   raw_user_meta_data jsonb,
   is_sso_user boolean not null default false,
@@ -75,6 +86,18 @@ create table auth.users (
   deleted_at timestamptz
 );
 grant all on auth.users to postgres;
+
+-- Supabase Auth's outstanding one-time links (reset, confirmation, email change).
+create table auth.one_time_tokens (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  token_type text not null,
+  token_hash text not null,
+  relates_to text not null,
+  created_at timestamp without time zone not null default now(),
+  updated_at timestamp without time zone not null default now()
+);
+grant all on auth.one_time_tokens to postgres;
 
 -- Supabase Auth's identities: one row per sign-in method of an account (email, google, ...).
 create table auth.identities (
@@ -91,14 +114,45 @@ create table auth.identities (
 );
 grant all on auth.identities to postgres;
 
+create type auth.aal_level as enum ('aal1', 'aal2', 'aal3');
+create type auth.factor_type as enum ('totp', 'webauthn', 'phone');
+create type auth.factor_status as enum ('unverified', 'verified');
+
 create table auth.sessions (
   id uuid primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
   created_at timestamptz,
   updated_at timestamptz,
-  not_after timestamptz
+  factor_id uuid,
+  aal auth.aal_level,
+  not_after timestamptz,
+  refreshed_at timestamp without time zone,
+  user_agent text,
+  ip inet
 );
 grant all on auth.sessions to postgres;
+
+-- Two-factor authenticators and their challenges (S37 guards both).
+create table auth.mfa_factors (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  friendly_name text,
+  factor_type auth.factor_type not null,
+  status auth.factor_status not null,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  secret text
+);
+grant all on auth.mfa_factors to postgres;
+
+create table auth.mfa_challenges (
+  id uuid primary key,
+  factor_id uuid not null references auth.mfa_factors (id) on delete cascade,
+  created_at timestamptz not null,
+  verified_at timestamptz,
+  ip_address inet not null
+);
+grant all on auth.mfa_challenges to postgres;
 
 -- How each session was authenticated (the `amr` claim of its access tokens).
 create table auth.mfa_amr_claims (

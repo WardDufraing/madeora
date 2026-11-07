@@ -178,10 +178,12 @@ select tests.assert_denied(
 );
 
 select tests.act_as_session((select id from ids where name = 'pat'), (select id from ids where name = 'pat_oauth'));
-select tests.assert_denied(
+select tests.assert_allowed(
   $q$select public.authorize_sign_in_method_change('link', 'google')$q$,
-  'A Google sign-in is not a password reauthentication'
+  'A fresh Google sign-in is a reauthentication too (S37: Google-only accounts reauthenticate so)'
 );
+select tests.act_as_owner();
+delete from private.sign_in_method_grants where user_id = (select id from ids where name = 'pat');
 
 select tests.act_as_user((select id from ids where name = 'pat'));
 select tests.assert_denied(
@@ -329,11 +331,12 @@ select tests.assert_denied(
   'The last usable sign-in method cannot be removed'
 );
 select tests.act_as_session((select id from ids where name = 'gina'), (select id from ids where name = 'gina_oauth'));
-select tests.assert_denied(
+select tests.assert_allowed(
   $q$select public.authorize_sign_in_method_change('unlink', 'google')$q$,
-  'A Google-only account cannot reauthenticate with a password'
+  'A Google-only account reauthenticates with Google (S37)'
 );
 select tests.act_as_owner();
+delete from private.sign_in_method_grants where user_id = (select id from ids where name = 'gina');
 -- Even a permission obtained some other way does not remove the last method.
 insert into private.sign_in_method_grants (user_id, action, provider, expires_at)
   values ((select id from ids where name = 'gina'), 'unlink', 'google', now() + interval '5 minutes');
@@ -357,6 +360,16 @@ select tests.assert_denied(
          tests.google_identity((select id from ids where name = 'both'))),
   'Google cannot be removed when the remaining email method has no password'
 );
+-- Setting a password needs the S37 permission, like any password change.
+-- The permission is bound to the session that changes it, and Supabase Auth signs out the others.
+insert into private.account_change_grants (user_id, action, session_id, expires_at)
+  values ((select id from ids where name = 'both'), 'password',
+          (select id from ids where name = 'both_fresh'), now() + interval '1 minute');
+with signed_out as (
+  delete from auth.sessions
+  where user_id = (select id from ids where name = 'both')
+    and id <> (select id from ids where name = 'both_fresh')
+)
 update auth.users set encrypted_password = '$2a$10$synthetic.hash.for.tests.only'
   where id = (select id from ids where name = 'both');
 delete from private.sign_in_method_grants where user_id = (select id from ids where name = 'both');
