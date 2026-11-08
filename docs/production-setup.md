@@ -48,6 +48,18 @@ Create a separate project; do not point production at `madeora-preview`.
 
 Check: project name and region are correct; email confirmation is on; production redirects contain the canonical URL; the publishable key is the only Supabase key intended for browser use.
 
+### Adult account security
+
+Complete [adult security setup](adult-security-setup.md) in `madeora-production` before exposing Settings → Security:
+
+1. Enable **TOTP (App Authenticator)** enrollment and verification under Supabase Authentication → Multi-Factor. Keep Phone/SMS MFA off.
+2. Turn **Secure email change** off so only the new address receives and confirms the change.
+3. Install the repository's Change Email Address template and the password-changed, email-changed, MFA-enrolled and MFA-unenrolled security-notification templates exactly as listed in the guide.
+4. Apply both adult-security migrations with the chronological migration set in step 11. Then verify that the `authenticator` role contains `pgrst.db_pre_request=public.check_request`; stop the release if the hosted project rejects that setting.
+5. Deploy the `security-email` and `account-recovery-ready` Trigger.dev tasks with the other jobs in step 9. They use the existing production email configuration; no additional environment variables or provider credentials are required.
+
+Check: TOTP is enabled and Phone is off; single-confirmation email change and all five templates are configured; the PostgREST request check is active; and both security tasks appear in Trigger.dev Production.
+
 ## 4. Cloudflare Turnstile
 
 1. Create a Cloudflare account if needed. No website transfer is required.
@@ -120,7 +132,7 @@ Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and
 | `GOOGLE_CALENDAR_CLIENT_SECRET`  | production Calendar OAuth client secret, when enabled |
 | `GOOGLE_CALENDAR_TOKEN_KEY`      | production token key; identical to Vercel Production  |
 
-Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
+Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev, including `security-email` and `account-recovery-ready` when the adult-security migrations are released. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
 
 ## 10. Vercel Production environment variables
 
@@ -170,6 +182,7 @@ Use a private browser window and the canonical production URL.
 - Sign in with the owner account; verify the dashboard loads, then sign out.
 - Try sign-up only if it is intentionally enabled. If disabled, it should report that new accounts cannot be created.
 - Verify password recovery and confirmation emails arrive from `no-reply@mail.madeora.studio` before enabling public sign-up.
+- Verify Settings → Security end to end with a production test account: enroll TOTP and save recovery codes; sign in with the second factor; trust and then revoke the browser; revoke another session; change the password after reauthentication; confirm a backup email; and confirm a revoked session is refused on its next protected request.
 - If Google sign-in is enabled, complete one Google sign-in and verify the linked method in Settings.
 - If Google Calendar is enabled, connect a production test user, verify an inbound event appears, create or edit one event from Madeora, run Sync now, and confirm it reaches Google. Verify an unshared calendar and a Google-private event reveal nothing in a Home.
 - If storage is enabled, upload and read a profile picture and a photo-library image; check quota accounting, album sharing/access, derivatives, trash recovery, and that files remain private.
@@ -183,7 +196,7 @@ Use a private browser window and the canonical production URL.
 - **Rollbacks:** use Vercel Instant Rollback for an urgent rollback, then fix source and release through Git. A rollback does not reverse a database migration; migrations are forward-only. Never run the destructive reset section in [production migrations](production-migrations.md) as a rollback.
 - **Secrets:** rotate credentials in their provider, update only the intended environment, then redeploy the app/jobs. Keep preview and production credentials separate.
 - **Costs and limits:** review [provider cost register](provider-cost-register.md), including Vercel commercial-use limits, Supabase quotas, Resend email quotas, Trigger.dev usage and Cloudflare R2 billing.
-- **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), and [Google Calendar](google-calendar-setup.md).
+- **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), [Google Calendar](google-calendar-setup.md), and [adult account security](adult-security-setup.md).
 
 ## Never put these in Git, chat or browser-visible variables
 
