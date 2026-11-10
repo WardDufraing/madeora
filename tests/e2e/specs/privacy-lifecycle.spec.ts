@@ -32,7 +32,10 @@ test("review privacy settings and history, then export permitted data", async ({
   await page.goto("/settings");
   await page.getByTestId("privacy-link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
-  await expect(page.getByText("Ann's flat", { exact: true })).toBeVisible();
+  // The Homes section names each Home (the context switcher names it too).
+  await expect(
+    page.getByLabel("Your Homes").getByText("Ann's flat", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Home-specific").first()).toBeVisible();
   await expect(page.getByText(/Your account is not searchable/)).toBeVisible();
   expect(await axeViolations(page)).toEqual([]);
