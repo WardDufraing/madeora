@@ -56192,40 +56192,40 @@ revoke all on table private.account_security_events from public;
 
 create function private.record_security_event(p_user_id uuid, p_kind text, p_session_id uuid)
 returns void
-  language sql security definer set search_path = '' as $
+  language sql security definer set search_path = '' as $$
     insert into private.account_security_events (user_id, kind, session_id)
       values (p_user_id, p_kind, p_session_id)
-  $;
+  $$;
 
 -- The session id in the caller's access token, or null.
 create function private.jwt_session_id() returns uuid
-  language plpgsql stable set search_path = '' as $
+  language plpgsql stable set search_path = '' as $$
   begin
     return (auth.jwt() ->> 'session_id')::uuid;
   exception when invalid_text_representation then
     return null;
   end
-  $;
+  $$;
 
 -- Whether the account has a verified authenticator (two-factor sign-in is on).
 create function private.has_two_factor(p_user_id uuid) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select exists (
       select 1 from auth.mfa_factors f
       where f.user_id = p_user_id and f.status = 'verified'
     )
-  $;
+  $$;
 
 -- True when session p_session_id of p_user_id still exists and has not expired.
 create function private.session_is_live(p_user_id uuid, p_session_id uuid) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select exists (
       select 1 from auth.sessions s
       where s.id = p_session_id
         and s.user_id = p_user_id
         and (s.not_after is null or s.not_after > pg_catalog.now())
     )
-  $;
+  $$;
 
 -- Permissions -------------------------------------------------------------------------------------
 
@@ -56250,7 +56250,7 @@ revoke all on table private.account_change_grants from public;
 
 -- An account-change permission is meant for the request that follows at once in the same page.
 create function private.account_change_grant_lifetime() returns interval
-  language sql immutable set search_path = '' as $ select interval '2 minutes' $;
+  language sql immutable set search_path = '' as $$ select interval '2 minutes' $$;
 
 -- Uses up the matching permission, if one is still valid; an expired one is removed too. When the
 -- change is made through Madeora's own API, the caller's session must be the one it was given to.
@@ -56259,7 +56259,7 @@ create function private.consume_account_change_grant(
   p_user_id uuid, p_action text, p_session_id uuid default null
 )
 returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_found boolean;
   begin
@@ -56271,7 +56271,7 @@ returns boolean
       where g.user_id = p_user_id and g.action = p_action and g.expires_at <= pg_catalog.now();
     return coalesce(v_found, false);
   end
-  $;
+  $$;
 
 -- Whether p_user_id has just reauthenticated. The first factor is a fresh sign-in in a separate
 -- session p_session_id (a password, or Google: amr "oauth") within the S08 window. When the
@@ -56282,7 +56282,7 @@ create function private.is_recent_reauthentication(
   p_user_id uuid, p_session_id uuid, p_main_session_id uuid default null
 )
 returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select p_session_id is not null
       and exists (
         select 1
@@ -56307,14 +56307,14 @@ returns boolean
             and c.updated_at > pg_catalog.now() - private.sign_in_method_reauth_window()
         )
       )
-  $;
+  $$;
 
 -- Called by the browser with the session of the password (and TOTP) sign-in it has just made in a
 -- memory-only client, naming its own (main) session in p_session_id: the permission is bound to
 -- that session. Returns when the permission expires.
 create function public.authorize_account_change(p_action text, p_session_id uuid)
 returns timestamptz
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -56356,7 +56356,7 @@ returns timestamptz
     perform private.record_security_event(v_user_id, 'reauthenticated', v_session_id);
     return v_expires_at;
   end
-  $;
+  $$;
 
 comment on function public.authorize_account_change(text, uuid) is
   'S37: one-time permission for a sensitive account change after a fresh password (and TOTP) sign-in.';
@@ -56371,7 +56371,7 @@ create function public.authorize_sign_in_method_change(
   p_action text, p_provider text, p_main_session_id uuid default null
 )
 returns timestamptz
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -56402,7 +56402,7 @@ returns timestamptz
             created_at = pg_catalog.now();
     return v_expires_at;
   end
-  $;
+  $$;
 
 comment on function public.authorize_sign_in_method_change(text, text, uuid) is
   'S08/S37: one-time permission to link or unlink a sign-in method after recent reauthentication.';
@@ -56416,176 +56416,12 @@ grant execute on function public.authorize_sign_in_method_change(text, text, uui
 -- a standard bcrypt hash at its default cost of 10: imported Argon2/scrypt hashes, or bcrypt at
 -- another cost. Such a rewrite must not be refused. An attacker cannot choose the stored format.
 create function private.is_upgradable_password_hash(p_hash text) returns boolean
-  language sql immutable set search_path = '' as $
-    select coalesce(p_hash, '') <> '' and p_hash !~ '^\$2[abxy]?\$10\
-
-Use this only when intentionally resetting the dedicated `madeora-production` project to a pre-Madeora-migrations state. It drops Madeora tables, functions, the `private` schema, associated policies/triggers, resets Madeora's PostgREST pre-request role setting, and removes matching migration-history rows if present. It **deletes all application database data**. It does not delete Supabase Auth users, provider settings, email templates, or objects in Cloudflare R2. Back up anything needed and empty the R2 bucket separately if a complete data purge is intended.
-
-Never use this as a release rollback. Production schema changes are forward-only; repair them with a new migration.
-
-```sql
--- DESTRUCTIVE RESET for the dedicated Madeora Supabase project only.
--- Removes Madeora database objects and recorded versions for the migrations listed below.
--- This deletes application data. It does not delete R2 objects, Supabase Auth users,
--- provider settings, or unrelated Supabase services. Back up first; never use as rollback.
-begin;
-
--- Restore the PostgREST role configuration changed by the adult-security request-check migration.
-alter role authenticator reset pgrst.db_pre_request;
-notify pgrst, 'reload config';
-
--- Remove Madeora Auth triggers before dropping their helper functions.
-drop trigger if exists madeora_guard_account_credentials on auth.users;
-drop trigger if exists madeora_check_password_change_sessions on auth.users;
-drop trigger if exists madeora_guard_mfa_factor_insert on auth.mfa_factors;
-drop trigger if exists madeora_guard_mfa_factor_delete on auth.mfa_factors;
-drop trigger if exists madeora_after_mfa_factor_delete on auth.mfa_factors;
-drop trigger if exists madeora_after_mfa_factor_verified on auth.mfa_factors;
-drop trigger if exists madeora_guard_mfa_challenge_insert on auth.mfa_challenges;
-drop trigger if exists madeora_guard_mfa_challenge_verify on auth.mfa_challenges;
-drop trigger if exists madeora_guard_identity_insert on auth.identities;
-drop trigger if exists madeora_guard_identity_delete on auth.identities;
-drop trigger if exists madeora_check_identity_link_flow on auth.identities;
-
--- Drop Madeora public RPCs by exact routine name, including all overloads.
-do $reset$
-declare
-  routine record;
-begin
-  for routine in
-    select p.oid::regprocedure as signature
-    from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
-      and p.proname = any (array[
-        'abandon_my_upload', 'accept_ownership_recovery', 'acquire_recipe_lock', 'add_goal_entry', 'add_habit_contribution', 'add_photos_to_album',
-        'add_shopping_items', 'add_subtask', 'add_task_comment', 'add_vacation_participants', 'adjust_personal_points', 'adjust_points',
-        'advance_all_pet_care', 'advance_chores', 'advance_habit_reminders', 'advance_reminder_series', 'advance_shopping', 'advance_task_series',
-        'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'archive_goal', 'archive_habit',
-        'archive_personal_reward', 'archive_reward', 'attach_pet_medical_file', 'attach_task_file', 'authorize_account_change', 'authorize_file_read',
-        'authorize_photo_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'begin_recipe_import', 'bulk_chore_occurrences', 'bulk_update_tasks',
-        'calendar_notice_titles', 'cancel_account_recovery', 'cancel_backup_email_change', 'cancel_my_email_change', 'cancel_ownership_recoveries', 'cancel_ownership_transfer',
-        'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_goal_link_start', 'change_goal_series_target', 'change_goal_target', 'change_habit_schedule',
-        'change_habit_tracking', 'change_home_member_role', 'change_vacation_participation', 'check_request', 'claim_chore_occurrence', 'claim_job_outbox',
-        'claim_my_upload', 'clear_completed_shopping_items', 'complete_chore_occurrence', 'complete_habit', 'complete_job_outbox', 'complete_pet_care_occurrence',
-        'complete_storage_object_deletion', 'confirm_backup_email', 'continue_account_recovery', 'copy_meal_week', 'correct_chore_completion', 'correct_chore_volunteer_assignment',
-        'correct_pet_care_completion', 'count_pending_join_requests', 'create_account_recovery_codes', 'create_calendar_event', 'create_chore', 'create_chore_category',
-        'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_goal', 'create_goal_link', 'create_goal_series',
-        'create_google_calendar_event', 'create_habit', 'create_home', 'create_home_invitation', 'create_home_vacation', 'create_meal_entry',
-        'create_meal_series', 'create_meal_slot', 'create_personal_reward', 'create_pet', 'create_pet_care', 'create_pet_medical_attachment_intent',
-        'create_pet_medical_entry', 'create_pet_photo_intent', 'create_photo_album', 'create_photo_intent', 'create_recipe', 'create_recipe_cover_intent',
-        'create_reward', 'create_shopping_category', 'create_shopping_list', 'create_task', 'create_task_attachment_intent', 'create_task_from_template',
-        'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_two_factor_recovery_codes', 'create_upload_intent',
-        'decide_chore_vacation_item', 'decide_join_request', 'delete_calendar_event', 'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences',
-        'delete_dashboard_template', 'delete_goal', 'delete_goal_series', 'delete_google_calendar_event', 'delete_habit', 'delete_meal_entry',
-        'delete_pet', 'delete_pet_care', 'delete_pet_medical_entry', 'delete_photo_album', 'delete_photos', 'delete_recipe',
-        'delete_shopping_category', 'delete_shopping_item', 'delete_shopping_list', 'delete_subtask', 'delete_task', 'delete_task_comment',
-        'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_account_recovery_ready', 'deliver_calendar_reminder',
-        'deliver_chore_reminder', 'deliver_goal_reminder', 'deliver_habit_pause_end', 'deliver_habit_reminder', 'deliver_habit_snooze', 'deliver_pet_care_reminder',
-        'deliver_recovery_ready', 'deliver_task_reminder', 'deliver_vacation_reminder', 'discard_google_calendar_change', 'disconnect_google_calendar', 'edit_meal_occurrence',
-        'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_photo', 'finalize_upload', 'find_recipe_duplicates',
-        'finish_account_recovery', 'finish_job_execution', 'get_calendar_event', 'get_calendar_upcoming', 'get_chore_claim_policy', 'get_chore_claim_state',
-        'get_chore_context', 'get_chore_occurrence', 'get_chore_points', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary',
-        'get_chore_summary_setting', 'get_chore_vacation_state', 'get_chore_volunteer_state', 'get_dashboard', 'get_goal', 'get_goal_entries',
-        'get_goal_events', 'get_goal_link_candidates', 'get_goal_links', 'get_goal_series', 'get_goal_series_periods', 'get_goals',
-        'get_google_calendar_connection', 'get_google_calendar_event', 'get_habit', 'get_habit_calendar', 'get_habit_checkins', 'get_habit_contributions',
-        'get_habit_daily_totals', 'get_habit_events', 'get_habit_insights', 'get_habits', 'get_home_vacation', 'get_home_vacation_widget',
-        'get_invitation_email', 'get_meal_plan', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_personal_points',
-        'get_pet', 'get_pet_care', 'get_pet_care_activity', 'get_pet_medical', 'get_pet_medical_entry', 'get_photo',
-        'get_photo_upload_keys', 'get_point_leaderboard', 'get_point_summary', 'get_recipe', 'get_recipe_context', 'get_reward_redemption',
-        'get_security_email', 'get_shopping_context', 'get_shopping_list', 'get_storage_object_deletion', 'get_task', 'get_task_context',
-        'get_task_reminder', 'get_task_template', 'get_vacation_habits', 'get_weekly_points', 'goal_notice_names', 'google_push_changes',
-        'google_push_result', 'google_sync_apply_events', 'google_sync_begin', 'google_sync_calendars', 'google_sync_finish', 'google_sync_finish_calendar',
-        'habit_notice_names', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage',
-        'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_absence_review', 'list_calendar', 'list_chore_absences',
-        'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_points', 'list_chore_pool',
-        'list_chore_proposals', 'list_chore_reassignment_requests', 'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget',
-        'list_chores', 'list_dashboard_templates', 'list_home_calendar_access', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests',
-        'list_home_pet_care', 'list_home_vacation_days', 'list_home_vacations', 'list_meal_recipes', 'list_my_join_requests', 'list_my_recipe_drafts',
-        'list_my_sessions', 'list_my_trusted_devices', 'list_personal_reward_redemptions', 'list_personal_rewards', 'list_pet_medical_access', 'list_pets',
-        'list_photo_library', 'list_point_accounts', 'list_point_entries', 'list_recipe_shares', 'list_recipe_tags', 'list_recipes',
-        'list_reward_redemptions', 'list_rewards', 'list_shopping_lists', 'list_task_attachments', 'list_task_calendar', 'list_task_comments',
-        'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash',
-        'list_vacation_review', 'mark_notifications_read', 'meal_slot_impact', 'move_meal_slot', 'move_shopping_category', 'move_shopping_item',
-        'move_shopping_list', 'move_task', 'my_account_security', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage',
-        'object_to_ownership_recovery', 'pause_habit', 'pet_care_notice_names', 'photo_deletion_impact', 'preview_chore_points_change', 'preview_home_invitation',
-        'preview_meal_copy', 'preview_meal_ingredients', 'preview_meal_series', 'propose_chore', 'publish_recipe', 'purge_expired_trash_entry',
-        'purge_stored_file', 'purge_trash_entries', 'queue_google_calendar_syncs', 'reactivate_habit', 'recipe_delete_impact', 'recipe_widget',
-        'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'record_security_email', 'redeem_personal_reward', 'redeem_reward',
-        'redeem_two_factor_recovery_code', 'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'release_recipe_lock',
-        'remove_backup_email', 'remove_chore_reminder', 'remove_goal_link', 'remove_home_member', 'remove_pet_medical_attachment', 'remove_pet_photo',
-        'remove_photos_from_album', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_photo_album', 'rename_shopping_category',
-        'rename_subtask', 'renew_home_invitation', 'renew_recipe_lock', 'reopen_chore_occurrence', 'reopen_pet_care_occurrence', 'reorder_chore_categories',
-        'reorder_subtasks', 'reorder_task_lists', 'request_backup_email', 'request_chore_reassignment', 'request_google_calendar_sync', 'request_ownership_recovery',
-        'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'resolve_google_calendar_conflict',
-        'resolve_personal_reward_redemption', 'resolve_photo_widget', 'resolve_reward_redemption', 'respond_to_ownership_transfer', 'restore_google_calendar_event', 'restore_meal_occurrence',
-        'restore_trash_entries', 'retry_google_calendar_change', 'reverse_personal_point_entry', 'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission',
-        'review_reward_redemption', 'review_task_reminder', 'revoke_all_trusted_devices', 'revoke_home_invitation', 'revoke_my_session', 'revoke_trusted_device',
-        'roll_goal_periods', 'save_chore_absence', 'save_dashboard', 'save_google_calendar_connection', 'send_chore_summaries', 'session_is_trusted',
-        'set_administrator_capabilities', 'set_calendar_event_shares', 'set_calendar_preferences', 'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused',
-        'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_goal_achievement', 'set_goal_reminders', 'set_goal_series_state',
-        'set_google_calendar_settings', 'set_google_calendar_write_target', 'set_habit_celebrations', 'set_habit_checkin_note', 'set_habit_day_note', 'set_habit_end',
-        'set_habit_quick_adds', 'set_habit_reminders', 'set_home_calendar_access', 'set_my_avatar', 'set_my_goal_reminders', 'set_my_habit_reminders',
-        'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_personal_reward_fulfillment', 'set_pet_care_state', 'set_pet_medical_access',
-        'set_pet_medical_details', 'set_pet_photo', 'set_recipe_favorite', 'set_recipe_rating', 'set_replacement_outcome', 'set_reward_fulfillment',
-        'set_shopping_item_completed', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder',
-        'set_task_series_paused', 'set_vacation_habit', 'share_dashboard_template', 'share_photo_album', 'share_recipe', 'shopping_item_history',
-        'shopping_widget', 'sign_out_everywhere', 'skip_chore_occurrence', 'skip_meal_occurrence', 'skip_pet_care_occurrence', 'snooze_habit_reminder',
-        'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_account_recovery', 'start_ownership_transfer',
-        'start_shopping_recurrence', 'storage_stats', 'sync_goal_periods', 'task_attachment_scope_impact', 'task_reminder_titles', 'transfer_meal_ingredients',
-        'transfer_shopping_item', 'trash_stats', 'trust_this_device', 'undo_dashboard_change', 'undo_habit_checkin', 'unshare_dashboard_template',
-        'unshare_photo_album', 'unshare_recipe', 'update_calendar_event', 'update_chore', 'update_chore_category', 'update_chore_occurrence',
-        'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_goal', 'update_goal_entry', 'update_goal_series',
-        'update_goal_settings', 'update_google_calendar_event', 'update_habit', 'update_habit_contribution', 'update_habit_pause', 'update_habit_settings',
-        'update_home_vacation', 'update_meal_entry', 'update_meal_series', 'update_meal_settings', 'update_meal_slot', 'update_personal_reward',
-        'update_pet', 'update_pet_care', 'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences', 'update_point_settings',
-        'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence', 'update_task',
-        'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'use_trusted_device',
-        'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'
-      ])
-  loop
-    execute format('drop function if exists %s cascade', routine.signature);
-  end loop;
-end
-$reset$;
-
--- Drop the Madeora public tables; CASCADE removes their policies, indexes and table triggers.
-drop table if exists public.home_member_profiles cascade;
-drop table if exists public.home_memberships cascade;
-drop table if exists public.homes cascade;
-drop table if exists public.notification_preferences cascade;
-drop table if exists public.notification_quiet_hours cascade;
-drop table if exists public.notifications cascade;
-drop table if exists public.chore_pool_signals cascade;
-drop table if exists public.shopping_signals cascade;
-drop table if exists public.user_preferences cascade;
-
--- The private schema was introduced by Madeora's first migration and contains only Madeora objects.
-drop schema if exists private cascade;
-
--- Dashboard SQL Editor runs are not normally recorded by the Supabase CLI. If this project
--- does have a migration history table, remove only the exact Madeora versions listed here.
-do $reset$
-begin
-  if to_regclass('supabase_migrations.schema_migrations') is not null then
-    execute
-      'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100']::text[];
-  end if;
-end
-$reset$;
-
-commit;
-```
-
-## Refreshing this file
-
-When a migration is added, changed or removed in `supabase/migrations/`, update this document in the same change: refresh the individual file list, rebuild the consolidated SQL in chronological order, and update the reset version list. Keep the source files as the authoritative standalone migrations.
-
-  $;
+  language sql immutable set search_path = '' as $$
+    select coalesce(p_hash, '') <> '' and p_hash !~ '^\$2[abxy]?\$10\$'
+  $$;
 
 create function private.guard_account_credentials() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_keep uuid;
   begin
@@ -56653,7 +56489,7 @@ create function private.guard_account_credentials() returns trigger
     end if;
     return new;
   end
-  $;
+  $$;
 
 create trigger madeora_guard_account_credentials
   before update on auth.users
@@ -56664,7 +56500,7 @@ create trigger madeora_guard_account_credentials
 -- bound to (say, a stolen session racing the owner's reauthentication), or, for a reset, not the
 -- reset session, the whole change is refused.
 create function private.check_password_change_sessions() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_keeps text := pg_catalog.current_setting('madeora.password_change_keeps', true);
   begin
@@ -56693,7 +56529,7 @@ create function private.check_password_change_sessions() returns trigger
     end if;
     return null;
   end
-  $;
+  $$;
 
 create constraint trigger madeora_check_password_change_sessions
   after update of encrypted_password on auth.users
@@ -56702,7 +56538,7 @@ create constraint trigger madeora_check_password_change_sessions
 
 -- Cancels the signed-in account's pending email change. The old address stays authoritative.
 create function public.cancel_my_email_change() returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_found boolean;
@@ -56723,7 +56559,7 @@ create function public.cancel_my_email_change() returns boolean
     end if;
     return coalesce(v_found, false);
   end
-  $;
+  $$;
 
 revoke all on function public.cancel_my_email_change() from public, anon;
 grant execute on function public.cancel_my_email_change() to authenticated;
@@ -56758,7 +56594,7 @@ create index two_factor_recovery_attempts_user_idx
 revoke all on table private.two_factor_recovery_attempts from public;
 
 create function private.guard_mfa_factor_insert() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_session_id uuid;
   begin
@@ -56788,10 +56624,10 @@ create function private.guard_mfa_factor_insert() returns trigger
             created_at = pg_catalog.now();
     return new;
   end
-  $;
+  $$;
 
 create function private.guard_mfa_factor_delete() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     -- The account itself is being deleted, or an unfinished setup is cleaned up.
     if not exists (select 1 from auth.users u where u.id = old.user_id)
@@ -56810,11 +56646,11 @@ create function private.guard_mfa_factor_delete() returns trigger
     end if;
     return old;
   end
-  $;
+  $$;
 
 -- After the last verified authenticator is gone, its recovery codes mean nothing any more.
 create function private.after_mfa_factor_delete() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     if old.status::text = 'verified' and exists (select 1 from auth.users u where u.id = old.user_id)
        and not private.has_two_factor(old.user_id) then
@@ -56823,17 +56659,17 @@ create function private.after_mfa_factor_delete() returns trigger
     end if;
     return null;
   end
-  $;
+  $$;
 
 create function private.after_mfa_factor_verified() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     if new.status::text = 'verified' and old.status::text <> 'verified' then
       perform private.record_security_event(new.user_id, 'two_factor_enrolled', null);
     end if;
     return null;
   end
-  $;
+  $$;
 
 create trigger madeora_guard_mfa_factor_insert
   before insert on auth.mfa_factors
@@ -56854,7 +56690,7 @@ create trigger madeora_after_mfa_factor_verified
 -- Per-account attempt limit: Supabase Auth limits verification per IP address only. The browser
 -- asks for a new challenge for every code it tries (supabase-js challengeAndVerify).
 create function private.guard_mfa_challenge_insert() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid;
   begin
@@ -56873,7 +56709,7 @@ create function private.guard_mfa_challenge_insert() returns trigger
     end if;
     return new;
   end
-  $;
+  $$;
 
 -- A code is valid for up to 90 seconds (30-second steps, one step of clock drift either way). A
 -- second successful verification of the same authenticator inside that window could be the same
@@ -56884,7 +56720,7 @@ create function private.guard_mfa_challenge_insert() returns trigger
 -- may therefore only succeed within 30 seconds of its creation (Madeora's pages create and verify
 -- in one step): guessing beyond that needs new challenges, which the limit above counts.
 create function private.guard_mfa_challenge_verify() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     if new.verified_at is not null and old.verified_at is null
        and old.created_at < pg_catalog.now() - interval '30 seconds' then
@@ -56902,7 +56738,7 @@ create function private.guard_mfa_challenge_verify() returns trigger
     end if;
     return new;
   end
-  $;
+  $$;
 
 create trigger madeora_guard_mfa_challenge_insert
   before insert on auth.mfa_challenges
@@ -56916,19 +56752,19 @@ create trigger madeora_guard_mfa_challenge_verify
 
 -- Upper case, no spaces or dashes: what the person types is compared in this form.
 create function private.normalise_recovery_code(p_code text) returns text
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
     select pg_catalog.upper(pg_catalog.regexp_replace(coalesce(p_code, ''), '[\s-]', '', 'g'))
-  $;
+  $$;
 
 create function private.recovery_code_hash(p_code text) returns bytea
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
     select extensions.digest(private.normalise_recovery_code(p_code), 'sha256')
-  $;
+  $$;
 
 -- One code: 12 characters from 23456789ABCDEFGHJKLMNPQRSTUVWXYZ (no 0/O, 1/I), each from the low
 -- five bits of a random byte (256 is a multiple of 32, so every letter is equally likely).
 create function private.new_recovery_code() returns text
-  language plpgsql volatile set search_path = '' as $
+  language plpgsql volatile set search_path = '' as $$
   declare
     v_alphabet constant text := '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     v_bytes bytea := extensions.gen_random_bytes(12);
@@ -56939,13 +56775,13 @@ create function private.new_recovery_code() returns text
     end loop;
     return v_code;
   end
-  $;
+  $$;
 
 -- Creates a new set of 10 codes and returns them, formatted XXXX-XXXX-XXXX, this once. Needs an
 -- aal2 session and the `recovery_codes` permission: given automatically when an authenticator is
 -- added, otherwise by reauthenticating. The previous set stops working in the same transaction.
 create function public.create_two_factor_recovery_codes() returns setof text
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -56991,7 +56827,7 @@ create function public.create_two_factor_recovery_codes() returns setof text
     end if;
     return;
   end
-  $;
+  $$;
 
 revoke all on function public.create_two_factor_recovery_codes() from public, anon;
 grant execute on function public.create_two_factor_recovery_codes() to authenticated;
@@ -57002,7 +56838,7 @@ grant execute on function public.create_two_factor_recovery_codes() to authentic
 -- other sessions are signed out, a notice goes out, and the person is asked to set 2FA up again.
 -- A failure is recorded and returned (not raised), so the attempt counts.
 create function public.redeem_two_factor_recovery_code(p_code text) returns text
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -57047,7 +56883,7 @@ create function public.redeem_two_factor_recovery_code(p_code text) returns text
       'account.recovery_code_used:' || v_code_id::text, true);
     return 'ok';
   end
-  $;
+  $$;
 
 revoke all on function public.redeem_two_factor_recovery_code(text) from public, anon;
 grant execute on function public.redeem_two_factor_recovery_code(text) to authenticated;
@@ -57065,7 +56901,7 @@ returns table (
   two_factor boolean,
   is_current boolean
 )
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select s.id,
            s.created_at,
            coalesce(s.refreshed_at::timestamptz, s.updated_at, s.created_at),
@@ -57077,7 +56913,7 @@ returns table (
       and (s.not_after is null or s.not_after > pg_catalog.now())
     order by s.id = private.jwt_session_id() desc,
              coalesce(s.refreshed_at::timestamptz, s.updated_at, s.created_at) desc
-  $;
+  $$;
 
 revoke all on function public.list_my_sessions() from public, anon;
 grant execute on function public.list_my_sessions() to authenticated;
@@ -57087,7 +56923,7 @@ grant execute on function public.list_my_sessions() to authenticated;
 -- no longer exists (expired or already signed out between the list and the click).
 create function public.revoke_my_session(p_session_id uuid, p_report boolean default false)
 returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_current uuid := private.jwt_session_id();
@@ -57120,7 +56956,7 @@ returns boolean
     end if;
     return true;
   end
-  $;
+  $$;
 
 revoke all on function public.revoke_my_session(uuid, boolean) from public, anon;
 grant execute on function public.revoke_my_session(uuid, boolean) to authenticated;
@@ -57128,7 +56964,7 @@ grant execute on function public.revoke_my_session(uuid, boolean) to authenticat
 -- Signs out every session of the account, this one included. The browser then clears its own
 -- cookies and opens the sign-in page.
 create function public.sign_out_everywhere() returns integer
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_current uuid := private.jwt_session_id();
@@ -57145,7 +56981,7 @@ create function public.sign_out_everywhere() returns integer
       'account.signed_out_everywhere:' || v_current::text, true);
     return v_count;
   end
-  $;
+  $$;
 
 revoke all on function public.sign_out_everywhere() from public, anon;
 grant execute on function public.sign_out_everywhere() to authenticated;
@@ -57190,17 +57026,17 @@ create table private.trusted_sessions (
 revoke all on table private.trusted_devices, private.trusted_sessions from public;
 
 create function private.trusted_device_lifetime() returns interval
-  language sql immutable set search_path = '' as $ select interval '30 days' $;
+  language sql immutable set search_path = '' as $$ select interval '30 days' $$;
 
 create function private.token_hash(p_token text) returns bytea
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
     select extensions.digest(coalesce(p_token, ''), 'sha256')
-  $;
+  $$;
 
 -- Whether session p_session_id of p_user_id passed the second factor through a device that is
 -- still trusted.
 create function private.session_trusted(p_user_id uuid, p_session_id uuid) returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select exists (
       select 1
       from private.trusted_sessions t
@@ -57210,11 +57046,11 @@ create function private.session_trusted(p_user_id uuid, p_session_id uuid) retur
         and d.revoked_at is null
         and d.expires_at > pg_catalog.now()
     )
-  $;
+  $$;
 
 -- Ends every trust of the account (credential, recovery or 2FA changes; reported sessions).
 create function private.revoke_all_trust(p_user_id uuid) returns integer
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_count integer;
   begin
@@ -57223,16 +57059,16 @@ create function private.revoke_all_trust(p_user_id uuid) returns integer
     get diagnostics v_count = row_count;
     return v_count;
   end
-  $;
+  $$;
 
 -- Consequential account security events clear trust, wherever they come from.
 create function private.clear_trust_on_security_event() returns trigger
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     perform private.revoke_all_trust(new.user_id);
     return null;
   end
-  $;
+  $$;
 
 create trigger madeora_clear_trust_on_security_event
   after insert on private.account_security_events
@@ -57251,7 +57087,7 @@ create trigger madeora_clear_trust_on_security_event
 create function public.trust_this_device(
   p_token text, p_kind text, p_browser text, p_platform text
 ) returns timestamptz
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -57292,7 +57128,7 @@ create function public.trust_this_device(
       'account.device_trusted:' || v_device_id::text, true);
     return v_expires_at;
   end
-  $;
+  $$;
 
 revoke all on function public.trust_this_device(text, text, text, text) from public, anon;
 grant execute on function public.trust_this_device(text, text, text, text) to authenticated;
@@ -57303,7 +57139,7 @@ grant execute on function public.trust_this_device(text, text, text, text) to au
 -- PostgREST's pre-request check lets an aal1 session make this one call.
 create function public.use_trusted_device(p_token text, p_browser text, p_platform text)
 returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -57328,7 +57164,7 @@ returns boolean
     update private.trusted_devices d set last_used_at = pg_catalog.now() where d.id = v_device.id;
     return true;
   end
-  $;
+  $$;
 
 revoke all on function public.use_trusted_device(text, text, text) from public, anon;
 grant execute on function public.use_trusted_device(text, text, text) to authenticated;
@@ -57336,9 +57172,9 @@ grant execute on function public.use_trusted_device(text, text, text) to authent
 -- Whether the caller's session passed the second factor through a trusted device (the server
 -- asks this for an aal1 token of an account with two-factor sign-in).
 create function public.session_is_trusted() returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select coalesce(private.session_trusted(auth.uid(), private.jwt_session_id()), false)
-  $;
+  $$;
 
 revoke all on function public.session_is_trusted() from public, anon;
 grant execute on function public.session_is_trusted() to authenticated;
@@ -57348,14 +57184,14 @@ returns table (
   id uuid, kind text, browser text, platform text,
   created_at timestamptz, last_used_at timestamptz, expires_at timestamptz, is_current boolean
 )
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select d.id, d.kind, d.browser, d.platform, d.created_at, d.last_used_at, d.expires_at,
            exists (select 1 from private.trusted_sessions t
                    where t.device_id = d.id and t.session_id = private.jwt_session_id())
     from private.trusted_devices d
     where d.user_id = auth.uid() and d.revoked_at is null and d.expires_at > pg_catalog.now()
     order by d.created_at desc, d.id
-  $;
+  $$;
 
 revoke all on function public.list_my_trusted_devices() from public, anon;
 grant execute on function public.list_my_trusted_devices() to authenticated;
@@ -57363,7 +57199,7 @@ grant execute on function public.list_my_trusted_devices() to authenticated;
 -- Ending trust needs no reauthentication (it only takes something away). False when the device
 -- was not (or no longer) trusted.
 create function public.revoke_trusted_device(p_device_id uuid) returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_found boolean;
@@ -57379,10 +57215,10 @@ create function public.revoke_trusted_device(p_device_id uuid) returns boolean
     end if;
     return coalesce(v_found, false);
   end
-  $;
+  $$;
 
 create function public.revoke_all_trusted_devices() returns integer
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_count integer;
@@ -57396,7 +57232,7 @@ create function public.revoke_all_trusted_devices() returns integer
     end if;
     return v_count;
   end
-  $;
+  $$;
 
 revoke all on function public.revoke_trusted_device(uuid) from public, anon;
 grant execute on function public.revoke_trusted_device(uuid) to authenticated;
@@ -57430,7 +57266,7 @@ revoke all on table private.security_emails from public;
 create function private.queue_security_email(
   p_user_id uuid, p_kind text, p_to text, p_token text, p_expires_at timestamptz
 ) returns uuid
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_id uuid;
   begin
@@ -57442,7 +57278,7 @@ create function private.queue_security_email(
       pg_catalog.jsonb_build_object('emailId', v_id));
     return v_id;
   end
-  $;
+  $$;
 
 -- For the security-email job (service role): 'ok' with what to send, or 'skipped' when it was
 -- already sent, its link expired or its flow moved on.
@@ -57451,7 +57287,7 @@ returns table (
   outcome text, kind text, recipient_email text, email_locale text, token text,
   expires_at timestamptz
 )
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_e private.security_emails;
     v_locale text;
@@ -57467,10 +57303,10 @@ returns table (
     return query select 'ok'::text, v_e.kind, v_e.to_email, coalesce(v_locale, 'en'), v_e.token,
                         v_e.expires_at;
   end
-  $;
+  $$;
 
 create function public.record_security_email(p_email_id uuid, p_status text) returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_found boolean;
   begin
@@ -57484,7 +57320,7 @@ create function public.record_security_email(p_email_id uuid, p_status text) ret
       returning true into v_found;
     return coalesce(v_found, false);
   end
-  $;
+  $$;
 
 revoke all on function public.get_security_email(uuid) from public, anon, authenticated;
 revoke all on function public.record_security_email(uuid, text) from public, anon, authenticated;
@@ -57524,22 +57360,22 @@ create index backup_email_sends_idx on private.backup_email_sends (user_id, sent
 revoke all on table private.backup_emails, private.backup_email_sends from public;
 
 create function private.normalise_email(p_email text) returns text
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
     select pg_catalog.lower(pg_catalog.btrim(coalesce(p_email, '')))
-  $;
+  $$;
 
 -- A masked address for display: the first character of the local part, then the domain.
 create function private.mask_email(p_email text) returns text
-  language sql immutable set search_path = '' as $
+  language sql immutable set search_path = '' as $$
     select case when p_email is null or pg_catalog.strpos(p_email, '@') < 2 then null
       else pg_catalog.left(p_email, 1) || '•••' || pg_catalog.substr(p_email, pg_catalog.strpos(p_email, '@'))
     end
-  $;
+  $$;
 
 -- Sends a verification link to p_email, after reauthentication (the `backup_email` permission of
 -- this session). Outcomes: 'sent', 'invalid', 'same_as_primary', 'rate_limited' (5 links a day).
 create function public.request_backup_email(p_email text) returns text
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -57550,74 +57386,7 @@ create function public.request_backup_email(p_email text) returns text
     if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
       raise exception 'not signed in' using errcode = '42501';
     end if;
-    if pg_catalog.length(v_email) > 254 or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+
-
-Use this only when intentionally resetting the dedicated `madeora-production` project to a pre-Madeora-migrations state. It drops Madeora tables, functions, the `private` schema, associated policies/triggers, and matching migration-history rows if present. It **deletes all application database data**. It does not delete Supabase Auth users, provider settings, or objects in Cloudflare R2. Back up anything needed and empty the R2 bucket separately if a complete data purge is intended.
-
-Never use this as a release rollback. Production schema changes are forward-only; repair them with a new migration.
-
-```sql
--- DESTRUCTIVE RESET for the dedicated Madeora Supabase project only.
--- Removes Madeora database objects and recorded versions for the migrations listed below.
--- This deletes application data. It does not delete R2 objects, Supabase Auth users,
--- provider settings, or unrelated Supabase services. Back up first; never use as rollback.
-begin;
-
--- Remove Auth triggers before dropping their helper functions.
-drop trigger if exists madeora_guard_identity_insert on auth.identities;
-drop trigger if exists madeora_guard_identity_delete on auth.identities;
-drop trigger if exists madeora_check_identity_link_flow on auth.identities;
-
--- Drop Madeora public RPCs by exact routine name, including all overloads.
-do $reset$
-declare
-  routine record;
-begin
-  for routine in
-    select p.oid::regprocedure as signature
-    from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
-      and p.proname = any (array['abandon_my_upload', 'accept_ownership_recovery', 'acquire_recipe_lock', 'add_goal_entry', 'add_habit_contribution', 'add_photos_to_album', 'add_shopping_items', 'add_subtask', 'add_task_comment', 'add_vacation_participants', 'adjust_personal_points', 'adjust_points', 'advance_all_pet_care', 'advance_chores', 'advance_habit_reminders', 'advance_reminder_series', 'advance_shopping', 'advance_task_series', 'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'archive_goal', 'archive_habit', 'archive_personal_reward', 'archive_reward', 'attach_pet_medical_file', 'attach_task_file', 'authorize_file_read', 'authorize_photo_read', 'authorize_sign_in_method_change', 'begin_job_execution', 'begin_recipe_import', 'bulk_chore_occurrences', 'bulk_update_tasks', 'calendar_notice_titles', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_goal_link_start', 'change_goal_series_target', 'change_goal_target', 'change_habit_schedule', 'change_habit_tracking', 'change_home_member_role', 'change_vacation_participation', 'claim_chore_occurrence', 'claim_job_outbox', 'claim_my_upload', 'clear_completed_shopping_items', 'complete_chore_occurrence', 'complete_habit', 'complete_job_outbox', 'complete_pet_care_occurrence', 'complete_storage_object_deletion', 'copy_meal_week', 'correct_chore_completion', 'correct_chore_volunteer_assignment', 'correct_pet_care_completion', 'count_pending_join_requests', 'create_calendar_event', 'create_chore', 'create_chore_category', 'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_goal', 'create_goal_link', 'create_goal_series', 'create_google_calendar_event', 'create_habit', 'create_home', 'create_home_invitation', 'create_home_vacation', 'create_meal_entry', 'create_meal_series', 'create_meal_slot', 'create_personal_reward', 'create_pet', 'create_pet_care', 'create_pet_medical_attachment_intent', 'create_pet_medical_entry', 'create_pet_photo_intent', 'create_photo_album', 'create_photo_intent', 'create_recipe', 'create_recipe_cover_intent', 'create_reward', 'create_shopping_category', 'create_shopping_list', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_upload_intent', 'decide_chore_vacation_item', 'decide_join_request', 'delete_calendar_event', 'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_goal', 'delete_goal_series', 'delete_google_calendar_event', 'delete_habit', 'delete_meal_entry', 'delete_pet', 'delete_pet_care', 'delete_pet_medical_entry', 'delete_photo_album', 'delete_photos', 'delete_recipe', 'delete_shopping_category', 'delete_shopping_item', 'delete_shopping_list', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_calendar_reminder', 'deliver_chore_reminder', 'deliver_goal_reminder', 'deliver_habit_pause_end', 'deliver_habit_reminder', 'deliver_habit_snooze', 'deliver_pet_care_reminder', 'deliver_recovery_ready', 'deliver_task_reminder', 'deliver_vacation_reminder', 'discard_google_calendar_change', 'disconnect_google_calendar', 'edit_meal_occurrence', 'empty_trash', 'expire_upload', 'fail_job_outbox', 'finalize_photo', 'finalize_upload', 'find_recipe_duplicates', 'finish_job_execution', 'get_calendar_event', 'get_calendar_upcoming', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence', 'get_chore_points', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_vacation_state', 'get_chore_volunteer_state', 'get_dashboard', 'get_goal', 'get_goal_entries', 'get_goal_events', 'get_goal_link_candidates', 'get_goal_links', 'get_goal_series', 'get_goal_series_periods', 'get_goals', 'get_google_calendar_connection', 'get_google_calendar_event', 'get_habit', 'get_habit_calendar', 'get_habit_checkins', 'get_habit_contributions', 'get_habit_daily_totals', 'get_habit_events', 'get_habit_insights', 'get_habits', 'get_home_vacation', 'get_home_vacation_widget', 'get_invitation_email', 'get_meal_plan', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_personal_points', 'get_pet', 'get_pet_care', 'get_pet_care_activity', 'get_pet_medical', 'get_pet_medical_entry', 'get_photo', 'get_photo_upload_keys', 'get_point_leaderboard', 'get_point_summary', 'get_recipe', 'get_recipe_context', 'get_reward_redemption', 'get_shopping_context', 'get_shopping_list', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template', 'get_vacation_habits', 'get_weekly_points', 'goal_notice_names', 'google_push_changes', 'google_push_result', 'google_sync_apply_events', 'google_sync_begin', 'google_sync_calendars', 'google_sync_finish', 'google_sync_finish_calendar', 'habit_notice_names', 'home_capabilities', 'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats', 'leave_home', 'list_absence_review', 'list_calendar', 'list_chore_absences', 'list_chore_approvals', 'list_chore_categories', 'list_chore_history', 'list_chore_occurrences', 'list_chore_points', 'list_chore_pool', 'list_chore_proposals', 'list_chore_reassignment_requests', 'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_dashboard_templates', 'list_home_calendar_access', 'list_home_chore_history', 'list_home_invitations', 'list_home_join_requests', 'list_home_pet_care', 'list_home_vacation_days', 'list_home_vacations', 'list_meal_recipes', 'list_my_join_requests', 'list_my_recipe_drafts', 'list_personal_reward_redemptions', 'list_personal_rewards', 'list_pet_medical_access', 'list_pets', 'list_photo_library', 'list_point_accounts', 'list_point_entries', 'list_recipe_shares', 'list_recipe_tags', 'list_recipes', 'list_reward_redemptions', 'list_rewards', 'list_shopping_lists', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'list_vacation_review', 'mark_notifications_read', 'meal_slot_impact', 'move_meal_slot', 'move_shopping_category', 'move_shopping_item', 'move_shopping_list', 'move_task', 'my_notification_channels', 'my_recovered_homes', 'my_storage_usage', 'object_to_ownership_recovery', 'pause_habit', 'pet_care_notice_names', 'photo_deletion_impact', 'preview_chore_points_change', 'preview_home_invitation', 'preview_meal_copy', 'preview_meal_ingredients', 'preview_meal_series', 'propose_chore', 'publish_recipe', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'queue_google_calendar_syncs', 'reactivate_habit', 'recipe_delete_impact', 'recipe_widget', 'record_home_invitation_delivery', 'record_invitation_email', 'record_notification_email', 'redeem_personal_reward', 'redeem_reward', 'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'release_recipe_lock', 'remove_chore_reminder', 'remove_goal_link', 'remove_home_member', 'remove_pet_medical_attachment', 'remove_pet_photo', 'remove_photos_from_album', 'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_photo_album', 'rename_shopping_category', 'rename_subtask', 'renew_home_invitation', 'renew_recipe_lock', 'reopen_chore_occurrence', 'reopen_pet_care_occurrence', 'reorder_chore_categories', 'reorder_subtasks', 'reorder_task_lists', 'request_chore_reassignment', 'request_google_calendar_sync', 'request_ownership_recovery', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'resolve_google_calendar_conflict', 'resolve_personal_reward_redemption', 'resolve_photo_widget', 'resolve_reward_redemption', 'respond_to_ownership_transfer', 'restore_google_calendar_event', 'restore_meal_occurrence', 'restore_trash_entries', 'retry_google_calendar_change', 'reverse_personal_point_entry', 'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission', 'review_reward_redemption', 'review_task_reminder', 'revoke_home_invitation', 'roll_goal_periods', 'save_chore_absence', 'save_dashboard', 'save_google_calendar_connection', 'send_chore_summaries', 'set_administrator_capabilities', 'set_calendar_event_shares', 'set_calendar_preferences', 'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused', 'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_goal_achievement', 'set_goal_reminders', 'set_goal_series_state', 'set_google_calendar_settings', 'set_google_calendar_write_target', 'set_habit_celebrations', 'set_habit_checkin_note', 'set_habit_day_note', 'set_habit_end', 'set_habit_quick_adds', 'set_habit_reminders', 'set_home_calendar_access', 'set_my_avatar', 'set_my_goal_reminders', 'set_my_habit_reminders', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_personal_reward_fulfillment', 'set_pet_care_state', 'set_pet_medical_access', 'set_pet_medical_details', 'set_pet_photo', 'set_recipe_favorite', 'set_recipe_rating', 'set_replacement_outcome', 'set_reward_fulfillment', 'set_shopping_item_completed', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees', 'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'set_vacation_habit', 'share_dashboard_template', 'share_photo_album', 'share_recipe', 'shopping_item_history', 'shopping_widget', 'skip_chore_occurrence', 'skip_meal_occurrence', 'skip_pet_care_occurrence', 'snooze_habit_reminder', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery', 'start_ownership_transfer', 'start_shopping_recurrence', 'storage_stats', 'sync_goal_periods', 'task_attachment_scope_impact', 'task_reminder_titles', 'transfer_meal_ingredients', 'transfer_shopping_item', 'trash_stats', 'undo_dashboard_change', 'undo_habit_checkin', 'unshare_dashboard_template', 'unshare_photo_album', 'unshare_recipe', 'update_calendar_event', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_goal', 'update_goal_entry', 'update_goal_series', 'update_goal_settings', 'update_google_calendar_event', 'update_habit', 'update_habit_contribution', 'update_habit_pause', 'update_habit_settings', 'update_home_vacation', 'update_meal_entry', 'update_meal_series', 'update_meal_settings', 'update_meal_slot', 'update_personal_reward', 'update_pet', 'update_pet_care', 'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences', 'update_point_settings', 'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence', 'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'])
-  loop
-    execute format('drop function if exists %s cascade', routine.signature);
-  end loop;
-end
-$reset$;
-
--- Drop the Madeora public tables; CASCADE removes their policies, indexes and table triggers.
-drop table if exists public.home_member_profiles cascade;
-drop table if exists public.home_memberships cascade;
-drop table if exists public.homes cascade;
-drop table if exists public.notification_preferences cascade;
-drop table if exists public.notification_quiet_hours cascade;
-drop table if exists public.notifications cascade;
-drop table if exists public.chore_pool_signals cascade;
-drop table if exists public.shopping_signals cascade;
-drop table if exists public.user_preferences cascade;
-
--- The private schema was introduced by Madeora's first migration and contains only Madeora objects.
-drop schema if exists private cascade;
-
--- Dashboard SQL Editor runs are not normally recorded by the Supabase CLI. If this project
--- does have a migration history table, remove only the exact Madeora versions listed here.
-do $reset$
-begin
-  if to_regclass('supabase_migrations.schema_migrations') is not null then
-    execute
-      'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000']::text[];
-  end if;
-end
-$reset$;
-
-commit;
-```
-
-## Refreshing this file
-
-When a migration is added, changed or removed in `supabase/migrations/`, update this document in the same change: refresh the individual file list, rebuild the consolidated SQL in chronological order, and update the reset version list. Keep the source files as the authoritative standalone migrations.
- then
+    if pg_catalog.length(v_email) > 254 or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
       return 'invalid';
     end if;
     if exists (select 1 from auth.users u
@@ -57646,13 +57415,13 @@ When a migration is added, changed or removed in `supabase/migrations/`, update 
     perform private.record_security_event(v_user_id, 'backup_email_requested', v_session_id);
     return 'sent';
   end
-  $;
+  $$;
 
 -- Opened from the link, signed in as the account. Outcomes: 'confirmed', 'invalid' (wrong,
 -- used or expired link), 'unavailable' (the address is another account's backup or sign-in
 -- address).
 create function public.confirm_backup_email(p_token text) returns text
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_row private.backup_emails;
@@ -57690,11 +57459,11 @@ create function public.confirm_backup_email(p_token text) returns text
       'account.backup_email_changed:' || pg_catalog.gen_random_uuid()::text, true);
     return 'confirmed';
   end
-  $;
+  $$;
 
 -- Drops a pending change; the verified address (if any) stays.
 create function public.cancel_backup_email_change() returns void
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   begin
     if auth.uid() is null then
       raise exception 'not signed in' using errcode = '42501';
@@ -57705,11 +57474,11 @@ create function public.cancel_backup_email_change() returns void
       where b.user_id = auth.uid();
     delete from private.backup_emails b where b.user_id = auth.uid() and b.email is null;
   end
-  $;
+  $$;
 
 -- Removes the backup address, after reauthentication. A recovery in progress ends with it.
 create function public.remove_backup_email() returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -57737,7 +57506,7 @@ create function public.remove_backup_email() returns boolean
       'account.backup_email_removed:' || pg_catalog.gen_random_uuid()::text, true);
     return true;
   end
-  $;
+  $$;
 
 revoke all on function public.request_backup_email(text) from public, anon;
 grant execute on function public.request_backup_email(text) to authenticated;
@@ -57763,7 +57532,7 @@ create table private.account_recovery_codes (
 revoke all on table private.account_recovery_codes from public;
 
 create function private.new_account_recovery_code() returns text
-  language plpgsql volatile set search_path = '' as $
+  language plpgsql volatile set search_path = '' as $$
   declare
     v_alphabet constant text := '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     v_bytes bytea := extensions.gen_random_bytes(16);
@@ -57774,12 +57543,12 @@ create function private.new_account_recovery_code() returns text
     end loop;
     return v_code;
   end
-  $;
+  $$;
 
 -- Creates a new set of 10 and returns them once; the old set stops working in the same
 -- transaction. Needs the `account_recovery_codes` permission of this session.
 create function public.create_account_recovery_codes() returns setof text
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
@@ -57810,7 +57579,7 @@ create function public.create_account_recovery_codes() returns setof text
       pg_catalog.jsonb_build_object('replaced', v_regenerated),
       'account.account_recovery_codes_created:' || pg_catalog.gen_random_uuid()::text, true);
   end
-  $;
+  $$;
 
 revoke all on function public.create_account_recovery_codes() from public, anon;
 grant execute on function public.create_account_recovery_codes() to authenticated;
@@ -57858,13 +57627,13 @@ create index account_recovery_attempts_idx
 revoke all on table private.account_recoveries, private.account_recovery_attempts from public;
 
 create function private.account_recovery_wait() returns interval
-  language sql immutable set search_path = '' as $ select interval '72 hours' $;
+  language sql immutable set search_path = '' as $$ select interval '72 hours' $$;
 
 -- Step 1, signed out: the account's sign-in address. The answer is always the same; when the
 -- account has a verified backup address (and asked fewer than 3 times today, with no recovery
 -- already waiting), a link valid for 1 hour goes to that address.
 create function private.start_account_recovery(p_email text) returns void
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_user_id uuid;
     v_backup text;
@@ -57896,7 +57665,7 @@ create function private.start_account_recovery(p_email text) returns void
     perform private.queue_security_email(v_user_id, 'recovery_link', v_backup, v_token, v_expires_at);
     perform private.record_security_event(v_user_id, 'account_recovery_requested', null);
   end
-  $;
+  $$;
 
 -- Step 2, signed out, from the link: one account recovery code. Outcomes: 'waiting' (the wait has
 -- started; ready_at says until when), 'invalid' (wrong code, or a wrong, used or expired link),
@@ -57904,7 +57673,7 @@ create function private.start_account_recovery(p_email text) returns void
 create function private.continue_account_recovery(
   p_token text, p_code text, p_lost_authenticator boolean
 ) returns table (outcome text, ready_at timestamptz)
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_r private.account_recoveries;
     -- Milliseconds, so the time survives the round trip through the job payload exactly.
@@ -57952,13 +57721,13 @@ create function private.continue_account_recovery(
       null, v_ready_at);
     return query select 'waiting'::text, v_ready_at;
   end
-  $;
+  $$;
 
 -- For the account-recovery-ready job (service role), at the end of the wait: a link to finish
 -- (valid 7 days) goes to the backup address, if the recovery is still waiting for that time.
 create function public.deliver_account_recovery_ready(p_recovery_id uuid, p_ready_at timestamptz)
 returns text
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_r private.account_recoveries;
     v_token text;
@@ -57977,7 +57746,7 @@ returns text
     perform private.queue_security_email(v_r.user_id, 'recovery_ready', v_r.backup_email, v_token, v_expires_at);
     return 'notified';
   end
-  $;
+  $$;
 
 revoke all on function public.deliver_account_recovery_ready(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function public.deliver_account_recovery_ready(uuid, timestamptz) to service_role;
@@ -57986,7 +57755,7 @@ grant execute on function public.deliver_account_recovery_ready(uuid, timestampt
 -- sign-in address: reset the password there), 'invalid', 'unavailable' (the backup address
 -- changed, or another account now uses it).
 create function private.finish_account_recovery(p_token text) returns text
-  language plpgsql volatile security definer set search_path = '' as $
+  language plpgsql volatile security definer set search_path = '' as $$
   declare
     v_r private.account_recoveries;
   begin
@@ -58046,7 +57815,7 @@ create function private.finish_account_recovery(p_token text) returns text
       'account.recovered:' || v_r.id::text, true);
     return 'completed';
   end
-  $;
+  $$;
 
 -- The signed-out steps, callable by visitors. As with check_request, the public functions run
 -- with the caller's rights and are bound at creation; only the private helpers above, granted
@@ -58088,7 +57857,7 @@ grant execute on function public.finish_account_recovery(text) to anon, authenti
 -- The account holder stops a recovery they did not ask for (no reauthentication: it only takes
 -- something away). Returns whether one was stopped.
 create function public.cancel_account_recovery() returns boolean
-  language plpgsql security definer set search_path = '' as $
+  language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := auth.uid();
     v_count integer;
@@ -58106,7 +57875,7 @@ create function public.cancel_account_recovery() returns boolean
     end if;
     return v_count > 0;
   end
-  $;
+  $$;
 
 revoke all on function public.cancel_account_recovery() from public, anon;
 grant execute on function public.cancel_account_recovery() to authenticated;
@@ -58124,7 +57893,7 @@ returns table (
   recovery_waiting_until timestamptz,
   recovery_ready boolean
 )
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select private.has_usable_password(u.id),
            private.has_two_factor(u.id),
            (select count(*)::integer from private.two_factor_recovery_codes c
@@ -58140,7 +57909,7 @@ returns table (
     from auth.users u
     left join private.backup_emails b on b.user_id = u.id
     where u.id = auth.uid()
-  $;
+  $$;
 
 revoke all on function public.my_account_security() from public, anon;
 grant execute on function public.my_account_security() to authenticated;
@@ -58151,7 +57920,7 @@ grant execute on function public.my_account_security() to authenticated;
 -- signed-in token whose session exists and, for an account with two-factor sign-in, has passed
 -- the second factor (aal2); otherwise 'session_not_active' or 'second_factor_required'.
 create function private.request_session_state() returns text
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_claims jsonb := auth.jwt();
     v_user_id uuid;
@@ -58176,13 +57945,13 @@ create function private.request_session_state() returns text
     end if;
     return 'ok';
   end
-  $;
+  $$;
 
 -- For the row level security policies of tables Realtime streams (it does not go through PostgREST).
 create function private.request_session_ok() returns boolean
-  language sql stable security definer set search_path = '' as $
+  language sql stable security definer set search_path = '' as $$
     select private.request_session_state() = 'ok'
-  $;
+  $$;
 
 revoke all on function private.request_session_ok() from public;
 grant execute on function private.request_session_ok() to authenticated;
@@ -58193,7 +57962,7 @@ grant execute on function private.request_session_ok() to authenticated;
 -- reauthentication permissions, which the short-lived password or Google session asks for while
 -- the code is verified on the browser's own session (is_recent_reauthentication requires it).
 create function private.enforce_request_session() returns void
-  language plpgsql stable security definer set search_path = '' as $
+  language plpgsql stable security definer set search_path = '' as $$
   declare
     v_state text := private.request_session_state();
   begin
@@ -58208,7 +57977,7 @@ create function private.enforce_request_session() returns void
       raise sqlstate 'PT401' using message = 'second_factor_required';
     end if;
   end
-  $;
+  $$;
 
 revoke all on function private.enforce_request_session() from public;
 grant execute on function private.enforce_request_session() to anon, authenticated, service_role;
