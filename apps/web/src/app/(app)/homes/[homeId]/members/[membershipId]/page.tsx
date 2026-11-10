@@ -237,6 +237,10 @@ export default async function MemberPage({ params }: MemberPageProps) {
           <Card title={t("transferSection")} description={t("transferSectionHint", { name })}>
             {pendingTransfer ? (
               <p className="text-body text-fg-muted">{t("transferPendingElsewhere")}</p>
+            ) : member.isInactive ? (
+              <p className="text-body text-fg-muted" data-testid="transfer-inactive">
+                {t("transferInactive", { name })}
+              </p>
             ) : (
               <NominateOwner
                 homeId={home.id}

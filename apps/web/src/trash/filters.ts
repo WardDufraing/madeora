@@ -74,7 +74,7 @@ export function startOfDayInZone(isoDate: string, timeZone: string): Date {
   return new Date(instant);
 }
 
-function nextDay(isoDate: string): string {
+export function nextDay(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number) as [number, number, number];
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }

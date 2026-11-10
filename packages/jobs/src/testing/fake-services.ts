@@ -99,6 +99,11 @@ export class FakeJobData implements JobDataPort {
   googleBegin: BeginResult = { outcome: "missing" };
   readonly googleCalls: string[] = [];
   googleQueued = 0;
+  /** S38: sign-in classification and activity purge calls. */
+  readonly signInCalls: number[] = [];
+  signInsClassified = 0;
+  activityPurges = 0;
+  readonly inactivityCalls: number[] = [];
   readonly googleSync: SyncStore = {
     begin: (connectionId) => {
       this.check();
@@ -119,6 +124,24 @@ export class FakeJobData implements JobDataPort {
   queueGoogleCalendarSyncs(): Promise<number> {
     this.check();
     return Promise.resolve(this.googleQueued);
+  }
+
+  processSignInEvents(limit: number): Promise<number> {
+    this.check();
+    this.signInCalls.push(limit);
+    return Promise.resolve(this.signInsClassified);
+  }
+
+  purgeAccountActivity(): Promise<number> {
+    this.check();
+    this.activityPurges += 1;
+    return Promise.resolve(0);
+  }
+
+  sendInactivityReminders(limit: number): Promise<number> {
+    this.check();
+    this.inactivityCalls.push(limit);
+    return Promise.resolve(0);
   }
 
   private check(): void {

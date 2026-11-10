@@ -16,6 +16,13 @@ export const notificationKinds = [
   "account.account_recovery_codes_created",
   "account.recovery_started",
   "account.recovered",
+  "account.new_device_sign_in",
+  "account.unfinished_sign_in",
+  "account.deactivated",
+  "account.reactivated",
+  "account.inactivity_reminder",
+  "account.signed_in",
+  "account.security_report_ready",
   "recovery.claimant_review_started",
   "recovery.claimant_approved",
   "recovery.claimant_paused",
@@ -97,6 +104,55 @@ export interface NotificationEmailText {
 type Catalogue = Record<NotificationEmailKind, NotificationEmailText>;
 
 const en: Catalogue = {
+  "account.new_device_sign_in": {
+    subject: "New sign-in to your Madeora account",
+    preview: "Your account was signed in to from a device it hasn't used recently.",
+    heading: "A new device signed in",
+    body: "Your Madeora account was just signed in to from a device or browser it hasn't used in the last 12 months. If this was you, there's nothing to do. If it wasn't, open Security activity in Madeora, choose Secure my account on that sign-in and change your password.",
+    button: "Review security activity",
+  },
+  "account.unfinished_sign_in": {
+    subject: "Unfinished sign-in to your Madeora account",
+    preview: "Someone got past the first step but not two-step verification.",
+    heading: "A sign-in wasn't finished",
+    body: "Someone entered your Madeora account's password, or used its Google sign-in, but didn't complete two-step verification, so they weren't let in. If this was you, there's nothing to do. If it wasn't, change your password now and open Security activity in Madeora to secure your account. This alert is always sent.",
+    button: "Review security activity",
+  },
+  "account.deactivated": {
+    subject: "Your Madeora account is deactivated",
+    preview: "You can reactivate it whenever you like by signing in.",
+    heading: "Account deactivated",
+    body: "Your Madeora account was deactivated. Your data, Homes and roles are kept, every device was signed out and Google Calendar is paused. To come back, sign in as usual and choose Reactivate. If you didn't do this, sign in, reactivate your account and change your password straight away.",
+    button: "Open Madeora",
+  },
+  "account.reactivated": {
+    subject: "Your Madeora account is active again",
+    preview: "Welcome back.",
+    heading: "Account reactivated",
+    body: "Your Madeora account was reactivated. Check your Homes for anything that changed while you were away, and reconnect Google Calendar if you use it. If you didn't do this, change your password and review your devices now.",
+    button: "Review account activity",
+  },
+  "account.inactivity_reminder": {
+    subject: "Your Madeora account is still here",
+    preview: "Nothing has changed: your account, Homes and data are kept.",
+    heading: "We haven't seen you in a while",
+    body: "You haven't used your Madeora account for a long time. Nothing has been changed or removed: your account, your Homes and your data stay as they are. When you come back, we'll ask you to take a quick look at your security settings. You don't need to do anything now.",
+    button: "Open Madeora",
+  },
+  "account.signed_in": {
+    subject: "Someone signed in to your Madeora account",
+    preview: "You asked to hear about every sign-in.",
+    heading: "New sign-in",
+    body: "Your Madeora account was just signed in to. You get this because alerts for every sign-in are on. If this wasn't you, open Security activity in Madeora, choose Secure my account on that sign-in and change your password.",
+    button: "Review security activity",
+  },
+  "account.security_report_ready": {
+    subject: "Your Madeora security report is ready",
+    preview: "Download it in Madeora within 24 hours.",
+    heading: "Security report ready",
+    body: "The security activity report you asked for is ready. For your protection it isn't attached: sign in to Madeora and download it from Security activity within 24 hours. If you didn't ask for a report, change your password and review your devices.",
+    button: "Open security activity",
+  },
   "account.device_trusted": {
     subject: "A device was trusted on your Madeora account",
     preview: "Sign-ins there skip the authenticator code for 30 days.",
@@ -633,6 +689,55 @@ const en: Catalogue = {
 };
 
 const nl: Catalogue = {
+  "account.new_device_sign_in": {
+    subject: "Nieuwe inlog op je Madeora-account",
+    preview: "Er is ingelogd vanaf een apparaat dat je account recent niet gebruikte.",
+    heading: "Er is ingelogd op een nieuw apparaat",
+    body: "Er is net ingelogd op je Madeora-account vanaf een apparaat of browser die het de afgelopen 12 maanden niet gebruikte. Was jij dit, dan hoef je niets te doen. Was jij het niet, open dan Beveiligingsactiviteit in Madeora, kies Mijn account beveiligen bij die inlog en wijzig je wachtwoord.",
+    button: "Beveiligingsactiviteit bekijken",
+  },
+  "account.unfinished_sign_in": {
+    subject: "Onafgemaakte inlog op je Madeora-account",
+    preview: "Iemand kwam voorbij de eerste stap, maar niet voorbij de tweestapsverificatie.",
+    heading: "Een inlog is niet afgemaakt",
+    body: "Iemand heeft het wachtwoord van je Madeora-account ingevoerd, of de Google-inlog gebruikt, maar de tweestapsverificatie niet voltooid, dus kreeg geen toegang. Was jij dit, dan hoef je niets te doen. Was jij het niet, wijzig dan meteen je wachtwoord en open Beveiligingsactiviteit in Madeora om je account te beveiligen. Deze melding wordt altijd verstuurd.",
+    button: "Beveiligingsactiviteit bekijken",
+  },
+  "account.deactivated": {
+    subject: "Je Madeora-account is gedeactiveerd",
+    preview: "Je kunt het altijd opnieuw activeren door in te loggen.",
+    heading: "Account gedeactiveerd",
+    body: "Je Madeora-account is gedeactiveerd. Je gegevens, Homes en rollen blijven bewaard, je bent op elk apparaat uitgelogd en Google Agenda is gepauzeerd. Wil je terugkomen, log dan gewoon in en kies Opnieuw activeren. Heb jij dit niet gedaan, log dan in, activeer je account opnieuw en wijzig meteen je wachtwoord.",
+    button: "Madeora openen",
+  },
+  "account.reactivated": {
+    subject: "Je Madeora-account is weer actief",
+    preview: "Welkom terug.",
+    heading: "Account opnieuw geactiveerd",
+    body: "Je Madeora-account is opnieuw geactiveerd. Kijk in je Homes wat er veranderde terwijl je weg was, en koppel Google Agenda opnieuw als je die gebruikt. Heb jij dit niet gedaan, wijzig dan nu je wachtwoord en bekijk je apparaten.",
+    button: "Accountactiviteit bekijken",
+  },
+  "account.inactivity_reminder": {
+    subject: "Je Madeora-account is er nog",
+    preview: "Er is niets veranderd: je account, Homes en gegevens blijven bewaard.",
+    heading: "We hebben je al een tijd niet gezien",
+    body: "Je hebt je Madeora-account lang niet gebruikt. Er is niets gewijzigd of verwijderd: je account, je Homes en je gegevens blijven zoals ze zijn. Kom je terug, dan vragen we je even naar je beveiligingsinstellingen te kijken. Je hoeft nu niets te doen.",
+    button: "Madeora openen",
+  },
+  "account.signed_in": {
+    subject: "Er is ingelogd op je Madeora-account",
+    preview: "Je wilde van elke inlog horen.",
+    heading: "Nieuwe inlog",
+    body: "Er is net ingelogd op je Madeora-account. Je krijgt dit bericht omdat meldingen voor elke inlog aan staan. Was jij het niet, open dan Beveiligingsactiviteit in Madeora, kies Mijn account beveiligen bij die inlog en wijzig je wachtwoord.",
+    button: "Beveiligingsactiviteit bekijken",
+  },
+  "account.security_report_ready": {
+    subject: "Je Madeora-beveiligingsrapport staat klaar",
+    preview: "Download het binnen 24 uur in Madeora.",
+    heading: "Beveiligingsrapport klaar",
+    body: "Het rapport met beveiligingsactiviteit dat je hebt aangevraagd staat klaar. Voor je veiligheid zit het niet als bijlage bij deze e-mail: log in bij Madeora en download het binnen 24 uur via Beveiligingsactiviteit. Heb je geen rapport aangevraagd, wijzig dan je wachtwoord en bekijk je apparaten.",
+    button: "Beveiligingsactiviteit openen",
+  },
   "account.device_trusted": {
     subject: "Er is een apparaat vertrouwd voor je Madeora-account",
     preview: "Inloggen daar slaat de code van de authenticator 30 dagen over.",

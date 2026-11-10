@@ -235,7 +235,8 @@ describe("callback", () => {
     });
     expect(notice(await callback(back({ state: value, code: "c" })))).toBe("missing_scope");
     expect(state.client.revoke).toHaveBeenCalledWith("refresh-1");
-    expect(state.rpc).not.toHaveBeenCalled();
+    // Nothing stored; only the failed attempt is recorded in the person's activity (S38).
+    expect(state.rpc.mock.calls.map(([name]) => name)).toEqual(["record_integration_failure"]);
   });
 
   it("revokes and stores nothing without a refresh token", async () => {
@@ -247,14 +248,16 @@ describe("callback", () => {
     });
     expect(notice(await callback(back({ state: value, code: "c" })))).toBe("failed");
     expect(state.client.revoke).toHaveBeenCalledWith("access-1");
-    expect(state.rpc).not.toHaveBeenCalled();
+    // Nothing stored; only the failed attempt is recorded in the person's activity (S38).
+    expect(state.rpc.mock.calls.map(([name]) => name)).toEqual(["record_integration_failure"]);
   });
 
   it("says failed when Google refuses the code", async () => {
     const value = startAttempt();
     state.client.exchangeCode.mockRejectedValue(new Error("invalid_grant"));
     expect(notice(await callback(back({ state: value, code: "c" })))).toBe("failed");
-    expect(state.rpc).not.toHaveBeenCalled();
+    // Nothing stored; only the failed attempt is recorded in the person's activity (S38).
+    expect(state.rpc.mock.calls.map(([name]) => name)).toEqual(["record_integration_failure"]);
   });
 
   it("stores the refresh token sealed for this person only, with the PKCE verifier", async () => {

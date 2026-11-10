@@ -369,6 +369,24 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return data;
     },
 
+    async processSignInEvents(limit) {
+      const { data, error } = await client.rpc("process_sign_in_events", { p_limit: limit });
+      if (error) throw new JobStoreError("process_sign_in_events", error.code);
+      return data;
+    },
+
+    async purgeAccountActivity() {
+      const { data, error } = await client.rpc("purge_account_activity");
+      if (error) throw new JobStoreError("purge_account_activity", error.code);
+      return data;
+    },
+
+    async sendInactivityReminders(limit) {
+      const { data, error } = await client.rpc("send_inactivity_reminders", { p_limit: limit });
+      if (error) throw new JobStoreError("send_inactivity_reminders", error.code);
+      return data;
+    },
+
     async deliverCalendarReminder(eventId, on, at) {
       const { data, error } = await client.rpc("deliver_calendar_reminder", {
         p_event_id: eventId,

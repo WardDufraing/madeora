@@ -108,6 +108,13 @@ export const notificationKinds = [
   "account.account_recovery_codes_created",
   "account.recovery_started",
   "account.recovered",
+  "account.new_device_sign_in",
+  "account.unfinished_sign_in",
+  "account.signed_in",
+  "account.security_report_ready",
+  "account.deactivated",
+  "account.reactivated",
+  "account.inactivity_reminder",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -166,6 +173,16 @@ export function notificationPath(
   if (kind.startsWith("storage.personal_")) return "/settings/storage";
   // S33: an expired Google Calendar authorization leads to its settings, to reconnect.
   if (kind === "google_calendar.authorization_expired") return "/settings/google-calendar";
+  // S38: sign-in alerts lead to Security activity, where "This was me" and "Secure my account"
+  // are; a ready report to its section there.
+  if (
+    kind === "account.new_device_sign_in" ||
+    kind === "account.unfinished_sign_in" ||
+    kind === "account.signed_in"
+  ) {
+    return "/settings/security/activity";
+  }
+  if (kind === "account.security_report_ready") return "/settings/security/activity#report";
   // S37: account security notices lead to Settings › Security.
   if (kind.startsWith("account.")) return "/settings/security";
   if (!homeId) return "/";

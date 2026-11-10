@@ -51,6 +51,7 @@ export const getHomeDirectory = cache(async (homeId: string): Promise<HomeDirect
             name: nameOrNull(row.name),
             accentColor: parseAccentColor(row.accent_color),
             avatarFileId: row.avatar_file_id,
+            isInactive: row.is_inactive,
           },
         ]
       : [],

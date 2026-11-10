@@ -56,16 +56,19 @@ const notices = {
  */
 export default async function SecurityPage({ searchParams }: SecurityPageProps) {
   await requireIdentity();
-  const [t, tSettings, user, security, sessions, trusted, formats, params] = await Promise.all([
-    getTranslations("Security"),
-    getTranslations("Settings"),
-    getVerifiedUser(),
-    getAccountSecurity(),
-    getMySessions(),
-    getMyTrustedDevices(),
-    getDateTimeFormats(),
-    searchParams,
-  ]);
+  const [t, tActivity, tSettings, tLifecycle, user, security, sessions, trusted, formats, params] =
+    await Promise.all([
+      getTranslations("Security"),
+      getTranslations("Activity"),
+      getTranslations("Settings"),
+      getTranslations("Lifecycle"),
+      getVerifiedUser(),
+      getAccountSecurity(),
+      getMySessions(),
+      getMyTrustedDevices(),
+      getDateTimeFormats(),
+      searchParams,
+    ]);
   if (!user) return null;
   const email = user.email ?? "";
   const factor = verifiedTotpFactor(user);
@@ -87,6 +90,28 @@ export default async function SecurityPage({ searchParams }: SecurityPageProps) 
       <p className="mb-4">
         <Link href="/settings" className="text-body font-medium text-accent-fg underline">
           {tSettings("notificationsBack")}
+        </Link>
+      </p>
+      <p className="mb-4 flex flex-wrap gap-4">
+        <Link
+          href="/settings/security/activity"
+          className="text-body font-medium text-accent-fg underline"
+          data-testid="security-activity-link"
+        >
+          {tActivity("securityLink")}
+        </Link>
+        <Link
+          href="/settings/security/notifications"
+          className="text-body font-medium text-accent-fg underline"
+        >
+          {tActivity("alertsLink")}
+        </Link>
+        <Link
+          href="/settings/security/deactivate"
+          className="text-body font-medium text-accent-fg underline"
+          data-testid="deactivate-link"
+        >
+          {tLifecycle("deactivateLink")}
         </Link>
       </p>
       <div className="flex max-w-2xl flex-col gap-6">
