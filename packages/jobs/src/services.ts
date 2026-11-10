@@ -199,12 +199,23 @@ export interface JobDataPort {
   failDataExport(exportId: string, code: string): Promise<boolean>;
   /** task-reminder-advance (S39): expiry, expiry warnings and stuck preparations; how many changed. */
   sweepDataExports(limit: number): Promise<number>;
+  /**
+   * task-reminder-advance (S40): deletes Homes and accounts whose 30-day recovery period ended;
+   * how many of each, and how many failed (retried next hour).
+   */
+  purgeDueDeletions(limit: number): Promise<DeletionPurge>;
   /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
   deliverCalendarReminder(
     eventId: string,
     on: string,
     at: string,
   ): Promise<CalendarReminderOutcome>;
+}
+
+export interface DeletionPurge {
+  readonly homes: number;
+  readonly accounts: number;
+  readonly failed: number;
 }
 
 export type DataExportBegin =

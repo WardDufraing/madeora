@@ -49,6 +49,9 @@ const paramsSchema = z.object({
   reminder: z.enum(["lead", "overdue"]).optional(),
   petCare: z.int().min(0).optional(),
   onDate: z.iso.date().optional(),
+  // A closed Home's notices carry its name, since its members no longer see it (S40).
+  homeName: z.string().min(1).max(200).optional(),
+  purgeAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 /** The template for a kind whose wording depends on a parameter (the decision, the reason). */
@@ -97,8 +100,10 @@ export async function buildNotificationEmail(
   ).toString();
   const timeZone = input.homeTimeZone ?? "UTC";
   // A notice without a Home (a case that ended after the person left it) still reads as a sentence.
-  const homeName = input.homeName ?? (input.locale === "nl" ? "een Home" : "a Home");
+  const homeName =
+    input.homeName ?? params.data.homeName ?? (input.locale === "nl" ? "een Home" : "a Home");
   const endsAt = params.data.objectionEndsAt ? new Date(params.data.objectionEndsAt) : null;
+  const purgeAt = params.data.purgeAt ? new Date(params.data.purgeAt) : null;
 
   if (input.kind === "recovery.owner_review_started" || input.kind === "recovery.owner_approved") {
     const approved = input.kind === "recovery.owner_approved";
@@ -117,12 +122,14 @@ export async function buildNotificationEmail(
   if (!isEmailKind(kind)) throw new PermanentJobError("no_email_template");
   if (kind === "recovery.claimant_approved" && !endsAt)
     throw new PermanentJobError("invalid_params");
+  if ((kind === "account.deletion_requested" || kind === "home.deletion_started") && !purgeAt)
+    throw new PermanentJobError("invalid_params");
   return renderNotificationEmail({
     kind,
     locale: input.locale,
     homeName,
     url,
-    date: endsAt,
+    date: endsAt ?? purgeAt,
     day: params.data.dueDate ?? params.data.resumesOn ?? params.data.onDate ?? null,
     timeZone,
   });

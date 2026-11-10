@@ -7,18 +7,25 @@ import { ActivityActionError, reactivateAccount } from "@/activity/api";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 
+export interface ReactivateAccountProps {
+  /** S40: the account is pending deletion; this cancels the deletion. */
+  readonly deletion?: boolean;
+}
+
 /**
- * "Reactivate my account" (S38). Afterwards the person lands on their Home membership history from
- * the day they left, so they see what changed while they were away.
+ * "Reactivate my account" (S38), or "Cancel deletion" for an account pending deletion (S40).
+ * Afterwards the person lands on their Home membership history from the day they left, so they see
+ * what changed while they were away.
  */
-export function ReactivateAccount() {
+export function ReactivateAccount({ deletion = false }: ReactivateAccountProps) {
   const t = useTranslations("Lifecycle");
+  const tDeletion = useTranslations("Deletion");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"failed" | "expired" | null>(null);
 
   async function reactivate() {
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
       const since = await reactivateAccount();
       // Reactivation ended this session: signing in again opens a fresh one, then shows what
@@ -27,7 +34,7 @@ export function ReactivateAccount() {
       if (since) changes.set("from", since.slice(0, 10));
       changes.set("welcome", "back");
       const target = new URL("/sign-in", window.location.origin);
-      target.searchParams.set("status", "reactivated");
+      target.searchParams.set("status", deletion ? "deletion_canceled" : "reactivated");
       target.searchParams.set("next", `/settings/activity?${changes.toString()}`);
       window.location.assign(target);
     } catch (error) {
@@ -35,7 +42,9 @@ export function ReactivateAccount() {
         window.location.assign(new URL("/sign-in", window.location.origin));
         return;
       }
-      setFailed(true);
+      setFailed(
+        error instanceof ActivityActionError && error.failure === "expired" ? "expired" : "failed",
+      );
       setBusy(false);
     }
   }
@@ -44,7 +53,7 @@ export function ReactivateAccount() {
     <div className="mt-6 flex flex-col gap-4">
       {failed ? (
         <FormAlert tone="error" announce>
-          {t("reactivateFailed")}
+          {failed === "expired" ? tDeletion("recoverExpired") : t("reactivateFailed")}
         </FormAlert>
       ) : null}
       <div className="flex flex-wrap gap-3">
@@ -54,7 +63,7 @@ export function ReactivateAccount() {
             void reactivate();
           }}
         >
-          {t("reactivate")}
+          {deletion ? tDeletion("recoverButton") : t("reactivate")}
         </Button>
         <form method="post" action="/auth/sign-out">
           <Button type="submit" variant="ghost">

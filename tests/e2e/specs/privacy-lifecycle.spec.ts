@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 
-import { registerConfirmed, signIn } from "../support/accounts";
+import { type Account, registerConfirmed, signIn } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
-import { createHomeFor, setGlobalProfile } from "../support/database";
+import { addMember, createHomeFor, setGlobalProfile } from "../support/database";
 import { runJobs } from "../support/jobs";
 
 // S39 done-condition: the export half of the "Privacy lifecycle" journey (Project-entry.md):
@@ -16,7 +16,8 @@ test.use({
   timezoneId: "Europe/London",
   viewport: { width: 1280, height: 900 },
   // Requesting and downloading first ask the server, which answers 403 until Ann confirms it's her.
-  allowedConsoleErrors: [/Failed to load resource: the server responded with a status of 403/],
+  // S40: a closed Home answers 404.
+  allowedConsoleErrors: [/Failed to load resource: the server responded with a status of 40[34]/],
 });
 
 test("review privacy settings and history, then export permitted data", async ({
@@ -105,4 +106,99 @@ test("review privacy settings and history, then export permitted data", async ({
 
   await page.reload();
   await expect(row.getByText(/^Downloaded /)).toBeVisible();
+});
+
+// S40 done-condition: the deletion half of the journey. Ann closes her Home after typing its name
+// and confirming it's her; Bea, a member, can no longer open it; Ann restores it within the 30
+// days. Then Bea deletes her account: every session ends, signing in again only offers to cancel
+// the deletion, and cancelling brings the account back.
+test("delete data with the required confirmation and recovery", async ({ page, baseURL }) => {
+  const ann = await registerConfirmed(baseURL ?? "");
+  const bea = await registerConfirmed(baseURL ?? "");
+  setGlobalProfile(ann.email, "Ann", "#2563eb");
+  setGlobalProfile(bea.email, "Bea", "#16a34a");
+  const homeId = createHomeFor(ann.email, "Pine Lane");
+  addMember(homeId, bea.email, "member");
+
+  /** Confirms it's `who` when the form appears (a recent confirmation may still count). */
+  async function confirmIfAsked(who: Account, name: string, button: string, done: RegExp) {
+    const form = page.getByRole("form", { name });
+    const first = await Promise.race([
+      page.waitForURL(done).then(() => "done" as const),
+      form.waitFor().then(() => "confirm" as const),
+    ]);
+    if (first === "confirm") {
+      await form.getByLabel(/password/i).fill(who.password);
+      await form.getByRole("button", { name: button }).click();
+    }
+    await expect(page).toHaveURL(done);
+  }
+
+  // Ann closes the Home from its settings: the summary, the typed name, then "confirm it's you".
+  await signIn(page, ann);
+  await page.goto(`/homes/${homeId}/close`);
+  await expect(page.getByRole("heading", { level: 1, name: /Close .*Pine Lane/ })).toBeVisible();
+  await expect(page.getByTestId("close-summary")).toContainText("2 members, you included");
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByTestId("close-home-name").fill("Pine");
+  await page.getByRole("button", { name: "Close the Home" }).click();
+  await expect(page.getByText("Type the Home's name exactly as it's written.")).toBeVisible();
+  await page.getByTestId("close-home-name").fill("Pine Lane");
+  await page.getByRole("button", { name: "Close the Home" }).click();
+  await confirmIfAsked(
+    ann,
+    "Confirm it's you to close the Home.",
+    "Close the Home",
+    /\/settings\/closed-homes\?status=closed/,
+  );
+  const closed = page.getByTestId("closed-home");
+  await expect(closed).toContainText("Pine Lane");
+  await expect(closed).toContainText(/Deleted for good on /);
+  expect(await axeViolations(page)).toEqual([]);
+
+  // Nobody can open it now, Ann included.
+  const gone = await page.goto(`/homes/${homeId}`);
+  expect(gone?.status()).toBe(404);
+
+  // Ann restores it within the 30 days.
+  await page.goto("/settings/closed-homes");
+  await page.getByRole("button", { name: "Restore the Home" }).click();
+  await confirmIfAsked(
+    ann,
+    "Confirm it's you to restore the Home.",
+    "Restore the Home",
+    new RegExp(`/homes/${homeId}$`),
+  );
+  await page.goto("/settings/closed-homes");
+  await expect(page.getByTestId("closed-homes-empty")).toBeVisible();
+  await page.context().clearCookies();
+
+  // Bea deletes her account.
+  await signIn(page, bea);
+  await page.goto("/settings/privacy");
+  await page.getByTestId("privacy-delete-account-link").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Delete your account" })).toBeVisible();
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByTestId("delete-account-phrase").fill("DELETE");
+  await page.getByRole("button", { name: "Delete my account" }).click();
+  await confirmIfAsked(
+    bea,
+    "Confirm it's you to delete your account.",
+    "Delete my account",
+    /\/sign-in\?status=deletion_requested/,
+  );
+  await expect(page.getByText(/Your account will be deleted in 30 days/)).toBeVisible();
+
+  // Signing in again only offers to cancel the deletion; cancelling brings the account back.
+  await signIn(page, bea);
+  await expect(page).toHaveURL(/\/reactivate$/);
+  await expect(page.getByTestId("account-pending-deletion")).toBeVisible();
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByRole("button", { name: "Cancel deletion" }).click();
+  await expect(page).toHaveURL(/\/sign-in\?status=deletion_canceled/);
+  await expect(page.getByText(/The deletion is cancelled/)).toBeVisible();
+  await signIn(page, bea, page.url());
+  await expect(page).toHaveURL(/\/settings\/activity\?/);
+  await page.goto(`/homes/${homeId}`);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Pine Lane");
 });

@@ -300,6 +300,7 @@ describe("renderWidgets on the personal dashboard", () => {
         homeId: null,
         homeName: null,
         objectionEndsAt: null,
+        purgeAt: null,
         decision: "approved",
         duringQuietHours: false,
         createdAt: "2026-12-30T10:00:00Z",

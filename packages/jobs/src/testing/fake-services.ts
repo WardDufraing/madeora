@@ -27,6 +27,7 @@ import type {
   SecurityEmailRead,
   CalendarReminderOutcome,
   DataExportBegin,
+  DeletionPurge,
   PetCareReminderOutcome,
   StoredFileStatus,
   TaskReminderOutcome,
@@ -158,6 +159,7 @@ export class FakeJobData implements JobDataPort {
   }[] = [];
   readonly exportFailures: { exportId: string; code: string }[] = [];
   readonly exportSweeps: number[] = [];
+  readonly deletionPurges: number[] = [];
 
   beginDataExport(exportId: string): Promise<DataExportBegin> {
     this.check();
@@ -192,6 +194,12 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.exportSweeps.push(limit);
     return Promise.resolve(0);
+  }
+
+  purgeDueDeletions(limit: number): Promise<DeletionPurge> {
+    this.check();
+    this.deletionPurges.push(limit);
+    return Promise.resolve({ homes: 0, accounts: 0, failed: 0 });
   }
 
   private check(): void {

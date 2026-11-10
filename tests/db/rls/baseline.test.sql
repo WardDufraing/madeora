@@ -61,7 +61,10 @@ select tests.assert_true(
         -- recovery code themselves and reveal nothing about whether an account exists.
         'private.start_account_recovery(text)',
         'private.continue_account_recovery(text,text,boolean)',
-        'private.finish_account_recovery(text)'
+        'private.finish_account_recovery(text)',
+        -- S40: the membership view (security_invoker, so it runs as its reader) leaves out Homes
+        -- pending deletion; it only says whether a Home id is closed.
+        'private.home_is_open(uuid)'
       ]::text[])
       and (
         has_function_privilege('anon', p.oid, 'execute')

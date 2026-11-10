@@ -25,6 +25,8 @@ export interface NotificationView {
   readonly homeName: string | null;
   /** Dates and codes only (never free text); the words come from the reader's language. */
   readonly objectionEndsAt: string | null;
+  /** S40: when a closed Home or an account pending deletion is deleted for good. */
+  readonly purgeAt: string | null;
   readonly decision: NotificationDecision | null;
   /** Why a chore claim was released (S21): automatically, or by a chore manager. */
   readonly reason: "auto" | "manager" | null;

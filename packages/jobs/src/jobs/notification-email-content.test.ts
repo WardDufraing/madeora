@@ -19,7 +19,7 @@ describe("buildNotificationEmail", () => {
       const email = await buildNotificationEmail({
         ...base,
         kind,
-        params: { objectionEndsAt: "2026-10-29T16:00:00Z" },
+        params: { objectionEndsAt: "2026-10-29T16:00:00Z", purgeAt: "2026-12-10T09:00:00+00:00" },
       });
       expect(email.subject.length).toBeGreaterThan(0);
       expect(email.text).toContain("https://app.madeora.test/");
@@ -237,6 +237,22 @@ describe("buildNotificationEmail", () => {
       });
     },
   );
+
+  it("names a closed Home from the notice and gives its deletion date (S40)", async () => {
+    const email = await buildNotificationEmail({
+      ...base,
+      homeName: null,
+      homeTimeZone: null,
+      kind: "home.deletion_started",
+      params: { homeName: "Pine Lane", purgeAt: "2026-12-10T09:00:00.123456+00:00" },
+    });
+    expect(email.subject).toContain("Pine Lane");
+    expect(email.subject).toContain("2026");
+    expect(email.text).toContain("https://app.madeora.test/settings/closed-homes");
+    await expect(
+      buildNotificationEmail({ ...base, kind: "account.deletion_requested", params: {} }),
+    ).rejects.toThrow("invalid_params");
+  });
 
   it("refuses params it does not understand", async () => {
     await expect(

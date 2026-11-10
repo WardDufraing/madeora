@@ -248,6 +248,56 @@ export async function listMyDeactivationBlockers(): Promise<
   };
 }
 
+/** S40: a Home its Owner closed, with the date it will be deleted for good. */
+export interface ClosedHome {
+  readonly homeId: string;
+  readonly homeName: string;
+  readonly purgeAfter: string;
+}
+
+/** S40: the Homes the person closed as their Owner and can still restore. */
+export async function listMyClosedHomes(): Promise<Loaded<readonly ClosedHome[]>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("my_closed_homes");
+  if (error) {
+    logFailure("home.closed_list_failed", error.code);
+    return { status: "unavailable" };
+  }
+  return {
+    status: "ok",
+    value: data.map((row) => ({
+      homeId: row.home_id,
+      homeName: row.home_name,
+      purgeAfter: row.purge_after,
+    })),
+  };
+}
+
+/** S40: what closing a Home affects, for its Owner (counts only). */
+export interface HomeClosureSummary {
+  readonly members: number;
+  readonly invitations: number;
+  readonly sharedCalendars: number;
+}
+
+export async function getHomeClosureSummary(homeId: string): Promise<Loaded<HomeClosureSummary>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("home_closure_summary", { p_home_id: homeId });
+  const row = data?.[0];
+  if (error || !row) {
+    logFailure("home.closure_summary_failed", error?.code);
+    return { status: "unavailable" };
+  }
+  return {
+    status: "ok",
+    value: {
+      members: row.member_count,
+      invitations: row.pending_invitations,
+      sharedCalendars: row.shared_calendars,
+    },
+  };
+}
+
 /**
  * S38: records this visit as account activity (at most hourly in the database) and says whether a
  * security review is due after a long absence. A failure never blocks the page.

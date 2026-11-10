@@ -147,6 +147,9 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
             return t("eventReleasedAuto", { claimant, date });
           case "departure":
             return t("eventReleasedDeparture", { date });
+          // S40: released when the claimant asked to delete their account; the reason stays private.
+          case "unavailable":
+            return t("eventReleasedUnavailable", { date });
           default:
             return t("eventReleased", { person: claimant, date });
         }

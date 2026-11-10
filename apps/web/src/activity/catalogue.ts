@@ -82,6 +82,9 @@ export const ACTIVITY_KINDS = {
     "data_export_downloaded",
     "privacy_review_started",
     "privacy_review_completed",
+    // S40: account deletion and its cancellation.
+    "account_deletion_requested",
+    "account_deletion_canceled",
   ],
   profile: [
     "profile.name_changed",
@@ -110,6 +113,9 @@ export const ACTIVITY_KINDS = {
     "join_request",
     "invitation",
     "home_ownership.transfer",
+    // S40: the Owner closed or restored a Home.
+    "home.closed",
+    "home.restored",
   ],
 } as const satisfies Record<ActivityCategory, readonly string[]>;
 
