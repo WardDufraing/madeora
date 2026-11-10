@@ -1,6 +1,6 @@
 # Madeora
 
-Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, Home membership and invitations, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, personal and Home goals, native and Google-connected personal and Home calendars, Home pets and pet care, personal and Home photo libraries, private personal points and rewards, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
+Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences and adult account security, Home membership and invitations, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, personal and Home goals, native and Google-connected personal and Home calendars, Home pets and pet care, personal and Home photo libraries, private personal points and rewards, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
 
 ## Repository
 
@@ -23,6 +23,7 @@ Madeora is a Turborepo + pnpm monorepo:
 The repository currently contains working code for the application shell and these feature areas:
 
 - Account preferences, including display name, language, regional formats and timezone.
+- Adult account security, including optional authenticator-app two-factor sign-in and recovery codes, trusted browsers, session review and revocation, recently reauthenticated password/email changes, backup email, and delayed account recovery.
 - Personal dashboards and configurable dashboard templates/widgets.
 - Home creation and membership, invitations and join flows, member profiles, role and ownership management, and ownership recovery.
 - Tasks, task calendars, recurrence, reminders, templates, bulk actions and attachments.

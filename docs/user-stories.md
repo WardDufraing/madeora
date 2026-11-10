@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 6 November 2026
+**Last reviewed:** 8 November 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
@@ -25,6 +25,20 @@ As a signed-in person, I want to manage my profile and regional preferences so M
 - I can set regional formats and a timezone.
 - My saved preferences persist and are used by the app.
 - Private account preferences are not exposed to other Home members.
+
+### US-039 — Protect and recover my adult account
+
+As an adult account holder, I want strong sign-in, session and recovery controls so I can protect my account and regain access without exposing it to a Home.
+
+**Acceptance checks**
+
+- I can optionally enable authenticator-app two-factor sign-in after recent reauthentication, save newly issued single-use recovery codes, use either a current authenticator code or an unused recovery code at sign-in, and disable the factor only after reauthentication.
+- I can trust the current browser for 30 days after completing two-factor sign-in, review trusted browsers, and revoke one or all of them; security-sensitive account events clear existing trust.
+- I can review my active sessions and revoke another session, report it and sign it out, or sign out everywhere. A revoked session and a session still waiting for its second factor are refused on their next protected database request.
+- Changing my password, email address, sign-in methods or recovery settings requires a fresh password or Google reauthentication and, when enabled, the second factor. A password change leaves only the authorized current session signed in; an email change requires the new address to confirm and can be cancelled while pending.
+- I can confirm a backup email and create separate account-recovery codes. Signed-out account recovery requires the configured recovery proof and enforced waiting period before it can finish.
+- Security notifications and recovery messages go through the configured email jobs, while recovery secrets, device tokens and security events remain private to my account.
+- No Home membership, role or cross-Home permission grants access to my security settings, sessions, trusted browsers or recovery methods.
 
 ## 2. Personal dashboard
 
@@ -471,9 +485,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
+## Implementation evidence for security, chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
 
-The additional workflows are represented by [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [adult-security browser tests](../tests/e2e/specs/adult-security.spec.ts), [security component tests](../apps/web/src/components/security/security.test.tsx), [account-recovery component tests](../apps/web/src/components/security/recovery.test.tsx), authentication unit tests under `apps/web/src/auth/`, [trusted-device route tests](../apps/web/src/app/api/v1/me/trusted-device/route.test.ts), [adult-security database/RLS tests](../tests/db/rls/adult_security.test.sql), [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 
