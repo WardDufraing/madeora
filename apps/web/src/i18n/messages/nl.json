@@ -6960,6 +6960,7 @@
     "cancel": "Annuleren",
     "deactivateUnderstand": "Ik begrijp dat ik overal word uitgelogd en dat mijn account inactief blijft tot ik het opnieuw activeer.",
     "deactivatedNotice": "Je account is gedeactiveerd en je bent op elk apparaat uitgelogd. Log in wanneer je het opnieuw wilt activeren.",
+    "reactivatedNotice": "Je account is weer actief. Meld je nog één keer aan om verder te gaan.",
     "reviewTitle": "Controleer de beveiliging van je account",
     "reviewIntro": "Je hebt Madeora een tijd niet gebruikt. Neem even de tijd om te controleren of alles hieronder nog klopt. Er is niets aan je account veranderd omdat je weg was.",
     "reviewEmail": "Je e-mailadres om in te loggen",

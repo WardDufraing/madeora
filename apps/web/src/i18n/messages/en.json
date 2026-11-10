@@ -6960,6 +6960,7 @@
     "cancel": "Cancel",
     "deactivateUnderstand": "I understand that I'll be signed out everywhere and that my account stays inactive until I reactivate it.",
     "deactivatedNotice": "Your account is deactivated and you were signed out on every device. Sign in whenever you want to reactivate it.",
+    "reactivatedNotice": "Your account is active again. Sign in once more to continue.",
     "reviewTitle": "Review your account security",
     "reviewIntro": "It's been a while since you used Madeora. Take a minute to check that everything below is still right. Nothing has changed on your account because of your absence.",
     "reviewEmail": "Your sign-in email address",

@@ -75,10 +75,10 @@ Platform limit: failed password attempts are invisible to Madeora on Supabase's 
 - **Inactivity:** `account_inactivity.last_active_at` updated by signed-in page visits (at most hourly; background jobs, integrations, token refreshes never count; backfilled from last sign-in). Hourly job sends `account.inactivity_reminder` (security category, no Home/date) after 12 months, then every 3 months, at most 3; deactivated accounts excluded. Returning after the threshold sets `review_due`: banner on every page → `/settings/security/review` (email, sign-in methods, devices, security activity) → "Everything looks right" records `security_review_completed`. Nothing is forced (2FA stays optional).
 - **Account switching:** chooser `/accounts` (signed in or out) with names and colours only, stored in localStorage (no tokens, emails, Homes). "Remember this account on this device" checkbox on sign-in (untick on shared devices). Switch/Add posts to `/auth/sign-out` (`then=switch`), which signs the current account out on this device and lands on sign-in: a full page load, so TanStack cache, Realtime sockets and pending requests of the previous account cannot survive; other tabs are told via `AnnounceSignedOut`. Remove = off this device's list (active one is also signed out).
 
-## Part 2 choices to confirm (made to keep moving)
+## Part 2 choices (owner confirmed 1 and 4)
 
 1. Switching always signs the current account out and requires the next account's own sign-in; there is no locked-but-kept session or short-lived unlock (spec allows them only "where security review permits"). Idle locking is not added.
 2. Child (username/PIN) accounts and Household Displays do not exist yet, so their switching rules apply when those are built.
-3. Reactivation keeps the session that signed in (it could do nothing until reactivation) instead of forcing a second sign-in.
-4. Ownership transfer to a currently deactivated member is not blocked yet (follow-up).
-5. Part 2 was not covered by the independent review.
+3. Reactivation ends the session that signed in while deactivated, and the person signs in once more, so every session afterwards is fresh (spec L318). Changed after the part 2 review (M4).
+4. Ownership transfer to a deactivated member is blocked, and deactivation ends any pending offer to or from the account (owner approved; review M3).
+5. Part 2 and the follow-up had their independent review: `reviews/steps/S38-review-part2.md`. The HIGH finding (a trusted browser skipping two-factor on reactivation) and M1–M4 are fixed. M5 (showing inactive members' open work to Home managers, and marking them in assignee pickers) is left for a later step.

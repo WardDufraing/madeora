@@ -65,6 +65,14 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </FormAlert>
         </>
       ) : null}
+      {params.status === "reactivated" ? (
+        <>
+          <AnnounceSignedOut />
+          <FormAlert tone="success" className="mb-4">
+            {tLifecycle("reactivatedNotice")}
+          </FormAlert>
+        </>
+      ) : null}
       {params.status === "switched" ? (
         <>
           <AnnounceSignedOut />

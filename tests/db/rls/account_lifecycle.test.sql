@@ -88,9 +88,25 @@ insert into private.google_calendar_connections (user_id, account, refresh_token
   values ((select id from ids where name = 'eli'), 'eli@example.com',
           'v1.AAAAAAAAAAAAAAAA.AAAA.AAAAAAAAAAAAAAAAAAAAAA', array['calendar']);
 
+-- Dana has offered Eli ownership of Oak; the offer is still waiting.
+select tests.act_as_user((select id from ids where name = 'dana'));
+select tests.assert_true(
+  (select t.outcome = 'started' from public.start_ownership_transfer(
+     (select id from ids where name = 'oak'), (select id from ids where name = 'eli_membership'),
+     gen_random_uuid()) t),
+  'an ownership offer to Eli is pending');
+select tests.act_as_owner();
+
 select tests.act_as_user((select id from ids where name = 'eli'));
 select public.deactivate_my_account();
 select tests.act_as_owner();
+
+select tests.assert_true(
+  not exists (select 1 from private.home_ownership_transfers t
+              where t.home_id = (select id from ids where name = 'oak') and t.status = 'pending')
+  and exists (select 1 from private.home_ownership_transfers t
+              where t.home_id = (select id from ids where name = 'oak') and t.status = 'invalid'),
+  'deactivation ends a pending ownership offer to the account');
 
 select tests.assert_true(private.is_deactivated((select id from ids where name = 'eli')),
   'the account is deactivated');
@@ -125,6 +141,10 @@ select tests.assert_true(
     'invitations', 'invitation.accepted', '{}'::jsonb, 'lifecycle-test-1', false) is null,
   'a deactivated account gets no ordinary notifications');
 select tests.assert_true(
+  not private.effective_notification_channel((select id from ids where name = 'eli'),
+    (select id from ids where name = 'oak'), 'storage', 'in_app'),
+  'not even Home storage notices');
+select tests.assert_true(
   not private.effective_notification_channel((select id from ids where name = 'eli'), null, 'invitations', 'in_app')
   and private.effective_notification_channel((select id from ids where name = 'eli'), null, 'security', 'email'),
   'security notices still go out');
@@ -148,8 +168,8 @@ select tests.assert_true(
 select tests.act_as_owner();
 select tests.assert_true(
   not exists (select 1 from private.home_ownership_transfers t
-              where t.home_id = (select id from ids where name = 'oak')),
-  'the refused offer left no transfer');
+              where t.home_id = (select id from ids where name = 'oak') and t.status = 'pending'),
+  'the refused offer left no pending transfer');
 
 -- Signing in again: only the reactivation calls are allowed.
 select tests.act_as_user((select id from ids where name = 'eli'));
@@ -164,7 +184,12 @@ select tests.assert_true(
 
 -- Reactivation.
 select tests.assert_true(public.reactivate_my_account() is not null, 'the account holder reactivates');
-select tests.assert_true(tests.al_request_ok('/rpc/home_directory'), 'the session works again');
+select tests.assert_true(not tests.al_request_ok('/rpc/home_directory'),
+  'the session that reactivated has ended: the next sign-in is a fresh session');
+select tests.act_as_owner();
+select tests.ensure_session((select id from ids where name = 'eli'));
+select tests.act_as_user((select id from ids where name = 'eli'));
+select tests.assert_true(tests.al_request_ok('/rpc/home_directory'), 'a fresh session works');
 select tests.act_as_owner();
 select tests.assert_true(not private.is_deactivated((select id from ids where name = 'eli')),
   'the account is active again');
@@ -191,6 +216,56 @@ select tests.act_as_owner();
 select tests.act_as_user((select id from ids where name = 'fay'));
 select tests.assert_denied($q$select public.reactivate_my_account()$q$,
   'an active account has nothing to reactivate', 'P0002');
+select tests.act_as_owner();
+
+-- Two-factor: a trusted browser does not get a deactivated account past the second step. --------
+
+create function tests.al_trust(p_user uuid) returns void
+  language sql
+  as $$
+    insert into private.trusted_devices (user_id, token_hash, kind, browser, platform, expires_at)
+      values (p_user, extensions.digest(gen_random_uuid()::text, 'sha256'), 'computer', 'firefox',
+              'linux', now() + interval '30 days');
+    insert into private.trusted_sessions (session_id, device_id)
+      select tests.session_id(p_user), d.id from private.trusted_devices d
+      where d.user_id = p_user and d.revoked_at is null
+      order by d.created_at desc limit 1
+      on conflict (session_id) do update set device_id = excluded.device_id;
+  $$;
+
+insert into ids values ('gus', tests.al_account('gus-lifecycle@madeora.test'));
+select tests.ensure_session((select id from ids where name = 'gus'));
+insert into private.account_change_grants (user_id, action, session_id, expires_at)
+  values ((select id from ids where name = 'gus'), 'two_factor_enroll',
+          tests.session_id((select id from ids where name = 'gus')), now() + interval '1 minute');
+insert into ids values ('gus_factor', gen_random_uuid());
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
+  values ((select id from ids where name = 'gus_factor'), (select id from ids where name = 'gus'),
+          null, 'totp', 'unverified', now(), now(), 'SYNTHETICSECRET');
+update auth.mfa_factors set status = 'verified' where id = (select id from ids where name = 'gus_factor');
+select tests.al_trust((select id from ids where name = 'gus'));
+select tests.al_grant((select id from ids where name = 'gus'));
+
+select tests.act_as_user((select id from ids where name = 'gus'));
+select tests.assert_true(tests.al_request_ok('/rpc/home_directory'),
+  'while active, the trusted browser skips the code');
+select public.deactivate_my_account();
+select tests.act_as_owner();
+select tests.assert_true(
+  not exists (select 1 from private.trusted_devices d
+              where d.user_id = (select id from ids where name = 'gus') and d.revoked_at is null),
+  'deactivation stops trusting every browser');
+
+-- Even a browser that is still trusted (defence in depth) needs the code to reactivate.
+select tests.ensure_session((select id from ids where name = 'gus'));
+select tests.al_trust((select id from ids where name = 'gus'));
+select tests.act_as_user((select id from ids where name = 'gus'));
+select tests.assert_true(not tests.al_request_ok('/rpc/reactivate_my_account'),
+  'a trusted browser without the second step cannot reactivate');
+select set_config('request.jwt.claims',
+  (current_setting('request.jwt.claims')::jsonb || '{"aal": "aal2"}')::text, true);
+select tests.assert_true(tests.al_request_ok('/rpc/reactivate_my_account'),
+  'after the second step it may reactivate');
 select tests.act_as_owner();
 
 -- Ordinary callers cannot touch another account's state.

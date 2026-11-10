@@ -79,6 +79,8 @@ describe("remembered accounts", () => {
     unmount();
     setRememberChoice(false);
     expect(rememberChoice()).toBe(false);
+    // The choice holds in every tab of this browser, not only the one that signed in.
+    expect(window.localStorage.getItem("madeora.remember-account")).toBe("no");
     renderWithIntl(<AccountMemory userId={ANN} name="Ann" accent={null} />);
     expect(listRememberedAccounts()).toEqual([]);
   });
@@ -179,7 +181,7 @@ describe("DeactivateAccount", () => {
 });
 
 describe("ReactivateAccount", () => {
-  it("reactivates and shows what changed in the person's Homes since", async () => {
+  it("reactivates, then signs in afresh and shows what changed in the person's Homes", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ since: "2026-09-01T10:00:00+00:00" }));
     renderWithIntl(<ReactivateAccount />);
     await userEvent.click(screen.getByRole("button", { name: "Reactivate my account" }));
@@ -187,9 +189,13 @@ describe("ReactivateAccount", () => {
       expect(assign).toHaveBeenCalled();
     });
     const target = new URL(String(assign.mock.calls[0]?.[0]));
-    expect(target.pathname).toBe("/settings/activity");
-    expect(target.searchParams.get("category")).toBe("home_memberships");
-    expect(target.searchParams.get("from")).toBe("2026-09-01");
+    expect(target.pathname).toBe("/sign-in");
+    expect(target.searchParams.get("status")).toBe("reactivated");
+    const next = new URL(target.searchParams.get("next") ?? "", target.origin);
+    expect(next.pathname).toBe("/settings/activity");
+    expect(next.searchParams.get("category")).toBe("home_memberships");
+    expect(next.searchParams.get("from")).toBe("2026-09-01");
+    expect(next.searchParams.get("welcome")).toBe("back");
   });
 
   it("says when reactivation failed", async () => {

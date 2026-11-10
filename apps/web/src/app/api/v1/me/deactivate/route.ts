@@ -1,6 +1,9 @@
-import { cookies } from "next/headers";
-
-import { databaseFailure, json, readActivityMutation } from "@/activity/route-helpers";
+import {
+  clearSessionCookies,
+  databaseFailure,
+  json,
+  readActivityMutation,
+} from "@/activity/route-helpers";
 import { emptyBodySchema } from "@/activity/schema";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
@@ -15,9 +18,6 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.rpc("deactivate_my_account");
   if (error) return databaseFailure("account.deactivate_failed", error);
-  const cookieStore = await cookies();
-  for (const { name } of cookieStore.getAll()) {
-    if (/^sb-.+-auth-token(?:\.\d+)?$/.test(name)) cookieStore.delete(name);
-  }
+  await clearSessionCookies();
   return json(200, {});
 }

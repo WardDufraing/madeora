@@ -12,7 +12,7 @@ import { z } from "zod";
  * behaves as if nothing were remembered.
  */
 const STORAGE_KEY = "madeora.remembered-accounts.v1";
-/** "no" when the person chose "don't remember me" for this sign-in (this tab only). */
+/** "no" when the person chose "don't remember me" at the latest sign-in on this device (all tabs). */
 const CHOICE_KEY = "madeora.remember-account";
 export const MAX_REMEMBERED_ACCOUNTS = 8;
 
@@ -92,8 +92,8 @@ export function forgetAccount(userId: string): void {
 
 export function setRememberChoice(remember: boolean): void {
   try {
-    if (remember) window.sessionStorage.removeItem(CHOICE_KEY);
-    else window.sessionStorage.setItem(CHOICE_KEY, "no");
+    if (remember) window.localStorage.removeItem(CHOICE_KEY);
+    else window.localStorage.setItem(CHOICE_KEY, "no");
   } catch {
     // Without storage the default (remember) applies, and nothing can be stored anyway.
   }
@@ -101,7 +101,7 @@ export function setRememberChoice(remember: boolean): void {
 
 export function rememberChoice(): boolean {
   try {
-    return window.sessionStorage.getItem(CHOICE_KEY) !== "no";
+    return window.localStorage.getItem(CHOICE_KEY) !== "no";
   } catch {
     return false;
   }

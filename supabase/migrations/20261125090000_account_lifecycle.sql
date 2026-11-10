@@ -43,7 +43,8 @@ create function private.is_deactivated(p_user_id uuid) returns boolean
 revoke all on function private.is_deactivated(uuid) from public;
 
 -- As S37, with one more state: 'account_deactivated' for a live, fully signed-in session of a
--- deactivated account (two-factor comes first, so reactivation needs the second factor too).
+-- deactivated account. Two-factor comes first, so reactivation needs the second factor too, and
+-- for a deactivated account only a real second step (aal2) counts: a trusted browser does not.
 create or replace function private.request_session_state() returns text
   language plpgsql stable security definer set search_path = '' as $$
   declare
@@ -65,7 +66,8 @@ create or replace function private.request_session_state() returns text
       return 'session_not_active';
     end if;
     if coalesce(v_claims ->> 'aal', '') <> 'aal2' and private.has_two_factor(v_user_id)
-       and not private.session_trusted(v_user_id, v_session_id) then
+       and (private.is_deactivated(v_user_id)
+            or not private.session_trusted(v_user_id, v_session_id)) then
       return 'second_factor_required';
     end if;
     if private.is_deactivated(v_user_id) then
@@ -108,11 +110,11 @@ create or replace function private.effective_notification_channel(
   declare
     v_value boolean;
   begin
+    if private.is_deactivated(p_user_id) then
+      return p_category = 'security';
+    end if;
     if private.notification_category_essential(p_category) then
       return true;
-    end if;
-    if private.is_deactivated(p_user_id) then
-      return false;
     end if;
     if p_home_id is not null then
       select p.enabled into v_value from public.notification_preferences p
@@ -187,6 +189,7 @@ create function public.deactivate_my_account() returns void
   declare
     v_user_id uuid := auth.uid();
     v_session_id uuid := private.jwt_session_id();
+    v_transfer record;
   begin
     if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
       raise exception 'not signed in' using errcode = '42501';
@@ -195,6 +198,10 @@ create function public.deactivate_my_account() returns void
     if private.is_deactivated(v_user_id) then
       return;
     end if;
+    -- Lock the caller's Homes (in a fixed order), so a concurrent ownership change or offer
+    -- cannot slip past the checks below.
+    perform private.lock_home(m.home_id) from public.home_memberships m
+      where m.user_id = v_user_id order by m.home_id;
     if exists (select 1 from public.my_deactivation_blockers()) then
       raise exception 'sole owner' using errcode = 'P0001', hint = 'sole_owner';
     end if;
@@ -208,6 +215,18 @@ create function public.deactivate_my_account() returns void
       v_user_id, null, 'security', 'account.deactivated', '{}'::jsonb,
       'account.deactivated:' || pg_catalog.gen_random_uuid()::text, true);
     insert into private.account_deactivations (user_id) values (v_user_id);
+    -- No browser stays trusted for the second step, so reactivation needs the code.
+    perform private.revoke_all_trust(v_user_id);
+    -- A pending ownership offer to or from this account can no longer be completed.
+    for v_transfer in
+      update private.home_ownership_transfers t
+        set status = 'invalid', decided_at = pg_catalog.now()
+        where t.status = 'pending' and (t.to_user_id = v_user_id or t.from_user_id = v_user_id)
+        returning t.id, t.home_id
+    loop
+      perform private.audit('home_ownership.transfer_invalid', v_transfer.home_id,
+        'ownership_transfer', v_transfer.id);
+    end loop;
 
     perform pg_catalog.set_config('madeora.deactivating', v_user_id::text, true);
     update private.google_calendar_connections c
@@ -269,6 +288,9 @@ create function public.reactivate_my_account() returns timestamptz
     perform private.notify_user(
       v_user_id, null, 'security', 'account.reactivated', '{}'::jsonb,
       'account.reactivated:' || pg_catalog.gen_random_uuid()::text, true);
+    -- The session that signed in while deactivated ends here: the person signs in again, so every
+    -- session of the reactivated account is a fresh one (spec: fresh sessions only afterwards).
+    delete from auth.sessions s where s.id = v_session_id;
     return v_since;
   end
   $$;

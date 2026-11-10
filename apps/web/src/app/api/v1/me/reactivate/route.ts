@@ -1,10 +1,17 @@
-import { databaseFailure, json, readActivityMutation } from "@/activity/route-helpers";
+import {
+  clearSessionCookies,
+  databaseFailure,
+  json,
+  readActivityMutation,
+} from "@/activity/route-helpers";
 import { emptyBodySchema } from "@/activity/schema";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
 /**
  * Reactivates a deactivated account (S38) from its own fully signed-in session: the sign-in
- * method and, when enabled, two-factor sign-in were just passed. Returns when it was deactivated.
+ * method and, when enabled, two-factor sign-in were just passed. The database then ends that
+ * session, so this browser's session cookies go too and the person signs in again to a fresh
+ * session. Returns when it was deactivated.
  */
 export async function POST(request: Request): Promise<Response> {
   const input = await readActivityMutation(request, emptyBodySchema, { deactivated: true });
@@ -12,5 +19,6 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("reactivate_my_account");
   if (error) return databaseFailure("account.reactivate_failed", error);
+  await clearSessionCookies();
   return json(200, { since: data });
 }

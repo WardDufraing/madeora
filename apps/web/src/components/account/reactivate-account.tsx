@@ -21,10 +21,14 @@ export function ReactivateAccount() {
     setFailed(false);
     try {
       const since = await reactivateAccount();
-      const target = new URL("/settings/activity", window.location.origin);
-      target.searchParams.set("category", "home_memberships");
-      if (since) target.searchParams.set("from", since.slice(0, 10));
-      target.searchParams.set("welcome", "back");
+      // Reactivation ended this session: signing in again opens a fresh one, then shows what
+      // changed in the person's Homes while they were away.
+      const changes = new URLSearchParams({ category: "home_memberships" });
+      if (since) changes.set("from", since.slice(0, 10));
+      changes.set("welcome", "back");
+      const target = new URL("/sign-in", window.location.origin);
+      target.searchParams.set("status", "reactivated");
+      target.searchParams.set("next", `/settings/activity?${changes.toString()}`);
       window.location.assign(target);
     } catch (error) {
       if (error instanceof ActivityActionError && error.failure === "signedOut") {

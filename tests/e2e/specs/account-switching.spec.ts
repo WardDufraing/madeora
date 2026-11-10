@@ -125,6 +125,10 @@ test.describe("deactivation", () => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/reactivate$/);
     await page.getByRole("button", { name: "Reactivate my account" }).click();
+    // The session that signed in while deactivated ends; the next sign-in is a fresh session.
+    await expect(page).toHaveURL(/\/sign-in\?status=reactivated/);
+    await expect(page.getByText("Your account is active again.")).toBeVisible();
+    await signIn(page, cleo, page.url());
     await expect(page).toHaveURL(/\/settings\/activity\?/);
     await expect(page.getByText(/Welcome back/)).toBeVisible();
     await page.goto("/settings/security/activity");

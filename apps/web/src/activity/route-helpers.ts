@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cookies } from "next/headers";
+
 import type { z } from "zod";
 
 import { checkJsonMutation, readJsonBody, refusedFields } from "@/api/json-request";
@@ -71,4 +73,12 @@ export function databaseFailure(
   // Privacy-safe: the error code only, no ids, no values.
   console.error(JSON.stringify({ event, code: error.code ?? null }));
   return failure(500, "failed");
+}
+
+/** Deletes this browser's Supabase session cookies after the database ended the session. */
+export async function clearSessionCookies(): Promise<void> {
+  const cookieStore = await cookies();
+  for (const { name } of cookieStore.getAll()) {
+    if (/^sb-.+-auth-token(?:\.\d+)?$/.test(name)) cookieStore.delete(name);
+  }
 }
