@@ -518,7 +518,7 @@ export function DataExport({
             {included.length === 0 ? (
               <p className="text-helper text-fg-muted">{t("previewEmpty")}</p>
             ) : (
-              <ul className="flex list-disc flex-col gap-1 pl-5 text-body">
+              <ul className="flex list-disc flex-col gap-1 ps-5 text-body">
                 {included.map((category) => (
                   <li key={category}>{label(home ? "home" : "personal", category)}</li>
                 ))}
@@ -530,7 +530,7 @@ export function DataExport({
                 : t("previewHomes", { count: homeIds.length })}
             </p>
             <h4 className="text-body font-medium">{t("neverTitle")}</h4>
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-helper text-fg-muted">
+            <ul className="flex list-disc flex-col gap-1 ps-5 text-helper text-fg-muted">
               {(home ? NEVER_INCLUDED_HOME : NEVER_INCLUDED).map((key) => (
                 <li key={key}>{t(key)}</li>
               ))}
