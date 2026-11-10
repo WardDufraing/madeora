@@ -115,6 +115,10 @@ export const notificationKinds = [
   "account.deactivated",
   "account.reactivated",
   "account.inactivity_reminder",
+  // S39: personal data exports (no link token, no details).
+  "account.data_export_ready",
+  "account.data_export_failed",
+  "account.data_export_expiring",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -183,6 +187,10 @@ export function notificationPath(
     return "/settings/security/activity";
   }
   if (kind === "account.security_report_ready") return "/settings/security/activity#report";
+  // A Home export's notice carries its Home and leads to that Home's export page.
+  if (kind.startsWith("account.data_export_")) {
+    return homeId ? `/homes/${encodeURIComponent(homeId)}/export` : "/settings/privacy/export";
+  }
   // S37: account security notices lead to Settings › Security.
   if (kind.startsWith("account.")) return "/settings/security";
   if (!homeId) return "/";

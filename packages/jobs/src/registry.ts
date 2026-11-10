@@ -7,6 +7,7 @@ import { petCareReminder } from "./jobs/pets.ts";
 import { habitPauseEnd, habitReminder, habitReminderSnooze } from "./jobs/habits.ts";
 import { invitationEmail } from "./jobs/invitation-email.ts";
 import { notificationEmail } from "./jobs/notification-email.ts";
+import { privacyExportBuild } from "./jobs/privacy-export.ts";
 import { recoveryReady } from "./jobs/recovery-ready.ts";
 import { samplePing } from "./jobs/sample-ping.ts";
 import { accountRecoveryReady, securityEmail } from "./jobs/security-email.ts";
@@ -40,6 +41,7 @@ export const jobs: readonly AnyJobDefinition[] = [
   googleCalendarSync,
   securityEmail,
   accountRecoveryReady,
+  privacyExportBuild,
 ];
 
 export const jobRegistry = createJobRegistry(jobs);

@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
+import { getHomeExportAccess } from "@/privacy/server";
 import { timeZoneChoices } from "@/preferences/timezone";
 
 interface HomeSettingsPageProps {
@@ -38,11 +39,13 @@ export async function generateMetadata({ params }: HomeSettingsPageProps): Promi
 export default async function HomeSettingsPage({ params }: HomeSettingsPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tStorage, tTrash] = await Promise.all([
+  const [context, t, tStorage, tTrash, tPrivacy, exportAccess] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Homes"),
     getTranslations("Storage"),
     getTranslations("Trash"),
+    getTranslations("Privacy"),
+    getHomeExportAccess(homeId),
   ]);
   if (!context) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
@@ -98,6 +101,19 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
             data-testid="home-storage-link"
           >
             {tStorage("homeSettingsLink")}
+          </Link>
+        </Card>
+      ) : null}
+      {/* Home data export (S39): only for whoever holds exportHomeData; the page and the database
+          check again. */}
+      {exportAccess.status === "ok" && exportAccess.value.canExport ? (
+        <Card title={tPrivacy("homeExportTitle")} className="mt-6 max-w-2xl">
+          <Link
+            href={`/homes/${home.id}/export`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="home-export-link"
+          >
+            {tPrivacy("homeExportLink")}
           </Link>
         </Card>
       ) : null}

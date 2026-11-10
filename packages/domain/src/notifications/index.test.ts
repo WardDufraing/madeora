@@ -15,6 +15,9 @@ describe("notificationPath", () => {
     expect(notificationPath("recovery.owner_approved", homeId)).toBe(`/homes/${homeId}`);
     expect(notificationPath("recovery.member_requested", homeId)).toBe(`/homes/${homeId}`);
     expect(notificationPath("join_request.received", homeId)).toBe(`/homes/${homeId}/invitations`);
+    // S39: a personal export's notice leads to Settings, a Home export's to that Home's page.
+    expect(notificationPath("account.data_export_ready", null)).toBe("/settings/privacy/export");
+    expect(notificationPath("account.data_export_ready", homeId)).toBe(`/homes/${homeId}/export`);
     expect(notificationPath("google_calendar.authorization_expired", null)).toBe(
       "/settings/google-calendar",
     );
@@ -167,7 +170,8 @@ describe("notificationKinds", () => {
           name.endsWith("_calendar.sql") ||
           name.endsWith("_adult_security.sql") ||
           name.endsWith("_activity_history.sql") ||
-          name.endsWith("_account_lifecycle.sql"),
+          name.endsWith("_account_lifecycle.sql") ||
+          name.endsWith("_privacy_exports.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");

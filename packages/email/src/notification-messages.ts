@@ -23,6 +23,7 @@ export const notificationKinds = [
   "account.inactivity_reminder",
   "account.signed_in",
   "account.security_report_ready",
+  "account.data_export_ready",
   "recovery.claimant_review_started",
   "recovery.claimant_approved",
   "recovery.claimant_paused",
@@ -153,6 +154,14 @@ const en: Catalogue = {
     body: "The security activity report you asked for is ready. For your protection it isn't attached: sign in to Madeora and download it from Security activity within 24 hours. If you didn't ask for a report, change your password and review your devices.",
     button: "Open security activity",
   },
+  "account.data_export_ready": {
+    subject: "Your Madeora data export is ready",
+    preview: "Sign in to Madeora to download it within 7 days.",
+    heading: "Data export ready",
+    body: "The data export you asked for is ready. For your protection it isn't attached and this email has no download link: sign in to Madeora and download it from its export page within 7 days. If you didn't ask for an export, change your password and review your devices.",
+    button: "Open Madeora",
+  },
+
   "account.device_trusted": {
     subject: "A device was trusted on your Madeora account",
     preview: "Sign-ins there skip the authenticator code for 30 days.",
@@ -738,6 +747,14 @@ const nl: Catalogue = {
     body: "Het rapport met beveiligingsactiviteit dat je hebt aangevraagd staat klaar. Voor je veiligheid zit het niet als bijlage bij deze e-mail: log in bij Madeora en download het binnen 24 uur via Beveiligingsactiviteit. Heb je geen rapport aangevraagd, wijzig dan je wachtwoord en bekijk je apparaten.",
     button: "Beveiligingsactiviteit openen",
   },
+  "account.data_export_ready": {
+    subject: "Je Madeora-gegevensexport staat klaar",
+    preview: "Log in bij Madeora om hem binnen 7 dagen te downloaden.",
+    heading: "Gegevensexport klaar",
+    body: "De gegevensexport die je hebt aangevraagd staat klaar. Voor je veiligheid zit hij niet als bijlage bij deze e-mail en staat er geen downloadlink in: log in bij Madeora en download hem binnen 7 dagen via de exportpagina. Heb je geen export aangevraagd, wijzig dan je wachtwoord en bekijk je apparaten.",
+    button: "Madeora openen",
+  },
+
   "account.device_trusted": {
     subject: "Er is een apparaat vertrouwd voor je Madeora-account",
     preview: "Inloggen daar slaat de code van de authenticator 30 dagen over.",

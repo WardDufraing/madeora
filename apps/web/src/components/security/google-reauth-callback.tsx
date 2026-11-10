@@ -32,7 +32,9 @@ type Outcome =
 
 async function finish(pending: PendingGoogleReauth): Promise<Outcome | null> {
   if (!(await authorizeAfterGoogle(pending.action))) return { kind: "failed", failure: "refused" };
-  window.location.assign(new URL(confirmedPath(pending.action), window.location.origin));
+  window.location.assign(
+    new URL(confirmedPath(pending.action, pending.returnPath), window.location.origin),
+  );
   return null;
 }
 

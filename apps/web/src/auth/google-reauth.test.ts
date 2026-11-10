@@ -2,6 +2,7 @@ import {
   PENDING_KEY,
   authorizeAfterGoogle,
   confirmedPath,
+  isReturnPath,
   openGoogleReauthSession,
   parseAccountChangeAction,
   startGoogleReauth,
@@ -133,5 +134,38 @@ describe("google reauthentication", () => {
     reauth.rpc.mockResolvedValue({ data: null, error: { code: "42501" } });
     expect(await authorizeAfterGoogle("email")).toBe(false);
     expect(reauth.auth.signOut).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("return path after confirming", () => {
+  const home = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0f01";
+
+  it("returns a data export to its Home's export page only", () => {
+    expect(confirmedPath("data_export", `/homes/${home}/export`)).toBe(
+      `/homes/${home}/export?confirmed=data_export`,
+    );
+    expect(confirmedPath("data_export")).toBe("/settings/privacy/export?confirmed=data_export");
+    // Another action never follows a return path.
+    expect(confirmedPath("security_report", `/homes/${home}/export`)).toBe(
+      "/settings/security/activity?confirmed=security_report#report",
+    );
+  });
+
+  it("refuses anything that could lead elsewhere", () => {
+    for (const path of [
+      "https://evil.test/homes/x/export",
+      "//evil.test",
+      `/homes/${home}/export/../../settings`,
+      `/homes/${home}/export?next=//evil.test`,
+      `/homes/${home.toUpperCase()}/export`,
+      "/homes/not-a-uuid/export",
+      `/homes/${home}/tasks`,
+      42,
+    ]) {
+      expect(isReturnPath(path)).toBe(false);
+    }
+    expect(confirmedPath("data_export", "//evil.test")).toBe(
+      "/settings/privacy/export?confirmed=data_export",
+    );
   });
 });

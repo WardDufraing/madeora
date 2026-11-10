@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { e2eEnv } from "./env";
+import { e2eStorageEnv } from "./storage-env";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -33,6 +34,8 @@ export function runJobs(): void {
         LOCAL_JOBS_MAILPIT_URL: e2eEnv.mailpitUrl,
         LOCAL_JOBS_FROM: "Madeora Test <no-reply@madeora.test>",
         LOCAL_JOBS_APP_URL: `http://127.0.0.1:${port}`,
+        // S39: export archives go to the same local S3 stand-in the web server uses.
+        ...e2eStorageEnv,
       },
     },
   );

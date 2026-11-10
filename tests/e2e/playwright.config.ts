@@ -1,19 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { e2eS3Port, e2eStorageEnv } from "./support/storage-env";
+
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const baseURL = `http://127.0.0.1:${String(port)}`;
 
-// File storage (S15) goes to the local S3 stand-in (tools/s3-stand-in), never a real bucket.
-// Synthetic credentials, valid only against the stand-in, which keeps objects in memory.
-const s3Port = Number(process.env.PLAYWRIGHT_S3_PORT ?? 54390);
-const storageEnv = {
-  STORAGE_DRIVER: "s3",
-  STORAGE_S3_ENDPOINT: `http://127.0.0.1:${String(s3Port)}`,
-  STORAGE_S3_REGION: "auto",
-  STORAGE_S3_BUCKET: "madeora-e2e",
-  STORAGE_S3_ACCESS_KEY_ID: "E2eSyntheticAccessKey",
-  STORAGE_S3_SECRET_ACCESS_KEY: "E2eSyntheticSecretAccessKey0123456789",
-};
+// File storage (S15) goes to the local S3 stand-in, never a real bucket (support/storage-env.ts).
+const s3Port = e2eS3Port;
+const storageEnv = e2eStorageEnv;
 
 // Signed-in browser state saved by setup/signed-in.setup.ts (ignored by Git).
 const storageState = "playwright/.auth/user.json";

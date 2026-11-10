@@ -20,6 +20,7 @@ import { googleCalendarSync } from "../jobs/google-calendar.ts";
 import { habitPauseEnd, habitReminder, habitReminderSnooze } from "../jobs/habits.ts";
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
+import { privacyExportBuild } from "../jobs/privacy-export.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
 import { accountRecoveryReady, securityEmail } from "../jobs/security-email.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
@@ -99,6 +100,7 @@ export const goalReminderTask = jobTask(goalReminder);
 export const petCareReminderTask = jobTask(petCareReminder);
 export const calendarEventReminderTask = jobTask(calendarEventReminder);
 export const googleCalendarSyncTask = jobTask(googleCalendarSync);
+export const privacyExportBuildTask = jobTask(privacyExportBuild);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
@@ -125,6 +127,8 @@ export const taskReminderAdvance = schedules.task({
     const activityPurged = await services.data.purgeAccountActivity();
     // S38: long-term inactivity reminders; at most a few per account, ever.
     const inactivityReminders = await services.data.sendInactivityReminders(REMINDER_ADVANCE_BATCH);
+    // S39: data exports past their 7 days, the warning a day before, and stuck preparations.
+    const dataExports = await services.data.sweepDataExports(REMINDER_ADVANCE_BATCH);
     logger.info("jobs.task_reminder_advance.done", {
       created,
       habits,
@@ -132,8 +136,17 @@ export const taskReminderAdvance = schedules.task({
       petCare,
       activityPurged,
       inactivityReminders,
+      dataExports,
     });
-    return { created, habits, goalPeriods, petCare, activityPurged, inactivityReminders };
+    return {
+      created,
+      habits,
+      goalPeriods,
+      petCare,
+      activityPurged,
+      inactivityReminders,
+      dataExports,
+    };
   },
 });
 

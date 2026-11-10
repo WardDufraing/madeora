@@ -19,6 +19,12 @@ import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
 import { connectNotices, googleScopes } from "@/google-calendar/schema";
 import { changeActions, changeStates, googleFields, googleStates } from "@/google-calendar/shapes";
 import { unitMessageKeys } from "@/habits/numeric-keys";
+import {
+  EXPORT_CATEGORIES,
+  EXPORT_STATUSES,
+  HOME_EXPORT_CATEGORIES,
+  REVIEW_STEPS,
+} from "@/privacy/catalogue";
 
 import { locales } from "./locales";
 import en from "./messages/en.json";
@@ -176,6 +182,20 @@ describe("message dictionaries", () => {
         ]),
       ],
       // Each palette colour's name, looked up by its id (S11).
+      // S39: looked up by the codes in src/privacy/catalogue.ts.
+      Privacy: [
+        ...withPrefix("scope.", ["account", "home", "device"]),
+        ...withPrefix("step.", REVIEW_STEPS),
+        ...withPrefix("stepHint.", REVIEW_STEPS),
+        ...withPrefix("reviewExplain.", REVIEW_STEPS),
+        ...withPrefix("reviewConsider.", REVIEW_STEPS),
+        ...withPrefix("category.", EXPORT_CATEGORIES),
+        ...withPrefix("categoryHint.", EXPORT_CATEGORIES),
+        ...withPrefix("homeCategory.", HOME_EXPORT_CATEGORIES),
+        ...withPrefix("homeCategoryHint.", HOME_EXPORT_CATEGORIES),
+        ...withPrefix("status.", EXPORT_STATUSES),
+        ...withPrefix("statusHint.", ["failed", "invalidated", "expired"]),
+      ],
       Accent: accentPalette.map((entry) => entry.id),
       // The names of the preset units, chosen by the quantity's plural form (S29).
       HabitsNumeric: unitMessageKeys,
