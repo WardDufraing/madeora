@@ -1,0 +1,34 @@
+# ADR 0048: Privacy dashboard, personal and Home data exports
+
+- **Status:** Accepted for S39 within the approved architecture (§10 storage, §11 background jobs), CLAUDE.md (authorization C, database access A, storage B, background processing B, €0 budget) and ADR 0047 (reauthentication). The open values in the brief (`plans/steps/S39-brief.md`) are open to correction by the owner.
+- **Date:** 2026-11-10
+- **Step:** S39 (brief: `plans/steps/S39-brief.md`), built as one PR in two parts (owner's choice): personal exports and the dashboard, then Home exports with the `exportHomeData` permission.
+
+## Context
+
+The spec asks for a privacy dashboard that shows each privacy-relevant setting with its scope and who it affects, an optional guided review that changes nothing by itself, and an export of the person's own data, prepared in the background, confirmed again before download, available for a limited time and never including other people's private data, secrets or system internals.
+
+## Decision
+
+**The dashboard reads, the settings stay authoritative.** `/settings/privacy` builds its summaries on the server from the existing settings (profile, Homes and roles, Google Calendar, sign-in and recovery, devices, exports) and links each one to its own setting. Nothing is copied.
+
+**The guided review saves only its position.** `private.privacy_reviews` keeps the step reached and when it was started and completed. `save_my_privacy_review` takes `start`, `step`, `finish` and `dismiss`; starting and finishing are recorded in the activity history (category `privacy`). "Change setting" opens the existing control after the position is saved.
+
+**Exports are prepared by a job and checked twice.** `request_personal_export` needs a fresh `authorize_account_change('data_export')` permission (ADR 0047). It allows one export in progress at a time and 3 requests a day. It stores the chosen categories and the membership row ids of the chosen Homes, and queues `privacy-export-build` through the outbox. The job collects each category through `collect_data_export`, a service-role-only function with explicit column lists. It returns the person's own records and their own contributions in the chosen Homes, never Home-owned records, and never another person's id (others appear as `someone_else`). The job then writes one ZIP with CSV and JSON files, a `manifest.json` and a `README.txt` to private storage, and marks the export ready for 7 days. Downloading needs the permission again. `authorize_export_download` rechecks the scope and returns the object key, and the route answers with a 60-second presigned GET (Vercel cannot stream large responses).
+
+**An export follows access.** An export no longer matches when the person leaves or re-joins a selected Home (membership row ids change), when the account is deactivated, when the person moves one of their own personal items to trash, when a Home item is moved to trash in a Home whose contributions the export holds, or when the person's data is deleted outright (a delete trigger on each exported table, naming the row's person or its parent's). Edits that rewrite a record's own parts (recipe ingredients and steps, habit schedules, task labels) do not count as deletions. The export is then invalidated and its archive queued for removal. Membership is checked again at build and download time. Thirty minutes after an export ends, the hourly sweep removes its archive once more, in case a preparation stored it late or crashed before finishing.
+
+**Home exports use their own permission.** The Owner may always export a Home. The Owner grants `exportHomeData` to chosen Administrators or Members in `private.home_export_grants` (one row per membership, removed with it), through `set_home_export_access` on the member's page; changes are audited (`home.export_access.changed`). `request_home_export` needs the permission, a fresh `data_export` grant, and the same limits per Home and requester (one in progress, 3 a day). The job runs the same pipeline with the Home's categories (home, tasks, chores, calendar, recipes, shopping, meals, habits and goals, pets, photos, points). `collect_home_category` returns only the Home's own records that the requester may see now, with the module rules applied (calendar level, shopping and meal access, pet medical access, point accounts and redemptions, chore review). Personal items shared into the Home stay out. Members appear by their name in the Home, "you" for the requester and "former_member" once they left. Losing the permission (grant removed, role changed, leaving the Home), trashing or deleting one of the Home's records ends the Home's exports the same way. A Home export also keeps a snapshot of the module and record access it was built with (the module gates for its categories and the ids of the recipes, shopping lists, point accounts and redemptions the requester could see), taken when preparation begins and widened when it finishes. Every later check (collect, finish, download, the sweep's recheck) needs the requester to still see at least that much, so losing, for example, pet medical access blocks the download and invalidates the export. A queued export, which has collected nothing yet, is not ended by data changes, and Home exports ended by another member's change do not count toward the requester's daily limit. Notices for a Home export carry the Home and lead to its export page; cancelling one is audited. Requests and downloads are audited.
+
+**Media are bounded.** The archive is built in memory, so media are added smallest first up to 100 MB. Anything over that or unreadable is left out, named in the manifest, and the export is marked partial. The ZIP writer has no dependency (`node:zlib`) and no ZIP64. CSV cells that start like a formula are neutralised.
+
+**Lifecycle.** The hourly `task-reminder-advance` run calls `sweep_data_exports`: ready exports expire after 7 days, a preparation older than 2 hours fails as `timed_out`, and the person is told 24 hours before an undownloaded export expires. Ready, failed and expiring notices are `security` notifications (essential); the ready notice is also emailed.
+
+## Consequences
+
+- Any deletion of the person's own data, even a single shopping item, invalidates a ready export; they request a fresh one. Restoring a trashed item does not revalidate one.
+- The in-app notification inbox is exported without its details (kind and dates only), since details can name other people.
+- Large media libraries produce partial exports; the person sees which files were left out and can export again by category.
+- A presigned link stays usable for its 60 seconds even if access changes in that time.
+- A Home export shows only what the requester may see at build time; a member who later loses access loses the export too.
+- No new service, dependency or paid plan was added. `docs/production-migrations.md` is updated by the owner's docs-only push.

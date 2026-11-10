@@ -30,6 +30,8 @@ export const ACCOUNT_CHANGE_ACTIONS = [
   "security_report",
   // S38: temporary account deactivation.
   "deactivate_account",
+  // S39: requesting and downloading a personal data export.
+  "data_export",
 ] as const;
 export type AccountChangeAction = (typeof ACCOUNT_CHANGE_ACTIONS)[number];
 
@@ -57,16 +59,34 @@ export function sectionOf(action: AccountChangeAction): string {
       return "report";
     case "deactivate_account":
       return "deactivate";
+    case "data_export":
+      return "export";
   }
 }
 
-/** The page to return to once `action` is permitted: it opens that change without asking again. */
-export function confirmedPath(action: AccountChangeAction): string {
+/** Pages other than the action's own that may ask to be returned to (S39: a Home's export page). */
+const RETURN_PATH =
+  /^\/homes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/export$/;
+
+export function isReturnPath(value: unknown): value is string {
+  return typeof value === "string" && RETURN_PATH.test(value);
+}
+
+/**
+ * The page to return to once `action` is permitted: it opens that change without asking again.
+ * A data export started on a Home's export page returns there (`returnPath`).
+ */
+export function confirmedPath(action: AccountChangeAction, returnPath?: string): string {
+  if (action === "data_export" && isReturnPath(returnPath)) {
+    return `${returnPath}?confirmed=${action}`;
+  }
   // S38: the report lives on Settings › Security › Security activity.
   if (action === "security_report") {
     return `/settings/security/activity?confirmed=${action}#${sectionOf(action)}`;
   }
   if (action === "deactivate_account") return `/settings/security/deactivate?confirmed=${action}`;
+  // S39: data exports live on Settings › Privacy › Export your data.
+  if (action === "data_export") return `/settings/privacy/export?confirmed=${action}`;
   return `/settings/security?confirmed=${action}#${sectionOf(action)}`;
 }
 
@@ -76,6 +96,7 @@ const pendingSchema = z.object({
   action: z.enum(ACCOUNT_CHANGE_ACTIONS),
   userId: z.string().min(1),
   twoFactor: z.boolean(),
+  returnPath: z.string().refine(isReturnPath).optional(),
 });
 export type PendingGoogleReauth = z.infer<typeof pendingSchema>;
 

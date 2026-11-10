@@ -64,6 +64,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     tTemplates,
     tGoogle,
     tActivity,
+    tPrivacy,
   ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
@@ -84,6 +85,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getTranslations("DashboardTemplates"),
     getTranslations("GoogleCalendar"),
     getTranslations("Activity"),
+    getTranslations("Privacy"),
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
@@ -154,6 +156,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             data-testid="security-link"
           >
             {t("securityLink")}
+          </Link>
+        </Card>
+        <Card title={tPrivacy("settingsCardTitle")} description={tPrivacy("settingsCardHint")}>
+          <Link
+            href="/settings/privacy"
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="privacy-link"
+          >
+            {tPrivacy("settingsCardLink")}
           </Link>
         </Card>
         <Card title={tActivity("settingsCardTitle")} description={tActivity("settingsCardHint")}>

@@ -124,6 +124,8 @@ export interface ConfirmWithGoogleProps {
   /** The button's label; "Confirm with Google" by default. */
   readonly label?: string;
   readonly variant?: "primary" | "secondary" | "destructive";
+  /** Where to come back to instead of the action's own page (a Home's export page). */
+  readonly returnPath?: string | undefined;
 }
 
 /**
@@ -139,6 +141,7 @@ export function ConfirmWithGoogle({
   twoFactor,
   label,
   variant = "secondary",
+  returnPath,
 }: ConfirmWithGoogleProps) {
   const t = useTranslations("Security");
   const messages = useAuthMessages();
@@ -153,7 +156,7 @@ export function ConfirmWithGoogle({
 
   async function leave(codeStillNeeded: boolean) {
     const { error } = await startGoogleReauth(
-      { action, userId, twoFactor: codeStillNeeded },
+      { action, userId, twoFactor: codeStillNeeded, returnPath },
       email,
     );
     // On success the browser is already on its way to Google.

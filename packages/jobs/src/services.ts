@@ -181,6 +181,24 @@ export interface JobDataPort {
    * reminder limit and interval); how many it sent.
    */
   sendInactivityReminders(limit: number): Promise<number>;
+  /**
+   * privacy-export-build (S39): starts (or resumes) preparing a personal data export. 'skip' when it
+   * is no longer queued or preparing; 'invalidated' when what it depended on changed.
+   */
+  beginDataExport(exportId: string): Promise<DataExportBegin>;
+  /** One category's rows and attachments, re-checked by the database; 'gone' when no longer allowed. */
+  collectDataExport(exportId: string, category: string): Promise<unknown>;
+  /** Marks the stored archive ready (and notifies), or 'discarded' if the export ended meanwhile. */
+  finishDataExport(
+    exportId: string,
+    sizeBytes: number,
+    summary: Readonly<Record<string, unknown>>,
+    partial: boolean,
+  ): Promise<"ready" | "discarded">;
+  /** Records a failed preparation with a short code; false when it had already ended. */
+  failDataExport(exportId: string, code: string): Promise<boolean>;
+  /** task-reminder-advance (S39): expiry, expiry warnings and stuck preparations; how many changed. */
+  sweepDataExports(limit: number): Promise<number>;
   /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
   deliverCalendarReminder(
     eventId: string,
@@ -188,6 +206,19 @@ export interface JobDataPort {
     at: string,
   ): Promise<CalendarReminderOutcome>;
 }
+
+export type DataExportBegin =
+  | {
+      readonly outcome: "ok";
+      /** Where the archive goes; chosen by the database, never logged. */
+      readonly objectKey: string;
+      readonly categories: readonly string[];
+      readonly allData: boolean;
+      /** The selected Homes still in scope, for the manifest. */
+      readonly homes: readonly { readonly id: string; readonly name: string }[];
+      readonly kind: "personal" | "home";
+    }
+  | { readonly outcome: "skip" | "invalidated" };
 
 export type HabitReminderOutcome =
   "notified" | "not_needed" | "late" | "inactive" | "stale" | "not_due";

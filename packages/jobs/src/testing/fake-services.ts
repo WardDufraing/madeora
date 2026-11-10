@@ -26,6 +26,7 @@ import type {
   NotificationEmailRead,
   SecurityEmailRead,
   CalendarReminderOutcome,
+  DataExportBegin,
   PetCareReminderOutcome,
   StoredFileStatus,
   TaskReminderOutcome,
@@ -141,6 +142,55 @@ export class FakeJobData implements JobDataPort {
   sendInactivityReminders(limit: number): Promise<number> {
     this.check();
     this.inactivityCalls.push(limit);
+    return Promise.resolve(0);
+  }
+
+  /** S39: data exports. `exportCategories` is what collect returns per category (or 'gone'). */
+  exportBegin: DataExportBegin = { outcome: "skip" };
+  exportCategories: Record<string, unknown> = {};
+  exportFinishOutcome: "ready" | "discarded" = "ready";
+  readonly exportCalls: string[] = [];
+  readonly exportFinishes: {
+    exportId: string;
+    sizeBytes: number;
+    summary: Readonly<Record<string, unknown>>;
+    partial: boolean;
+  }[] = [];
+  readonly exportFailures: { exportId: string; code: string }[] = [];
+  readonly exportSweeps: number[] = [];
+
+  beginDataExport(exportId: string): Promise<DataExportBegin> {
+    this.check();
+    this.exportCalls.push(`begin:${exportId}`);
+    return Promise.resolve(this.exportBegin);
+  }
+
+  collectDataExport(exportId: string, category: string): Promise<unknown> {
+    this.check();
+    this.exportCalls.push(`collect:${category}`);
+    return Promise.resolve(this.exportCategories[category] ?? { files: {}, media: [] });
+  }
+
+  finishDataExport(
+    exportId: string,
+    sizeBytes: number,
+    summary: Readonly<Record<string, unknown>>,
+    partial: boolean,
+  ): Promise<"ready" | "discarded"> {
+    this.check();
+    this.exportFinishes.push({ exportId, sizeBytes, summary, partial });
+    return Promise.resolve(this.exportFinishOutcome);
+  }
+
+  failDataExport(exportId: string, code: string): Promise<boolean> {
+    this.check();
+    this.exportFailures.push({ exportId, code });
+    return Promise.resolve(true);
+  }
+
+  sweepDataExports(limit: number): Promise<number> {
+    this.check();
+    this.exportSweeps.push(limit);
     return Promise.resolve(0);
   }
 

@@ -73,8 +73,16 @@ export const ACTIVITY_KINDS = {
     "security_review_completed",
     "ownership_recovery",
   ],
-  // Privacy events (privacy dashboard, guided review) arrive with S39.
-  privacy: [],
+  // S39: personal data exports and the guided privacy review.
+  privacy: [
+    "data_export_requested",
+    "data_export_ready",
+    "data_export_failed",
+    "data_export_canceled",
+    "data_export_downloaded",
+    "privacy_review_started",
+    "privacy_review_completed",
+  ],
   profile: [
     "profile.name_changed",
     "profile.accent_changed",

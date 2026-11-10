@@ -5,6 +5,7 @@
  * just what the job needs. Errors carry the Postgres code only (see `JobStoreError`).
  */
 import type { Json } from "@madeora/database";
+import { z } from "zod";
 
 import type {
   EmailLanguage,
@@ -25,6 +26,8 @@ function language(value: string | null): EmailLanguage {
 function isObject(value: Json): value is Readonly<Record<string, Json | undefined>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+const exportHomesSchema = z.array(z.strictObject({ id: z.uuid(), name: z.string() }));
 
 const notificationSkips = [
   "not_found",
@@ -397,6 +400,67 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       const outcome = oneOf(calendarReminderOutcomes, data);
       if (!outcome) throw new JobStoreError("deliver_calendar_reminder", "unexpected_result");
       return outcome;
+    },
+
+    async beginDataExport(exportId) {
+      const { data, error } = await client.rpc("begin_data_export", { p_export_id: exportId });
+      if (error) throw new JobStoreError("begin_data_export", error.code);
+      const [row] = data;
+      if (row?.outcome === "ok") {
+        const homes = exportHomesSchema.safeParse(row.homes);
+        if (!homes.success) throw new JobStoreError("begin_data_export", "unexpected_result");
+        return {
+          outcome: "ok",
+          objectKey: row.object_key,
+          categories: row.categories,
+          allData: row.all_data,
+          homes: homes.data,
+          kind: row.kind === "home" ? "home" : "personal",
+        };
+      }
+      if (row?.outcome === "skip" || row?.outcome === "invalidated")
+        return { outcome: row.outcome };
+      throw new JobStoreError("begin_data_export", "unexpected_result");
+    },
+
+    async collectDataExport(exportId, category) {
+      const { data, error } = await client.rpc("collect_data_export", {
+        p_export_id: exportId,
+        p_category: category,
+      });
+      // P0002: the export was canceled, invalidated or is no longer eligible.
+      if (error?.code === "P0002") return "gone";
+      if (error) throw new JobStoreError("collect_data_export", error.code);
+      return data;
+    },
+
+    async finishDataExport(exportId, sizeBytes, summary, partial) {
+      const { data, error } = await client.rpc("finish_data_export", {
+        p_export_id: exportId,
+        p_size: sizeBytes,
+        p_summary: summary as Json,
+        p_partial: partial,
+      });
+      if (error) throw new JobStoreError("finish_data_export", error.code);
+      if (data !== "ready" && data !== "discarded") {
+        throw new JobStoreError("finish_data_export", "unexpected_result");
+      }
+      return data;
+    },
+
+    async failDataExport(exportId, code) {
+      const { data, error } = await client.rpc("fail_data_export", {
+        p_export_id: exportId,
+        p_code: code,
+      });
+      if (error) throw new JobStoreError("fail_data_export", error.code);
+      return data;
+    },
+
+    async sweepDataExports(limit) {
+      const { data, error } = await client.rpc("sweep_data_exports", { p_limit: limit });
+      if (error) throw new JobStoreError("sweep_data_exports", error.code);
+      return data;
     },
 
     async getStorageObjectDeletion(deletionId) {
