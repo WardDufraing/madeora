@@ -55,6 +55,8 @@ insert into public.homes (id, name, timezone, creation_request_id)
 insert into public.home_memberships (home_id, user_id, role) values
   ((select id from ids where name = 'oak'), (select id from ids where name = 'dana'), 'owner'),
   ((select id from ids where name = 'oak'), (select id from ids where name = 'eli'), 'administrator');
+insert into ids select 'eli_membership', m.id from public.home_memberships m
+  where m.user_id = (select id from ids where name = 'eli');
 
 -- Deactivation ----------------------------------------------------------------------------------
 
@@ -137,7 +139,17 @@ select tests.assert_true(
   (select not d.is_inactive from public.home_directory((select id from ids where name = 'oak')) d
    where d.is_self),
   'an active member is not marked');
+select tests.assert_true(
+  (select t.outcome = 'invalid_target' from public.start_ownership_transfer(
+     (select id from ids where name = 'oak'),
+     (select id from ids where name = 'eli_membership'),
+     gen_random_uuid()) t),
+  'ownership cannot be offered to a deactivated member');
 select tests.act_as_owner();
+select tests.assert_true(
+  not exists (select 1 from private.home_ownership_transfers t
+              where t.home_id = (select id from ids where name = 'oak')),
+  'the refused offer left no transfer');
 
 -- Signing in again: only the reactivation calls are allowed.
 select tests.act_as_user((select id from ids where name = 'eli'));
@@ -166,6 +178,15 @@ select tests.assert_true(
   and exists (select 1 from public.notifications n
               where n.user_id = (select id from ids where name = 'eli') and n.kind = 'account.reactivated'),
   'reactivation is recorded and notified');
+
+select tests.act_as_user((select id from ids where name = 'dana'));
+select tests.assert_true(
+  (select t.outcome = 'started' from public.start_ownership_transfer(
+     (select id from ids where name = 'oak'),
+     (select id from ids where name = 'eli_membership'),
+     gen_random_uuid()) t),
+  'once reactivated, the member can be offered ownership again');
+select tests.act_as_owner();
 
 select tests.act_as_user((select id from ids where name = 'fay'));
 select tests.assert_denied($q$select public.reactivate_my_account()$q$,

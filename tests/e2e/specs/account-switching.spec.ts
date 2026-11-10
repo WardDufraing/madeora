@@ -93,31 +93,41 @@ test("switching accounts clears every cache and subscription", async ({ page, ba
   await page.goto("/accounts");
   await page.getByRole("button", { name: "Remove Ben from this device" }).click();
   await expect(list.getByText("Ben", { exact: true })).toHaveCount(0);
+  await page.context().clearCookies();
   await signIn(page, ben, "/sign-in");
   await expect(page).not.toHaveURL(/\/sign-in/);
 });
 
-test("deactivating and reactivating an account", async ({ page, baseURL }) => {
-  const cleo = await adult(baseURL, "Cleo", "#9333ea");
-  await signIn(page, cleo);
-  await page.goto("/settings/security/deactivate");
-  await expect(page.getByRole("heading", { level: 1, name: "Deactivate account" })).toBeVisible();
-  expect(await axeViolations(page)).toEqual([]);
-  await page.getByTestId("deactivate-understand").check();
-  await page.getByRole("button", { name: "Deactivate my account" }).click();
-  const confirm = page.getByRole("form", { name: "Confirm it's you to deactivate your account." });
-  await confirm.getByLabel(/password/i).fill(cleo.password);
-  await confirm.getByRole("button", { name: "Deactivate my account" }).click();
-  await expect(page).toHaveURL(/\/sign-in\?status=deactivated/);
+test.describe("deactivation", () => {
+  // Deactivating first asks the server, which answers 403 until the person has confirmed it's them.
+  test.use({
+    allowedConsoleErrors: [/Failed to load resource: the server responded with a status of 403/],
+  });
 
-  // Signing in again leads only to reactivation.
-  await signIn(page, cleo);
-  await expect(page).toHaveURL(/\/reactivate$/);
-  await page.goto("/settings");
-  await expect(page).toHaveURL(/\/reactivate$/);
-  await page.getByRole("button", { name: "Reactivate my account" }).click();
-  await expect(page).toHaveURL(/\/settings\/activity\?/);
-  await expect(page.getByText(/Welcome back/)).toBeVisible();
-  await page.goto("/settings/security/activity");
-  await expect(page.getByText("Account reactivated").first()).toBeVisible();
+  test("deactivating and reactivating an account", async ({ page, baseURL }) => {
+    const cleo = await adult(baseURL, "Cleo", "#9333ea");
+    await signIn(page, cleo);
+    await page.goto("/settings/security/deactivate");
+    await expect(page.getByRole("heading", { level: 1, name: "Deactivate account" })).toBeVisible();
+    expect(await axeViolations(page)).toEqual([]);
+    await page.getByTestId("deactivate-understand").check();
+    await page.getByRole("button", { name: "Deactivate my account" }).click();
+    const confirm = page.getByRole("form", {
+      name: "Confirm it's you to deactivate your account.",
+    });
+    await confirm.getByLabel(/password/i).fill(cleo.password);
+    await confirm.getByRole("button", { name: "Deactivate my account" }).click();
+    await expect(page).toHaveURL(/\/sign-in\?status=deactivated/);
+
+    // Signing in again leads only to reactivation.
+    await signIn(page, cleo);
+    await expect(page).toHaveURL(/\/reactivate$/);
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/reactivate$/);
+    await page.getByRole("button", { name: "Reactivate my account" }).click();
+    await expect(page).toHaveURL(/\/settings\/activity\?/);
+    await expect(page.getByText(/Welcome back/)).toBeVisible();
+    await page.goto("/settings/security/activity");
+    await expect(page.getByText("Account reactivated").first()).toBeVisible();
+  });
 });

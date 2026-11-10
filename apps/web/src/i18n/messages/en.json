@@ -829,6 +829,7 @@
     "transferConsequences": "{name} gets a request that lasts 7 days. Nothing changes until they accept. When they do, they become the only Owner and you become a Member who can then leave. You can cancel the request until then.",
     "transferConfirm": "Send request",
     "transferPendingElsewhere": "A request to become Owner is already waiting. Cancel it first to ask someone else.",
+    "transferInactive": "{name}'s account is temporarily deactivated, so they can't be made Owner right now.",
     "bannerRecipientTitle": "You've been asked to become the Owner of {home}",
     "bannerRecipientText": "If you accept, you become the only Owner: you manage the Home's members, Administrators and settings, and you can't leave until you hand ownership on. The current Owner becomes a Member. The request ends {date}.",
     "bannerAccept": "Accept and become Owner",

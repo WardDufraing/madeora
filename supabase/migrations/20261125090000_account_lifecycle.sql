@@ -435,6 +435,84 @@ returns table (
 comment on function public.home_directory(uuid) is
   'S11/S15/S38: the members of a Home the caller belongs to, with effective name, colour, avatar file id and whether the account is deactivated.';
 
+-- Ownership transfer ---------------------------------------------------------------------------
+
+-- S38: a temporarily deactivated account cannot be offered ownership; it can't sign in to accept,
+-- and a Home must not wait on it. Same as S12 otherwise.
+create or replace function public.start_ownership_transfer(
+  p_home_id uuid, p_membership_id uuid, p_request_id uuid
+) returns table (outcome text, transfer_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_target public.home_memberships;
+    v_existing private.home_ownership_transfers;
+    v_id uuid;
+  begin
+    if p_request_id is null then
+      raise exception 'a request id is required' using errcode = '22023';
+    end if;
+    -- The lock is its own statement: checks after it read what committed while it waited.
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) <> 'owner' then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+
+    select * into v_existing from private.home_ownership_transfers t
+      where t.from_user_id = v_user_id and t.creation_request_id = p_request_id;
+    if found then
+      return query select
+        case when v_existing.home_id = p_home_id then 'started' else 'not_found' end,
+        case when v_existing.home_id = p_home_id then v_existing.id end;
+      return;
+    end if;
+
+    select * into v_target from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = p_home_id;
+    if not found then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if v_target.user_id = v_user_id or v_target.role = 'owner'
+       or private.confirmed_email(v_target.user_id) is null
+       or private.is_deactivated(v_target.user_id) then
+      return query select 'invalid_target'::text, null::uuid;
+      return;
+    end if;
+
+    perform private.expire_ownership_transfers(p_home_id);
+    if exists (
+      select 1 from private.home_ownership_transfers t
+      where t.home_id = p_home_id and t.status = 'pending'
+    ) then
+      return query select 'pending_exists'::text, null::uuid;
+      return;
+    end if;
+
+    insert into private.home_ownership_transfers (
+      home_id, from_user_id, to_user_id, expires_at, creation_request_id
+    )
+      values (
+        p_home_id, v_user_id, v_target.user_id, pg_catalog.now() + interval '7 days', p_request_id
+      )
+      returning id into v_id;
+    perform private.audit('home_ownership.transfer_started', p_home_id, 'ownership_transfer', v_id,
+      pg_catalog.jsonb_build_object('to', v_target.user_id));
+    return query select 'started'::text, v_id;
+  end
+  $$;
+
+comment on function public.start_ownership_transfer(uuid, uuid, uuid) is
+  'S12/S38: the Owner offers ownership to another member with a confirmed email whose account is not deactivated. Outcomes: started, not_found, not_permitted, invalid_target, pending_exists.';
+
 -- Grants -----------------------------------------------------------------------------------------
 
 do $$

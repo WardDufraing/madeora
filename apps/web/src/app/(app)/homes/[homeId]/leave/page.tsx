@@ -102,6 +102,7 @@ export default async function LeavePage({ params }: LeavePageProps) {
     directory.status === "ok"
       ? directory.members.filter(
           (member) =>
+            !member.isInactive &&
             memberPermissions(membership, {
               homeId: home.id,
               role: member.role,

@@ -829,6 +829,7 @@
     "transferConsequences": "{name} krijgt een verzoek dat 7 dagen geldt. Er verandert niets tot die persoon aanvaardt. Dan wordt die de enige eigenaar en word jij lid, waarna je kunt vertrekken. Tot dan kun je het verzoek annuleren.",
     "transferConfirm": "Verzoek versturen",
     "transferPendingElsewhere": "Er wacht al een verzoek om eigenaar te worden. Annuleer dat eerst om iemand anders te vragen.",
+    "transferInactive": "Het account van {name} is tijdelijk gedeactiveerd, dus diegene kan nu geen eigenaar worden.",
     "bannerRecipientTitle": "Je bent gevraagd om eigenaar van {home} te worden",
     "bannerRecipientText": "Als je aanvaardt, word je de enige eigenaar: je beheert de leden, beheerders en instellingen van het Home, en je kunt pas vertrekken als je het eigendom doorgeeft. De huidige eigenaar wordt lid. Het verzoek loopt af op {date}.",
     "bannerAccept": "Aanvaarden en eigenaar worden",
