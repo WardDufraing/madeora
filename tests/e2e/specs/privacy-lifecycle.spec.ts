@@ -210,14 +210,14 @@ function personalItems(email: string): { recipe: string; event: string } {
     `
     with person as (select id from auth.users where email = :'email'),
     recipe as (
-      insert into private.recipes (owner_user_id, status, name, name_key, created_by, published_at)
-      select id, 'published', 'Lentil soup', 'lentil soup', id, now() from person
+      insert into private.recipes (id, owner_user_id, status, name, name_key, created_by, published_at)
+      select gen_random_uuid(), id, 'published', 'Lentil soup', 'lentil soup', id, now() from person
       returning id
     ),
     event as (
-      insert into private.calendar_events (owner_user_id, title, all_day, starts_on, ends_on, timezone,
-          created_by)
-      select id, 'Dentist', true, current_date, current_date, 'Europe/London', id from person
+      insert into private.calendar_events (id, owner_user_id, title, all_day, starts_on, ends_on,
+          timezone, created_by)
+      select gen_random_uuid(), id, 'Dentist', true, current_date, current_date, 'Europe/London', id from person
       returning id
     )
     select (select id from recipe) || ' ' || (select id from event);
