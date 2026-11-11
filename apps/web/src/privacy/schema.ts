@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { EXPORT_CATEGORIES, HOME_EXPORT_CATEGORIES, REVIEW_STEPS } from "./catalogue";
+import {
+  DELETION_CATEGORIES,
+  EXPORT_CATEGORIES,
+  HOME_EXPORT_CATEGORIES,
+  REVIEW_STEPS,
+} from "./catalogue";
 
 /**
  * Bodies of the privacy endpoints (S39). Client-safe; the server validates again and the database
@@ -50,3 +55,21 @@ export const reviewActionSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("dismiss") }),
 ]);
 export type ReviewActionInput = z.infer<typeof reviewActionSchema>;
+
+/** The words that confirm a category deletion (either language is accepted everywhere). */
+export const DATA_DELETION_PHRASES = ["DELETE", "VERWIJDER"] as const;
+
+/**
+ * Deleting personal data by category (S40 part 2): the client's request id (a repeat returns the
+ * first result), at least one category, and the typed confirmation word.
+ */
+export const personalDeletionSchema = z.strictObject({
+  requestId: z.uuid(),
+  categories: z
+    .array(z.enum(DELETION_CATEGORIES))
+    .min(1)
+    .max(DELETION_CATEGORIES.length)
+    .refine((value) => new Set(value).size === value.length, { message: "duplicate" }),
+  confirmation: z.enum(DATA_DELETION_PHRASES),
+});
+export type PersonalDeletionInput = z.infer<typeof personalDeletionSchema>;

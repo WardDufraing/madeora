@@ -55,7 +55,7 @@ export async function readActivityMutation<S extends z.ZodType>(
 
 /**
  * Maps a database error: malformed input 400, unknown or someone else's record 404, a missing
- * fresh re-authentication 403, a Home left without an Owner 409, a recovery period that ended 410
+ * fresh re-authentication 403, a Home left without an Owner or open copy requests 409, a recovery period that ended 410
  * (S40), too many reports 429, a lost
  * session 401, anything else 500.
  */
@@ -67,6 +67,13 @@ export function databaseFailure(
   if (error.code === "P0002") return failure(404, "not-found");
   if (error.code === "54000") return failure(429, "rate-limited");
   if (error.code === "P0001" && error.hint === "sole_owner") return failure(409, "sole-owner");
+  // S40 part 2: account deletion waits for the person's own copy requests to Homes.
+  if (error.code === "P0001" && error.hint === "pending_copies") {
+    return failure(409, "pending-copies");
+  }
+  if (error.code === "P0001" && error.hint === "copies_running") {
+    return failure(409, "copies-running");
+  }
   if (error.code === "P0001" && error.hint === "expired") return failure(410, "expired");
   if (error.code === "42501" && error.hint === "reauthentication_required") {
     return failure(403, "reauthentication-required");

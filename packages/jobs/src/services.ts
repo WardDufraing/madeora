@@ -204,6 +204,15 @@ export interface JobDataPort {
    * how many of each, and how many failed (retried next hour).
    */
   purgeDueDeletions(limit: number): Promise<DeletionPurge>;
+  /** home-copy-files (S40 part 2): the objects one running Home copy must copy; 'skip' when ended. */
+  beginHomeCopyFiles(requestId: string): Promise<HomeCopyBegin>;
+  /**
+   * Records the job's result. With `ok` the database makes the Home item (after checking everything
+   * again); otherwise the copy fails with `code`. 'discarded' when the request had already ended.
+   */
+  finishHomeCopyFiles(requestId: string, ok: boolean, code: string | null): Promise<HomeCopyFinish>;
+  /** task-reminder-advance (S40 part 2): expired, stuck and orphaned copy requests; how many ended. */
+  sweepHomeCopies(limit: number): Promise<number>;
   /** calendar-event-reminder (S32): one occurrence's reminder moment, if still current. */
   deliverCalendarReminder(
     eventId: string,
@@ -211,6 +220,20 @@ export interface JobDataPort {
     at: string,
   ): Promise<CalendarReminderOutcome>;
 }
+
+export type HomeCopyBegin =
+  | {
+      readonly outcome: "ok";
+      /** Keys chosen by the database, never logged; `size` is what each copy must measure. */
+      readonly objects: readonly {
+        readonly from: string;
+        readonly to: string;
+        readonly size: number | null;
+      }[];
+    }
+  | { readonly outcome: "skip" };
+
+export type HomeCopyFinish = "completed" | "failed" | "invalidated" | "discarded";
 
 export interface DeletionPurge {
   readonly homes: number;

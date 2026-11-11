@@ -47,6 +47,7 @@ export const notificationKinds = [
   "task.reminder.personal",
   "task.reminder.personal_due",
   "chore.approval_requested",
+  "home_copy.approval_requested",
   "chore.claim_released.auto",
   "chore.claim_released.manager",
   "chore.reassignment_requested",
@@ -397,6 +398,13 @@ const en: Catalogue = {
     heading: "Completed chores are waiting for your review",
     body: "Someone in {home} completed a chore that needs approval. Open Madeora to see what waits and to approve or reject it.",
     button: "Review chores",
+  },
+  "home_copy.approval_requested": {
+    subject: "A request in {home} is waiting for your review",
+    preview: "Sign in to Madeora to review it.",
+    heading: "A request is waiting for your review",
+    body: "Someone in {home} asked to add one of their own items to the Home. Sign in to Madeora to see the request and to approve or reject it.",
+    button: "Review the request",
   },
   "chore.claim_released.auto": {
     subject: "A chore you claimed in {home} went back to the pool",
@@ -1018,6 +1026,13 @@ const nl: Catalogue = {
     body: "Iemand in {home} heeft een klusje afgewerkt dat goedkeuring nodig heeft. Open Madeora om te zien wat er wacht en het goed te keuren of af te wijzen.",
     button: "Klusjes beoordelen",
   },
+  "home_copy.approval_requested": {
+    subject: "Een verzoek in {home} wacht op je beoordeling",
+    preview: "Meld je aan bij Madeora om het te bekijken.",
+    heading: "Een verzoek wacht op je beoordeling",
+    body: "Iemand in {home} vroeg om een eigen item aan het Home toe te voegen. Meld je aan bij Madeora om het verzoek te bekijken en goed te keuren of af te wijzen.",
+    button: "Verzoek bekijken",
+  },
   "chore.claim_released.auto": {
     subject: "Een klusje dat je opnam in {home} ging terug naar de pool",
     preview: "Het moment van automatisch vrijgeven is voorbij.",
@@ -1386,6 +1401,7 @@ export function isOptionalNotificationKind(kind: NotificationEmailKind): boolean
     kind.startsWith("join_request.") ||
     kind.startsWith("task.reminder.") ||
     kind === "chore.approval_requested" ||
+    kind === "home_copy.approval_requested" ||
     kind.startsWith("points.") ||
     kind.startsWith("reward.") ||
     kind.startsWith("habit.") ||

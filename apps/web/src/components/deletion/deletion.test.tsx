@@ -108,6 +108,20 @@ describe("DeleteAccount", () => {
     expect(router.refresh).toHaveBeenCalled();
   });
 
+  it("says when copy requests to Homes must be cancelled or finish first", async () => {
+    fetchMock
+      .mockResolvedValueOnce(Response.json({ error: "pending-copies" }, { status: 409 }))
+      .mockResolvedValueOnce(Response.json({ error: "copies-running" }, { status: 409 }));
+    renderWithIntl(<DeleteAccount {...person} blockers={[]} />);
+    await userEvent.type(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
+    await userEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+    expect(await screen.findByText(/waiting for approval. Cancel them first/)).toBeInTheDocument();
+    expect(router.refresh).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+    expect(await screen.findByText(/still being made/)).toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("accepts the Dutch word in Dutch", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ purgeAfter: null }));
     const { container } = renderWithIntl(<DeleteAccount {...person} blockers={[]} />, "nl");

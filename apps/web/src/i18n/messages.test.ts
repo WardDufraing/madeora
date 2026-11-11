@@ -24,7 +24,10 @@ import {
   EXPORT_STATUSES,
   HOME_EXPORT_CATEGORIES,
   REVIEW_STEPS,
+  DELETION_CATEGORIES,
+  UNDELETABLE_CATEGORIES,
 } from "@/privacy/catalogue";
+import { COPY_END_CODES, COPY_ITEM_TYPES, COPY_OUTCOMES, COPY_STATUSES } from "@/copies/catalogue";
 
 import { locales } from "./locales";
 import en from "./messages/en.json";
@@ -195,6 +198,34 @@ describe("message dictionaries", () => {
         ...withPrefix("homeCategoryHint.", HOME_EXPORT_CATEGORIES),
         ...withPrefix("status.", EXPORT_STATUSES),
         ...withPrefix("statusHint.", ["failed", "invalidated", "expired"]),
+      ],
+      // S40 part 2: looked up by the codes in src/privacy/catalogue.ts.
+      DataDeletion: [
+        ...withPrefix("category.", DELETION_CATEGORIES),
+        ...withPrefix("impact.", DELETION_CATEGORIES),
+        ...withPrefix("notHere.", UNDELETABLE_CATEGORIES),
+        ...withPrefix("notHereReason.", UNDELETABLE_CATEGORIES),
+        ...withPrefix("result.", ["completed", "partial", "failed"]),
+      ],
+      // S40 part 2: looked up by the codes in src/copies/catalogue.ts and the decision outcomes.
+      HomeCopies: [
+        ...withPrefix("type.", COPY_ITEM_TYPES),
+        ...withPrefix("untitled.", COPY_ITEM_TYPES),
+        ...withPrefix("itemGone.", COPY_ITEM_TYPES),
+        ...withPrefix("explainFiles.", COPY_ITEM_TYPES),
+        ...withPrefix("filesCount.", COPY_ITEM_TYPES),
+        ...withPrefix("status.", COPY_STATUSES),
+        ...withPrefix("outcome.", COPY_OUTCOMES),
+        ...withPrefix("endCode.", [...COPY_END_CODES, "other"]),
+        ...withPrefix("decided.", [
+          "completed",
+          "copying",
+          "rejected",
+          "expired",
+          "invalidated",
+          "failed",
+          "not_pending",
+        ]),
       ],
       Accent: accentPalette.map((entry) => entry.id),
       // The names of the preset units, chosen by the quantity's plural form (S29).

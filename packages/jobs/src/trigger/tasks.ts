@@ -21,6 +21,7 @@ import { habitPauseEnd, habitReminder, habitReminderSnooze } from "../jobs/habit
 import { invitationEmail } from "../jobs/invitation-email.ts";
 import { notificationEmail } from "../jobs/notification-email.ts";
 import { privacyExportBuild } from "../jobs/privacy-export.ts";
+import { homeCopyFiles } from "../jobs/home-copy.ts";
 import { recoveryReady } from "../jobs/recovery-ready.ts";
 import { accountRecoveryReady, securityEmail } from "../jobs/security-email.ts";
 import { samplePing } from "../jobs/sample-ping.ts";
@@ -101,6 +102,7 @@ export const petCareReminderTask = jobTask(petCareReminder);
 export const calendarEventReminderTask = jobTask(calendarEventReminder);
 export const googleCalendarSyncTask = jobTask(googleCalendarSync);
 export const privacyExportBuildTask = jobTask(privacyExportBuild);
+export const homeCopyFilesTask = jobTask(homeCopyFiles);
 
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
@@ -134,6 +136,8 @@ export const taskReminderAdvance = schedules.task({
     const dataExports = await services.data.sweepDataExports(REMINDER_ADVANCE_BATCH);
     // S40: Homes and accounts whose 30-day recovery period ended; a few per hour at most.
     const deletions = await services.data.purgeDueDeletions(DELETION_PURGE_BATCH);
+    // S40 part 2: copy requests past their 30 days, stuck copies, requests whose requester left.
+    const homeCopies = await services.data.sweepHomeCopies(REMINDER_ADVANCE_BATCH);
     logger.info("jobs.task_reminder_advance.done", {
       created,
       habits,
@@ -145,6 +149,7 @@ export const taskReminderAdvance = schedules.task({
       homesPurged: deletions.homes,
       accountsPurged: deletions.accounts,
       purgesFailed: deletions.failed,
+      homeCopies,
     });
     return {
       created,
@@ -155,6 +160,7 @@ export const taskReminderAdvance = schedules.task({
       inactivityReminders,
       dataExports,
       deletions,
+      homeCopies,
     };
   },
 });

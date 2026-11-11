@@ -8,10 +8,16 @@ import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { getAccountSecurity } from "@/auth/security-server";
 import { verifiedTotpFactor } from "@/auth/two-factor";
 import { FormAlert } from "@/components/auth/form-alert";
+import { CancelPendingCopies } from "@/components/copies/cancel-pending-copies";
 import { DeleteAccount } from "@/components/deletion/delete-account";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
+import { CopyToHomeLink } from "@/components/copies/copy-origin";
+import { copyPagePath } from "@/copies/catalogue";
+import { listMyOpenHomeCopies, listMySharedCopyableItems } from "@/copies/server";
 import { pageTitle } from "@/i18n/page-title";
+import { formatDateTime } from "@/invitations/format";
+import { getDateTimeFormats } from "@/invitations/server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Deletion");
@@ -29,13 +35,18 @@ interface DeleteAccountPageProps {
  */
 export default async function DeleteAccountPage({ searchParams }: DeleteAccountPageProps) {
   await requireIdentity();
-  const [t, params, user, security, blockers] = await Promise.all([
-    getTranslations("Deletion"),
-    searchParams,
-    getVerifiedUser(),
-    getAccountSecurity(),
-    listMyDeactivationBlockers(),
-  ]);
+  const [t, tCopies, params, user, security, blockers, openCopies, shared, formats] =
+    await Promise.all([
+      getTranslations("Deletion"),
+      getTranslations("HomeCopies"),
+      searchParams,
+      getVerifiedUser(),
+      getAccountSecurity(),
+      listMyDeactivationBlockers(),
+      listMyOpenHomeCopies(),
+      listMySharedCopyableItems(),
+      getDateTimeFormats(),
+    ]);
   if (!user) return null;
   const hasPassword = security.status === "ok" ? security.value.hasPassword : true;
 
@@ -67,6 +78,44 @@ export default async function DeleteAccountPage({ searchParams }: DeleteAccountP
             </Link>
           </p>
         </Card>
+        {/* S40 part 2: optionally keep items shared with a Home as that Home's own copy, item by
+            item; account deletion stays possible without it. */}
+        {shared.status === "ok" && shared.value.length > 0 ? (
+          <Card title={tCopies("sharedTitle")}>
+            <p className="mb-3 text-body">{tCopies("sharedIntro")}</p>
+            <ul className="flex flex-col gap-3" data-testid="account-deletion-shared">
+              {shared.value.map((item) => (
+                <li key={`${item.itemType}:${item.itemId}`} className="flex flex-col gap-1">
+                  <p className="text-body">
+                    <span className="font-semibold">
+                      {item.label ?? tCopies(`untitled.${item.itemType}`)}
+                    </span>{" "}
+                    <span className="text-fg-muted">({tCopies(`type.${item.itemType}`)})</span>
+                  </p>
+                  <p className="text-helper text-fg-muted">
+                    {tCopies("sharedIn", { homes: item.homes.join(", ") })}
+                  </p>
+                  <CopyToHomeLink href={copyPagePath(item.itemType, item.itemId)} />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
+        {/* S40 part 2: open copy requests to Homes must be cancelled (or finish) first. */}
+        {openCopies.status === "ok" && openCopies.value.length > 0 ? (
+          <Card title={tCopies("pendingTitle")}>
+            <CancelPendingCopies
+              rows={openCopies.value.map((row) => ({
+                id: row.id,
+                homeName: row.homeName,
+                itemType: row.itemType,
+                label: row.label,
+                status: row.status,
+                expires: formatDateTime(row.expiresAt, formats),
+              }))}
+            />
+          </Card>
+        ) : null}
         <Card title={t("accountConfirmTitle")}>
           {blockers.status === "ok" ? (
             <DeleteAccount

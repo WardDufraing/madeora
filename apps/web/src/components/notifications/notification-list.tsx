@@ -94,6 +94,11 @@ const kindMessage = {
   "reward.unable": "kindRewardUnable",
   "reward.refunded": "kindRewardRefunded",
   "reward.replacement": "kindRewardReplacement",
+  "home_copy.approval_requested": "kindHomeCopyApprovalRequested",
+  "home_copy.approved": "kindHomeCopyApproved",
+  "home_copy.rejected": "kindHomeCopyRejected",
+  "home_copy.completed": "kindHomeCopyCompleted",
+  "home_copy.failed": "kindHomeCopyFailed",
 } as const;
 
 /** A pet-care category's name in the Pets messages. */

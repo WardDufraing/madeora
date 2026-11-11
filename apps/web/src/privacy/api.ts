@@ -1,7 +1,9 @@
+import type { DeletionCategory } from "./catalogue";
 import type {
   ExportRequestInput,
   HomeExportAccessInput,
   HomeExportRequestInput,
+  PersonalDeletionInput,
   ReviewActionInput,
 } from "./schema";
 
@@ -24,11 +26,24 @@ import type {
  * - `POST /api/v1/me/privacy-review` `{ action: "start" | "step" | "finish" | "dismiss", step? }`
  *   → `200 {}`
  *
+ * - `POST /api/v1/me/personal-data/delete` `{ requestId, categories, confirmation }` → `200 { status,
+ *   results: { [category]: { outcome: "deleted" | "failed", count } } }` (S40 part 2; the same
+ *   request id again returns the first result); `403 reauthentication-required`
+ *
  * Errors: `401 unauthenticated`, `400 invalid`, `403 forbidden` (cross-site), `404 not-found`,
  * `413 too-large`, `415 unsupported-media-type`, `500 failed`, `503 storage-off`.
  */
 export const EXPORTS_ENDPOINT = "/api/v1/me/exports";
 export const PRIVACY_REVIEW_ENDPOINT = "/api/v1/me/privacy-review";
+export const PERSONAL_DELETION_ENDPOINT = "/api/v1/me/personal-data/delete";
+
+export type DeletionStatus = "completed" | "partial" | "failed";
+export interface DeletionResult {
+  readonly status: DeletionStatus;
+  readonly results: Partial<
+    Record<DeletionCategory, { readonly outcome: "deleted" | "failed"; readonly count: number }>
+  >;
+}
 
 export type PrivacyErrorCode =
   | "forbidden"
@@ -149,4 +164,16 @@ export async function setHomeExportAccess(
   input: HomeExportAccessInput,
 ): Promise<void> {
   await send(homeExportAccessEndpoint(homeId), input, "PUT");
+}
+
+export async function deletePersonalData(input: PersonalDeletionInput): Promise<DeletionResult> {
+  const body = await send(PERSONAL_DELETION_ENDPOINT, input);
+  const status = body.status;
+  if (status !== "completed" && status !== "partial" && status !== "failed") {
+    throw new PrivacyActionError("failed");
+  }
+  const results = (
+    typeof body.results === "object" && body.results !== null ? body.results : {}
+  ) as DeletionResult["results"];
+  return { status, results };
 }

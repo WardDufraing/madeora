@@ -85,6 +85,8 @@ export const ACTIVITY_KINDS = {
     // S40: account deletion and its cancellation.
     "account_deletion_requested",
     "account_deletion_canceled",
+    // S40 part 2: deleting personal data by category.
+    "personal_data_deleted",
   ],
   profile: [
     "profile.name_changed",

@@ -1,8 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
+import { CopyOrigin, CopyToHomeLink } from "@/components/copies/copy-origin";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
+import { copyPagePath } from "@/copies/catalogue";
 import { formatDateTime } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import type { RecipeDetail, RecipePerson } from "@/recipes/api";
@@ -69,6 +71,7 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
             {t("sharedInNotice")}
           </p>
         ) : null}
+        {homeId && !detail.sharedIn ? <CopyOrigin type="recipe" id={detail.id} /> : null}
         <LockNotice recipe={detail} names={names} />
         <div className="flex flex-wrap gap-2">
           {detail.steps.length > 0 ? (
@@ -99,6 +102,13 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
                 ? t("shareRecipeCount", { count: detail.shareCount })
                 : t("shareRecipe")}
             </Link>
+          ) : null}
+          {/* S40 part 2: copy a personal recipe into a Home; the database checks again. */}
+          {homeId === null && detail.can.share ? (
+            <CopyToHomeLink
+              href={copyPagePath("recipe", detail.id)}
+              className={secondaryLinkClass}
+            />
           ) : null}
           {detail.can.unshareHere && homeId ? (
             <RecipeUnshareHere recipeId={detail.id} homeId={homeId} />

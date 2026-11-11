@@ -170,6 +170,24 @@ describe("buildNotificationEmail", () => {
     expect(nl.subject).toBe("Klusjes in \u2068De Boomgaard\u2069 wachten op je beoordeling");
   });
 
+  it("emails copy approvers that a request waits, naming neither the item nor a person", async () => {
+    const email = await buildNotificationEmail({
+      ...base,
+      kind: "home_copy.approval_requested",
+      params: { itemType: "recipe", requestId: "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d" },
+    });
+    expect(email.subject).toBe("A request in \u2068De Boomgaard\u2069 is waiting for your review");
+    expect(email.text).toContain(`https://app.madeora.test/homes/${homeId}/copy-requests`);
+    expect(email.text).not.toContain("recipe");
+    const nl = await buildNotificationEmail({
+      ...base,
+      locale: "nl",
+      kind: "home_copy.approval_requested",
+      params: {},
+    });
+    expect(nl.subject).toBe("Een verzoek in \u2068De Boomgaard\u2069 wacht op je beoordeling");
+  });
+
   it("emails claim and handover notices by outcome, linking to the occurrence", async () => {
     const occurrenceId = "7c1e2a3b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
     const cases = [

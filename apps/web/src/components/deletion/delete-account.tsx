@@ -95,6 +95,13 @@ export function DeleteAccount({
             window.location.assign(new URL("/sign-in", window.location.origin));
             return { kind: "done" };
           }
+          if (failure === "pendingCopies") {
+            router.refresh();
+            return { kind: "message", message: t("accountPendingCopies") };
+          }
+          if (failure === "copiesRunning") {
+            return { kind: "message", message: t("accountCopiesRunning") };
+          }
           if (failure === "soleOwner") {
             router.refresh();
             return { kind: "message", message: t("accountSoleOwner") };

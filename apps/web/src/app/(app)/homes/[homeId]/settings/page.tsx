@@ -39,15 +39,17 @@ export async function generateMetadata({ params }: HomeSettingsPageProps): Promi
 export default async function HomeSettingsPage({ params }: HomeSettingsPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tStorage, tTrash, tPrivacy, tDeletion, exportAccess] = await Promise.all([
-    loadHomeForPage(homeId),
-    getTranslations("Homes"),
-    getTranslations("Storage"),
-    getTranslations("Trash"),
-    getTranslations("Privacy"),
-    getTranslations("Deletion"),
-    getHomeExportAccess(homeId),
-  ]);
+  const [context, t, tStorage, tTrash, tPrivacy, tDeletion, tCopies, exportAccess] =
+    await Promise.all([
+      loadHomeForPage(homeId),
+      getTranslations("Homes"),
+      getTranslations("Storage"),
+      getTranslations("Trash"),
+      getTranslations("Privacy"),
+      getTranslations("Deletion"),
+      getTranslations("HomeCopies"),
+      getHomeExportAccess(homeId),
+    ]);
   if (!context) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
@@ -118,6 +120,17 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           </Link>
         </Card>
       ) : null}
+      {/* Copy requests (S40 part 2): approvers decide them there, and each member sees their own;
+          the page and the database decide what each person sees. */}
+      <Card title={tCopies("requestsTitle")} className="mt-6 max-w-2xl">
+        <Link
+          href={`/homes/${home.id}/copy-requests`}
+          className="text-body font-medium text-accent-fg underline"
+          data-testid="home-copy-requests-link"
+        >
+          {tCopies("homeSettingsLink")}
+        </Link>
+      </Card>
       {/* Closing the Home (S40): the Owner only; the page and the database check again. */}
       {membership.role === "owner" ? (
         <Card title={tDeletion("closeCardTitle")} className="mt-6 max-w-2xl">

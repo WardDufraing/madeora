@@ -28,6 +28,8 @@ import type {
   CalendarReminderOutcome,
   DataExportBegin,
   DeletionPurge,
+  HomeCopyBegin,
+  HomeCopyFinish,
   PetCareReminderOutcome,
   StoredFileStatus,
   TaskReminderOutcome,
@@ -200,6 +202,32 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.deletionPurges.push(limit);
     return Promise.resolve({ homes: 0, accounts: 0, failed: 0 });
+  }
+
+  homeCopyBegin: HomeCopyBegin = { outcome: "skip" };
+  readonly homeCopyFinishes: { requestId: string; ok: boolean; code: string | null }[] = [];
+  homeCopyFinishOutcome: HomeCopyFinish = "completed";
+  readonly homeCopySweeps: number[] = [];
+
+  beginHomeCopyFiles(): Promise<HomeCopyBegin> {
+    this.check();
+    return Promise.resolve(this.homeCopyBegin);
+  }
+
+  finishHomeCopyFiles(
+    requestId: string,
+    ok: boolean,
+    code: string | null,
+  ): Promise<HomeCopyFinish> {
+    this.check();
+    this.homeCopyFinishes.push({ requestId, ok, code });
+    return Promise.resolve(this.homeCopyFinishOutcome);
+  }
+
+  sweepHomeCopies(limit: number): Promise<number> {
+    this.check();
+    this.homeCopySweeps.push(limit);
+    return Promise.resolve(0);
   }
 
   private check(): void {
@@ -438,6 +466,14 @@ export class FakeObjects implements ObjectStore {
     this.check();
     this.objects.set(key, bytes);
     return Promise.resolve();
+  }
+
+  copy(sourceKey: string, destKey: string): Promise<"copied" | "missing"> {
+    this.check();
+    const bytes = this.objects.get(sourceKey);
+    if (!bytes) return Promise.resolve("missing");
+    this.objects.set(destKey, bytes.slice());
+    return Promise.resolve("copied");
   }
 
   delete(key: string): Promise<void> {

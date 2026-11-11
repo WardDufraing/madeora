@@ -566,6 +566,7 @@ export type Database = {
           outcome: string;
         }[];
       };
+      begin_home_copy_files: { Args: { p_request_id: string }; Returns: Json };
       begin_job_execution: {
         Args: { p_idempotency_key: string; p_job_name: string; p_lease_seconds: number };
         Returns: {
@@ -627,8 +628,10 @@ export type Database = {
       };
       cancel_account_recovery: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_backup_email_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      cancel_home_copy: { Args: { p_request_id: string }; Returns: boolean };
       cancel_my_email_change: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_my_export: { Args: { p_export_id: string }; Returns: boolean };
+      cancel_my_pending_home_copies: { Args: Record<PropertyKey, never>; Returns: number };
       cancel_ownership_recoveries: {
         Args: { p_home_id: string };
         Returns: {
@@ -1390,6 +1393,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      decide_home_copy: { Args: { p_approve: boolean; p_request_id: string }; Returns: string };
       decide_join_request: {
         Args: { p_decision: string; p_home_id: string; p_request_id: string };
         Returns: string;
@@ -1471,6 +1475,10 @@ export type Database = {
           entry_id: string;
           outcome: string;
         }[];
+      };
+      delete_personal_data: {
+        Args: { p_categories: string[]; p_request_id: string };
+        Returns: Json;
       };
       delete_pet: { Args: { p_expected_revision: number; p_pet_id: string }; Returns: Json };
       delete_pet_care: {
@@ -1659,6 +1667,10 @@ export type Database = {
         Args: { p_export_id: string; p_partial: boolean; p_size: number; p_summary: Json };
         Returns: string;
       };
+      finish_home_copy_files: {
+        Args: { p_code?: string; p_ok: boolean; p_request_id: string };
+        Returns: string;
+      };
       finish_job_execution: {
         Args: {
           p_claim_token: string;
@@ -1704,6 +1716,7 @@ export type Database = {
       get_chore_summary_setting: { Args: { p_home_id: string }; Returns: Json };
       get_chore_vacation_state: { Args: { p_occurrence_id: string }; Returns: Json };
       get_chore_volunteer_state: { Args: { p_occurrence_id: string }; Returns: Json };
+      get_copy_origin: { Args: { p_item_id: string; p_item_type: string }; Returns: string };
       get_dashboard: {
         Args: { p_home_id?: string };
         Returns: {
@@ -2248,6 +2261,7 @@ export type Database = {
           title: string;
         }[];
       };
+      list_copy_destinations: { Args: { p_item_id: string; p_item_type: string }; Returns: Json };
       list_dashboard_templates: {
         Args: { p_home_id?: string };
         Returns: {
@@ -2303,6 +2317,7 @@ export type Database = {
           total_count: number;
         }[];
       };
+      list_home_copy_requests: { Args: { p_home_id: string }; Returns: Json };
       list_home_export_access: { Args: { p_home_id: string }; Returns: Json };
       list_home_invitations: {
         Args: { p_home_id: string };
@@ -2421,6 +2436,7 @@ export type Database = {
           summary: Json;
         }[];
       };
+      list_my_home_copies: { Args: Record<PropertyKey, never>; Returns: Json };
       list_my_join_requests: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2788,6 +2804,7 @@ export type Database = {
           email_verified: boolean;
         }[];
       };
+      my_open_home_copies: { Args: Record<PropertyKey, never>; Returns: Json };
       my_privacy_review: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2806,6 +2823,7 @@ export type Database = {
           still_member: boolean;
         }[];
       };
+      my_shared_copyable_items: { Args: Record<PropertyKey, never>; Returns: Json };
       my_storage_usage: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2833,6 +2851,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      personal_deletion_preview: { Args: { p_categories: string[] }; Returns: Json };
       pet_care_notice_names: {
         Args: { p_occurrence_ids: string[] };
         Returns: {
@@ -3137,6 +3156,10 @@ export type Database = {
         }[];
       };
       request_google_calendar_sync: { Args: Record<PropertyKey, never>; Returns: string };
+      request_home_copies: {
+        Args: { p_home_ids: string[]; p_item_id: string; p_item_type: string };
+        Returns: Json;
+      };
       request_home_export: {
         Args: { p_all: boolean; p_categories: string[]; p_home_id: string };
         Returns: string;
@@ -3846,6 +3869,7 @@ export type Database = {
         }[];
       };
       sweep_data_exports: { Args: { p_limit: number }; Returns: number };
+      sweep_home_copies: { Args: { p_limit?: number }; Returns: number };
       sync_goal_periods: { Args: { p_home_id?: string; p_series_id?: string }; Returns: number };
       task_attachment_scope_impact: {
         Args: { p_attachment_id?: string; p_scope: string; p_task_id: string };
