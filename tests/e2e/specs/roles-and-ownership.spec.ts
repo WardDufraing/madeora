@@ -177,8 +177,9 @@ test.describe("ownership transfer", () => {
     await page.waitForURL(`**/homes/${homeId}/leave`);
     await expect(page.getByText(/You're the Owner of Thuis/)).toBeVisible();
     await expect(page.getByRole("button", { name: /^Leave/ })).toHaveCount(0);
+    // S40: the Owner may close the Home instead (30 days to restore it).
     await expect(page.getByRole("region", { name: "Close the Home" })).toContainText(
-      "isn't available in Madeora yet",
+      "Closing deletes the Home for everyone",
     );
     await expectNoAxeViolations(page, "owner leave page");
     // The server refuses the Owner's departure too.

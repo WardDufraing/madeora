@@ -16,8 +16,7 @@ test.use({
   timezoneId: "Europe/London",
   viewport: { width: 1280, height: 900 },
   // Requesting and downloading first ask the server, which answers 403 until Ann confirms it's her.
-  // S40: a closed Home answers 404.
-  allowedConsoleErrors: [/Failed to load resource: the server responded with a status of 40[34]/],
+  allowedConsoleErrors: [/Failed to load resource: the server responded with a status of 403/],
 });
 
 test("review privacy settings and history, then export permitted data", async ({
@@ -157,8 +156,9 @@ test("delete data with the required confirmation and recovery", async ({ page, b
   expect(await axeViolations(page)).toEqual([]);
 
   // Nobody can open it now, Ann included.
-  const gone = await page.goto(`/homes/${homeId}`);
-  expect(gone?.status()).toBe(404);
+  // Its pages send everyone to the start page with the "Home unavailable" notice.
+  await page.goto(`/homes/${homeId}`);
+  await expect(page).toHaveURL(/\/\?notice=home-unavailable$/);
 
   // Ann restores it within the 30 days.
   await page.goto("/settings/closed-homes");
