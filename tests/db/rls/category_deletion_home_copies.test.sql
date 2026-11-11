@@ -341,21 +341,29 @@ select tests.assert_true(
   'the recipe does not appear before its cover is in place');
 
 -- The approver's authority is checked again when the copy is made.
-savepoint demoted;
-update private.home_memberships_all set role = 'member'
-  where home_id = (select id from ids where name = 'oak') and user_id = (select id from ids where name = 'cleo');
-select tests.act_as_service_role();
-select tests.assert_true(
-  public.finish_home_copy_files((select id from ids where name = 'pie_oak'), true, null) = 'invalidated',
-  'an approver who lost the right before the copy was made invalidates it');
-select tests.act_as_owner();
-select tests.assert_true(
-  (select r.status = 'invalidated' and r.end_code = 'not_authorized' from private.home_copy_requests r
-   where r.id = (select id from ids where name = 'pie_oak'))
-  and not exists (select 1 from private.recipes r where r.owner_home_id = (select id from ids where name = 'oak')
-                  and r.copied_from_personal_at is not null),
-  'nothing is created and the request records why');
-rollback to savepoint demoted;
+-- (Inside a block that is undone afterwards, so the copy goes on below.)
+do $$
+begin
+  begin
+    update private.home_memberships_all set role = 'member'
+      where home_id = (select id from ids where name = 'oak') and user_id = (select id from ids where name = 'cleo');
+    perform tests.act_as_service_role();
+    perform tests.assert_true(
+      public.finish_home_copy_files((select id from ids where name = 'pie_oak'), true, null) = 'invalidated',
+      'an approver who lost the right before the copy was made invalidates it');
+    perform tests.act_as_owner();
+    perform tests.assert_true(
+      (select r.status = 'invalidated' and r.end_code = 'not_authorized' from private.home_copy_requests r
+       where r.id = (select id from ids where name = 'pie_oak'))
+      and not exists (select 1 from private.recipes r where r.owner_home_id = (select id from ids where name = 'oak')
+                      and r.copied_from_personal_at is not null),
+      'nothing is created and the request records why');
+    raise exception 'undo' using errcode = 'MT999';
+  exception when sqlstate 'MT999' then
+    null;
+  end;
+end
+$$;
 select tests.act_as_owner();
 
 insert into answers select 'cover_key', to_jsonb(f.object_key) from private.stored_files f
