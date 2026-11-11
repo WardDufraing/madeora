@@ -35,6 +35,8 @@ export const ACCOUNT_CHANGE_ACTIONS = [
   // S40: account deletion, and closing or restoring a Home.
   "delete_account",
   "close_home",
+  // S40 part 2: deleting personal data by category.
+  "delete_personal_data",
 ] as const;
 export type AccountChangeAction = (typeof ACCOUNT_CHANGE_ACTIONS)[number];
 
@@ -68,6 +70,8 @@ export function sectionOf(action: AccountChangeAction): string {
       return "delete";
     case "close_home":
       return "close";
+    case "delete_personal_data":
+      return "delete-data";
   }
 }
 
@@ -103,6 +107,7 @@ export function confirmedPath(action: AccountChangeAction, returnPath?: string):
   // S40: account deletion lives on Settings › Privacy; closing and restoring Homes on their pages.
   if (action === "delete_account") return `/settings/privacy/delete?confirmed=${action}`;
   if (action === "close_home") return `/settings/closed-homes?confirmed=${action}`;
+  if (action === "delete_personal_data") return `/settings/privacy/delete-data?confirmed=${action}`;
   return `/settings/security?confirmed=${action}#${sectionOf(action)}`;
 }
 

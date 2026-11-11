@@ -85,3 +85,29 @@ export function perReviewStep<T>(make: (step: ReviewStep) => T): Record<ReviewSt
     data_rights: make("data_rights"),
   };
 }
+
+/**
+ * Personal categories that can be deleted on Settings › Privacy › Delete data by category (S40
+ * part 2), in the database's order (`private.personal_deletion_categories()`): the export's keys
+ * without the account itself and the person's contributions to Homes (Home-owned records).
+ */
+export const DELETION_CATEGORIES = [
+  "calendar",
+  "tasks",
+  "recipes",
+  "shopping",
+  "meals",
+  "habits_goals",
+  "media",
+] as const;
+export type DeletionCategory = (typeof DELETION_CATEGORIES)[number];
+
+/** Categories shown as not deletable here, each with its reason. */
+export const UNDELETABLE_CATEGORIES = ["account", "home_contributions", "security"] as const;
+
+/** Categories whose items can have been copied into a Home or have pending copy requests. */
+export const COPYABLE_DELETION_CATEGORIES: readonly DeletionCategory[] = [
+  "calendar",
+  "recipes",
+  "media",
+];

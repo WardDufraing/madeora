@@ -124,6 +124,12 @@ export const notificationKinds = [
   "account.deletion_canceled",
   "home.deletion_started",
   "home.restored",
+  // S40 part 2: personal-to-Home copies (the item's kind only, never its title).
+  "home_copy.approval_requested",
+  "home_copy.approved",
+  "home_copy.rejected",
+  "home_copy.completed",
+  "home_copy.failed",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -208,6 +214,9 @@ export function notificationPath(
   if (!homeId) return "/";
   const home = `/homes/${encodeURIComponent(homeId)}`;
   if (kind === "join_request.received") return `${home}/invitations`;
+  // S40 part 2: approvers review copy requests in the Home; the requester sees their own requests.
+  if (kind === "home_copy.approval_requested") return `${home}/copy-requests`;
+  if (kind.startsWith("home_copy.")) return "/settings/privacy/copies";
   if (kind.startsWith("storage.home_")) return `${home}/storage`;
   if (kind === "chore.approval_requested") return `${home}/chores/approvals`;
   if (kind === "chore.proposal_decided") return `${home}/chores/proposals`;

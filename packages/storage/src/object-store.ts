@@ -64,6 +64,11 @@ export interface ObjectStore {
   /** Reads at most `maxBytes`; a larger object is `too-large` and is not read further. */
   get(key: string, maxBytes: number): Promise<ObjectRead>;
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  /**
+   * Copies an object to a new key inside the bucket (S3 CopyObject; the bytes never leave the
+   * store). 'missing' when the source object does not exist.
+   */
+  copy(sourceKey: string, destKey: string): Promise<"copied" | "missing">;
   /** Removes an object; one that is already gone counts as removed. */
   delete(key: string): Promise<void>;
 }
@@ -223,6 +228,22 @@ export function createObjectStore(
       });
       await response.body?.cancel();
       if (!response.ok) throw new StorageUnavailableError(`status_${String(response.status)}`);
+    },
+
+    async copy(sourceKey, destKey) {
+      checkKey(sourceKey);
+      const response = await send("PUT", destKey, {
+        headers: { "x-amz-copy-source": `/${uriEncode(config.bucket)}/${sourceKey}` },
+      });
+      // CopyObject answers 200 with an XML body, also for some failures: read it (it is small).
+      const body = await response.text();
+      if (response.status === 404) return "missing";
+      if (!response.ok) throw new StorageUnavailableError(`status_${String(response.status)}`);
+      if (body.includes("<Error>")) {
+        if (body.includes("<Code>NoSuchKey</Code>")) return "missing";
+        throw new StorageUnavailableError("copy_failed");
+      }
+      return "copied";
     },
 
     async delete(key) {

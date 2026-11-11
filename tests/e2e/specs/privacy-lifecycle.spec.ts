@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { type Account, registerConfirmed, signIn } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
-import { addMember, createHomeFor, setGlobalProfile } from "../support/database";
+import { addMember, createHomeFor, setGlobalProfile, sql } from "../support/database";
 import { runJobs } from "../support/jobs";
 
 // S39 done-condition: the export half of the "Privacy lifecycle" journey (Project-entry.md):
@@ -202,4 +202,125 @@ test("delete data with the required confirmation and recovery", async ({ page, b
   await expect(page).toHaveURL(/\/settings\/activity\?/);
   await page.goto(`/homes/${homeId}`);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Pine Lane");
+});
+
+/** A personal published recipe and a personal all-day event of `email`; returns their ids. */
+function personalItems(email: string): { recipe: string; event: string } {
+  const ids = sql(
+    `
+    with person as (select id from auth.users where email = :'email'),
+    recipe as (
+      insert into private.recipes (owner_user_id, status, name, name_key, created_by, published_at)
+      select id, 'published', 'Lentil soup', 'lentil soup', id, now() from person
+      returning id
+    ),
+    event as (
+      insert into private.calendar_events (owner_user_id, title, all_day, starts_on, ends_on, timezone,
+          created_by)
+      select id, 'Dentist', true, current_date, current_date, 'Europe/London', id from person
+      returning id
+    )
+    select (select id from recipe) || ' ' || (select id from event);
+    `,
+    { email },
+  );
+  const [recipe = "", event = ""] = ids.split(" ");
+  return { recipe, event };
+}
+
+// S40 part 2 done-condition: deleting chosen categories of personal data, and copying a personal
+// item into a Home before deletion. Bea deletes her calendar after the impact preview, the
+// acknowledgement, the typed word and confirming it's her. She asks to copy a recipe into Ann's
+// Home, which waits for approval; Ann approves and the Home has its own copy, marked as copied from
+// personal. Before deleting her account, Bea must cancel the request she still has open.
+test("delete personal data by category and copy content into a Home", async ({ page, baseURL }) => {
+  const ann = await registerConfirmed(baseURL ?? "");
+  const bea = await registerConfirmed(baseURL ?? "");
+  setGlobalProfile(ann.email, "Ann", "#2563eb");
+  setGlobalProfile(bea.email, "Bea", "#16a34a");
+  const homeId = createHomeFor(ann.email, "Oak Road");
+  addMember(homeId, bea.email, "member");
+  const items = personalItems(bea.email);
+
+  // Bea deletes her personal calendar.
+  await signIn(page, bea);
+  await page.goto("/settings/privacy");
+  await page.getByTestId("privacy-delete-data-link").click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Delete data by category" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("data-deletion-not-here")).toContainText("Security activity");
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByTestId("data-deletion-category-calendar").check();
+  await expect(page.getByTestId("data-deletion-impact")).toContainText(
+    "Nothing is deleted in your Google account.",
+  );
+  await page.getByTestId("data-deletion-ack-calendar").check();
+  await page.getByTestId("data-deletion-phrase").fill("DELETE");
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByRole("button", { name: "Delete 1 category" }).click();
+  const confirm = page.getByRole("form", { name: "Confirm it's you to delete this data." });
+  const result = page.getByTestId("data-deletion-result");
+  if (
+    (await Promise.race([result.waitFor(), confirm.waitFor().then(() => "confirm")])) === "confirm"
+  ) {
+    await confirm.getByLabel(/password/i).fill(bea.password);
+    await confirm.getByRole("button", { name: "Delete 1 category" }).click();
+  }
+  await expect(result).toContainText("Your data was deleted.");
+  await expect(page.getByTestId("data-deletion-result-calendar")).toContainText("1 item deleted");
+  await page.goto(`/calendar/events/${items.event}`);
+  await expect(page.getByTestId("event-page")).toHaveCount(0);
+
+  // Bea asks to copy her recipe into the Home; as a plain member it waits for approval.
+  await page.goto(`/recipes/${items.recipe}`);
+  await page.getByTestId("copy-to-home-link").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Copy to a Home" })).toBeVisible();
+  await expect(page.getByText("Needs approval in this Home")).toBeVisible();
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByRole("checkbox", { name: /Oak Road/ }).check();
+  await page.getByTestId("copy-understand").check();
+  await page.getByRole("button", { name: "Copy to 1 Home" }).click();
+  await expect(page.getByTestId("copy-result-pending")).toContainText("waiting for approval");
+  await page.goto("/settings/privacy/copies");
+  await expect(page.getByTestId("my-copy-pending")).toContainText("Oak Road");
+  expect(await axeViolations(page)).toEqual([]);
+  await page.context().clearCookies();
+
+  // Ann approves it from the Home's copy requests, after reading the consequences.
+  await signIn(page, ann);
+  await page.goto(`/homes/${homeId}/settings`);
+  await page.getByTestId("home-copy-requests-link").click();
+  const request = page.getByTestId("copy-request");
+  await expect(request).toContainText("Lentil soup");
+  await expect(request).toContainText("Asked by Bea");
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page.getByText(/Oak Road gets its own copy/)).toBeVisible();
+  await page.getByRole("button", { name: "Approve and copy" }).click();
+  await expect(page.getByText("Approved. The copy is in the Home.")).toBeVisible();
+
+  // The Home's own copy, quietly labelled.
+  const copy = sql(
+    `select id from private.recipes where owner_home_id = :'home'::uuid and name = 'Lentil soup';`,
+    { home: homeId },
+  );
+  await page.goto(`/homes/${homeId}/recipes/${copy}`);
+  await expect(page.getByTestId("copy-origin")).toContainText("Copied from personal");
+  await page.context().clearCookies();
+
+  // Bea asks again, then has to cancel that open request before deleting her account.
+  await signIn(page, bea);
+  await page.goto(`/copy-to-home?type=recipe&id=${items.recipe}`);
+  await page.getByRole("checkbox", { name: /Oak Road/ }).check();
+  await page.getByTestId("copy-understand").check();
+  await page.getByRole("button", { name: "Copy to 1 Home" }).click();
+  await expect(page.getByTestId("copy-result-pending")).toBeVisible();
+  await page.goto("/settings/privacy/delete");
+  const open = page.getByTestId("account-deletion-copies");
+  await expect(open).toContainText("Oak Road");
+  expect(await axeViolations(page)).toEqual([]);
+  await page.getByTestId("account-deletion-copies-ack").check();
+  await page.getByRole("button", { name: "Cancel 1 request" }).click();
+  await expect(open).toHaveCount(0);
 });

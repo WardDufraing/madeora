@@ -57,6 +57,8 @@ export type ActivityErrorCode =
   | "reauthentication-required"
   | "rate-limited"
   | "sole-owner"
+  | "pending-copies"
+  | "copies-running"
   | "expired"
   | "failed";
 
@@ -72,6 +74,8 @@ export type ActivityFailure =
   | "reauthenticate"
   | "rateLimited"
   | "soleOwner"
+  | "pendingCopies"
+  | "copiesRunning"
   | "expired"
   | "network"
   | "failed";
@@ -88,7 +92,12 @@ async function errorOf(response: Response): Promise<ActivityFailure> {
   if (response.status === 400) return "invalid";
   if (response.status === 404) return "notFound";
   if (response.status === 429) return "rateLimited";
-  if (response.status === 409) return "soleOwner";
+  if (response.status === 409) {
+    const body = (await response.json().catch(() => ({}))) as { error?: unknown };
+    if (body.error === "pending-copies") return "pendingCopies";
+    if (body.error === "copies-running") return "copiesRunning";
+    return "soleOwner";
+  }
   if (response.status === 410) return "expired";
   if (response.status === 403) {
     const body = (await response.json().catch(() => ({}))) as { error?: unknown };

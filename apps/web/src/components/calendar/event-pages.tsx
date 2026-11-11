@@ -7,9 +7,11 @@ import { readGoogleWriteTargets } from "@/google-calendar/data";
 import { getGoogleCalendarServer } from "@/google-calendar/server";
 import { calendarPath, clockTime, editEventPath } from "@/calendar/format";
 import type { EventDetail } from "@/calendar/shapes";
+import { CopyOrigin, CopyToHomeLink } from "@/components/copies/copy-origin";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/states";
+import { copyPagePath } from "@/copies/catalogue";
 import { dateOnlySchema } from "@/tasks/schema";
 import type { DateTimeFormats } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
@@ -114,6 +116,7 @@ export async function EventPage({
         </Link>
       </p>
       <div className="flex max-w-2xl flex-col gap-4" data-testid="event-page">
+        {event.kind === "home" ? <CopyOrigin type="calendar_event" id={event.id} /> : null}
         <Card>
           <dl className="grid gap-x-6 gap-y-3 text-body sm:grid-cols-[auto_1fr]">
             <dt className="font-medium text-fg-muted">{t("when")}</dt>
@@ -218,6 +221,12 @@ export async function EventPage({
               shared={event.shares}
             />
           </Card>
+        ) : null}
+        {/* S40 part 2: copy the owner's personal event into a Home; the database checks again. */}
+        {event.kind === "personal" && event.shares !== null ? (
+          <p>
+            <CopyToHomeLink href={copyPagePath("calendar_event", event.id)} />
+          </p>
         ) : null}
       </div>
     </>

@@ -10,11 +10,13 @@ import { readGoogleConnection } from "@/google-calendar/data";
 import { listMyHomes } from "@/homes/server";
 
 import {
+  DELETION_CATEGORIES,
   isExportCategory,
   isHomeExportCategory,
   isReviewStep,
   EXPORT_STATUSES,
   type AnyExportCategory,
+  type DeletionCategory,
   type ExportKind,
   type ExportStatus,
   type ReviewStep,
@@ -264,6 +266,55 @@ export async function getHomeExportAccess(homeId: string): Promise<Loaded<HomeEx
   const parsed = homeExportAccessShape.safeParse(data);
   if (!parsed.success) {
     logFailure("privacy.home_export_access_failed", "unexpected");
+    return { status: "unavailable" };
+  }
+  return { status: "ok", value: parsed.data };
+}
+
+/** What deleting one category affects (S40 part 2), counted by the database. */
+export interface DeletionCategoryPreview {
+  readonly items: number;
+  readonly inTrash: number;
+  readonly shared: number;
+  readonly files: number;
+  readonly openCopies: number;
+}
+
+export interface DeletionPreview {
+  readonly categories: Readonly<Record<DeletionCategory, DeletionCategoryPreview>>;
+  /** Personal exports in preparation or ready that become unavailable. */
+  readonly openExports: number;
+}
+
+const countSchema = z.int().min(0).catch(0);
+const deletionPreviewSchema = z.object({
+  categories: z.record(
+    z.enum(DELETION_CATEGORIES),
+    z.object({
+      items: countSchema,
+      inTrash: countSchema,
+      shared: countSchema,
+      files: countSchema,
+      openCopies: countSchema,
+    }),
+  ),
+  openExports: countSchema,
+});
+
+/** The impact preview of every deletable category, for the person's own data. */
+export async function getDeletionPreview(): Promise<Loaded<DeletionPreview>> {
+  if (!(await getVerifiedIdentity())) return { status: "unavailable" };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("personal_deletion_preview", {
+    p_categories: [...DELETION_CATEGORIES],
+  });
+  if (error) {
+    logFailure("privacy.deletion_preview_failed", error.code);
+    return { status: "unavailable" };
+  }
+  const parsed = deletionPreviewSchema.safeParse(data);
+  if (!parsed.success) {
+    logFailure("privacy.deletion_preview_failed", "unexpected_result");
     return { status: "unavailable" };
   }
   return { status: "ok", value: parsed.data };

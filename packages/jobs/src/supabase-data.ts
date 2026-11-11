@@ -5,6 +5,7 @@
  * just what the job needs. Errors carry the Postgres code only (see `JobStoreError`).
  */
 import type { Json } from "@madeora/database";
+import { OBJECT_KEY } from "@madeora/storage";
 import { z } from "zod";
 
 import type {
@@ -470,6 +471,40 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return deletionPurge(data);
     },
 
+    async beginHomeCopyFiles(requestId) {
+      const { data, error } = await client.rpc("begin_home_copy_files", {
+        p_request_id: requestId,
+      });
+      if (error) throw new JobStoreError("begin_home_copy_files", error.code);
+      const parsed = homeCopyBeginSchema.safeParse(data);
+      if (!parsed.success) throw new JobStoreError("begin_home_copy_files", "unexpected_result");
+      return parsed.data;
+    },
+
+    async finishHomeCopyFiles(requestId, ok, code) {
+      const { data, error } = await client.rpc("finish_home_copy_files", {
+        p_request_id: requestId,
+        p_ok: ok,
+        ...(code === null ? {} : { p_code: code }),
+      });
+      if (error) throw new JobStoreError("finish_home_copy_files", error.code);
+      if (
+        data !== "completed" &&
+        data !== "failed" &&
+        data !== "invalidated" &&
+        data !== "discarded"
+      ) {
+        throw new JobStoreError("finish_home_copy_files", "unexpected_result");
+      }
+      return data;
+    },
+
+    async sweepHomeCopies(limit) {
+      const { data, error } = await client.rpc("sweep_home_copies", { p_limit: limit });
+      if (error) throw new JobStoreError("sweep_home_copies", error.code);
+      return data;
+    },
+
     async getStorageObjectDeletion(deletionId) {
       const { data, error } = await client.rpc("get_storage_object_deletion", {
         p_deletion_id: deletionId,
@@ -489,6 +524,23 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
     },
   };
 }
+
+/** What a Home copy must copy, checked: the database returns it as JSON. */
+const homeCopyBeginSchema = z.discriminatedUnion("outcome", [
+  z.object({
+    outcome: z.literal("ok"),
+    objects: z
+      .array(
+        z.object({
+          from: z.string().regex(OBJECT_KEY),
+          to: z.string().regex(OBJECT_KEY),
+          size: z.int().min(0).nullable(),
+        }),
+      )
+      .max(1_000),
+  }),
+  z.object({ outcome: z.literal("skip") }),
+]);
 
 /** The purge's counts, checked: the database returns them as JSON. */
 const deletionPurgeSchema = z.object({

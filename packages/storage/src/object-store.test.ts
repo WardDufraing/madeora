@@ -129,6 +129,45 @@ describe("createObjectStore", () => {
   });
 });
 
+describe("copy", () => {
+  const dest = `h/${"d".repeat(64)}`;
+
+  it("copies inside the bucket with a signed copy-source header", async () => {
+    const { store, fetchMock } = storeWith(
+      () => new Response("<CopyObjectResult><ETag>x</ETag></CopyObjectResult>"),
+    );
+    await expect(store.copy(key, dest)).resolves.toBe("copied");
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url instanceof Request ? url.url : url instanceof URL ? url.href : url).toBe(
+      `${config.endpoint}/madeora-dev/${dest}`,
+    );
+    expect(init?.method).toBe("PUT");
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["x-amz-copy-source"]).toBe(`/madeora-dev/${key}`);
+    expect(headers.authorization).toContain("x-amz-copy-source");
+  });
+
+  it("reports a missing source and refuses keys it did not generate", async () => {
+    await expect(
+      storeWith(
+        () => new Response("<Error><Code>NoSuchKey</Code></Error>", { status: 404 }),
+      ).store.copy(key, dest),
+    ).resolves.toBe("missing");
+    await expect(
+      storeWith(() => new Response("<Error><Code>NoSuchKey</Code></Error>")).store.copy(key, dest),
+    ).resolves.toBe("missing");
+    await expect(
+      storeWith(() => new Response("<Error><Code>InternalError</Code></Error>")).store.copy(
+        key,
+        dest,
+      ),
+    ).rejects.toThrow(StorageUnavailableError);
+    await expect(storeWith(() => new Response(null)).store.copy("../x", dest)).rejects.toThrow(
+      TypeError,
+    );
+  });
+});
+
 describe("storage settings", () => {
   it("is off unless configured", () => {
     expect(storageConfigFromEnv(parseStorageEnv({}))).toBeNull();

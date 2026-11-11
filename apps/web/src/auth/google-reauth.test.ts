@@ -164,6 +164,9 @@ describe("return path after confirming", () => {
     expect(confirmedPath("data_export", `/homes/${home}/close`)).toBe(
       "/settings/privacy/export?confirmed=data_export",
     );
+    expect(confirmedPath("delete_personal_data")).toBe(
+      "/settings/privacy/delete-data?confirmed=delete_personal_data",
+    );
     expect(confirmedPath("delete_account")).toBe(
       "/settings/privacy/delete?confirmed=delete_account",
     );
