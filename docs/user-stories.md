@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 8 November 2026
+**Last reviewed:** 11 November 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
@@ -40,6 +40,43 @@ As an adult account holder, I want strong sign-in, session and recovery controls
 - Security notifications and recovery messages go through the configured email jobs, while recovery secrets, device tokens and security events remain private to my account.
 - No Home membership, role or cross-Home permission grants access to my security settings, sessions, trusted browsers or recovery methods.
 
+### US-040 — Review account activity and respond to security events
+
+As an account holder, I want a private activity history, useful alerts and downloadable security reports so I can understand and respond to important account events.
+
+**Acceptance checks**
+
+- I can review my account activity with the supported category, Home and date filters; the history describes account, security, profile, integration and Home-membership events without exposing another account's private activity.
+- I can choose optional alerts for a new device and for every successful sign-in, while mandatory security notifications remain mandatory.
+- I can identify an unfamiliar sign-in and use the offered response; the response applies to the relevant session/account event and is itself recorded.
+- After recent reauthentication, I can request a security-activity report for a valid retained date range, download it as CSV or JSON while it is ready, or discard it. Report creation and download do not bypass account or session checks.
+- Activity and security reports remain account-private; Home roles and membership never grant another person access.
+
+### US-041 — Switch, deactivate and reactivate my account safely
+
+As a person using a shared device, I want to switch remembered accounts or temporarily deactivate mine without leaking one account's data into another.
+
+**Acceptance checks**
+
+- I can choose whether this device remembers my account; remembered entries contain only the limited display information needed by the account chooser, not a reusable sign-in session.
+- Adding or switching to another remembered account signs out the active account on that device, clears client-side account state, and requires the selected account's own sign-in and second factor when enabled.
+- Removing an entry from the device does not deactivate or delete that account.
+- Temporary deactivation requires acknowledgement and recent reauthentication, is blocked while I am the sole Owner of a Home, revokes sessions and trusted browsers, and prevents normal use until reactivation.
+- Signing in to a deactivated account permits only the reactivation flow, including the second factor when enabled. Reactivation ends that restricted session and requires a fresh sign-in before normal access resumes.
+- Deactivation, reactivation and switching preserve personal and cross-Home isolation; ownership cannot be transferred to a deactivated member.
+
+### US-042 — Review privacy settings and export permitted data
+
+As an account holder or authorized Home member, I want to review privacy settings and export permitted data so I can understand and retrieve information without crossing access boundaries.
+
+**Acceptance checks**
+
+- The privacy dashboard distinguishes account-, Home- and device-scoped settings. Its guided review records progress but does not silently change a setting.
+- After recent reauthentication, I can request all eligible personal data or selected categories and choose which Homes contribute my own Home-specific settings and contributions; other members' private data and unrelated Home records are excluded.
+- A Home export is available only to the Owner or a member explicitly granted `exportHomeData`; module, record and membership access are rechecked while building and downloading it.
+- Exports are prepared by the background job as a private ZIP with a manifest, README and JSON/CSV data. Eligible media is included within the documented 100 MB cap, and omissions make the result visibly partial.
+- A ready export expires after seven days, requires a fresh authorization check before a short-lived download, and is invalidated when relevant access or source data changes. Cancellation, download, expiry and failure states are visible.
+- Personal exports, Home exports and their archives remain isolated by account and Home. Losing a Home or export permission ends access without granting a copy of data that is no longer permitted.
 ## 2. Personal dashboard
 
 ### US-002 — Use Madeora without joining a Home
@@ -485,9 +522,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for security, chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
+## Implementation evidence for security, activity, privacy, lifecycle, chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
 
-The additional workflows are represented by [adult-security browser tests](../tests/e2e/specs/adult-security.spec.ts), [security component tests](../apps/web/src/components/security/security.test.tsx), [account-recovery component tests](../apps/web/src/components/security/recovery.test.tsx), authentication unit tests under `apps/web/src/auth/`, [trusted-device route tests](../apps/web/src/app/api/v1/me/trusted-device/route.test.ts), [adult-security database/RLS tests](../tests/db/rls/adult_security.test.sql), [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [account-switching and lifecycle browser tests](../tests/e2e/specs/account-switching.spec.ts), [privacy-review and export browser tests](../tests/e2e/specs/privacy-lifecycle.spec.ts), activity unit and component tests under `apps/web/src/activity/` and `apps/web/src/components/activity/`, privacy component tests under `apps/web/src/components/privacy/`, [privacy-export job tests](../packages/jobs/src/jobs/privacy-export.test.ts), activity, lifecycle and export database/RLS tests under `tests/db/rls/`, [adult-security browser tests](../tests/e2e/specs/adult-security.spec.ts), [security component tests](../apps/web/src/components/security/security.test.tsx), [account-recovery component tests](../apps/web/src/components/security/recovery.test.tsx), authentication unit tests under `apps/web/src/auth/`, [trusted-device route tests](../apps/web/src/app/api/v1/me/trusted-device/route.test.ts), [adult-security database/RLS tests](../tests/db/rls/adult_security.test.sql), [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 
