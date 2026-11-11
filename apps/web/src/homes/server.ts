@@ -20,8 +20,9 @@ import type { HomeSummary, MyHome } from "./types";
 
 // Memberships come from the `home_memberships` view (S40: it leaves out Homes pending deletion),
 // and their Homes from `homes`. RLS returns only the signed-in person's own memberships and only
-// Homes they belong to; a membership whose Home is not visible is dropped. Two reads instead of an
-// embedded select: PostgREST does not need to infer a relationship through the view.
+// Homes they belong to; a membership whose Home is not visible is dropped. Two reads, run in
+// parallel, instead of an embedded select: PostgREST would have to infer a relationship through
+// the view.
 interface MembershipRow {
   readonly home_id: string | null;
   readonly role: string | null;
@@ -39,18 +40,8 @@ function toMyHome(row: MembershipRow, homes: ReadonlyMap<string, HomeRow>): MyHo
   return { id: home.id, name: home.name, timeZone: home.timezone, role: row.role };
 }
 
-type Supabase = Awaited<ReturnType<typeof createSupabaseServerClient>>;
-
-/** The Homes of these memberships, by id; null when they could not be read. */
-async function homesOf(
-  supabase: Supabase,
-  rows: readonly MembershipRow[],
-): Promise<Map<string, HomeRow> | null> {
-  const ids = rows.flatMap((row) => (row.home_id === null ? [] : [row.home_id]));
-  if (ids.length === 0) return new Map();
-  const { data, error } = await supabase.from("homes").select("id, name, timezone").in("id", ids);
-  if (error) return null;
-  return new Map(data.map((home) => [home.id, home]));
+function byId(rows: readonly HomeRow[]): Map<string, HomeRow> {
+  return new Map(rows.map((home) => [home.id, home]));
 }
 
 export type MyHomes =
@@ -69,18 +60,19 @@ export const listMyHomes = cache(async (): Promise<MyHomes> => {
   if (!identity) return { status: "ok", homes: [] };
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("home_memberships")
-    .select("home_id, role")
-    .eq("user_id", identity.userId);
-  const byId = error ? null : await homesOf(supabase, data);
-  if (error || !byId) {
+  const [memberships, visible] = await Promise.all([
+    supabase.from("home_memberships").select("home_id, role").eq("user_id", identity.userId),
+    supabase.from("homes").select("id, name, timezone"),
+  ]);
+  if (memberships.error || visible.error) {
     // Privacy-safe: the error code only, no account or Home ids.
-    console.error(JSON.stringify({ event: "homes.list_failed", code: error?.code ?? "homes" }));
+    const code = (memberships.error ?? visible.error)?.code ?? null;
+    console.error(JSON.stringify({ event: "homes.list_failed", code }));
     return { status: "unavailable" };
   }
-  const homes = data
-    .map((row) => toMyHome(row, byId))
+  const homesById = byId(visible.data);
+  const homes = memberships.data
+    .map((row) => toMyHome(row, homesById))
     .filter((home): home is MyHome => home !== null)
     .sort((a, b) => collator.compare(a.name, b.name) || a.id.localeCompare(b.id));
   return { status: "ok", homes };
@@ -110,18 +102,21 @@ export const getHomeContext = cache(async (homeId: string): Promise<HomeContextR
   if (!identity) return { status: "not-found" };
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("home_memberships")
-    .select("home_id, role")
-    .eq("home_id", parsedId.data)
-    .eq("user_id", identity.userId)
-    .maybeSingle();
-  const byId = error ? null : await homesOf(supabase, data ? [data] : []);
-  if (error || !byId) {
-    console.error(JSON.stringify({ event: "homes.read_failed", code: error?.code ?? "homes" }));
+  const [own, visible] = await Promise.all([
+    supabase
+      .from("home_memberships")
+      .select("home_id, role")
+      .eq("home_id", parsedId.data)
+      .eq("user_id", identity.userId)
+      .maybeSingle(),
+    supabase.from("homes").select("id, name, timezone").eq("id", parsedId.data),
+  ]);
+  if (own.error || visible.error) {
+    const code = (own.error ?? visible.error)?.code ?? null;
+    console.error(JSON.stringify({ event: "homes.read_failed", code }));
     return { status: "unavailable" };
   }
-  const home = data ? toMyHome(data, byId) : null;
+  const home = own.data ? toMyHome(own.data, byId(visible.data)) : null;
   if (!home) return { status: "not-found" };
 
   // What the Owner granted this person (S12). Only Administrators hold grants; the database drops

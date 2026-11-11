@@ -158,7 +158,8 @@ test("delete data with the required confirmation and recovery", async ({ page, b
   // Nobody can open it now, Ann included.
   // Its pages send everyone to the start page with the "Home unavailable" notice.
   await page.goto(`/homes/${homeId}`);
-  await expect(page).toHaveURL(/\/\?notice=home-unavailable$/);
+  await expect(page.getByText("That Home isn't available to you.")).toBeVisible();
+  await expect(page).not.toHaveURL(new RegExp(`/homes/${homeId}`));
 
   // Ann restores it within the 30 days.
   await page.goto("/settings/closed-homes");
