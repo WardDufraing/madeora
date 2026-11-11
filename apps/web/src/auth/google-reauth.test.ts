@@ -151,6 +151,24 @@ describe("return path after confirming", () => {
     );
   });
 
+  it("returns closing or restoring a Home to its own page only (S40)", () => {
+    expect(confirmedPath("close_home", `/homes/${home}/close`)).toBe(
+      `/homes/${home}/close?confirmed=close_home`,
+    );
+    expect(confirmedPath("close_home", "/settings/closed-homes")).toBe(
+      "/settings/closed-homes?confirmed=close_home",
+    );
+    expect(confirmedPath("close_home", `/homes/${home}/export`)).toBe(
+      "/settings/closed-homes?confirmed=close_home",
+    );
+    expect(confirmedPath("data_export", `/homes/${home}/close`)).toBe(
+      "/settings/privacy/export?confirmed=data_export",
+    );
+    expect(confirmedPath("delete_account")).toBe(
+      "/settings/privacy/delete?confirmed=delete_account",
+    );
+  });
+
   it("refuses anything that could lead elsewhere", () => {
     for (const path of [
       "https://evil.test/homes/x/export",

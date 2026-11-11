@@ -37,6 +37,10 @@ const kindMessage = {
   "account.data_export_ready": "kindAccountDataExportReady",
   "account.data_export_failed": "kindAccountDataExportFailed",
   "account.data_export_expiring": "kindAccountDataExportExpiring",
+  "account.deletion_requested": "kindAccountDeletionRequested",
+  "account.deletion_canceled": "kindAccountDeletionCanceled",
+  "home.deletion_started": "kindHomeDeletionStarted",
+  "home.restored": "kindHomeRestored",
   "recovery.owner_requested": "kindRecoveryOwnerRequested",
   "recovery.owner_review_started": "kindRecoveryOwnerReviewStarted",
   "recovery.owner_approved": "kindRecoveryOwnerApproved",
@@ -259,15 +263,17 @@ export async function NotificationList({
             home: item.homeName ? isolate(item.homeName) : t("homeFallback"),
             date: item.objectionEndsAt
               ? formatDateTime(item.objectionEndsAt, formats)
-              : item.dueDate
-                ? formatTaskDate(item.dueDate, formats)
-                : item.kind === "habit.paused" && item.resumesOn
-                  ? formatTaskDate(item.resumesOn, formats)
-                  : item.kind === "goal.reminder" && item.deadline
-                    ? formatTaskDate(item.deadline, formats)
-                    : item.onDate
-                      ? formatTaskDate(item.onDate, formats)
-                      : "",
+              : item.purgeAt
+                ? formatDateTime(item.purgeAt, formats)
+                : item.dueDate
+                  ? formatTaskDate(item.dueDate, formats)
+                  : item.kind === "habit.paused" && item.resumesOn
+                    ? formatTaskDate(item.resumesOn, formats)
+                    : item.kind === "goal.reminder" && item.deadline
+                      ? formatTaskDate(item.deadline, formats)
+                      : item.onDate
+                        ? formatTaskDate(item.onDate, formats)
+                        : "",
             task: item.taskTitle ? isolate(item.taskTitle) : t("taskFallback"),
             habit: item.habitName ? isolate(item.habitName) : t("habitFallback"),
             goal: item.goalName ? isolate(item.goalName) : t("goalFallback"),

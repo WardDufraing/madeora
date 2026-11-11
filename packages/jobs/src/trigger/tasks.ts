@@ -105,6 +105,9 @@ export const privacyExportBuildTask = jobTask(privacyExportBuild);
 /** How many recurring series one hourly run looks ahead for; the rest wait for the next hour. */
 const REMINDER_ADVANCE_BATCH = 200;
 
+/** How many Homes and accounts one hourly run deletes for good (S40); the rest wait an hour. */
+const DELETION_PURGE_BATCH = 20;
+
 // Recurring occurrences are created lazily, so a reminder days before a due date needs its
 // occurrence to exist in time; the same run tops up habit reminder chains whose next moment is
 // missing (S28), and rolls recurring goal series (S30b): ended periods are finalized and the period
@@ -129,6 +132,8 @@ export const taskReminderAdvance = schedules.task({
     const inactivityReminders = await services.data.sendInactivityReminders(REMINDER_ADVANCE_BATCH);
     // S39: data exports past their 7 days, the warning a day before, and stuck preparations.
     const dataExports = await services.data.sweepDataExports(REMINDER_ADVANCE_BATCH);
+    // S40: Homes and accounts whose 30-day recovery period ended; a few per hour at most.
+    const deletions = await services.data.purgeDueDeletions(DELETION_PURGE_BATCH);
     logger.info("jobs.task_reminder_advance.done", {
       created,
       habits,
@@ -137,6 +142,9 @@ export const taskReminderAdvance = schedules.task({
       activityPurged,
       inactivityReminders,
       dataExports,
+      homesPurged: deletions.homes,
+      accountsPurged: deletions.accounts,
+      purgesFailed: deletions.failed,
     });
     return {
       created,
@@ -146,6 +154,7 @@ export const taskReminderAdvance = schedules.task({
       activityPurged,
       inactivityReminders,
       dataExports,
+      deletions,
     };
   },
 });

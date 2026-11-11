@@ -32,6 +32,9 @@ export const ACCOUNT_CHANGE_ACTIONS = [
   "deactivate_account",
   // S39: requesting and downloading a personal data export.
   "data_export",
+  // S40: account deletion, and closing or restoring a Home.
+  "delete_account",
+  "close_home",
 ] as const;
 export type AccountChangeAction = (typeof ACCOUNT_CHANGE_ACTIONS)[number];
 
@@ -61,12 +64,19 @@ export function sectionOf(action: AccountChangeAction): string {
       return "deactivate";
     case "data_export":
       return "export";
+    case "delete_account":
+      return "delete";
+    case "close_home":
+      return "close";
   }
 }
 
-/** Pages other than the action's own that may ask to be returned to (S39: a Home's export page). */
+/**
+ * Pages other than the action's own that may ask to be returned to: a Home's export page (S39), a
+ * Home's close page and the closed Homes page (S40).
+ */
 const RETURN_PATH =
-  /^\/homes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/export$/;
+  /^(?:\/homes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(?:export|close)|\/settings\/closed-homes)$/;
 
 export function isReturnPath(value: unknown): value is string {
   return typeof value === "string" && RETURN_PATH.test(value);
@@ -77,8 +87,11 @@ export function isReturnPath(value: unknown): value is string {
  * A data export started on a Home's export page returns there (`returnPath`).
  */
 export function confirmedPath(action: AccountChangeAction, returnPath?: string): string {
-  if (action === "data_export" && isReturnPath(returnPath)) {
-    return `${returnPath}?confirmed=${action}`;
+  if (isReturnPath(returnPath)) {
+    const exportPage = returnPath.endsWith("/export");
+    if (action === "data_export" ? exportPage : action === "close_home" && !exportPage) {
+      return `${returnPath}?confirmed=${action}`;
+    }
   }
   // S38: the report lives on Settings › Security › Security activity.
   if (action === "security_report") {
@@ -87,6 +100,9 @@ export function confirmedPath(action: AccountChangeAction, returnPath?: string):
   if (action === "deactivate_account") return `/settings/security/deactivate?confirmed=${action}`;
   // S39: data exports live on Settings › Privacy › Export your data.
   if (action === "data_export") return `/settings/privacy/export?confirmed=${action}`;
+  // S40: account deletion lives on Settings › Privacy; closing and restoring Homes on their pages.
+  if (action === "delete_account") return `/settings/privacy/delete?confirmed=${action}`;
+  if (action === "close_home") return `/settings/closed-homes?confirmed=${action}`;
   return `/settings/security?confirmed=${action}#${sectionOf(action)}`;
 }
 

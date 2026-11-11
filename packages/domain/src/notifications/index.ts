@@ -119,6 +119,11 @@ export const notificationKinds = [
   "account.data_export_ready",
   "account.data_export_failed",
   "account.data_export_expiring",
+  // S40: account deletion and closed Homes (the Home's name, no Home id).
+  "account.deletion_requested",
+  "account.deletion_canceled",
+  "home.deletion_started",
+  "home.restored",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -190,6 +195,13 @@ export function notificationPath(
   // A Home export's notice carries its Home and leads to that Home's export page.
   if (kind.startsWith("account.data_export_")) {
     return homeId ? `/homes/${encodeURIComponent(homeId)}/export` : "/settings/privacy/export";
+  }
+  // S40: a closed Home's notice leads to the closed Homes (its Owner restores it there); a restored
+  // Home's to the person's Homes. The deletion of one's own account to Settings › Privacy.
+  if (kind === "home.deletion_started") return "/settings/closed-homes";
+  if (kind === "home.restored") return "/";
+  if (kind === "account.deletion_requested" || kind === "account.deletion_canceled") {
+    return "/settings/privacy";
   }
   // S37: account security notices lead to Settings › Security.
   if (kind.startsWith("account.")) return "/settings/security";

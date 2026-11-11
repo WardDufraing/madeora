@@ -72,38 +72,6 @@ export type Database = {
           },
         ];
       };
-      home_memberships: {
-        Row: {
-          created_at: string;
-          home_id: string;
-          id: string;
-          role: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          home_id: string;
-          id?: string;
-          role: string;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          home_id?: string;
-          id?: string;
-          role?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "home_memberships_home_id_fkey";
-            columns: ["home_id"];
-            isOneToOne: false;
-            referencedRelation: "homes";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       homes: {
         Row: {
           created_at: string;
@@ -354,7 +322,30 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      home_memberships: {
+        Row: {
+          created_at: string | null;
+          home_id: string | null;
+          id: string | null;
+          role: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string | null;
+          home_id?: string | null;
+          id?: string | null;
+          role?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string | null;
+          home_id?: string | null;
+          id?: string | null;
+          role?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       abandon_my_upload: { Args: { p_file_id: string; p_reason: string }; Returns: boolean };
@@ -798,6 +789,7 @@ export type Database = {
           skipped: number;
         }[];
       };
+      close_home: { Args: { p_confirm_name: string; p_home_id: string }; Returns: string };
       collect_data_export: { Args: { p_category: string; p_export_id: string }; Returns: Json };
       complete_chore_occurrence: {
         Args: { p_contributor: string; p_note?: string; p_occurrence_id: string };
@@ -1938,6 +1930,14 @@ export type Database = {
           membership_id: string;
         }[];
       };
+      home_closure_summary: {
+        Args: { p_home_id: string };
+        Returns: {
+          member_count: number;
+          pending_invitations: number;
+          shared_calendars: number;
+        }[];
+      };
       home_directory: {
         Args: { p_home_id: string };
         Returns: {
@@ -2761,7 +2761,18 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: {
           deactivated_at: string;
+          deletion_purge_after: string;
+          deletion_requested_at: string;
           review_due: boolean;
+        }[];
+      };
+      my_closed_homes: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          home_id: string;
+          home_name: string;
+          purge_after: string;
+          requested_at: string;
         }[];
       };
       my_deactivation_blockers: {
@@ -2913,6 +2924,7 @@ export type Database = {
         }[];
       };
       purge_account_activity: { Args: Record<PropertyKey, never>; Returns: number };
+      purge_due_deletions: { Args: { p_limit?: number }; Returns: Json };
       purge_expired_trash_entry: { Args: { p_entry_id: string }; Returns: string };
       purge_stored_file: { Args: { p_file_id: string }; Returns: string };
       purge_trash_entries: {
@@ -3109,6 +3121,7 @@ export type Database = {
       reorder_chore_categories: { Args: { p_home_id: string; p_ids: string[] }; Returns: string };
       reorder_subtasks: { Args: { p_subtask_ids: string[]; p_task_id: string }; Returns: string };
       reorder_task_lists: { Args: { p_home_id?: string; p_list_ids: string[] }; Returns: string };
+      request_account_deletion: { Args: Record<PropertyKey, never>; Returns: string };
       request_backup_email: { Args: { p_email: string }; Returns: string };
       request_chore_reassignment: {
         Args: {
@@ -3209,6 +3222,7 @@ export type Database = {
       };
       respond_to_sign_in: { Args: { p_event_id: string; p_response: string }; Returns: string };
       restore_google_calendar_event: { Args: { p_exclusion_id: string }; Returns: string };
+      restore_home: { Args: { p_home_id: string }; Returns: undefined };
       restore_meal_occurrence: {
         Args: { p_on: string; p_recurrence_id: string };
         Returns: {

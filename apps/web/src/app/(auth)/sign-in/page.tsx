@@ -40,10 +40,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   if (state.kind === "second-factor") redirect(twoFactorPath(next));
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
 
-  const [t, tAccounts, tLifecycle, googleEnabled] = await Promise.all([
+  const [t, tAccounts, tLifecycle, tDeletion, googleEnabled] = await Promise.all([
     getTranslations("Auth"),
     getTranslations("Accounts"),
     getTranslations("Lifecycle"),
+    getTranslations("Deletion"),
     isGoogleSignInEnabled(),
   ]);
   return (
@@ -62,6 +63,22 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           <AnnounceSignedOut />
           <FormAlert tone="info" className="mb-4">
             {tLifecycle("deactivatedNotice")}
+          </FormAlert>
+        </>
+      ) : null}
+      {params.status === "deletion_requested" ? (
+        <>
+          <AnnounceSignedOut />
+          <FormAlert tone="info" className="mb-4">
+            {tDeletion("requestedNotice")}
+          </FormAlert>
+        </>
+      ) : null}
+      {params.status === "deletion_canceled" ? (
+        <>
+          <AnnounceSignedOut />
+          <FormAlert tone="success" className="mb-4">
+            {tDeletion("canceledNotice")}
           </FormAlert>
         </>
       ) : null}

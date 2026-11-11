@@ -245,7 +245,7 @@ select tests.assert_denied(
 );
 -- The "at least one Owner" check runs at commit. These tests never commit, so they make it
 -- immediate for the statements that should fail.
-set constraints public.home_memberships_owner_required immediate;
+set constraints private.home_memberships_owner_required immediate;
 select tests.assert_denied(
   $$update public.home_memberships set role = 'member'
     where home_id = (select id from ids where name = 'home-a')
@@ -265,7 +265,7 @@ select tests.assert_denied(
   'The account of a Home''s only Owner cannot be deleted until transfer-or-close exists',
   '23514'
 );
-set constraints public.home_memberships_owner_required deferred;
+set constraints private.home_memberships_owner_required deferred;
 
 -- A Home with no Owner membership cannot be committed.
 set constraints public.homes_owner_required immediate;
@@ -301,9 +301,9 @@ select tests.assert_row_count(
 select tests.act_as_owner();
 insert into public.home_memberships (home_id, user_id, role)
   values ((select id from ids where name = 'home-a'), tests.user_id('carol'), 'member');
-set constraints public.home_memberships_owner_required immediate;
+set constraints private.home_memberships_owner_required immediate;
 delete from auth.users where id = tests.user_id('carol');
-set constraints public.home_memberships_owner_required deferred;
+set constraints private.home_memberships_owner_required deferred;
 select tests.assert_true(
   not exists (
     select 1 from public.home_memberships where user_id = '10000000-0000-4000-8000-000000000003'

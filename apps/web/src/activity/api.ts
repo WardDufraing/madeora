@@ -20,10 +20,15 @@ import type {
  *   `409 sole-owner` while a Home the account alone owns has no other Owner
  * - `POST /api/v1/me/reactivate` `{}` → `200 { since }` (the deactivated account's own session)
  * - `POST /api/v1/me/security-review` `{}` → `200 {}`
+ * - `POST /api/v1/me/delete-account` `{ confirmation }` → `200 { purgeAfter }` (S40: every session
+ *   ends, this one too); `409 sole-owner` while the account owns an active Home
+ * - `POST /api/v1/homes/{homeId}/close` `{ name }` → `200 { purgeAfter }` (S40, the Owner only)
+ * - `POST /api/v1/homes/{homeId}/restore` `{}` → `200 {}` (S40, the Owner only, before the deadline);
+ *   `410 expired` once the recovery period has ended
  *
  * Errors: `401 unauthenticated`, `400 invalid`, `403 forbidden` (cross-site),
  * `403 reauthentication-required` (a fresh re-authentication is needed), `404 not-found`,
- * `409 sole-owner`,
+ * `409 sole-owner`, `410 expired`,
  * `413 too-large`, `415 unsupported-media-type`, `429 rate-limited`, `500 failed`.
  */
 export const ACTIVITY_ENDPOINT = "/api/v1/me/activity";
@@ -32,6 +37,15 @@ export const SECURITY_REPORTS_ENDPOINT = "/api/v1/me/security-reports";
 export const DEACTIVATE_ENDPOINT = "/api/v1/me/deactivate";
 export const REACTIVATE_ENDPOINT = "/api/v1/me/reactivate";
 export const SECURITY_REVIEW_ENDPOINT = "/api/v1/me/security-review";
+export const DELETE_ACCOUNT_ENDPOINT = "/api/v1/me/delete-account";
+
+export function homeCloseEndpoint(homeId: string): string {
+  return `/api/v1/homes/${encodeURIComponent(homeId)}/close`;
+}
+
+export function homeRestoreEndpoint(homeId: string): string {
+  return `/api/v1/homes/${encodeURIComponent(homeId)}/restore`;
+}
 
 export type ActivityErrorCode =
   | "forbidden"
@@ -43,6 +57,7 @@ export type ActivityErrorCode =
   | "reauthentication-required"
   | "rate-limited"
   | "sole-owner"
+  | "expired"
   | "failed";
 
 export interface ActivityErrorResponse {
@@ -57,6 +72,7 @@ export type ActivityFailure =
   | "reauthenticate"
   | "rateLimited"
   | "soleOwner"
+  | "expired"
   | "network"
   | "failed";
 
@@ -73,6 +89,7 @@ async function errorOf(response: Response): Promise<ActivityFailure> {
   if (response.status === 404) return "notFound";
   if (response.status === 429) return "rateLimited";
   if (response.status === 409) return "soleOwner";
+  if (response.status === 410) return "expired";
   if (response.status === 403) {
     const body = (await response.json().catch(() => ({}))) as { error?: unknown };
     return body.error === "reauthentication-required" ? "reauthenticate" : "failed";
@@ -162,6 +179,23 @@ export async function deactivateAccount(): Promise<void> {
 export async function reactivateAccount(): Promise<string | null> {
   const body = await jsonOf(await send("POST", REACTIVATE_ENDPOINT, {}));
   return typeof body.since === "string" ? body.since : null;
+}
+
+/** S40: asks for the account's deletion; returns the permanent-deletion deadline (ISO). */
+export async function requestAccountDeletion(confirmation: string): Promise<string | null> {
+  const body = await jsonOf(await send("POST", DELETE_ACCOUNT_ENDPOINT, { confirmation }));
+  return typeof body.purgeAfter === "string" ? body.purgeAfter : null;
+}
+
+/** S40: closes a Home (its Owner); returns the permanent-deletion deadline (ISO). */
+export async function closeHome(homeId: string, name: string): Promise<string | null> {
+  const body = await jsonOf(await send("POST", homeCloseEndpoint(homeId), { name }));
+  return typeof body.purgeAfter === "string" ? body.purgeAfter : null;
+}
+
+/** S40: restores a closed Home before its deadline (its Owner). */
+export async function restoreHome(homeId: string): Promise<void> {
+  await send("POST", homeRestoreEndpoint(homeId), {});
 }
 
 export async function completeSecurityReview(): Promise<void> {

@@ -39,8 +39,8 @@ export async function generateMetadata({ params }: LeavePageProps): Promise<Meta
  * Leaving a Home (S12; spec "Confirmed voluntary Home departure", "Confirmed guided
  * transfer-or-close for departing Home Owner"). Members and Administrators see the consequences and
  * leave after one confirmation. The Owner gets the guided transfer-or-close page instead: choose a
- * member to hand ownership to (they must accept), or close the Home, which arrives with Home
- * deletion (S40). The Owner can never leave from here.
+ * member to hand ownership to (they must accept), or close the Home (S40: its own page, with a
+ * 30-day recovery period). The Owner can never leave from here.
  */
 export default async function LeavePage({ params }: LeavePageProps) {
   const { userId } = await requireIdentity();
@@ -165,7 +165,14 @@ export default async function LeavePage({ params }: LeavePageProps) {
           )}
         </Card>
         <Card title={t("ownerCloseTitle")}>
-          <p className="text-body text-fg-muted">{t("ownerCloseText")}</p>
+          <p className="mb-3 text-body text-fg-muted">{t("ownerCloseText")}</p>
+          <Link
+            href={`/homes/${home.id}/close`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="owner-close-link"
+          >
+            {t("ownerCloseLink")}
+          </Link>
         </Card>
       </div>
     </>

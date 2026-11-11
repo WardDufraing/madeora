@@ -8,6 +8,7 @@ import type { Json } from "@madeora/database";
 import { z } from "zod";
 
 import type {
+  DeletionPurge,
   EmailLanguage,
   EmailRecordStatus,
   InvitationEmailRead,
@@ -463,6 +464,12 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return data;
     },
 
+    async purgeDueDeletions(limit) {
+      const { data, error } = await client.rpc("purge_due_deletions", { p_limit: limit });
+      if (error) throw new JobStoreError("purge_due_deletions", error.code);
+      return deletionPurge(data);
+    },
+
     async getStorageObjectDeletion(deletionId) {
       const { data, error } = await client.rpc("get_storage_object_deletion", {
         p_deletion_id: deletionId,
@@ -481,4 +488,17 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return data;
     },
   };
+}
+
+/** The purge's counts, checked: the database returns them as JSON. */
+const deletionPurgeSchema = z.object({
+  homes: z.int().min(0),
+  accounts: z.int().min(0),
+  failed: z.int().min(0),
+});
+
+function deletionPurge(data: unknown): DeletionPurge {
+  const parsed = deletionPurgeSchema.safeParse(data);
+  if (!parsed.success) throw new JobStoreError("purge_due_deletions", "unexpected_result");
+  return parsed.data;
 }

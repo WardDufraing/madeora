@@ -171,7 +171,8 @@ describe("notificationKinds", () => {
           name.endsWith("_adult_security.sql") ||
           name.endsWith("_activity_history.sql") ||
           name.endsWith("_account_lifecycle.sql") ||
-          name.endsWith("_privacy_exports.sql"),
+          name.endsWith("_privacy_exports.sql") ||
+          name.endsWith("_account_home_deletion.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -192,6 +193,8 @@ describe("notificationKinds", () => {
       ...[...sql.matchAll(/'security', '(google_calendar\.[a-z_]+)'/g)].map((m) => m[1]),
       // S37: account security notices.
       ...[...sql.matchAll(/'security', '(account\.[a-z_]+)'/g)].map((m) => m[1]),
+      // S40: a closed Home's notices share the prefix with its audit actions.
+      ...[...sql.matchAll(/'security', '(home\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/habit_notify_pause\(v_habit, '(habit\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());

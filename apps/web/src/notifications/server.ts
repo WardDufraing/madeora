@@ -150,8 +150,15 @@ export const listNotifications = cache(async (): Promise<Loaded<readonly Notific
       id: row.id,
       kind: row.kind,
       homeId: row.home_id,
-      homeName: isRecord(home) && typeof home.name === "string" ? home.name : null,
+      // S40: a notice about a closed Home has no Home id (nobody can open it); it carries the name.
+      homeName:
+        isRecord(home) && typeof home.name === "string"
+          ? home.name
+          : typeof params.homeName === "string"
+            ? params.homeName
+            : null,
       objectionEndsAt: typeof params.objectionEndsAt === "string" ? params.objectionEndsAt : null,
+      purgeAt: typeof params.purgeAt === "string" ? params.purgeAt : null,
       decision: oneOf(notificationDecisions, params.decision),
       reason: oneOf(["auto", "manager"] as const, params.reason),
       occurrenceId: typeof params.occurrenceId === "string" ? params.occurrenceId : null,

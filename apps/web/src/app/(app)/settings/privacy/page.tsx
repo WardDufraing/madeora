@@ -25,8 +25,9 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function PrivacyPage() {
   await requireIdentity();
-  const [t, overview, review] = await Promise.all([
+  const [t, tDeletion, overview, review] = await Promise.all([
     getTranslations("Privacy"),
+    getTranslations("Deletion"),
     getPrivacyOverview(),
     getPrivacyReview(),
   ]);
@@ -68,6 +69,24 @@ export default async function PrivacyPage() {
               >
                 {t("exportLink")}
               </Link>
+            ) : null}
+            {step === "data_rights" ? (
+              <p className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                <Link
+                  href="/settings/closed-homes"
+                  className="text-body font-medium text-accent-fg underline"
+                  data-testid="privacy-closed-homes-link"
+                >
+                  {tDeletion("closedLink")}
+                </Link>
+                <Link
+                  href="/settings/privacy/delete"
+                  className="text-body font-medium text-accent-fg underline"
+                  data-testid="privacy-delete-account-link"
+                >
+                  {tDeletion("accountLink")}
+                </Link>
+              </p>
             ) : null}
           </Card>
         ))}

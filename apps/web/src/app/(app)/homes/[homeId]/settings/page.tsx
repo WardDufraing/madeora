@@ -39,12 +39,13 @@ export async function generateMetadata({ params }: HomeSettingsPageProps): Promi
 export default async function HomeSettingsPage({ params }: HomeSettingsPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tStorage, tTrash, tPrivacy, exportAccess] = await Promise.all([
+  const [context, t, tStorage, tTrash, tPrivacy, tDeletion, exportAccess] = await Promise.all([
     loadHomeForPage(homeId),
     getTranslations("Homes"),
     getTranslations("Storage"),
     getTranslations("Trash"),
     getTranslations("Privacy"),
+    getTranslations("Deletion"),
     getHomeExportAccess(homeId),
   ]);
   if (!context) {
@@ -114,6 +115,19 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
             data-testid="home-export-link"
           >
             {tPrivacy("homeExportLink")}
+          </Link>
+        </Card>
+      ) : null}
+      {/* Closing the Home (S40): the Owner only; the page and the database check again. */}
+      {membership.role === "owner" ? (
+        <Card title={tDeletion("closeCardTitle")} className="mt-6 max-w-2xl">
+          <p className="mb-3 text-body text-fg-muted">{tDeletion("closeCardText")}</p>
+          <Link
+            href={`/homes/${home.id}/close`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="home-close-link"
+          >
+            {tDeletion("closeCardLink")}
           </Link>
         </Card>
       ) : null}

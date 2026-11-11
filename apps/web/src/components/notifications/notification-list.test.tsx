@@ -41,6 +41,7 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     homeId: HOME_ID,
     homeName: "Thuis",
     objectionEndsAt: null,
+    purgeAt: null,
     decision: null,
     reason: null,
     occurrenceId: null,

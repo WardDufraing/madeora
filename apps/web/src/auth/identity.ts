@@ -22,8 +22,9 @@ export interface VerifiedIdentity {
  * - `second-factor`: a valid sign-in of an account with two-factor sign-in that has not passed
  *   the authenticator code yet (S37), and is not a session of a trusted browser. It may only use
  *   the two-factor page.
- * - `deactivated`: a fully signed-in session of an account its holder deactivated (S38). It may
- *   only use the reactivation page; the database refuses everything else for it.
+ * - `deactivated`: a fully signed-in session of an account its holder deactivated (S38) or asked to
+ *   delete (S40; `deletionPurgeAfter` then says until when it can be recovered). It may only use
+ *   the reactivation page; the database refuses everything else for it.
  * - `signed-in`: everything else.
  *
  * The session cookie is only a claim: `auth.getUser(token)` asks Supabase Auth to check the access
@@ -34,7 +35,11 @@ export interface VerifiedIdentity {
 export type AuthState =
   | { readonly kind: "signed-out" }
   | { readonly kind: "second-factor"; readonly user: User }
-  | { readonly kind: "deactivated"; readonly user: User }
+  | {
+      readonly kind: "deactivated";
+      readonly user: User;
+      readonly deletionPurgeAfter: string | null;
+    }
   | { readonly kind: "signed-in"; readonly user: User };
 
 export const getAuthState = cache(async (): Promise<AuthState> => {
@@ -55,8 +60,13 @@ export const getAuthState = cache(async (): Promise<AuthState> => {
   // S38: a deactivated account. When the state cannot be read, the database's own request check
   // still refuses the session everything, so "signed-in" never grants access by itself.
   const account = await supabase.rpc("my_account_state");
-  if (!account.error && account.data[0]?.deactivated_at) {
-    return { kind: "deactivated", user: data.user };
+  const state = account.error ? undefined : account.data[0];
+  if (state?.deactivated_at) {
+    return {
+      kind: "deactivated",
+      user: data.user,
+      deletionPurgeAfter: state.deletion_purge_after,
+    };
   }
   return { kind: "signed-in", user: data.user };
 });
