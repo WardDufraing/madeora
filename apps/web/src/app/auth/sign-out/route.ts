@@ -2,7 +2,7 @@ import { getPublicEnv } from "@madeora/config/env/public";
 import { cookies } from "next/headers";
 
 import { getAuthState } from "@/auth/identity";
-import { CHILD_SIGN_IN_PATH, HOUSEHOLD_SIGN_IN_PATH } from "@/auth/redirects";
+import { CHILD_SIGN_IN_PATH, DISPLAY_PATH, HOUSEHOLD_SIGN_IN_PATH } from "@/auth/redirects";
 import { isSameOriginRequest } from "@/auth/same-origin";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
@@ -18,13 +18,24 @@ import { createSupabaseServerClient } from "@/auth/supabase-server";
  * S42: a child's session is ended in the database first (so its token stops working even if
  * Supabase Auth cannot be reached), and `then=child` / `then=household` lead back to the child
  * sign-in page or the device's PIN screen.
+ *
+ * S43: a Household Display is not signed out here. Leaving display mode needs a Home manager (spec:
+ * exit-from-kiosk behind strong verification), who revokes the display from their own session; a
+ * passer-by posting this form only lands back on the display.
  */
 export async function POST(request: Request): Promise<Response> {
   if (!isSameOriginRequest(request.headers, getPublicEnv().NEXT_PUBLIC_APP_URL)) {
     return new Response(null, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
   const supabase = await createSupabaseServerClient();
-  if ((await getAuthState()).kind === "child") {
+  const state = await getAuthState();
+  if (state.kind === "display") {
+    return new Response(null, {
+      status: 303,
+      headers: { Location: DISPLAY_PATH, "Cache-Control": "no-store" },
+    });
+  }
+  if (state.kind === "child") {
     const ended = await supabase.rpc("child_end_session");
     if (ended.error && ended.error.code !== "42501") {
       console.error(JSON.stringify({ event: "child_session.end_failed", code: ended.error.code }));
@@ -66,6 +77,7 @@ async function destinationOf(request: Request): Promise<string> {
   if (then === "accounts") return "/accounts?status=removed";
   if (then === "child") return `${CHILD_SIGN_IN_PATH}?status=signed-out`;
   if (then === "household") return HOUSEHOLD_SIGN_IN_PATH;
+  if (then === "display") return DISPLAY_PATH;
   if (then === "switch") {
     const account = form?.get("account");
     return typeof account === "string" && UUID.test(account)

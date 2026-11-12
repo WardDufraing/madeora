@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: HomeSettingsPageProps): Promi
 export default async function HomeSettingsPage({ params }: HomeSettingsPageProps) {
   const { userId } = await requireIdentity();
   const { homeId } = await params;
-  const [context, t, tStorage, tTrash, tPrivacy, tDeletion, tCopies, exportAccess] =
+  const [context, t, tStorage, tTrash, tPrivacy, tDeletion, tCopies, tDisplays, exportAccess] =
     await Promise.all([
       loadHomeForPage(homeId),
       getTranslations("Homes"),
@@ -58,6 +58,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
       getTranslations("Privacy"),
       getTranslations("Deletion"),
       getTranslations("HomeCopies"),
+      getTranslations("Displays"),
       getHomeExportAccess(homeId),
     ]);
   if (!context) {
@@ -139,6 +140,19 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
               />
             </div>
           )}
+        </Card>
+      ) : null}
+      {/* Household Displays (S43): the same managers; the page and the database check again. */}
+      {permissions["home.updateSettings"] ? (
+        <Card title={tDisplays("title")} className="mt-6 max-w-2xl">
+          <p className="mb-3 text-body text-fg-muted">{tDisplays("settingsCardText")}</p>
+          <Link
+            href={`/homes/${home.id}/displays`}
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="home-displays-link"
+          >
+            {tDisplays("settingsLink")}
+          </Link>
         </Card>
       ) : null}
       {/* The Home's trash: every member may open it and sees what they may (S16). */}

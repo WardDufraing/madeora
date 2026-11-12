@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getAuthState } from "@/auth/identity";
-import { CHILD_HOME_PATH, REACTIVATE_PATH, safeNextPath } from "@/auth/redirects";
+import { CHILD_HOME_PATH, DISPLAY_PATH, REACTIVATE_PATH, safeNextPath } from "@/auth/redirects";
 import { describeDevice } from "@/auth/sessions";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { trustCookieName } from "@/auth/trusted-device";
@@ -37,6 +37,7 @@ export default async function TwoFactorPage({ searchParams }: TwoFactorPageProps
   if (state.kind === "signed-out") redirect("/sign-in");
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
   if (state.kind === "child") redirect(CHILD_HOME_PATH);
+  if (state.kind === "display") redirect(DISPLAY_PATH);
   const factor = verifiedTotpFactor(state.user);
   if (!factor) redirect(next);
 

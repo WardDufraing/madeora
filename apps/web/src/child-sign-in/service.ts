@@ -100,8 +100,11 @@ function log(event: string, code?: string): void {
   console.error(JSON.stringify({ event, code: code ?? null }));
 }
 
-/** The `session_id` claim of an access token Supabase Auth has just returned to this server. */
-function sessionIdOf(accessToken: string): string | null {
+/**
+ * The `session_id` claim of an access token Supabase Auth has just returned to this server (also
+ * used by S43 display pairing).
+ */
+export function sessionIdOf(accessToken: string): string | null {
   const payload = accessToken.split(".")[1];
   if (!payload) return null;
   try {

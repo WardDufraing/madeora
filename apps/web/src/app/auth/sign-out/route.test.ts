@@ -120,4 +120,29 @@ describe("POST /auth/sign-out", () => {
     expect(rpc).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("/sign-in/child?status=signed-out");
   });
+
+  it("never signs a Household Display out: it goes straight back to its screen (S43)", async () => {
+    authState.kind = "display";
+    const response = await post({ origin: "https://madeora.example", host: "madeora.example" });
+    expect(signOut).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/display");
+  });
+
+  it("then=display leads back to the pairing screen after someone signs out there", async () => {
+    const response = await POST(
+      new Request("http://localhost:3000/auth/sign-out", {
+        method: "POST",
+        headers: {
+          origin: "https://madeora.example",
+          host: "madeora.example",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: "then=display",
+      }),
+    );
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(response.headers.get("location")).toBe("/display");
+  });
 });
