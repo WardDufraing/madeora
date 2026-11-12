@@ -3141,6 +3141,13 @@ export type Database = {
           home_name: string;
         }[];
       };
+      my_device_pin: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          has_pin: boolean;
+          locked_until: string;
+        }[];
+      };
       my_notification_channels: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -3983,6 +3990,7 @@ export type Database = {
         Returns: string;
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
+      set_my_device_pin: { Args: { p_hash: string }; Returns: string };
       set_my_goal_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_habit_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_home_avatar: { Args: { p_file_id?: string; p_home_id: string }; Returns: string };
@@ -4066,6 +4074,10 @@ export type Database = {
         Args: { p_every_sign_in: boolean; p_new_device: boolean };
         Returns: undefined;
       };
+      set_shared_device_pin_rule: {
+        Args: { p_home_id: string; p_require_pin: boolean };
+        Returns: string;
+      };
       set_shopping_item_completed: {
         Args: { p_completed: boolean; p_item_id: string; p_seen_completed_at?: string };
         Returns: {
@@ -4146,6 +4158,32 @@ export type Database = {
       share_recipe: {
         Args: { p_can_edit: boolean; p_home_id: string; p_recipe_id: string };
         Returns: string;
+      };
+      shared_device_attempt: {
+        Args: {
+          p_client_key: string;
+          p_device_hash: string;
+          p_membership_id: string;
+          p_occurrence_id: string;
+          p_pin: boolean;
+        };
+        Returns: {
+          action_id: string;
+          check_id: string;
+          locked_until: string;
+          outcome: string;
+          pin_hash: string;
+        }[];
+      };
+      shared_device_board: { Args: { p_device_hash: string }; Returns: Json };
+      shared_device_pin_rule: { Args: { p_home_id: string }; Returns: boolean };
+      shared_device_undo: { Args: { p_action_id: string; p_device_hash: string }; Returns: string };
+      shared_device_verified: {
+        Args: { p_check_id: string; p_device_hash: string };
+        Returns: {
+          action_id: string;
+          outcome: string;
+        }[];
       };
       shopping_item_history: {
         Args: { p_item_id: string };

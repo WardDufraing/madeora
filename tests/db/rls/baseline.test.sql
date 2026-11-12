@@ -166,7 +166,12 @@ select tests.assert_true(
       'public.child_pin_attempt(text,uuid,text)',
       'public.child_sign_in_verified(uuid)',
       'public.child_sign_in_complete(uuid,uuid)',
-      'public.household_device_sign_in(text)'
+      'public.household_device_sign_in(text)',
+      -- S42 part 2: chores completed on an approved household device.
+      'public.shared_device_board(text)',
+      'public.shared_device_attempt(text,uuid,uuid,boolean,text)',
+      'public.shared_device_verified(text,uuid)',
+      'public.shared_device_undo(text,uuid)'
     ]::regprocedure[]) as s(signature)
     where has_function_privilege('authenticated', s.signature, 'execute')
   ),
