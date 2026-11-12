@@ -251,6 +251,10 @@ export function outcomeFailure(outcome: string): Response {
       return failure(409, "already-linked");
     case "rate_limited":
       return failure(429, "rate-limited");
+    case "taken":
+      return failure(409, "username-taken");
+    case "username_required":
+      return failure(409, "username-required");
     default:
       return failure(500, "failed");
   }

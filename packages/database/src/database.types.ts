@@ -103,7 +103,10 @@ export type Database = {
           child_user_id: string;
           home_id: string;
           overrides: NonNullable<Json>;
+          password_sign_in: boolean;
+          pin_sign_in: boolean;
           preset: string;
+          sign_in_updated_at: string | null;
           updated_at: string;
           updated_by: string | null;
         };
@@ -111,7 +114,10 @@ export type Database = {
           child_user_id: string;
           home_id: string;
           overrides?: NonNullable<Json>;
+          password_sign_in?: boolean;
+          pin_sign_in?: boolean;
           preset?: string;
+          sign_in_updated_at?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -119,7 +125,10 @@ export type Database = {
           child_user_id?: string;
           home_id?: string;
           overrides?: NonNullable<Json>;
+          password_sign_in?: boolean;
+          pin_sign_in?: boolean;
           preset?: string;
+          sign_in_updated_at?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -640,6 +649,13 @@ export type Database = {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
       };
+      approve_household_device: {
+        Args: { p_home_id: string; p_label: string; p_secret_hash: string };
+        Returns: {
+          device_id: string;
+          outcome: string;
+        }[];
+      };
       archive_goal: {
         Args: { p_archived: boolean; p_expected_revision: number; p_id: string };
         Returns: {
@@ -930,9 +946,69 @@ export type Database = {
         }[];
       };
       check_request: { Args: Record<PropertyKey, never>; Returns: undefined };
+      child_end_session: { Args: Record<PropertyKey, never>; Returns: undefined };
       child_link_code_state: {
         Args: { p_child_membership_id: string; p_home_id: string };
         Returns: string;
+      };
+      child_me: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          accent_color: string;
+          capabilities: string[];
+          display_name: string;
+          home_id: string;
+          home_name: string;
+          method: string;
+          session_expires_at: string;
+        }[];
+      };
+      child_password_attempt: {
+        Args: { p_client_key: string; p_username: string };
+        Returns: {
+          attempt_id: string;
+          locked_until: string;
+          outcome: string;
+          password_hash: string;
+        }[];
+      };
+      child_pin_attempt: {
+        Args: { p_child_membership_id: string; p_client_key: string; p_device_hash: string };
+        Returns: {
+          attempt_id: string;
+          locked_until: string;
+          outcome: string;
+          pin_hash: string;
+        }[];
+      };
+      child_sign_in_complete: {
+        Args: { p_attempt_id: string; p_session_id: string };
+        Returns: {
+          expires_at: string;
+          outcome: string;
+        }[];
+      };
+      child_sign_in_settings: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: {
+          active_sessions: number;
+          can_manage_identity: boolean;
+          has_password: boolean;
+          has_pin: boolean;
+          password_locked_until: string;
+          password_sign_in: boolean;
+          pin_locked_until: string;
+          pin_sign_in: boolean;
+          username: string;
+        }[];
+      };
+      child_sign_in_verified: {
+        Args: { p_attempt_id: string };
+        Returns: {
+          alias_email: string;
+          child_user_id: string;
+          outcome: string;
+        }[];
       };
       claim_chore_occurrence: {
         Args: { p_occurrence_id: string };
@@ -957,6 +1033,10 @@ export type Database = {
         }[];
       };
       claim_my_upload: { Args: { p_file_id: string }; Returns: string };
+      clear_child_credential: {
+        Args: { p_child_membership_id: string; p_home_id: string; p_kind: string };
+        Returns: string;
+      };
       clear_completed_shopping_items: {
         Args: { p_item_ids: string[]; p_list_id: string };
         Returns: {
@@ -1833,6 +1913,13 @@ export type Database = {
           outcome: string;
         }[];
       };
+      end_child_sign_ins: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: {
+          ended: number;
+          outcome: string;
+        }[];
+      };
       expire_upload: { Args: { p_file_id: string }; Returns: string };
       fail_data_export: { Args: { p_code: string; p_export_id: string }; Returns: boolean };
       fail_job_outbox: {
@@ -2186,6 +2273,17 @@ export type Database = {
           role: string;
         }[];
       };
+      home_household_devices: {
+        Args: { p_current_hash: string; p_home_id: string };
+        Returns: {
+          approved_at: string;
+          approved_by_membership_id: string;
+          device_id: string;
+          is_this_device: boolean;
+          label: string;
+          last_used_at: string;
+        }[];
+      };
       home_ownership_recovery_status: {
         Args: { p_home_id: string };
         Returns: {
@@ -2219,6 +2317,18 @@ export type Database = {
           reserved_bytes: number;
           used_bytes: number;
           warning_level: number;
+        }[];
+      };
+      household_device_sign_in: {
+        Args: { p_device_hash: string };
+        Returns: {
+          child_accent_color: string;
+          child_membership_id: string;
+          child_name: string;
+          device_id: string;
+          device_label: string;
+          home_id: string;
+          home_name: string;
         }[];
       };
       is_madeora_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -3584,6 +3694,10 @@ export type Database = {
         Args: { p_home_id: string; p_invitation_id: string };
         Returns: string;
       };
+      revoke_household_device: {
+        Args: { p_device_id: string; p_home_id: string };
+        Returns: string;
+      };
       revoke_my_session: { Args: { p_report?: boolean; p_session_id: string }; Returns: boolean };
       revoke_trusted_device: { Args: { p_device_id: string }; Returns: boolean };
       roll_goal_periods: { Args: { p_limit?: number }; Returns: number };
@@ -3667,6 +3781,10 @@ export type Database = {
           outcome: string;
         }[];
       };
+      set_child_credential: {
+        Args: { p_child_membership_id: string; p_hash: string; p_home_id: string; p_kind: string };
+        Returns: string;
+      };
       set_child_presentation: {
         Args: {
           p_accent_color: string;
@@ -3674,6 +3792,19 @@ export type Database = {
           p_display_name: string;
           p_home_id: string;
         };
+        Returns: string;
+      };
+      set_child_sign_in_access: {
+        Args: {
+          p_child_membership_id: string;
+          p_home_id: string;
+          p_password_sign_in: boolean;
+          p_pin_sign_in: boolean;
+        };
+        Returns: string;
+      };
+      set_child_username: {
+        Args: { p_child_membership_id: string; p_home_id: string; p_username: string };
         Returns: string;
       };
       set_chore_claim_policy: {
@@ -4205,6 +4336,10 @@ export type Database = {
         }[];
       };
       undo_habit_checkin: { Args: { p_checkin_id: string; p_reason?: string }; Returns: Json };
+      unlock_child_sign_in: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: string;
+      };
       unshare_dashboard_template: {
         Args: { p_home_id: string; p_template_id: string };
         Returns: string;

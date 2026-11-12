@@ -116,6 +116,20 @@ describe("child actions", () => {
     expect(decideChildAction(secondary, "child.link.issue")).toBe(false);
   });
 
+  it("keeps independent sign-in decisions with the primary guardian (S42)", () => {
+    const primary = facts({ guardianRole: "primary" });
+    const secondary = facts({ guardianRole: "secondary" });
+    expect(decideChildAction(primary, "child.signIn.manage")).toBe(true);
+    expect(decideChildAction(primary, "child.signIn.assist")).toBe(true);
+    expect(decideChildAction(secondary, "child.signIn.manage")).toBe(false);
+    expect(decideChildAction(secondary, "child.signIn.assist")).toBe(true);
+    for (const homeRole of ["owner", "administrator", "member"] as const) {
+      const notGuardian = facts({ homeRole, guardianRole: null });
+      expect(decideChildAction(notGuardian, "child.signIn.manage")).toBe(false);
+      expect(decideChildAction(notGuardian, "child.signIn.assist")).toBe(false);
+    }
+  });
+
   it("gives Home managers no guardian authority", () => {
     for (const homeRole of ["owner", "administrator"] as const) {
       const manager = facts({ homeRole });

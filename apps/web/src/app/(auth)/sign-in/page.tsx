@@ -5,7 +5,13 @@ import { redirect } from "next/navigation";
 
 import { getAuthState } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
-import { REACTIVATE_PATH, safeNextPath, twoFactorPath } from "@/auth/redirects";
+import {
+  CHILD_HOME_PATH,
+  CHILD_SIGN_IN_PATH,
+  REACTIVATE_PATH,
+  safeNextPath,
+  twoFactorPath,
+} from "@/auth/redirects";
 import { RememberDeviceChoice } from "@/components/account/remember-device-choice";
 import { SigningInAs } from "@/components/account/signing-in-as";
 import { AnnounceSignedOut } from "@/components/auth/announce-signed-out";
@@ -39,6 +45,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   // Signed in with the first step only: the second step comes next (S37).
   if (state.kind === "second-factor") redirect(twoFactorPath(next));
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
+  if (state.kind === "child") redirect(CHILD_HOME_PATH);
 
   const [t, tAccounts, tLifecycle, tDeletion, googleEnabled] = await Promise.all([
     getTranslations("Auth"),
@@ -122,6 +129,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </Link>
         <Link href="/forgot-password" className="font-medium text-accent-fg underline">
           {t("forgotPasswordLink")}
+        </Link>
+        <Link href={CHILD_SIGN_IN_PATH} className="font-medium text-accent-fg underline">
+          {t("childSignInLink")}
         </Link>
         <p className="text-fg-muted">
           {t("noAccount")}{" "}

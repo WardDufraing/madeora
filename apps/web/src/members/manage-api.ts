@@ -78,6 +78,8 @@ export type MemberErrorCode =
   | "invalid-code"
   | "already-linked"
   | "rate-limited"
+  | "username-taken"
+  | "username-required"
   | "failed";
 
 export interface MemberErrorResponse {
@@ -123,6 +125,8 @@ export type MemberFailure =
   | "invalidCode"
   | "alreadyLinked"
   | "rateLimited"
+  | "usernameTaken"
+  | "usernameRequired"
   | "network"
   | "failed";
 
@@ -154,6 +158,8 @@ const failureByCode: Partial<Record<MemberErrorCode, MemberFailure>> = {
   "invalid-code": "invalidCode",
   "already-linked": "alreadyLinked",
   "rate-limited": "rateLimited",
+  "username-taken": "usernameTaken",
+  "username-required": "usernameRequired",
 };
 
 async function send(method: "POST" | "PATCH" | "PUT", url: string, body: unknown) {

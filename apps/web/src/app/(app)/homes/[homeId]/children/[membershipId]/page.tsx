@@ -7,6 +7,8 @@ import { notFound, redirect } from "next/navigation";
 import { DEFAULT_ACCENT } from "@/accent/accent";
 import { suggestDistinctColors } from "@/accent/similarity";
 import { requireIdentity } from "@/auth/identity";
+import { getChildSignInSettings } from "@/child-sign-in/server";
+import { ChildSignInSettings } from "@/components/child-sign-in/child-sign-in-settings";
 import { ChildAccessForm } from "@/components/children/child-access-form";
 import { ChildGuardians } from "@/components/children/child-guardians";
 import { ChildPresentationForm } from "@/components/children/child-presentation-form";
@@ -122,9 +124,19 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
     member.accentColor && member.membershipId !== child.membershipId ? [member.accentColor] : [],
   );
   const suggestedColor = suggestDistinctColors(otherColors, 1)[0]?.color ?? DEFAULT_ACCENT;
-  const linkExpiry = can["child.link.issue"]
-    ? await getChildLinkCodeExpiry(home.id, child.membershipId)
+  const linkExpiryRead = can["child.link.issue"]
+    ? getChildLinkCodeExpiry(home.id, child.membershipId)
     : null;
+  const signInRead = child.myGuardianRole
+    ? getChildSignInSettings(home.id, child.membershipId)
+    : null;
+  const [linkExpiry, signIn, tSignIn] = await Promise.all([
+    linkExpiryRead,
+    signInRead,
+    getTranslations("ChildSignIn"),
+  ]);
+  const lockText = (value: string | null) =>
+    value === null || value === "guardian" ? value : formatDateTime(value, formats);
 
   return (
     <>
@@ -192,6 +204,27 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
             <p className="text-body text-fg-muted">{t("accessGuardiansOnly")}</p>
           </Card>
         )}
+        {signIn && child.myGuardianRole ? (
+          <Card title={tSignIn("guardianTitle")} headingLevel={2}>
+            <ChildSignInSettings
+              homeId={home.id}
+              membershipId={child.membershipId}
+              childName={name}
+              isPrimary={child.myGuardianRole === "primary"}
+              settings={{
+                username: signIn.username,
+                hasPassword: signIn.hasPassword,
+                hasPin: signIn.hasPin,
+                passwordSignIn: signIn.passwordSignIn,
+                pinSignIn: signIn.pinSignIn,
+                passwordLock: lockText(signIn.passwordLockedUntil),
+                pinLock: lockText(signIn.pinLockedUntil),
+                activeSessions: signIn.activeSessions,
+                canManageIdentity: signIn.canManageIdentity,
+              }}
+            />
+          </Card>
+        ) : null}
         {can["child.presentation.change"] ? (
           <Card title={t("presentationTitle")} headingLevel={2}>
             <ChildPresentationForm

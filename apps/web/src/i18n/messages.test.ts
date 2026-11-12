@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { accentPalette } from "@madeora/design-tokens";
+import { childCapabilities } from "@madeora/domain/permissions";
 import { createTranslator } from "next-intl";
 
 import {
@@ -308,6 +309,30 @@ describe("message dictionaries", () => {
         ...withPrefix("field_", googleFields),
         ...changeStates.flatMap((state) => withPrefix(`changeRow_${state}_`, changeActions)),
         ...withPrefix("hidden_", ["event", "series", "following"]),
+      ],
+      // S42: the guardian's three secret forms, results and field errors by their codes, and the
+      // child's capabilities by their ids.
+      ChildSignIn: [
+        ...["username", "password", "pin"].flatMap((kind) =>
+          ["FieldLabel", "FieldHint", "Save"].map((part) => kind + part),
+        ),
+        ...withPrefix("done.", [
+          "username",
+          "password",
+          "pin",
+          "access",
+          "cleared",
+          "unlocked",
+          "ended",
+        ]),
+        ...withPrefix("errors.", [
+          "usernameInvalid",
+          "passwordTooShort",
+          "passwordTooLong",
+          "pinFormat",
+          "pinTooSimple",
+        ]),
+        ...withPrefix("capability.", childCapabilities),
       ],
       // S34: an owner's Google event state on calendar lists.
       Calendar: withPrefix("googleState_", ["saving", "deleting", "conflict", "failed"]),
