@@ -42,7 +42,13 @@ export function DisplayPairing() {
         return;
       }
       setScreen(next);
-      if (next.status === "pending") {
+      if (next.status === "signed-in") {
+        // A session appeared in this browser, for example this display's own session once Supabase
+        // Auth answers again after an outage: reload, and the page shows whatever it is.
+        timer = setTimeout(() => {
+          window.location.replace(DISPLAY_PATH);
+        }, RETRY_MS);
+      } else if (next.status === "pending") {
         timer = setTimeout(() => {
           void ask(false);
         }, POLL_MS);
@@ -82,14 +88,13 @@ export function DisplayPairing() {
         ) : screen.status === "pending" ? (
           <>
             <p className="text-helper text-fg-muted">{t("pairingCodeLabel")}</p>
-            <p
-              className="rounded-card border border-line px-6 py-4 font-mono text-[2.5rem] leading-none font-semibold tracking-[0.2em] text-fg"
-              data-testid="pairing-code"
-              aria-label={t("pairingCodeSpoken", {
-                code: screen.code.split("").join(" "),
-              })}
-            >
-              {formatPairingCode(screen.code)}
+            <p className="rounded-card border border-line px-6 py-4 font-mono text-[2.5rem] leading-none font-semibold tracking-[0.2em] text-fg">
+              <span aria-hidden="true" data-testid="pairing-code">
+                {formatPairingCode(screen.code)}
+              </span>
+              <span className="sr-only">
+                {t("pairingCodeSpoken", { code: screen.code.split("").join(" ") })}
+              </span>
             </p>
             <p className="text-helper text-fg-muted">{t("pairingWaiting")}</p>
           </>

@@ -5,6 +5,7 @@ import { getAuthState } from "@/auth/identity";
 import { FormAlert } from "@/components/auth/form-alert";
 import { DisplayPairing } from "@/components/displays/display-pairing";
 import { DisplayReset } from "@/components/displays/display-reset";
+import { DisplayRetry } from "@/components/displays/display-retry";
 import { PairedDisplay } from "@/components/displays/paired-display";
 import { Button } from "@/components/ui/button";
 import { getDisplaySession } from "@/displays/server";
@@ -31,13 +32,7 @@ export default async function DisplayPage() {
   if (state.kind === "display") {
     const result = await getDisplaySession();
     if (result.kind === "refused") return <DisplayReset />;
-    if (result.kind === "unavailable") {
-      return (
-        <FormAlert tone="info" className="w-full max-w-md text-start">
-          {t("screenUnavailable")}
-        </FormAlert>
-      );
-    }
+    if (result.kind === "unavailable") return <DisplayRetry />;
     return (
       <PairedDisplay
         displayName={result.session.displayName}

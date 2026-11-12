@@ -53,9 +53,7 @@ describe("DisplayPairing", () => {
       );
     const { container } = renderWithQuery(<DisplayPairing />);
     expect(await screen.findByTestId("pairing-code")).toHaveTextContent("ABCD-EFGH");
-    expect(screen.getByTestId("pairing-code")).toHaveAccessibleName(
-      "Pairing code: A B C D E F G H",
-    );
+    expect(screen.getByText("Pairing code: A B C D E F G H")).toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
     expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ renew: false });
 
