@@ -233,6 +233,24 @@ export function outcomeFailure(outcome: string): Response {
       return failure(409, "expired");
     case "no_longer_valid":
       return failure(409, "no-longer-valid");
+    case "invalid_guardian":
+      return failure(409, "invalid-guardian");
+    case "confirmation_required":
+      return failure(409, "confirmation-required");
+    case "child_last_home":
+      return failure(409, "child-last-home");
+    case "limit_reached":
+      return failure(429, "limit-reached");
+    case "too_late":
+      return failure(409, "too-late");
+    case "child_other_homes":
+      return failure(409, "child-other-homes");
+    case "invalid_code":
+      return failure(404, "invalid-code");
+    case "already_linked":
+      return failure(409, "already-linked");
+    case "rate_limited":
+      return failure(429, "rate-limited");
     default:
       return failure(500, "failed");
   }

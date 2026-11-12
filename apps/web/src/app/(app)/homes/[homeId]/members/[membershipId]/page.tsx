@@ -112,6 +112,7 @@ export default async function MemberPage({ params }: MemberPageProps) {
   const member = directory.members.find((entry) => entry.membershipId === membershipId);
   if (!member) notFound();
   if (member.isSelf) redirect(`/homes/${home.id}/profile`);
+  if (member.isChild === true) redirect(`/homes/${home.id}/children/${member.membershipId}`);
 
   const can = memberPermissions(membership, {
     homeId: home.id,

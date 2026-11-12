@@ -15,6 +15,9 @@ import { ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { getDateTimeFormats } from "@/invitations/server";
+import { getMyGuardianOffers } from "@/children/server";
+import { GuardianOffers } from "@/components/children/guardian-offers";
+import { formatDateTime } from "@/invitations/format";
 import { getHomeDirectory } from "@/members/directory";
 import {
   arrangeDirectory,
@@ -29,6 +32,7 @@ interface MembersPageProps {
     readonly sort?: string | string[];
     readonly role?: string | string[];
     readonly removed?: string | string[];
+    readonly childDeleted?: string | string[];
   }>;
 }
 
@@ -66,10 +70,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Every member may see the directory today; the engine decides, so later restrictions (children,
   // Household Displays) apply here too. The database function checks the membership again.
   if (!permissions["home.members.view"]) redirect(HOME_UNAVAILABLE_PATH);
-  const [directory, formats, rawParams] = await Promise.all([
+  const [directory, formats, rawParams, offers, tChildren] = await Promise.all([
     getHomeDirectory(home.id),
     getDateTimeFormats(),
     searchParams,
+    getMyGuardianOffers(home.id),
+    getTranslations("Children"),
   ]);
   const query = parseDirectoryQuery(rawParams);
   // The membership ended between the two reads: the same neutral notice as any lost Home.
@@ -87,6 +93,22 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
           {tHomes("backToHome")}
         </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={`/homes/${home.id}/children/new`}
+          className="font-medium text-accent-fg underline"
+          data-testid="add-child-link"
+        >
+          {t("addChildLink")}
+        </Link>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <Link
+          href={`/homes/${home.id}/children/link`}
+          className="font-medium text-accent-fg underline"
+          data-testid="link-child-link"
+        >
+          {t("linkChildLink")}
+        </Link>
         {permissions["home.invitations.manage"] ? (
           <>
             <span aria-hidden="true">{"\u{00B7}"}</span>
@@ -99,6 +121,20 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
           </>
         ) : null}
       </p>
+      {rawParams.childDeleted === "1" ? (
+        <FormAlert tone="success" className="mb-6">
+          {tChildren("deletedNotice")}
+        </FormAlert>
+      ) : null}
+      <GuardianOffers
+        homeId={home.id}
+        offers={offers.map((offer) => ({
+          offerId: offer.offerId,
+          childName: offer.childName ?? t("noName"),
+          role: offer.role,
+          expires: formatDateTime(offer.expiresAt, formats),
+        }))}
+      />
       {rawParams.removed === "1" ? (
         <FormAlert tone="success" className="mb-6">
           {tManage("removedNotice")}
@@ -126,6 +162,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
             homeId: home.id,
             role: member.role,
             isSelf: member.isSelf,
+            isChild: member.isChild === true,
           }),
         ).some(Boolean),
       )

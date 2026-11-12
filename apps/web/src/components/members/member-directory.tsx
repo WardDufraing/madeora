@@ -183,7 +183,7 @@ export async function MemberDirectory({
                     ) : null}
                   </span>
                   <span className="text-helper text-fg-muted">
-                    {tHomes(roleKey[member.role])}
+                    {member.isChild === true ? t("child") : tHomes(roleKey[member.role])}
                     {member.isInactive ? (
                       <span data-testid="member-inactive">
                         {" \u{00B7} "}
@@ -204,6 +204,15 @@ export async function MemberDirectory({
                     className="shrink-0 text-body font-medium text-accent-fg underline"
                   >
                     {t("editYours")}
+                  </Link>
+                ) : member.isChild === true ? (
+                  <Link
+                    href={`/homes/${homeId}/children/${member.membershipId}`}
+                    className="shrink-0 text-body font-medium text-accent-fg underline"
+                    data-testid="child-link"
+                    aria-label={t("childLinkLabel", { name: member.name ?? t("noName") })}
+                  >
+                    {t("childLink")}
                   </Link>
                 ) : manageable.has(member.membershipId) ? (
                   <Link

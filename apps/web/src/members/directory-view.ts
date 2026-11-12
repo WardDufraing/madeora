@@ -28,6 +28,8 @@ export interface DirectoryMember {
    * pointed at reassigning open work, which never happens automatically.
    */
   readonly isInactive?: boolean;
+  /** S41: a guardian-managed child; their page is the child page, not the member page. */
+  readonly isChild?: boolean;
 }
 
 export const directorySorts = ["role", "name", "joined"] as const;
