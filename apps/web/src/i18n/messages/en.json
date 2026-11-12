@@ -7812,7 +7812,9 @@
     "choresLink": "Record a chore",
     "pinRuleLabel": "Ask for a PIN for every chore done on a household device",
     "pinRuleHint": "Off: whoever records a chore names the person who did it, and anyone with a PIN may still confirm with it. On: every chore needs that person's PIN.",
-    "pinRuleSaved": "PIN rule saved."
+    "pinRuleSaved": "PIN rule saved.",
+    "pinRuleMembers": "Always ask these people for their PIN",
+    "pinRuleChores": "Always ask for a PIN for these chores"
   },
   "HouseholdChores": {
     "title": "Chores",
@@ -7853,7 +7855,9 @@
     "confirmWithPin": "Confirm with my PIN",
     "pinLabel": "PIN for {name}",
     "confirm": "Confirm",
-    "notMe": "That's not me"
+    "notMe": "That's not me",
+    "pinRequiredChore": "This chore needs a PIN.",
+    "pinRequiredMember": "{name} confirms chores with their PIN."
   },
   "ChildTransition": {
     "guardianTitle": "Own account",

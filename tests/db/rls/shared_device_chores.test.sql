@@ -290,3 +290,71 @@ select tests.act_as('bob');
 select tests.assert_true(public.set_my_device_pin() = 'cleared', 'Bob removes his PIN');
 select tests.assert_true(public.set_my_device_pin() = 'unchanged', 'Removing it twice is a no-op');
 select tests.assert_true(not (select has_pin from public.my_device_pin()), 'He sees it is gone');
+
+-- Stricter rules per member and per chore (the stricter rule wins) -----------------------------------
+
+select tests.act_as('alice');
+select public.set_shared_device_pin_rule(tests.sd('home-a'), false);
+insert into ids values ('c-rule', gen_random_uuid()), ('c-rule2', gen_random_uuid());
+insert into ids select 'o-rule', occurrence_id from public.create_chore(tests.sd('c-rule'),
+  tests.sd('home-a'), 'Windows', '{"mode": "none", "members": []}', p_due_date => tests.sd_today());
+insert into ids select 'o-rule2', occurrence_id from public.create_chore(tests.sd('c-rule2'),
+  tests.sd('home-a'), 'Plants', '{"mode": "none", "members": []}', p_due_date => tests.sd_today());
+
+select tests.act_as('bob');
+select tests.assert_denied(format('select public.shared_device_pin_targets(%L)', tests.sd('home-a')),
+  'A plain Member cannot read the PIN rules');
+select tests.assert_true(
+  public.set_shared_device_pin_target(tests.sd('home-a'), 'member', tests.sd('m-bob'), false)
+    = 'not_permitted',
+  'nor change them, even for himself');
+
+select tests.act_as('alice');
+select tests.assert_true(
+  public.set_shared_device_pin_target(tests.sd('home-a'), 'member', tests.sd('m-alice'), true)
+    = 'saved',
+  'The Owner makes herself always confirm with her PIN');
+select tests.assert_true(
+  public.set_shared_device_pin_target(tests.sd('home-a'), 'chore', tests.sd('c-rule2'), true)
+    = 'saved',
+  'and the plants always need a PIN');
+select tests.assert_true(
+  public.set_shared_device_pin_target(tests.sd('home-a'), 'chore', tests.sd('c-rule2'), true)
+    = 'unchanged',
+  'Saving the same rule again changes nothing');
+select tests.assert_true(
+  public.set_shared_device_pin_target(tests.sd('home-a'), 'chore', gen_random_uuid(), true)
+    = 'not_found',
+  'A chore of another Home or none at all is not found');
+select tests.assert_true(
+  (select (t -> 'members') @> jsonb_build_array(jsonb_build_object(
+            'membership_id', tests.sd('m-alice'), 'required', true))
+          and (t -> 'chores') @> jsonb_build_array(jsonb_build_object(
+            'chore_id', tests.sd('c-rule2'), 'required', true))
+   from public.shared_device_pin_targets(tests.sd('home-a')) t),
+  'The managers see which members and chores need the PIN');
+
+select tests.act_as_service_role();
+select tests.assert_true(
+  (select outcome from public.shared_device_attempt(tests.sd_key('device'), tests.sd('o-rule'),
+     tests.sd('m-alice'), false, tests.sd_key('c9'))) = 'pin_required',
+  'Alice''s own rule asks for her PIN on any chore');
+select tests.assert_true(
+  (select outcome from public.shared_device_attempt(tests.sd_key('device'), tests.sd('o-rule2'),
+     tests.sd('m-bob'), false, tests.sd_key('c9'))) = 'pin_required',
+  'The plants need a PIN whoever does them');
+select tests.assert_true(
+  (select status from tests.sd_occ(tests.sd('o-rule2'))) = 'open',
+  'Nothing was completed without it');
+select tests.assert_true(
+  (select (b -> 'chores') @> jsonb_build_array(jsonb_build_object(
+            'occurrence_id', tests.sd('o-rule2'), 'requires_pin', true))
+          and (b -> 'members') @> jsonb_build_array(jsonb_build_object(
+            'membership_id', tests.sd('m-alice'), 'requires_pin', true))
+   from public.shared_device_board(tests.sd_key('device')) b),
+  'The device knows in advance which chores and people need the PIN');
+select tests.assert_true(
+  (select outcome = 'completed'
+   from public.shared_device_attempt(tests.sd_key('device'), tests.sd('o-rule'),
+     tests.sd('m-bob'), false, tests.sd_key('c9'))),
+  'Without any rule for Bob or the windows, naming him is enough');

@@ -7812,7 +7812,9 @@
     "choresLink": "Een taak afvinken",
     "pinRuleLabel": "Vraag een PIN voor elke taak die op een huishoudapparaat wordt afgevinkt",
     "pinRuleHint": "Uit: wie een taak afvinkt, kiest wie ze gedaan heeft, en wie een PIN heeft, kan nog altijd met die PIN bevestigen. Aan: elke taak vraagt de PIN van die persoon.",
-    "pinRuleSaved": "PIN-regel opgeslagen."
+    "pinRuleSaved": "PIN-regel opgeslagen.",
+    "pinRuleMembers": "Vraag deze mensen altijd om hun PIN",
+    "pinRuleChores": "Vraag altijd een PIN voor deze taken"
   },
   "HouseholdChores": {
     "title": "Taken",
@@ -7853,7 +7855,9 @@
     "confirmWithPin": "Bevestigen met mijn PIN",
     "pinLabel": "PIN van {name}",
     "confirm": "Bevestigen",
-    "notMe": "Dat ben ik niet"
+    "notMe": "Dat ben ik niet",
+    "pinRequiredChore": "Deze taak vraagt een PIN.",
+    "pinRequiredMember": "{name} bevestigt taken met een PIN."
   },
   "ChildTransition": {
     "guardianTitle": "Eigen account",

@@ -24,6 +24,7 @@ export interface HouseholdChoreMember {
   readonly accentColor: string | null;
   readonly isChild: boolean;
   readonly hasPin: boolean;
+  readonly requiresPin: boolean;
 }
 
 export interface HouseholdChore {
@@ -34,6 +35,7 @@ export interface HouseholdChore {
   readonly assigneeIds: readonly string[];
   readonly mandatoryOpen: number;
   readonly requiresApproval: boolean;
+  readonly requiresPin: boolean;
 }
 
 const UNDO_MS = 2 * 60 * 1000;
@@ -210,7 +212,9 @@ export function HouseholdChores({
     );
   }
 
-  const pinNeeded = requirePin || usePin;
+  // The stricter rule wins: the Home's, this person's or this chore's (spec).
+  const pinRequired = requirePin || member.requiresPin || chore.requiresPin;
+  const pinNeeded = pinRequired || usePin;
   const failureText = (value: DeviceChoreFailure): string => {
     switch (value.kind) {
       case "locked":
@@ -285,8 +289,14 @@ export function HouseholdChores({
       {chore.requiresApproval ? (
         <p className="text-helper text-fg-muted">{t("needsApproval")}</p>
       ) : null}
-      {requirePin ? (
-        <p className="text-helper text-fg-muted">{t("pinRequiredHere")}</p>
+      {pinRequired ? (
+        <p className="text-helper text-fg-muted">
+          {requirePin
+            ? t("pinRequiredHere")
+            : chore.requiresPin
+              ? t("pinRequiredChore")
+              : t("pinRequiredMember", { name: nameOf(member) })}
+        </p>
       ) : member.hasPin ? (
         <Checkbox
           label={t("confirmWithPin")}

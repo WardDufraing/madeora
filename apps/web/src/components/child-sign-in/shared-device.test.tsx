@@ -29,9 +29,30 @@ const OCCURRENCE = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0051";
 const ACTION = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0061";
 
 const members: readonly HouseholdChoreMember[] = [
-  { membershipId: ADULT, name: "Erin", accentColor: null, isChild: false, hasPin: true },
-  { membershipId: MIA, name: "Mia", accentColor: "#3366ff", isChild: true, hasPin: true },
-  { membershipId: NOOR, name: "Noor", accentColor: null, isChild: true, hasPin: false },
+  {
+    membershipId: ADULT,
+    name: "Erin",
+    accentColor: null,
+    isChild: false,
+    hasPin: true,
+    requiresPin: false,
+  },
+  {
+    membershipId: MIA,
+    name: "Mia",
+    accentColor: "#3366ff",
+    isChild: true,
+    hasPin: true,
+    requiresPin: false,
+  },
+  {
+    membershipId: NOOR,
+    name: "Noor",
+    accentColor: null,
+    isChild: true,
+    hasPin: false,
+    requiresPin: false,
+  },
 ];
 const chore: HouseholdChore = {
   occurrenceId: OCCURRENCE,
@@ -41,6 +62,7 @@ const chore: HouseholdChore = {
   assigneeIds: [MIA],
   mandatoryOpen: 0,
   requiresApproval: false,
+  requiresPin: false,
 };
 
 beforeEach(() => {
@@ -155,6 +177,36 @@ describe("HouseholdChores", () => {
     expect(await screen.findByText("Feed the cat is sent for approval.")).toBeInTheDocument();
   });
 
+  it("asks for the PIN when the person's or the chore's own rule needs it", async () => {
+    const user = userEvent.setup();
+    const strict = members.map((m) => (m.membershipId === ADULT ? { ...m, requiresPin: true } : m));
+    const { unmount } = renderWithQuery(
+      <HouseholdChores
+        requirePin={false}
+        members={strict}
+        chores={[{ ...chore, assigneeIds: [MIA, NOOR] }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Feed the cat/ }));
+    await user.click(screen.getByRole("button", { name: "Erin" }));
+    expect(screen.getByText("Erin confirms chores with their PIN.")).toBeInTheDocument();
+    expect(screen.getByLabelText("PIN for Erin")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    unmount();
+
+    renderWithQuery(
+      <HouseholdChores
+        requirePin={false}
+        members={members}
+        chores={[{ ...chore, requiresPin: true }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Feed the cat/ }));
+    await user.click(screen.getByRole("button", { name: "Mia" }));
+    expect(screen.getByText("This chore needs a PIN.")).toBeInTheDocument();
+    expect(screen.getByLabelText("PIN for Mia")).toBeInTheDocument();
+  });
+
   it("says when there is nothing to do", () => {
     renderWithQuery(<HouseholdChores requirePin={false} members={members} chores={[]} />);
     expect(screen.getByText("No open chores for today.")).toBeInTheDocument();
@@ -166,7 +218,12 @@ describe("SharedDevicePinRule", () => {
     const user = userEvent.setup();
     fetchMock.mockReturnValueOnce(answer(200, { outcome: "saved" }));
     const { container } = renderWithQuery(
-      <SharedDevicePinRule homeId={HOME_ID} requirePin={false} />,
+      <SharedDevicePinRule
+        homeId={HOME_ID}
+        requirePin={false}
+        members={[{ id: MIA, name: "Mia", required: false }]}
+        chores={[{ id: OCCURRENCE, name: "Feed the cat", required: true }]}
+      />,
     );
     expect(await axeViolations(container)).toEqual([]);
     const toggle = screen.getByRole("checkbox", { name: /Ask for a PIN/ });
@@ -183,6 +240,36 @@ describe("SharedDevicePinRule", () => {
       expect(toggle).toBeChecked();
     });
     expect(screen.queryByText("PIN rule saved.")).not.toBeInTheDocument();
+  });
+
+  it("sets a rule for one person or one chore, hidden while every chore needs a PIN", async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithQuery(
+      <SharedDevicePinRule
+        homeId={HOME_ID}
+        requirePin={false}
+        members={[{ id: MIA, name: "Mia", required: false }]}
+        chores={[{ id: OCCURRENCE, name: "Feed the cat", required: true }]}
+      />,
+    );
+    expect(await axeViolations(container)).toEqual([]);
+    expect(
+      screen.getByRole("group", { name: "Always ask for a PIN for these chores" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Feed the cat" })).toBeChecked();
+    fetchMock.mockReturnValueOnce(answer(200, { outcome: "saved" }));
+    await user.click(screen.getByRole("checkbox", { name: "Mia" }));
+    expect(await screen.findByText("PIN rule saved.")).toBeInTheDocument();
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({
+      kind: "member",
+      targetId: MIA,
+      requirePin: true,
+    });
+    fetchMock.mockReturnValueOnce(answer(200, { outcome: "saved" }));
+    await user.click(screen.getByRole("checkbox", { name: /Ask for a PIN for every chore/ }));
+    await waitFor(() => {
+      expect(screen.queryByRole("checkbox", { name: "Mia" })).not.toBeInTheDocument();
+    });
   });
 });
 

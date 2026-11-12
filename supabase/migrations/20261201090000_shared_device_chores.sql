@@ -236,6 +236,146 @@ returns text
 revoke all on function public.set_shared_device_pin_rule(uuid, boolean) from public, anon;
 grant execute on function public.set_shared_device_pin_rule(uuid, boolean) to authenticated;
 
+-- Stricter rules than the Home-wide one (spec: "member-specific PIN verification and/or
+-- verification for particular actions; the stricter applicable rule wins"; Ward, 2026-11-12):
+-- members who must always confirm with their PIN, and chores that always need the PIN.
+create table private.shared_device_member_rules (
+  home_id uuid not null,
+  user_id uuid not null,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint shared_device_member_rules_pkey primary key (home_id, user_id),
+  constraint shared_device_member_rules_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+create table private.shared_device_chore_rules (
+  chore_id uuid primary key references private.chores (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+revoke all on table private.shared_device_member_rules from public;
+revoke all on table private.shared_device_chore_rules from public;
+
+-- Whether a chore occurrence completed for this member on this Home's devices needs the PIN.
+create function private.shared_device_pin_needed(p_home_id uuid, p_user_id uuid, p_occurrence_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select coalesce((select s.require_pin from private.shared_device_settings s
+                     where s.home_id = p_home_id), false)
+      or exists (select 1 from private.shared_device_member_rules r
+                 where r.home_id = p_home_id and r.user_id = p_user_id)
+      or exists (select 1 from private.chore_occurrences o
+                 join private.shared_device_chore_rules r on r.chore_id = o.chore_id
+                 where o.id = p_occurrence_id and r.home_id = p_home_id)
+  $$;
+
+revoke all on function private.shared_device_pin_needed(uuid, uuid, uuid) from public;
+
+-- The members and chores of the Home with whether each always needs the PIN, for its managers.
+create function public.shared_device_pin_targets(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.home_role(p_home_id, v_user_id) is null
+       or not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    return jsonb_build_object(
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'membership_id', m.id,
+                 'name', coalesce(p.nickname, p.display_name, up.display_name),
+                 'required', exists (select 1 from private.shared_device_member_rules r
+                                     where r.home_id = m.home_id and r.user_id = m.user_id))
+               order by m.created_at, m.id)
+        from public.home_memberships m
+        left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+        left join public.user_preferences up on up.user_id = m.user_id
+        where m.home_id = p_home_id), '[]'::jsonb),
+      'chores', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'chore_id', c.id,
+                 'title', c.title,
+                 'required', exists (select 1 from private.shared_device_chore_rules r
+                                     where r.chore_id = c.id))
+               order by c.title, c.id)
+        from private.chores c
+        where c.home_id = p_home_id and c.deleted_at is null), '[]'::jsonb)
+    );
+  end
+  $$;
+
+revoke all on function public.shared_device_pin_targets(uuid) from public, anon;
+grant execute on function public.shared_device_pin_targets(uuid) to authenticated;
+
+-- Sets one member's or one chore's rule. p_kind: 'member' (p_target_id a membership id) or
+-- 'chore' (a chore id). Returns 'saved', 'unchanged', 'not_permitted' or 'not_found'.
+create function public.set_shared_device_pin_target(
+  p_home_id uuid, p_kind text, p_target_id uuid, p_require_pin boolean
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_target uuid;
+    v_found boolean;
+  begin
+    if p_require_pin is null or p_kind is null or p_kind not in ('member', 'chore') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) or private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      return 'not_permitted';
+    end if;
+    if p_kind = 'member' then
+      select m.user_id into v_target from public.home_memberships m
+        where m.id = p_target_id and m.home_id = p_home_id;
+      if v_target is null then
+        return 'not_found';
+      end if;
+      if p_require_pin then
+        insert into private.shared_device_member_rules (home_id, user_id, updated_by)
+          values (p_home_id, v_target, v_user_id)
+          on conflict do nothing
+          returning true into v_found;
+      else
+        delete from private.shared_device_member_rules r
+          where r.home_id = p_home_id and r.user_id = v_target
+          returning true into v_found;
+      end if;
+    else
+      select c.id into v_target from private.chores c
+        where c.id = p_target_id and c.home_id = p_home_id and c.deleted_at is null;
+      if v_target is null then
+        return 'not_found';
+      end if;
+      if p_require_pin then
+        insert into private.shared_device_chore_rules (chore_id, home_id, updated_by)
+          values (v_target, p_home_id, v_user_id)
+          on conflict do nothing
+          returning true into v_found;
+      else
+        delete from private.shared_device_chore_rules r where r.chore_id = v_target
+          returning true into v_found;
+      end if;
+    end if;
+    if v_found is null then
+      return 'unchanged';
+    end if;
+    perform private.audit('home.shared_device_pin_rule_changed', p_home_id, 'home', p_home_id,
+      jsonb_build_object('target', p_kind, 'target_id', p_target_id, 'require_pin', p_require_pin));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_shared_device_pin_target(uuid, text, uuid, boolean) from public, anon;
+grant execute on function public.set_shared_device_pin_target(uuid, text, uuid, boolean) to authenticated;
+
 -- An adult's own household-device PIN: whether it is set, and its lock. Never the hash.
 create function public.my_device_pin()
 returns table (has_pin boolean, locked_until timestamptz)
@@ -312,6 +452,8 @@ create function public.shared_device_board(p_device_hash text) returns jsonb
                  'name', coalesce(p.nickname, p.display_name, up.display_name),
                  'accent_color', coalesce(p.accent_color, up.accent_color),
                  'is_child', private.is_child(m.user_id),
+                 'requires_pin', exists (select 1 from private.shared_device_member_rules r
+                                         where r.home_id = m.home_id and r.user_id = m.user_id),
                  'has_pin', case when private.is_child(m.user_id)
                    then exists (select 1 from private.child_home_pins hp
                                 where hp.home_id = m.home_id and hp.child_user_id = m.user_id)
@@ -334,7 +476,9 @@ create function public.shared_device_board(p_device_hash text) returns jsonb
                    '[]'::jsonb),
                  'mandatory_open', (select count(*) from private.chore_occurrence_steps st
                    where st.occurrence_id = o.id and st.mandatory and st.checked_at is null),
-                 'requires_approval', c.requires_approval)
+                 'requires_approval', c.requires_approval,
+                 'requires_pin', exists (select 1 from private.shared_device_chore_rules r
+                                         where r.chore_id = c.id))
                order by o.due_date, c.title, o.id)
         from private.chore_occurrences o
         join private.chores c on c.id = o.chore_id
@@ -435,8 +579,7 @@ create function public.shared_device_attempt(
         null::timestamptz;
       return;
     end if;
-    v_require := coalesce((select s.require_pin from private.shared_device_settings s
-                           where s.home_id = v_device.home_id), false);
+    v_require := private.shared_device_pin_needed(v_device.home_id, v_member, p_occurrence_id);
     if not coalesce(p_pin, false) then
       if v_require then
         return query select 'pin_required'::text, null::uuid, null::uuid, null::text,

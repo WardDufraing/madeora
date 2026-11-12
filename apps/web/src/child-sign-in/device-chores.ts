@@ -22,6 +22,7 @@ const boardSchema = z.object({
       accent_color: z.string().nullable(),
       is_child: z.boolean(),
       has_pin: z.boolean(),
+      requires_pin: z.boolean(),
     }),
   ),
   chores: z.array(
@@ -33,6 +34,7 @@ const boardSchema = z.object({
       assignee_ids: z.array(z.uuid()),
       mandatory_open: z.number().int(),
       requires_approval: z.boolean(),
+      requires_pin: z.boolean(),
     }),
   ),
 });
@@ -43,6 +45,8 @@ export interface DeviceMember {
   readonly accentColor: string | null;
   readonly isChild: boolean;
   readonly hasPin: boolean;
+  /** A Home manager requires this member's PIN for every chore on household devices. */
+  readonly requiresPin: boolean;
 }
 
 export interface DeviceChore {
@@ -53,6 +57,8 @@ export interface DeviceChore {
   readonly assigneeIds: readonly string[];
   readonly mandatoryOpen: number;
   readonly requiresApproval: boolean;
+  /** A Home manager requires a PIN for this chore on household devices. */
+  readonly requiresPin: boolean;
 }
 
 export interface DeviceBoard {
@@ -90,6 +96,7 @@ export async function getDeviceChoreBoard(
       accentColor: m.accent_color,
       isChild: m.is_child,
       hasPin: m.has_pin,
+      requiresPin: m.requires_pin,
     })),
     chores: parsed.data.chores.map((c) => ({
       occurrenceId: c.occurrence_id,
@@ -99,6 +106,7 @@ export async function getDeviceChoreBoard(
       assigneeIds: c.assignee_ids,
       mandatoryOpen: c.mandatory_open,
       requiresApproval: c.requires_approval,
+      requiresPin: c.requires_pin,
     })),
   };
 }

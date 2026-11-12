@@ -51,6 +51,7 @@ export default async function HouseholdChoresPage() {
             assigneeIds: chore.assigneeIds,
             mandatoryOpen: chore.mandatoryOpen,
             requiresApproval: chore.requiresApproval,
+            requiresPin: chore.requiresPin,
           }))}
         />
       )}

@@ -4096,6 +4096,10 @@ export type Database = {
         Args: { p_home_id: string; p_require_pin: boolean };
         Returns: string;
       };
+      set_shared_device_pin_target: {
+        Args: { p_home_id: string; p_kind: string; p_require_pin: boolean; p_target_id: string };
+        Returns: string;
+      };
       set_shopping_item_completed: {
         Args: { p_completed: boolean; p_item_id: string; p_seen_completed_at?: string };
         Returns: {
@@ -4195,6 +4199,7 @@ export type Database = {
       };
       shared_device_board: { Args: { p_device_hash: string }; Returns: Json };
       shared_device_pin_rule: { Args: { p_home_id: string }; Returns: boolean };
+      shared_device_pin_targets: { Args: { p_home_id: string }; Returns: Json };
       shared_device_undo: { Args: { p_action_id: string; p_device_hash: string }; Returns: string };
       shared_device_verified: {
         Args: { p_check_id: string; p_device_hash: string };
