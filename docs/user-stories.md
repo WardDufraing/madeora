@@ -77,6 +77,7 @@ As an account holder or authorized Home member, I want to review privacy setting
 - Exports are prepared by the background job as a private ZIP with a manifest, README and JSON/CSV data. Eligible media is included within the documented 100 MB cap, and omissions make the result visibly partial.
 - A ready export expires after seven days, requires a fresh authorization check before a short-lived download, and is invalidated when relevant access or source data changes. Cancellation, download, expiry and failure states are visible.
 - Personal exports, Home exports and their archives remain isolated by account and Home. Losing a Home or export permission ends access without granting a copy of data that is no longer permitted.
+
 ## 2. Personal dashboard
 
 ### US-002 — Use Madeora without joining a Home
