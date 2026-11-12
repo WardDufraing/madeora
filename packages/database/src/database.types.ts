@@ -814,6 +814,10 @@ export type Database = {
         Args: { p_child_membership_id: string; p_home_id: string };
         Returns: string;
       };
+      cancel_child_transition: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: string;
+      };
       cancel_home_copy: { Args: { p_request_id: string }; Returns: boolean };
       cancel_my_email_change: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_my_export: { Args: { p_export_id: string }; Returns: boolean };
@@ -1010,6 +1014,19 @@ export type Database = {
           outcome: string;
         }[];
       };
+      child_transition_preview: { Args: { p_token: string }; Returns: Json };
+      child_transition_review: { Args: { p_email_token: string }; Returns: Json };
+      child_transition_state: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: {
+          can_start: boolean;
+          claim_expires_at: string;
+          email_given: boolean;
+          open: boolean;
+          required_age: number;
+        }[];
+      };
+      claim_child_transition: { Args: { p_email: string; p_token: string }; Returns: string };
       claim_chore_occurrence: {
         Args: { p_occurrence_id: string };
         Returns: {
@@ -1048,6 +1065,7 @@ export type Database = {
       };
       close_home: { Args: { p_confirm_name: string; p_home_id: string }; Returns: string };
       collect_data_export: { Args: { p_category: string; p_export_id: string }; Returns: Json };
+      complete_child_transition: { Args: { p_email_token: string }; Returns: string };
       complete_chore_occurrence: {
         Args: { p_contributor: string; p_note?: string; p_occurrence_id: string };
         Returns: {
@@ -4274,6 +4292,15 @@ export type Database = {
         }[];
       };
       start_account_recovery: { Args: { p_email: string }; Returns: undefined };
+      start_child_transition: {
+        Args: { p_birth_date: string; p_child_membership_id: string; p_home_id: string };
+        Returns: {
+          eligible_on: string;
+          expires_at: string;
+          outcome: string;
+          token: string;
+        }[];
+      };
       start_ownership_transfer: {
         Args: { p_home_id: string; p_membership_id: string; p_request_id: string };
         Returns: {

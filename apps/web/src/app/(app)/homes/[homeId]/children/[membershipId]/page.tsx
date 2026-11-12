@@ -8,7 +8,9 @@ import { DEFAULT_ACCENT } from "@/accent/accent";
 import { suggestDistinctColors } from "@/accent/similarity";
 import { requireIdentity } from "@/auth/identity";
 import { getChildSignInSettings } from "@/child-sign-in/server";
+import { getChildTransitionState } from "@/child-transition/server";
 import { ChildSignInSettings } from "@/components/child-sign-in/child-sign-in-settings";
+import { ChildTransitionSetting } from "@/components/child-transition/child-transition-setting";
 import { ChildAccessForm } from "@/components/children/child-access-form";
 import { ChildGuardians } from "@/components/children/child-guardians";
 import { ChildPresentationForm } from "@/components/children/child-presentation-form";
@@ -130,10 +132,15 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
   const signInRead = child.myGuardianRole
     ? getChildSignInSettings(home.id, child.membershipId)
     : null;
-  const [linkExpiry, signIn, tSignIn] = await Promise.all([
+  const transitionRead = child.myGuardianRole
+    ? getChildTransitionState(home.id, child.membershipId)
+    : null;
+  const [linkExpiry, signIn, transition, tSignIn, tTransition] = await Promise.all([
     linkExpiryRead,
     signInRead,
+    transitionRead,
     getTranslations("ChildSignIn"),
+    getTranslations("ChildTransition"),
   ]);
   const lockText = (value: string | null) =>
     value === null || value === "guardian" ? value : formatDateTime(value, formats);
@@ -221,6 +228,24 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
                 pinLock: lockText(signIn.pinLockedUntil),
                 activeSessions: signIn.activeSessions,
                 canManageIdentity: signIn.canManageIdentity,
+              }}
+            />
+          </Card>
+        ) : null}
+        {transition && child.myGuardianRole ? (
+          <Card title={tTransition("guardianTitle")} headingLevel={2}>
+            <ChildTransitionSetting
+              homeId={home.id}
+              membershipId={child.membershipId}
+              childName={name}
+              state={{
+                open: transition.open,
+                claimExpires: transition.claimExpiresAt
+                  ? formatDateTime(transition.claimExpiresAt, formats)
+                  : null,
+                emailGiven: transition.emailGiven,
+                requiredAge: transition.requiredAge,
+                canStart: transition.canStart,
               }}
             />
           </Card>
