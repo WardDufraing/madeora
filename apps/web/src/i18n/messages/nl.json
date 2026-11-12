@@ -1229,7 +1229,9 @@
     "kindHomeCopyApproved": "Je verzoek om een item naar {home} te kopiëren is goedgekeurd.",
     "kindHomeCopyRejected": "Je verzoek om een item naar {home} te kopiëren is afgewezen.",
     "kindHomeCopyCompleted": "Je kopie naar {home} staat klaar.",
-    "kindHomeCopyFailed": "Je kopie naar {home} kon niet worden gemaakt. Je kunt het opnieuw vragen."
+    "kindHomeCopyFailed": "Je kopie naar {home} kon niet worden gemaakt. Je kunt het opnieuw vragen.",
+    "kindChildTransitionStarted": "In {home} is voor een van je kinderen een overstap naar een eigen account gestart. Elke voogd kan die annuleren op de pagina van het kind, tot het kind bevestigt.",
+    "kindChildTransitionCompleted": "In {home} beheert een kind van wie je voogd was nu een eigen account. Je voogdcontrole over dat kind is gestopt."
   },
   "NotificationSettings": {
     "title": "Meldingsinstellingen",

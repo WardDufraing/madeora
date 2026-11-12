@@ -221,6 +221,10 @@ update private.digital_consent_ages set min_age = 16 where country = 'NL';
 
 -- Restarted and completed -------------------------------------------------------------------------------
 
+select tests.act_as_owner();
+insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role)
+  values (tests.ci('home-a'), tests.ci('mia'), tests.ci('bob'), 'secondary');
+
 select tests.act_as('alice');
 delete from tokens where name in ('claim', 'email');
 insert into tokens select 'claim', token from public.start_child_transition(
@@ -231,6 +235,13 @@ select tests.act_as_owner();
 insert into tokens select 'email', e.token from private.security_emails e
   where e.kind = 'transition_verify' and e.token is not null
     and e.token not in (select t.token from tokens t);
+
+select tests.assert_true(
+  (select count(*) from public.notifications
+   where user_id = tests.ci('bob') and kind = 'child.transition_started') = 1
+  and not exists (select 1 from public.notifications
+                  where user_id = tests.ci('alice') and kind = 'child.transition_started'),
+  'Starting tells the other guardian, not the one who started it');
 
 select tests.act_as_service_role();
 select tests.assert_true(public.complete_child_transition(tests.ci_token('email')) = 'completed',
@@ -243,6 +254,10 @@ select tests.assert_true(
 
 select tests.act_as_owner();
 select tests.assert_true(not private.is_child(tests.ci('mia')), 'She is no longer a child');
+select tests.assert_true(
+  (select count(distinct user_id) from public.notifications
+   where kind = 'child.transition_completed' and user_id in (tests.ci('alice'), tests.ci('bob'))) = 2,
+  'Both former guardians are told it is done');
 select tests.assert_true(
   (select email = 'mia@example.org' and email_confirmed_at is not null
    from auth.users where id = tests.ci('mia')),

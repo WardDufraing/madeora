@@ -1229,7 +1229,9 @@
     "kindHomeCopyApproved": "Your request to copy an item into {home} was approved.",
     "kindHomeCopyRejected": "Your request to copy an item into {home} was rejected.",
     "kindHomeCopyCompleted": "Your copy into {home} is ready.",
-    "kindHomeCopyFailed": "Your copy into {home} couldn't be made. You can ask again."
+    "kindHomeCopyFailed": "Your copy into {home} couldn't be made. You can ask again.",
+    "kindChildTransitionStarted": "In {home}, a move to an own account was started for one of your children. Any guardian can cancel it on the child's page until the child confirms.",
+    "kindChildTransitionCompleted": "In {home}, a child you were guardian of now manages their own account. Your guardian controls for them have ended."
   },
   "NotificationSettings": {
     "title": "Notification settings",

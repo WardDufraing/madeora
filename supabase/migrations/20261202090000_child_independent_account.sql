@@ -195,6 +195,7 @@ create function public.start_child_transition(
     v_child uuid;
     v_age integer;
     v_token text;
+    v_id uuid;
     v_expires timestamptz := pg_catalog.now() + interval '7 days';
   begin
     if p_birth_date is null or p_birth_date > current_date
@@ -229,7 +230,15 @@ create function public.start_child_transition(
     v_token := private.new_invitation_token('link');
     insert into private.child_transitions (child_user_id, started_by, required_age, claim_token_hash,
                                            claim_expires_at)
-      values (v_child, v_user_id, v_age, private.token_hash(v_token), v_expires);
+      values (v_child, v_user_id, v_age, private.token_hash(v_token), v_expires)
+      returning id into v_id;
+    -- Every other guardian, in any of the child's Homes, is told so they can cancel in time.
+    perform private.notify_user(g.guardian_user_id, g.home_id, 'security', 'child.transition_started',
+      '{}'::jsonb, 'child.transition_started:' || v_id::text || ':' || g.guardian_user_id::text)
+    from (select distinct on (x.guardian_user_id) x.guardian_user_id, x.home_id
+          from public.child_guardians x
+          where x.child_user_id = v_child and x.guardian_user_id <> v_user_id
+          order by x.guardian_user_id, x.assigned_at) g;
     perform private.audit('child.transition_started', p_home_id, 'user', v_child,
       pg_catalog.jsonb_build_object('required_age', v_age));
     return query select 'started'::text, v_token, v_expires, null::date;
@@ -416,6 +425,13 @@ create function public.complete_child_transition(p_email_token text) returns tex
 
     select coalesce(pg_catalog.array_agg(m.home_id), '{}') into v_homes
       from public.home_memberships m where m.user_id = v_child;
+
+    -- Every guardian is told that their authority ended (before it is removed).
+    perform private.notify_user(g.guardian_user_id, g.home_id, 'security', 'child.transition_completed',
+      '{}'::jsonb, 'child.transition_completed:' || v_t.id::text || ':' || g.guardian_user_id::text)
+    from (select distinct on (x.guardian_user_id) x.guardian_user_id, x.home_id
+          from public.child_guardians x where x.child_user_id = v_child
+          order by x.guardian_user_id, x.assigned_at) g;
 
     -- Child sessions end everywhere; child credentials, PINs and guardian authority end.
     perform private.end_child_sessions(v_child, null, 'independent');
