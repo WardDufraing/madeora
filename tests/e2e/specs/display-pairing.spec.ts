@@ -64,7 +64,9 @@ test("a manager pairs a tablet as a Household Display and revokes it", async ({
   await page.reload();
   await page.getByRole("textbox", { name: /Pairing code/ }).fill(codeText);
   await page.getByRole("button", { name: "Check code" }).click();
-  await expect(page.getByRole("alert")).toContainText("This code has already been used.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "This code has already been used.",
+  );
 
   // The manager signs out; the display keeps working after a restart.
   await page.goto("/settings");
