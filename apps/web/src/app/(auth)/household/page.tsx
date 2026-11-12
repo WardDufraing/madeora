@@ -6,7 +6,7 @@ import { getAuthState } from "@/auth/identity";
 import { currentDeviceHash } from "@/child-sign-in/device";
 import { getHouseholdDeviceScreen } from "@/child-sign-in/service";
 import { FormAlert } from "@/components/auth/form-alert";
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { Button } from "@/components/ui/button";
 import { HouseholdPinSignIn } from "@/components/child-sign-in/household-pin-sign-in";
 import { pageTitle } from "@/i18n/page-title";
 
@@ -62,7 +62,14 @@ export default async function HouseholdPage() {
       {state.kind !== "signed-out" && state.kind !== "child" ? (
         <div className="flex flex-col gap-3">
           <FormAlert tone="info">{t("adultSignedInHere")}</FormAlert>
-          <SignOutButton />
+          {/* A plain form POST: this page has no client cache to clear, and the device comes
+              straight back here for the child to choose their name. */}
+          <form method="post" action="/auth/sign-out">
+            <input type="hidden" name="then" value="household" />
+            <Button type="submit" variant="secondary">
+              {t("childSignOut")}
+            </Button>
+          </form>
         </div>
       ) : screen.children.length === 0 ? (
         <p className="text-body text-fg">{t("householdNoChildren")}</p>

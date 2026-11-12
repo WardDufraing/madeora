@@ -12,6 +12,8 @@ test.use({
   locale: "en-GB",
   timezoneId: "Europe/London",
   viewport: { width: 1280, height: 800 },
+  // The browser's own log line for the deliberately wrong PIN's 401 answer.
+  allowedConsoleErrors: [/status of 401/],
 });
 
 const PIN = "4827";
@@ -57,9 +59,6 @@ test("a child signs in with their PIN only on an approved household device", asy
   await page.goto("/household");
   await expect(page.getByText(/An adult is signed in on this device/)).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await page.waitForURL((url) => url.pathname !== "/household");
-
-  await page.goto("/household");
   await expect(page.getByRole("heading", { name: "Who are you?" })).toBeVisible();
   expect(await axeViolations(page)).toEqual([]);
   await page.getByRole("button", { name: "Mia" }).click();
