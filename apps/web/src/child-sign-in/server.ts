@@ -2,6 +2,7 @@ import "server-only";
 
 import { isChildCapability, type ChildCapability } from "@madeora/domain/permissions";
 import { cache } from "react";
+import { z } from "zod";
 
 import { parseAccentColor, type AccentColor } from "@/accent/accent";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
@@ -167,3 +168,53 @@ export const getMyDevicePin = cache(async (): Promise<MyDevicePin | null> => {
   const row = data[0];
   return { hasPin: row?.has_pin ?? false, lockedUntil: row?.locked_until ?? null };
 });
+
+/** A member or chore of the Home and whether it always needs the PIN on household devices. */
+export interface PinTarget {
+  readonly id: string;
+  readonly name: string | null;
+  readonly required: boolean;
+}
+
+const pinTargetsSchema = z.object({
+  members: z.array(
+    z.object({ membership_id: z.uuid(), name: z.string().nullable(), required: z.boolean() }),
+  ),
+  chores: z.array(z.object({ chore_id: z.uuid(), title: z.string(), required: z.boolean() })),
+});
+
+/** For the Home's managers; `null` for anyone else or when unreadable. */
+export const getSharedDevicePinTargets = cache(
+  async (
+    homeId: string,
+  ): Promise<{
+    readonly members: readonly PinTarget[];
+    readonly chores: readonly PinTarget[];
+  } | null> => {
+    if (!homeIdSchema.safeParse(homeId).success) return null;
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("shared_device_pin_targets", { p_home_id: homeId });
+    if (error) {
+      if (error.code !== "42501") {
+        console.error(
+          JSON.stringify({ event: "shared_device_pin_targets.read_failed", code: error.code }),
+        );
+      }
+      return null;
+    }
+    const parsed = pinTargetsSchema.safeParse(data);
+    if (!parsed.success) return null;
+    return {
+      members: parsed.data.members.map((m) => ({
+        id: m.membership_id,
+        name: m.name,
+        required: m.required,
+      })),
+      chores: parsed.data.chores.map((c) => ({
+        id: c.chore_id,
+        name: c.title,
+        required: c.required,
+      })),
+    };
+  },
+);

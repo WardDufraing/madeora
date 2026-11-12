@@ -3,7 +3,11 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { requireIdentity } from "@/auth/identity";
-import { getHouseholdDevices, getSharedDevicePinRule } from "@/child-sign-in/server";
+import {
+  getHouseholdDevices,
+  getSharedDevicePinRule,
+  getSharedDevicePinTargets,
+} from "@/child-sign-in/server";
 import { HouseholdDevicesSetting } from "@/components/child-sign-in/household-devices-setting";
 import { SharedDevicePinRule } from "@/components/child-sign-in/shared-device-pin-rule";
 import { HomeSettingsForm } from "@/components/homes/home-settings-form";
@@ -61,9 +65,10 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
   }
   const { home, membership, permissions } = context;
   // Approved household devices for child PIN sign-in (S42): the same managers as the settings.
-  const [devices, pinRule, directory, formats, tSignIn, tMembers] = await Promise.all([
+  const [devices, pinRule, pinTargets, directory, formats, tSignIn, tMembers] = await Promise.all([
     permissions["home.updateSettings"] ? getHouseholdDevices(home.id) : null,
     permissions["home.updateSettings"] ? getSharedDevicePinRule(home.id) : null,
+    permissions["home.updateSettings"] ? getSharedDevicePinTargets(home.id) : null,
     permissions["home.updateSettings"] ? getHomeDirectory(home.id) : null,
     getDateTimeFormats(),
     getTranslations("ChildSignIn"),
@@ -118,7 +123,20 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           />
           {pinRule === null ? null : (
             <div className="mt-6 border-t border-line pt-6">
-              <SharedDevicePinRule homeId={home.id} requirePin={pinRule} />
+              <SharedDevicePinRule
+                homeId={home.id}
+                requirePin={pinRule}
+                members={(pinTargets?.members ?? []).map((member) => ({
+                  id: member.id,
+                  name: member.name ?? tMembers("noName"),
+                  required: member.required,
+                }))}
+                chores={(pinTargets?.chores ?? []).map((chore) => ({
+                  id: chore.id,
+                  name: chore.name ?? "",
+                  required: chore.required,
+                }))}
+              />
             </div>
           )}
         </Card>
