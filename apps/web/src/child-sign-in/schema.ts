@@ -100,3 +100,18 @@ export type ChildSignInActionInput = z.input<typeof childSignInActionSchema>;
 
 export const approveDeviceSchema = z.strictObject({ label: deviceLabelSchema });
 export type ApproveDeviceInput = z.input<typeof approveDeviceSchema>;
+
+/** Whether a Home asks for a PIN for every chore confirmed on its household devices. */
+export const pinRuleSchema = z.union([
+  z.strictObject({ requirePin: z.boolean() }),
+  z.strictObject({
+    kind: z.enum(["member", "chore"]),
+    targetId: z.uuid(),
+    requirePin: z.boolean(),
+  }),
+]);
+export type PinRuleInput = z.input<typeof pinRuleSchema>;
+
+/** An adult sets (`pin`) or removes (`null`) their own household-device PIN. */
+export const myDevicePinSchema = z.strictObject({ pin: newPinSchema.nullable() });
+export type MyDevicePinInput = z.input<typeof myDevicePinSchema>;
