@@ -3,6 +3,7 @@ import {
   newPinSchema,
   passwordSchema,
   pinProblem,
+  pinRuleSchema,
   pinSignInSchema,
   usernameSchema,
 } from "./schema";
@@ -78,5 +79,29 @@ describe("child passwords and guardian actions", () => {
     expect(childSignInActionSchema.safeParse({ action: "unlock", extra: 1 }).success).toBe(false);
     expect(childSignInActionSchema.safeParse({ action: "grant-admin" }).success).toBe(false);
     expect(childSignInActionSchema.safeParse({ action: "pin", pin: "1234" }).success).toBe(false);
+  });
+});
+
+describe("household-device PIN rules (S42)", () => {
+  const id = "3f1c2a9e-8b7d-4c6e-9a1b-2d3e4f5a6b7c";
+
+  it.each([
+    { requirePin: true },
+    { kind: "member", targetId: id, requirePin: false },
+    { kind: "chore", targetId: id, requirePin: true },
+  ])("accepts %j", (rule) => {
+    expect(pinRuleSchema.safeParse(rule).success).toBe(true);
+  });
+
+  it.each([
+    {},
+    { requirePin: "yes" },
+    { kind: "home", targetId: id, requirePin: true },
+    { kind: "member", targetId: "not-a-uuid", requirePin: true },
+    { kind: "chore", requirePin: true },
+    { kind: "member", targetId: id, requirePin: true, homeId: id },
+    { requirePin: true, extra: 1 },
+  ])("refuses %j", (rule) => {
+    expect(pinRuleSchema.safeParse(rule).success).toBe(false);
   });
 });
