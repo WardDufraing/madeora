@@ -137,6 +137,10 @@ export const childActions = [
   "child.guardian.removeSecondary",
   "child.link.issue",
   "child.remove",
+  // S42: username, password and turning sign-in on (primary-only sensitive authority).
+  "child.signIn.manage",
+  // S42: PIN resets, turning sign-in off, unlocking, signing out everywhere (either guardian).
+  "child.signIn.assist",
 ] as const;
 export type ChildAction = (typeof childActions)[number];
 
@@ -156,11 +160,13 @@ export function decideChildAction(facts: ChildFacts, action: ChildAction): boole
   const guardian = facts.guardianRole !== null;
   switch (action) {
     case "child.access.change":
+    case "child.signIn.manage":
     case "child.guardian.assignSecondary":
     case "child.guardian.handOverPrimary":
     case "child.link.issue":
       return primary;
     case "child.access.restrict":
+    case "child.signIn.assist":
     case "child.presentation.change":
     case "child.guardian.removeSecondary":
       return guardian;
@@ -186,5 +192,7 @@ export function childPermissions(facts: ChildFacts): ChildPermissionProjection {
     "child.guardian.removeSecondary": can("child.guardian.removeSecondary"),
     "child.link.issue": can("child.link.issue"),
     "child.remove": can("child.remove"),
+    "child.signIn.manage": can("child.signIn.manage"),
+    "child.signIn.assist": can("child.signIn.assist"),
   };
 }

@@ -26,6 +26,8 @@ const messageKey = {
   invalidCode: "failInvalidCode",
   alreadyLinked: "failAlreadyLinked",
   rateLimited: "failRateLimited",
+  usernameTaken: "failUsernameTaken",
+  usernameRequired: "failUsernameRequired",
   network: "failNetwork",
   failed: "failFailed",
 } as const satisfies Record<MemberFailure, string>;

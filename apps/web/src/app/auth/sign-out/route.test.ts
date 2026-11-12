@@ -1,6 +1,11 @@
 import { POST } from "./route";
 
 const signOut = vi.fn();
+const rpc = vi.fn();
+const authState = vi.hoisted((): { kind: string } => ({ kind: "signed-in" }));
+vi.mock("@/auth/identity", () => ({
+  getAuthState: () => Promise.resolve({ kind: authState.kind }),
+}));
 const cookieStore = {
   getAll: vi.fn(() => [
     { name: "sb-127-auth-token.0" },
@@ -11,7 +16,7 @@ const cookieStore = {
 };
 vi.mock("next/headers", () => ({ cookies: () => Promise.resolve(cookieStore) }));
 vi.mock("@/auth/supabase-server", () => ({
-  createSupabaseServerClient: () => Promise.resolve({ auth: { signOut } }),
+  createSupabaseServerClient: () => Promise.resolve({ auth: { signOut }, rpc }),
 }));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
@@ -22,6 +27,8 @@ function post(headers: Record<string, string>) {
 }
 
 beforeEach(() => {
+  authState.kind = "signed-in";
+  rpc.mockReset().mockResolvedValue({ data: null, error: null });
   signOut.mockReset().mockResolvedValue({ error: null });
   cookieStore.delete.mockClear();
 });
@@ -78,5 +85,39 @@ describe("POST /auth/sign-out", () => {
       ["sb-127-auth-token.1"],
     ]);
     expect(response.status).toBe(303);
+  });
+
+  it("ends a child's registered session in the database before signing out (S42)", async () => {
+    authState.kind = "child";
+    const response = await POST(
+      new Request("http://localhost:3000/auth/sign-out", {
+        method: "POST",
+        headers: {
+          origin: "https://madeora.example",
+          host: "madeora.example",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: "then=household",
+      }),
+    );
+    expect(rpc).toHaveBeenCalledWith("child_end_session");
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(response.headers.get("location")).toBe("/household");
+  });
+
+  it("does not call the child function for an adult, and then=child goes to child sign-in", async () => {
+    const response = await POST(
+      new Request("http://localhost:3000/auth/sign-out", {
+        method: "POST",
+        headers: {
+          origin: "https://madeora.example",
+          host: "madeora.example",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: "then=child",
+      }),
+    );
+    expect(rpc).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe("/sign-in/child?status=signed-out");
   });
 });

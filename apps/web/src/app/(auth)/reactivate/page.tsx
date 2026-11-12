@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { getAuthState } from "@/auth/identity";
-import { DEFAULT_SIGNED_IN_PATH, twoFactorPath } from "@/auth/redirects";
+import { CHILD_HOME_PATH, DEFAULT_SIGNED_IN_PATH, twoFactorPath } from "@/auth/redirects";
 import { ReactivateAccount } from "@/components/account/reactivate-account";
 import { pageTitle } from "@/i18n/page-title";
 import { formatDateTime } from "@/invitations/format";
@@ -26,6 +26,7 @@ export default async function ReactivatePage() {
   if (state.kind === "signed-out") redirect("/sign-in");
   if (state.kind === "second-factor") redirect(twoFactorPath(null));
   if (state.kind === "signed-in") redirect(DEFAULT_SIGNED_IN_PATH);
+  if (state.kind === "child") redirect(CHILD_HOME_PATH);
   const t = await getTranslations("Lifecycle");
   if (state.deletionPurgeAfter) {
     const [tDeletion, formats] = await Promise.all([

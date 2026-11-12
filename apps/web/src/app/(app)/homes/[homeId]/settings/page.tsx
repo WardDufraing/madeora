@@ -3,6 +3,8 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { requireIdentity } from "@/auth/identity";
+import { getHouseholdDevices } from "@/child-sign-in/server";
+import { HouseholdDevicesSetting } from "@/components/child-sign-in/household-devices-setting";
 import { HomeSettingsForm } from "@/components/homes/home-settings-form";
 import { loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
@@ -12,6 +14,9 @@ import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/states";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
+import { formatDateTime } from "@/invitations/format";
+import { getDateTimeFormats } from "@/invitations/server";
+import { getHomeDirectory } from "@/members/directory";
 import { getHomeExportAccess } from "@/privacy/server";
 import { timeZoneChoices } from "@/preferences/timezone";
 
@@ -54,6 +59,14 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
   const { home, membership, permissions } = context;
+  // Approved household devices for child PIN sign-in (S42): the same managers as the settings.
+  const [devices, directory, formats, tSignIn, tMembers] = await Promise.all([
+    permissions["home.updateSettings"] ? getHouseholdDevices(home.id) : null,
+    permissions["home.updateSettings"] ? getHomeDirectory(home.id) : null,
+    getDateTimeFormats(),
+    getTranslations("ChildSignIn"),
+    getTranslations("Members"),
+  ]);
 
   return (
     <>
@@ -83,6 +96,26 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           </div>
         )}
       </Card>
+      {devices ? (
+        <Card title={tSignIn("devicesTitle")} className="mt-6 max-w-2xl">
+          <HouseholdDevicesSetting
+            homeId={home.id}
+            devices={devices.map((device) => ({
+              id: device.id,
+              label: device.label,
+              approvedBy:
+                directory?.status === "ok"
+                  ? (directory.members.find(
+                      (member) => member.membershipId === device.approvedByMembershipId,
+                    )?.name ?? (device.approvedByMembershipId ? tMembers("noName") : null))
+                  : null,
+              approvedAt: formatDateTime(device.approvedAt, formats),
+              lastUsedAt: device.lastUsedAt ? formatDateTime(device.lastUsedAt, formats) : null,
+              isThisDevice: device.isThisDevice,
+            }))}
+          />
+        </Card>
+      ) : null}
       {/* The Home's trash: every member may open it and sees what they may (S16). */}
       {permissions["home.trash.view"] ? (
         <Card title={tTrash("settingsCardTitle")} className="mt-6 max-w-2xl">

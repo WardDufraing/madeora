@@ -1,6 +1,8 @@
 import { getPublicEnv } from "@madeora/config/env/public";
 import { cookies } from "next/headers";
 
+import { getAuthState } from "@/auth/identity";
+import { CHILD_SIGN_IN_PATH, HOUSEHOLD_SIGN_IN_PATH } from "@/auth/redirects";
 import { isSameOriginRequest } from "@/auth/same-origin";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
@@ -12,12 +14,22 @@ import { createSupabaseServerClient } from "@/auth/supabase-server";
  * S38 account switching posts `then=switch` (with the chosen remembered `account` id) or
  * `then=accounts` (removing the active account from this device's chooser); the destination
  * changes, the sign-out is the same. The next account always signs in on its own.
+ *
+ * S42: a child's session is ended in the database first (so its token stops working even if
+ * Supabase Auth cannot be reached), and `then=child` / `then=household` lead back to the child
+ * sign-in page or the device's PIN screen.
  */
 export async function POST(request: Request): Promise<Response> {
   if (!isSameOriginRequest(request.headers, getPublicEnv().NEXT_PUBLIC_APP_URL)) {
     return new Response(null, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
   const supabase = await createSupabaseServerClient();
+  if ((await getAuthState()).kind === "child") {
+    const ended = await supabase.rpc("child_end_session");
+    if (ended.error && ended.error.code !== "42501") {
+      console.error(JSON.stringify({ event: "child_session.end_failed", code: ended.error.code }));
+    }
+  }
   const { error } = await supabase.auth.signOut({ scope: "local" });
   if (error) {
     // Supabase Auth could not be reached, so it kept the session. Still delete this browser's
@@ -52,6 +64,8 @@ async function destinationOf(request: Request): Promise<string> {
   }
   const then = form?.get("then");
   if (then === "accounts") return "/accounts?status=removed";
+  if (then === "child") return `${CHILD_SIGN_IN_PATH}?status=signed-out`;
+  if (then === "household") return HOUSEHOLD_SIGN_IN_PATH;
   if (then === "switch") {
     const account = form?.get("account");
     return typeof account === "string" && UUID.test(account)

@@ -6,7 +6,13 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { PATH_HEADER } from "./path-header";
-import { REACTIVATE_PATH, signInPath, twoFactorPath } from "./redirects";
+import {
+  CHILD_HOME_PATH,
+  CHILD_SIGN_IN_PATH,
+  REACTIVATE_PATH,
+  signInPath,
+  twoFactorPath,
+} from "./redirects";
 import { needsSecondFactor } from "./two-factor";
 import { createSupabaseServerClient } from "./supabase-server";
 
@@ -25,6 +31,10 @@ export interface VerifiedIdentity {
  * - `deactivated`: a fully signed-in session of an account its holder deactivated (S38) or asked to
  *   delete (S40; `deletionPurgeAfter` then says until when it can be recovered). It may only use
  *   the reactivation page; the database refuses everything else for it.
+ * - `child`: a guardian-managed child's session (S42), recognised by the `madeora_kind` the
+ *   database sets in the account's app metadata (users cannot change it). It may only use the
+ *   child pages; the database refuses it everything but the `child_*` functions, and only while
+ *   Madeora registered the session and the child's guardians still allow it.
  * - `signed-in`: everything else.
  *
  * The session cookie is only a claim: `auth.getUser(token)` asks Supabase Auth to check the access
@@ -40,7 +50,13 @@ export type AuthState =
       readonly user: User;
       readonly deletionPurgeAfter: string | null;
     }
+  | { readonly kind: "child"; readonly user: User }
   | { readonly kind: "signed-in"; readonly user: User };
+
+/** Whether a user Supabase Auth has just verified is a guardian-managed child (S42). */
+export function isChildUser(user: Pick<User, "app_metadata">): boolean {
+  return user.app_metadata["madeora_kind"] === "child";
+}
 
 export const getAuthState = cache(async (): Promise<AuthState> => {
   const supabase = await createSupabaseServerClient();
@@ -50,7 +66,11 @@ export const getAuthState = cache(async (): Promise<AuthState> => {
   if (!session) return { kind: "signed-out" };
 
   const { data, error } = await supabase.auth.getUser(session.access_token);
-  if (error || !data.user.email_confirmed_at) return { kind: "signed-out" };
+  if (error) return { kind: "signed-out" };
+  // Before the email check: a child's alias is confirmed for Supabase Auth's sake only, and none of
+  // the adult checks below apply to a child.
+  if (isChildUser(data.user)) return { kind: "child", user: data.user };
+  if (!data.user.email_confirmed_at) return { kind: "signed-out" };
   if (needsSecondFactor(data.user, session.access_token)) {
     // A browser the account holder trusted (S37) passes the second factor for this session: the
     // database records the trust against the session, so the token stays aal1.
@@ -99,6 +119,17 @@ export async function requireIdentity(): Promise<VerifiedIdentity> {
   const state = await getAuthState();
   if (state.kind === "signed-in") return { userId: state.user.id };
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
+  if (state.kind === "child") redirect(CHILD_HOME_PATH);
   const path = (await headers()).get(PATH_HEADER);
   redirect(state.kind === "second-factor" ? twoFactorPath(path) : signInPath(path));
+}
+
+/** The signed-in child (S42), for the child pages. Anyone else goes where they belong. */
+export async function requireChildIdentity(): Promise<VerifiedIdentity> {
+  const state = await getAuthState();
+  if (state.kind === "child") return { userId: state.user.id };
+  if (state.kind === "signed-in") redirect("/");
+  if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
+  if (state.kind === "second-factor") redirect(twoFactorPath(null));
+  redirect(CHILD_SIGN_IN_PATH);
 }

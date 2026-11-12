@@ -159,7 +159,14 @@ select tests.assert_true(
       -- S37: security emails to the backup address and the end of a recovery's wait.
       'public.get_security_email(uuid)',
       'public.record_security_email(uuid,text)',
-      'public.deliver_account_recovery_ready(uuid,timestamptz)'
+      'public.deliver_account_recovery_ready(uuid,timestamptz)',
+      -- S42: child sign-in steps (the web server checks the PIN or password hash) and the PIN
+      -- screen of an approved household device.
+      'public.child_password_attempt(text,text)',
+      'public.child_pin_attempt(text,uuid,text)',
+      'public.child_sign_in_verified(uuid)',
+      'public.child_sign_in_complete(uuid,uuid)',
+      'public.household_device_sign_in(text)'
     ]::regprocedure[]) as s(signature)
     where has_function_privilege('authenticated', s.signature, 'execute')
   ),

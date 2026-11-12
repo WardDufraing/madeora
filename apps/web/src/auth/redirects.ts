@@ -4,6 +4,11 @@ export const REACTIVATE_PATH = "/reactivate";
 /** Where people land after signing in when no (valid) destination was asked for. */
 export const DEFAULT_SIGNED_IN_PATH = "/";
 
+/** A signed-in child's only page (S42), the child sign-in page and an approved device's PIN page. */
+export const CHILD_HOME_PATH = "/child";
+export const CHILD_SIGN_IN_PATH = "/sign-in/child";
+export const HOUSEHOLD_SIGN_IN_PATH = "/household";
+
 /**
  * Accepts a post-sign-in destination only when it is a path on this site, such as `/tasks?x=1`.
  * Anything that a browser could resolve to another origin (`//evil.example`, `/\evil.example`,
