@@ -64,7 +64,10 @@ select tests.assert_true(
         'private.finish_account_recovery(text)',
         -- S40: the membership view (security_invoker, so it runs as its reader) leaves out Homes
         -- pending deletion; it only says whether a Home id is closed.
-        'private.home_is_open(uuid)'
+        'private.home_is_open(uuid)',
+        -- S41: the child settings policy asks whether the caller guards that child in that Home;
+        -- it only answers about the caller.
+        'private.caller_child_guardian_role(uuid,uuid)'
       ]::text[])
       and (
         has_function_privilege('anon', p.oid, 'execute')

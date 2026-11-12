@@ -69,6 +69,15 @@ export type MemberErrorCode =
   | "already-decided"
   | "expired"
   | "no-longer-valid"
+  | "invalid-guardian"
+  | "confirmation-required"
+  | "child-last-home"
+  | "limit-reached"
+  | "too-late"
+  | "child-other-homes"
+  | "invalid-code"
+  | "already-linked"
+  | "rate-limited"
   | "failed";
 
 export interface MemberErrorResponse {
@@ -105,6 +114,15 @@ export type MemberFailure =
   | "alreadyDecided"
   | "expired"
   | "noLongerValid"
+  | "invalidGuardian"
+  | "confirmationRequired"
+  | "childLastHome"
+  | "limitReached"
+  | "tooLate"
+  | "childOtherHomes"
+  | "invalidCode"
+  | "alreadyLinked"
+  | "rateLimited"
   | "network"
   | "failed";
 
@@ -127,6 +145,15 @@ const failureByCode: Partial<Record<MemberErrorCode, MemberFailure>> = {
   "already-decided": "alreadyDecided",
   expired: "expired",
   "no-longer-valid": "noLongerValid",
+  "invalid-guardian": "invalidGuardian",
+  "confirmation-required": "confirmationRequired",
+  "child-last-home": "childLastHome",
+  "limit-reached": "limitReached",
+  "too-late": "tooLate",
+  "child-other-homes": "childOtherHomes",
+  "invalid-code": "invalidCode",
+  "already-linked": "alreadyLinked",
+  "rate-limited": "rateLimited",
 };
 
 async function send(method: "POST" | "PATCH" | "PUT", url: string, body: unknown) {
@@ -219,3 +246,6 @@ export async function ownershipTransferAction(
     await send("POST", transferActionEndpoint(homeId, transferId, action), {}),
   );
 }
+
+/** The same request helper for the child-profile endpoints (S41, `@/children/api`). */
+export const sendMemberRequest = send;

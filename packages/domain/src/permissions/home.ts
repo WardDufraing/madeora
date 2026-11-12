@@ -386,6 +386,12 @@ export interface MemberTargetFacts {
   readonly role: HomeRole;
   /** Whether the target is the acting person themselves. */
   readonly isSelf: boolean;
+  /**
+   * S41: the target is a child. Children are managed through their guardians (./children.ts),
+   * never through the adult member actions: no role change, capabilities, ownership or removal
+   * here.
+   */
+  readonly isChild?: boolean;
 }
 
 /**
@@ -409,7 +415,7 @@ export function decideMemberAction(
     return { allowed: false, reason: "not-member" };
   }
   const denied: HomeDecision = { allowed: false, reason: "not-permitted" };
-  if (target.isSelf || target.role === "owner") return denied;
+  if (target.isSelf || target.role === "owner" || target.isChild === true) return denied;
   const homeAction = (name: HomeAction) => decideHomeAction(homeId, actor, name).allowed;
   switch (action) {
     case "member.changeRole":

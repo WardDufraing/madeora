@@ -5,6 +5,158 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      child_guardian_offers: {
+        Row: {
+          child_user_id: string;
+          created_at: string;
+          expires_at: string;
+          guardian_user_id: string;
+          home_id: string;
+          id: string;
+          kind: string;
+          offered_by: string | null;
+          role: string;
+        };
+        Insert: {
+          child_user_id: string;
+          created_at?: string;
+          expires_at?: string;
+          guardian_user_id: string;
+          home_id: string;
+          id?: string;
+          kind: string;
+          offered_by?: string | null;
+          role: string;
+        };
+        Update: {
+          child_user_id?: string;
+          created_at?: string;
+          expires_at?: string;
+          guardian_user_id?: string;
+          home_id?: string;
+          id?: string;
+          kind?: string;
+          offered_by?: string | null;
+          role?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "child_guardian_offers_child_membership_fkey";
+            columns: ["home_id", "child_user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+          {
+            foreignKeyName: "child_guardian_offers_guardian_membership_fkey";
+            columns: ["home_id", "guardian_user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
+      child_guardians: {
+        Row: {
+          assigned_at: string;
+          assigned_by: string | null;
+          child_user_id: string;
+          guardian_user_id: string;
+          home_id: string;
+          role: string;
+        };
+        Insert: {
+          assigned_at?: string;
+          assigned_by?: string | null;
+          child_user_id: string;
+          guardian_user_id: string;
+          home_id: string;
+          role: string;
+        };
+        Update: {
+          assigned_at?: string;
+          assigned_by?: string | null;
+          child_user_id?: string;
+          guardian_user_id?: string;
+          home_id?: string;
+          role?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "child_guardians_child_membership_fkey";
+            columns: ["home_id", "child_user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+          {
+            foreignKeyName: "child_guardians_guardian_membership_fkey";
+            columns: ["home_id", "guardian_user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
+      child_home_settings: {
+        Row: {
+          child_user_id: string;
+          home_id: string;
+          overrides: NonNullable<Json>;
+          preset: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          child_user_id: string;
+          home_id: string;
+          overrides?: NonNullable<Json>;
+          preset?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          child_user_id?: string;
+          home_id?: string;
+          overrides?: NonNullable<Json>;
+          preset?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "child_home_settings_membership_fkey";
+            columns: ["home_id", "child_user_id"];
+            isOneToOne: true;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
+      child_profiles: {
+        Row: {
+          age_band: string | null;
+          created_at: string;
+          created_by: string | null;
+          creation_request_id: string;
+          user_id: string;
+        };
+        Insert: {
+          age_band?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          creation_request_id: string;
+          user_id: string;
+        };
+        Update: {
+          age_band?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          creation_request_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       chore_pool_signals: {
         Row: {
           changed_at: string;
@@ -458,6 +610,10 @@ export type Database = {
       advance_reminder_series: { Args: { p_limit: number }; Returns: number };
       advance_shopping: { Args: { p_home_id?: string }; Returns: number };
       advance_task_series: { Args: { p_home_id?: string; p_today?: string }; Returns: number };
+      answer_child_guardian_offer: {
+        Args: { p_accept: boolean; p_offer_id: string };
+        Returns: string;
+      };
       answer_chore_reassignment: {
         Args: { p_action: string; p_request_id: string };
         Returns: {
@@ -512,6 +668,15 @@ export type Database = {
           outcome: string;
           revision: number;
         }[];
+      };
+      assign_child_guardian: {
+        Args: {
+          p_child_membership_id: string;
+          p_guardian_membership_id: string;
+          p_home_id: string;
+          p_role: string;
+        };
+        Returns: string;
       };
       attach_pet_medical_file: { Args: { p_file_id: string }; Returns: Json };
       attach_task_file: {
@@ -628,6 +793,11 @@ export type Database = {
       };
       cancel_account_recovery: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_backup_email_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      cancel_child_guardian_offer: { Args: { p_offer_id: string }; Returns: string };
+      cancel_child_link_code: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: string;
+      };
       cancel_home_copy: { Args: { p_request_id: string }; Returns: boolean };
       cancel_my_email_change: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_my_export: { Args: { p_export_id: string }; Returns: boolean };
@@ -760,6 +930,10 @@ export type Database = {
         }[];
       };
       check_request: { Args: Record<PropertyKey, never>; Returns: undefined };
+      child_link_code_state: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: string;
+      };
       claim_chore_occurrence: {
         Args: { p_occurrence_id: string };
         Returns: {
@@ -894,6 +1068,28 @@ export type Database = {
       create_calendar_event: {
         Args: { p_event: Json; p_home_id?: string; p_id: string };
         Returns: Json;
+      };
+      create_child: {
+        Args: {
+          p_accent_color: string;
+          p_age_band: string;
+          p_home_id: string;
+          p_name: string;
+          p_primary_guardian_membership_id: string;
+          p_request_id: string;
+        };
+        Returns: {
+          membership_id: string;
+          outcome: string;
+        }[];
+      };
+      create_child_link_code: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: {
+          code: string;
+          expires_at: string;
+          outcome: string;
+        }[];
       };
       create_chore: {
         Args: {
@@ -1476,6 +1672,10 @@ export type Database = {
           outcome: string;
         }[];
       };
+      delete_mistaken_child: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: string;
+      };
       delete_personal_data: {
         Args: { p_categories: string[]; p_request_id: string };
         Returns: Json;
@@ -1943,6 +2143,27 @@ export type Database = {
           membership_id: string;
         }[];
       };
+      home_children: {
+        Args: { p_home_id: string };
+        Returns: {
+          accent_color: string;
+          age_band: string;
+          can_delete: boolean;
+          capabilities: string[];
+          membership_id: string;
+          my_guardian_role: string;
+          name: string;
+          overrides: Json;
+          pending_primary_membership_id: string;
+          pending_primary_offer_id: string;
+          pending_secondary_membership_id: string;
+          pending_secondary_offer_id: string;
+          preset: string;
+          primary_guardian_membership_id: string;
+          secondary_guardian_membership_id: string;
+          settings_updated_at: string;
+        }[];
+      };
       home_closure_summary: {
         Args: { p_home_id: string };
         Returns: {
@@ -1956,6 +2177,7 @@ export type Database = {
         Returns: {
           accent_color: string;
           avatar_file_id: string;
+          is_child: boolean;
           is_inactive: boolean;
           is_self: boolean;
           joined_at: string;
@@ -2782,6 +3004,17 @@ export type Database = {
           review_due: boolean;
         }[];
       };
+      my_child_guardian_offers: {
+        Args: { p_home_id: string };
+        Returns: {
+          child_membership_id: string;
+          child_name: string;
+          expires_at: string;
+          kind: string;
+          offer_id: string;
+          role: string;
+        }[];
+      };
       my_closed_homes: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -3003,6 +3236,13 @@ export type Database = {
         Returns: boolean;
       };
       record_security_email: { Args: { p_email_id: string; p_status: string }; Returns: boolean };
+      redeem_child_link_code: {
+        Args: { p_accent_color: string; p_code: string; p_home_id: string };
+        Returns: {
+          membership_id: string;
+          outcome: string;
+        }[];
+      };
       redeem_personal_reward: {
         Args: {
           p_dry_run?: boolean;
@@ -3041,6 +3281,10 @@ export type Database = {
       };
       release_recipe_lock: { Args: { p_recipe_id: string; p_token: string }; Returns: boolean };
       remove_backup_email: { Args: Record<PropertyKey, never>; Returns: boolean };
+      remove_child_secondary_guardian: {
+        Args: { p_child_membership_id: string; p_home_id: string };
+        Returns: string;
+      };
       remove_chore_reminder: {
         Args: { p_expected_revision: number; p_occurrence_id: string };
         Returns: {
@@ -3405,6 +3649,30 @@ export type Database = {
           p_show_chores?: boolean;
           p_show_tasks?: boolean;
           p_show_vacations?: boolean;
+        };
+        Returns: string;
+      };
+      set_child_access: {
+        Args: {
+          p_child_membership_id: string;
+          p_confirm_expansion: boolean;
+          p_expected_updated_at: string;
+          p_home_id: string;
+          p_overrides: Json;
+          p_preset: string;
+        };
+        Returns: {
+          after_capabilities: string[];
+          before_capabilities: string[];
+          outcome: string;
+        }[];
+      };
+      set_child_presentation: {
+        Args: {
+          p_accent_color: string;
+          p_child_membership_id: string;
+          p_display_name: string;
+          p_home_id: string;
         };
         Returns: string;
       };
