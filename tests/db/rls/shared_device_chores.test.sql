@@ -184,6 +184,15 @@ select tests.act_as_service_role();
 select tests.assert_true(
   public.shared_device_undo(tests.sd_key('device'), tests.sd('a-any-2')) = 'expired',
   'Undo is possible for two minutes only');
+select tests.act_as_owner();
+update private.shared_device_actions set created_at = now() where id = tests.sd('a-any-2');
+update private.chore_occurrences set revision = revision + 1 where id = tests.sd('o-any');
+select tests.act_as_service_role();
+select tests.assert_true(
+  public.shared_device_undo(tests.sd_key('device'), tests.sd('a-any-2')) = 'invalid',
+  'Undo is refused once someone else changed the chore (say, approved it)');
+select tests.assert_true((select status from tests.sd_occ(tests.sd('o-any'))) = 'completed',
+  'Their change stands');
 
 -- A child completes their own chore ---------------------------------------------------------------------------
 
