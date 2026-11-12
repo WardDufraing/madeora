@@ -7683,7 +7683,7 @@
     "passwordLabel": "Password",
     "pinLabel": "PIN",
     "sessionsLabel": "Signed in now",
-    "sessionsCount": "{count, plural, =0 {Not signed in anywhere} one {On # device} other {On # devices}}",
+    "sessionsCount": "{count, plural, =0 {Not signed in anywhere} one {# active sign-in} other {# active sign-ins}}",
     "notSet": "Not set",
     "isSet": "Set",
     "passwordLocked": "Password sign-in is locked after too many wrong tries.",
@@ -7709,6 +7709,8 @@
     "passwordNeedsUsername": "Choose a username first; a password goes with it.",
     "unlock": "Unlock sign-in",
     "signOutEverywhere": "Sign out everywhere",
+    "identityOtherHome": "This child is also in another Home, so their username and password can only be changed by someone who is their primary guardian in every one of their Homes. You can still set this Home's PIN and turn sign-in on or off here.",
+    "signOutHere": "Sign out on this Home's devices",
     "removePassword": "Remove password",
     "removePin": "Remove PIN",
     "done": {

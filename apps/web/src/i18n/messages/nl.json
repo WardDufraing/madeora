@@ -7683,7 +7683,7 @@
     "passwordLabel": "Wachtwoord",
     "pinLabel": "Pincode",
     "sessionsLabel": "Nu aangemeld",
-    "sessionsCount": "{count, plural, =0 {Nergens aangemeld} one {Op # toestel} other {Op # toestellen}}",
+    "sessionsCount": "{count, plural, =0 {Nergens aangemeld} one {# actieve aanmelding} other {# actieve aanmeldingen}}",
     "notSet": "Niet ingesteld",
     "isSet": "Ingesteld",
     "passwordLocked": "Aanmelden met wachtwoord is vergrendeld na te veel foute pogingen.",
@@ -7709,6 +7709,8 @@
     "passwordNeedsUsername": "Kies eerst een gebruikersnaam; een wachtwoord hoort daarbij.",
     "unlock": "Aanmelden ontgrendelen",
     "signOutEverywhere": "Overal afmelden",
+    "identityOtherHome": "Dit kind zit ook in een ander Huis. Gebruikersnaam en wachtwoord kan daarom alleen iemand wijzigen die in al die Huizen de hoofdvoogd is. De pincode van dit Huis instellen en aanmelden hier aan- of uitzetten kan je nog wel.",
+    "signOutHere": "Afmelden op de toestellen van dit Huis",
     "removePassword": "Wachtwoord verwijderen",
     "removePin": "Pincode verwijderen",
     "done": {

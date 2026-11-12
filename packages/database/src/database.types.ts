@@ -992,6 +992,7 @@ export type Database = {
         Args: { p_child_membership_id: string; p_home_id: string };
         Returns: {
           active_sessions: number;
+          can_manage_identity: boolean;
           has_password: boolean;
           has_pin: boolean;
           password_locked_until: string;

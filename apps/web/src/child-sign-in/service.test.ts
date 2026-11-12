@@ -222,4 +222,24 @@ describe("child PIN sign-in (S42)", () => {
     });
     expect(generateLink).not.toHaveBeenCalled();
   });
+
+  it("issues no session where the database's request check is not set up", async () => {
+    const { signInChildWithPin } = await import("./service");
+    rpc.mockImplementation((name: string) =>
+      name === "child_pin_attempt"
+        ? Promise.resolve({
+            data: [{ outcome: "check", attempt_id: ATTEMPT, pin_hash: pinHash }],
+            error: null,
+          })
+        : Promise.resolve({
+            data: [{ outcome: "not_configured", child_user_id: null, alias_email: null }],
+            error: null,
+          }),
+    );
+    await expect(signInChildWithPin(DEVICE_HASH, CHILD, PIN)).resolves.toEqual({
+      kind: "unavailable",
+    });
+    expect(generateLink).not.toHaveBeenCalled();
+    expectNoSecretAnywhere(PIN);
+  });
 });

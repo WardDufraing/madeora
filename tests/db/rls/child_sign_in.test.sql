@@ -327,10 +327,11 @@ select tests.assert_true(
 
 -- The third lock within a day lasts until a guardian unlocks.
 select tests.act_as_owner();
-select private.count_child_failure(tests.cs('mia'), 'pin') from generate_series(1, 15);
+select private.count_child_failure(tests.cs('mia'), 'pin', tests.cs('home-a'))
+  from generate_series(1, 15);
 select tests.assert_true(
-  (select pin_locked_until = 'infinity' from private.child_credentials
-   where child_user_id = tests.cs('mia')),
+  (select pin_locked_until = 'infinity' from private.child_home_pins
+   where child_user_id = tests.cs('mia') and home_id = tests.cs('home-a')),
   'The third lock within 24 hours lasts until a guardian unlocks');
 select tests.act_as('alice');
 select public.unlock_child_sign_in(tests.cs('home-a'), tests.cs('m-mia'));
@@ -360,8 +361,9 @@ select tests.assert_true(
 -- Registering a session ------------------------------------------------------------------------------------------
 
 select tests.act_as_owner();
-update private.child_credentials set pin_failures = 0, password_failures = 0
+update private.child_credentials set password_failures = 0
   where child_user_id = tests.cs('mia');
+update private.child_home_pins set pin_failures = 0 where child_user_id = tests.cs('mia');
 select tests.act_as_service_role();
 insert into ids select 'att-pin', attempt_id from public.child_pin_attempt(
   tests.cs_key('device-a'), tests.cs('m-mia'), tests.cs_key('c5'));
@@ -375,7 +377,7 @@ select tests.assert_true(
   'An attempt can be verified only once');
 select tests.act_as_owner();
 select tests.assert_true(
-  (select pin_failures = 0 from private.child_credentials where child_user_id = tests.cs('mia')),
+  (select pin_failures = 0 from private.child_home_pins where child_user_id = tests.cs('mia')),
   'Verification clears the wrong-try count');
 select tests.act_as_service_role();
 insert into ids select 'sess-pin', tests.cs_session(tests.cs('mia'));
@@ -545,3 +547,112 @@ select tests.assert_true(
   (select outcome from public.end_child_sign_ins(tests.cs('home-a'), tests.cs('m-mia')))
     = 'not_permitted',
   'A non-guardian cannot');
+
+-- A child in two Homes: identity-wide credentials need the primary guardian of every Home ---------------
+-- (spec "identity-level guardians": a Home-only guardian is denied a global reset; a Home guardian
+-- resets only that Home's PIN).
+
+create temporary table link (code text) on commit drop;
+grant all on link to anon, authenticated;
+select tests.act_as('alice');
+insert into link select code from public.create_child_link_code(tests.cs('home-a'), tests.cs('m-mia'));
+select tests.act_as_user(tests.cs('erin'));
+insert into ids select 'm-mia-b', membership_id from public.redeem_child_link_code(
+  tests.cs('home-b'), (select code from link), '#2563eb');
+select tests.assert_true(tests.cs('m-mia-b') is not null,
+  'Fixture: Erin links Mia into Home B and becomes her primary guardian there');
+
+select tests.assert_true(
+  public.set_child_username(tests.cs('home-b'), tests.cs('m-mia-b'), 'mia.erin') = 'not_permitted',
+  'A Home-only primary guardian cannot change the identity-wide username');
+select tests.assert_true(
+  public.set_child_credential(tests.cs('home-b'), tests.cs('m-mia-b'), 'password',
+    tests.cs_hash('erin-pw')) = 'not_permitted',
+  'A Home-only primary guardian cannot reset the identity-wide password');
+select tests.assert_true(
+  public.clear_child_credential(tests.cs('home-b'), tests.cs('m-mia-b'), 'password')
+    = 'not_permitted',
+  'Nor remove it');
+select tests.assert_true(
+  (select not can_manage_identity and active_sessions = 0
+   from public.child_sign_in_settings(tests.cs('home-b'), tests.cs('m-mia-b'))),
+  'Home B''s guardian is told they cannot manage the identity, and sees no Home A sessions');
+
+select tests.act_as('alice');
+select tests.assert_true(
+  public.set_child_username(tests.cs('home-a'), tests.cs('m-mia'), 'mia.alice') = 'not_permitted',
+  'Home A''s primary guardian cannot change it alone any more either');
+select tests.assert_true(
+  (select not can_manage_identity
+   from public.child_sign_in_settings(tests.cs('home-a'), tests.cs('m-mia'))),
+  'Home A''s guardian sees the same restriction');
+
+-- PINs are per Home.
+select tests.act_as_user(tests.cs('erin'));
+select tests.assert_true(
+  public.set_child_credential(tests.cs('home-b'), tests.cs('m-mia-b'), 'pin',
+    tests.cs_hash('erin-pin')) = 'saved',
+  'Home B''s guardian sets a PIN for Home B');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select pin_hash = tests.cs_hash('mia-pin') from private.child_home_pins
+   where home_id = tests.cs('home-a') and child_user_id = tests.cs('mia'))
+  and (select pin_hash = tests.cs_hash('erin-pin') from private.child_home_pins
+       where home_id = tests.cs('home-b') and child_user_id = tests.cs('mia')),
+  'Home A''s PIN is untouched by Home B''s');
+update private.child_home_pins set pin_locked_until = now() + interval '1 hour', pin_failures = 2
+  where home_id = tests.cs('home-a') and child_user_id = tests.cs('mia');
+update private.child_credentials set password_locked_until = now() + interval '1 hour'
+  where child_user_id = tests.cs('mia');
+select tests.act_as_user(tests.cs('erin'));
+select tests.assert_true(
+  public.clear_child_credential(tests.cs('home-b'), tests.cs('m-mia-b'), 'pin') = 'cleared',
+  'Home B''s guardian removes Home B''s PIN');
+select tests.assert_true(
+  public.unlock_child_sign_in(tests.cs('home-b'), tests.cs('m-mia-b')) = 'unchanged',
+  'Home B''s guardian cannot lift Home A''s PIN lock or the identity-wide password lock');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select pin_locked_until > now() from private.child_home_pins
+   where home_id = tests.cs('home-a') and child_user_id = tests.cs('mia'))
+  and (select password_locked_until > now() from private.child_credentials
+       where child_user_id = tests.cs('mia')),
+  'Both locks are still in place');
+select tests.act_as('bob');
+select tests.assert_true(
+  public.unlock_child_sign_in(tests.cs('home-a'), tests.cs('m-mia')) = 'unlocked',
+  'Home A''s secondary guardian lifts Home A''s PIN lock');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select pin_locked_until is null from private.child_home_pins
+   where home_id = tests.cs('home-a') and child_user_id = tests.cs('mia'))
+  and (select password_locked_until > now() from private.child_credentials
+       where child_user_id = tests.cs('mia')),
+  'Only the PIN lock was lifted; the password lock needs identity authority');
+
+-- Ending sessions from one Home reaches only what that guardian may end.
+select tests.act_as_owner();
+update private.child_credentials set password_locked_until = null, password_failures = 0
+  where child_user_id = tests.cs('mia');
+select tests.act_as_service_role();
+insert into ids select 'att-pw3', attempt_id from public.child_password_attempt(
+  'mia.k', tests.cs_key('c9'));
+select public.child_sign_in_verified(tests.cs('att-pw3'));
+insert into ids select 'sess-pw3', tests.cs_session(tests.cs('mia'));
+select public.child_sign_in_complete(tests.cs('att-pw3'), tests.cs('sess-pw3'));
+select tests.act_as_user(tests.cs('erin'));
+select tests.assert_true(
+  (select ended = 0 from public.end_child_sign_ins(tests.cs('home-b'), tests.cs('m-mia-b'))),
+  'Home B''s guardian cannot end the child''s password session in Home A');
+select tests.assert_true(tests.cs_session_ok(tests.cs('mia'), tests.cs('sess-pw3')),
+  'The password session still works in Home A');
+
+-- A step-2 call without a step-1 'check' verifies nothing.
+select tests.act_as_owner();
+insert into private.child_sign_in_attempts (id, method, child_user_id, client_key)
+  values ('00000000-0000-4000-8000-0000000000aa', 'password', tests.cs('mia'), tests.cs_key('x'));
+select tests.act_as_service_role();
+select tests.assert_true(
+  (select outcome from public.child_sign_in_verified('00000000-0000-4000-8000-0000000000aa'))
+    = 'invalid',
+  'Only an attempt that step 1 answered with ''check'' can be verified');

@@ -38,6 +38,11 @@ export interface ChildSignInSettingsView {
   readonly passwordLock: string | null;
   readonly pinLock: string | null;
   readonly activeSessions: number;
+  /**
+   * Whether the caller may change the child's identity-wide username and password: the child's
+   * primary guardian in every Home the child belongs to (interim rule until identity guardians).
+   */
+  readonly canManageIdentity: boolean;
 }
 
 type Done = "username" | "password" | "pin" | "access" | "cleared" | "unlocked" | "ended";
@@ -59,9 +64,10 @@ function useSignInAction(homeId: string, membershipId: string, onDone: (done: Do
 
 /**
  * A child's sign-in, for their guardians in this Home (S42; spec "Confirmed guardian-managed child
- * sign-in" and the guardian authority rules). The primary guardian sets the username and password
- * and turns sign-in on; either guardian sets a new PIN, turns sign-in off, lifts a lock and signs
- * the child out everywhere. PINs and passwords are sent once, hashed on the server, never shown
+ * sign-in" and the identity-level guardian rules). The username and password are identity-wide:
+ * only a guardian who is the child's primary guardian in every one of the child's Homes changes
+ * them. The PIN belongs to this Home: either guardian here sets it, lifts its lock and ends its
+ * sessions. The primary guardian turns sign-in on in this Home; either guardian turns it off. PINs and passwords are sent once, hashed on the server, never shown
  * again. The API and the database decide every change again.
  */
 export function ChildSignInSettings({
@@ -88,6 +94,7 @@ export function ChildSignInSettings({
 
   const [passwordSignIn, setPasswordSignIn] = useState(settings.passwordSignIn);
   const [pinSignIn, setPinSignIn] = useState(settings.pinSignIn);
+  const identity = isPrimary && settings.canManageIdentity;
   const switchesChanged =
     passwordSignIn !== settings.passwordSignIn || pinSignIn !== settings.pinSignIn;
   const locked = settings.passwordLock !== null || settings.pinLock !== null;
@@ -165,7 +172,12 @@ export function ChildSignInSettings({
         </div>
       </fieldset>
 
-      {isPrimary ? (
+      {isPrimary && !settings.canManageIdentity ? (
+        <p className="text-helper text-fg-muted" data-testid="identity-other-home">
+          {t("identityOtherHome")}
+        </p>
+      ) : null}
+      {identity ? (
         <SecretForm
           kind="username"
           busy={action.isPending}
@@ -175,7 +187,7 @@ export function ChildSignInSettings({
           currentUsername={settings.username}
         />
       ) : null}
-      {isPrimary && settings.username ? (
+      {identity && settings.username ? (
         <SecretForm
           kind="password"
           busy={action.isPending}
@@ -183,7 +195,7 @@ export function ChildSignInSettings({
             run({ action: "password", password: value }, "password");
           }}
         />
-      ) : isPrimary ? (
+      ) : identity ? (
         <p className="text-helper text-fg-muted">{t("passwordNeedsUsername")}</p>
       ) : null}
       <SecretForm
@@ -216,10 +228,10 @@ export function ChildSignInSettings({
               run({ action: "end-sessions" }, "ended");
             }}
           >
-            {t("signOutEverywhere")}
+            {settings.canManageIdentity ? t("signOutEverywhere") : t("signOutHere")}
           </Button>
         ) : null}
-        {isPrimary && settings.hasPassword ? (
+        {identity && settings.hasPassword ? (
           <Button
             type="button"
             variant="ghost"

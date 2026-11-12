@@ -220,6 +220,7 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
                 passwordLock: lockText(signIn.passwordLockedUntil),
                 pinLock: lockText(signIn.pinLockedUntil),
                 activeSessions: signIn.activeSessions,
+                canManageIdentity: signIn.canManageIdentity,
               }}
             />
           </Card>

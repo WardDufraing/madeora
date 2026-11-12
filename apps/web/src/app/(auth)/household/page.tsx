@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { redirect } from "next/navigation";
 
 import { getAuthState } from "@/auth/identity";
-import { CHILD_HOME_PATH } from "@/auth/redirects";
 import { currentDeviceHash } from "@/child-sign-in/device";
-import { getChildSession } from "@/child-sign-in/server";
 import { getHouseholdDeviceScreen } from "@/child-sign-in/service";
 import { FormAlert } from "@/components/auth/form-alert";
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -23,11 +20,13 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * The PIN sign-in screen of an approved household device (S42; spec: PIN sign-in only on
  * explicitly approved household devices). Any other browser is told PIN sign-in is not available
- * here. Only the device's Home and the names of its children with PIN sign-in on are shown.
+ * here. Only the device's Home and the names of its children with PIN sign-in on are shown. A
+ * child still signed in here is not taken back to their session: the screen always asks who is
+ * signing in, and a new PIN sign-in replaces the earlier child's session (spec: a verified identity
+ * is never silently kept for the next person).
  */
 export default async function HouseholdPage() {
   const [state, t] = await Promise.all([getAuthState(), getTranslations("ChildSignIn")]);
-  if (state.kind === "child" && (await getChildSession())) redirect(CHILD_HOME_PATH);
   const deviceHash = await currentDeviceHash();
   const screen = deviceHash ? await getHouseholdDeviceScreen(deviceHash) : null;
 

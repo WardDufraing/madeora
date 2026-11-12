@@ -20,6 +20,7 @@ export interface ChildSignInSettings {
   readonly passwordLockedUntil: string | null;
   readonly pinLockedUntil: string | null;
   readonly activeSessions: number;
+  readonly canManageIdentity: boolean;
 }
 
 function lockEnd(value: string | null): string | null {
@@ -55,6 +56,7 @@ export const getChildSignInSettings = cache(
       passwordLockedUntil: lockEnd(row.password_locked_until),
       pinLockedUntil: lockEnd(row.pin_locked_until),
       activeSessions: row.active_sessions,
+      canManageIdentity: row.can_manage_identity,
     };
   },
 );

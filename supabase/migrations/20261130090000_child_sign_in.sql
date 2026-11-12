@@ -168,19 +168,11 @@ create table private.child_credentials (
     constraint child_credentials_password_hash_check
       check (password_hash is null or private.is_child_secret_hash(password_hash)),
   password_set_at timestamptz,
-  pin_hash text
-    constraint child_credentials_pin_hash_check
-      check (pin_hash is null or private.is_child_secret_hash(pin_hash)),
-  pin_set_at timestamptz,
   -- Wrong tries since the last success or lock, the current lock, and the locks in the window.
   password_failures integer not null default 0,
   password_locked_until timestamptz,
   password_locks integer not null default 0,
   password_locks_since timestamptz,
-  pin_failures integer not null default 0,
-  pin_locked_until timestamptz,
-  pin_locks integer not null default 0,
-  pin_locks_since timestamptz,
   updated_at timestamptz not null default now(),
   constraint child_credentials_username_key unique (username)
 );
@@ -188,7 +180,7 @@ create table private.child_credentials (
 revoke all on table private.child_credentials from public;
 
 comment on table private.child_credentials is
-  'S42: a child''s guardian-managed username and scrypt hashes of their password and PIN.';
+  'S42: a child''s identity-wide username and scrypt hash of their independent password.';
 
 -- Per-Home switches: both off until the child's primary guardian turns them on.
 alter table public.child_home_settings
@@ -197,6 +189,29 @@ alter table public.child_home_settings
   add column sign_in_updated_at timestamptz;
 
 grant select (password_sign_in, pin_sign_in) on table public.child_home_settings to authenticated;
+
+-- A child's PIN is Home-scoped (spec: Home guardians keep the Home's approved-device PIN rules):
+-- one scrypt hash and one lock per child per Home, gone with the child's membership there.
+create table private.child_home_pins (
+  home_id uuid not null,
+  child_user_id uuid not null,
+  pin_hash text not null
+    constraint child_home_pins_pin_hash_check check (private.is_child_secret_hash(pin_hash)),
+  pin_set_at timestamptz not null default now(),
+  pin_failures integer not null default 0,
+  pin_locked_until timestamptz,
+  pin_locks integer not null default 0,
+  pin_locks_since timestamptz,
+  updated_at timestamptz not null default now(),
+  constraint child_home_pins_pkey primary key (home_id, child_user_id),
+  constraint child_home_pins_settings_fkey foreign key (home_id, child_user_id)
+    references public.child_home_settings (home_id, child_user_id) on delete cascade
+);
+
+revoke all on table private.child_home_pins from public;
+
+comment on table private.child_home_pins is
+  'S42: a child''s scrypt-hashed PIN and its lock, for one Home''s approved household devices.';
 
 -- Approved household devices ----------------------------------------------------------------------------
 
@@ -239,6 +254,8 @@ create table private.child_sign_in_attempts (
   client_key text not null
     constraint child_sign_in_attempts_client_key_check check (client_key ~ '^[0-9a-f]{64}$'),
   created_at timestamptz not null default now(),
+  -- Set when step 1 answered 'check' (handed out a hash); only such an attempt can be verified.
+  checked_at timestamptz,
   verified_at timestamptz,
   completed_at timestamptz
 );
@@ -306,7 +323,8 @@ revoke all on function private.child_session_ok(uuid, uuid) from public;
 
 -- Ends a child's sessions (all, or one method's) and signs them out of Supabase Auth.
 create function private.end_child_sessions(
-  p_child uuid, p_method text, p_reason text, p_device_id uuid default null
+  p_child uuid, p_method text, p_reason text, p_device_id uuid default null,
+  p_home_id uuid default null
 ) returns integer
   language plpgsql security definer set search_path = '' as $$
   declare
@@ -319,6 +337,7 @@ create function private.end_child_sessions(
           and (p_child is null or cs.child_user_id = p_child)
           and (p_method is null or cs.method = p_method)
           and (p_device_id is null or cs.device_id = p_device_id)
+          and (p_home_id is null or cs.home_id = p_home_id)
         returning cs.session_id
     )
     select coalesce(pg_catalog.array_agg(e.session_id), '{}') into v_ids from ended e;
@@ -327,7 +346,7 @@ create function private.end_child_sessions(
   end
   $$;
 
-revoke all on function private.end_child_sessions(uuid, text, text, uuid) from public;
+revoke all on function private.end_child_sessions(uuid, text, text, uuid, uuid) from public;
 
 -- 2. Request-level enforcement ---------------------------------------------------------------------------
 
@@ -438,6 +457,23 @@ create function private.lock_guarded_child(
 
 revoke all on function private.lock_guarded_child(uuid, uuid, uuid) from public;
 
+-- Interim identity-level authority (spec "identity-level guardians", owner decision 2026-11-12):
+-- the child's identity-wide credentials (username, independent password, its lock and password
+-- sessions) may be changed only by a guardian who is the child's primary guardian in every Home the
+-- child belongs to. A Home-only guardian of a child in several Homes cannot reach them; dedicated
+-- identity guardians replace this rule in a later step.
+create function private.child_identity_authority(p_child uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (select 1 from public.home_memberships m where m.user_id = p_child)
+       and not exists (
+         select 1 from public.home_memberships m
+         where m.user_id = p_child
+           and private.child_guardian_role(m.home_id, p_child, p_user_id) is distinct from 'primary'
+       )
+  $$;
+
+revoke all on function private.child_identity_authority(uuid, uuid) from public;
+
 -- What a guardian sees about a child's sign-in in this Home. Never a hash, PIN or password.
 create function public.child_sign_in_settings(p_home_id uuid, p_child_membership_id uuid)
 returns table (
@@ -448,7 +484,8 @@ returns table (
   pin_sign_in boolean,
   password_locked_until timestamptz,
   pin_locked_until timestamptz,
-  active_sessions integer
+  active_sessions integer,
+  can_manage_identity boolean
 )
   language plpgsql stable security definer set search_path = '' as $$
   declare
@@ -460,18 +497,25 @@ returns table (
       raise exception 'not a guardian of this child here' using errcode = '42501';
     end if;
     return query
+      -- Sessions count only where they reach this Home: its PIN sessions, and password sessions
+      -- while password sign-in is on here. Nothing about the child's other Homes.
       select c.username,
              c.password_hash is not null,
-             c.pin_hash is not null,
+             hp.pin_hash is not null,
              s.password_sign_in,
              s.pin_sign_in,
              case when c.password_locked_until > pg_catalog.now() then c.password_locked_until end,
-             case when c.pin_locked_until > pg_catalog.now() then c.pin_locked_until end,
+             case when hp.pin_locked_until > pg_catalog.now() then hp.pin_locked_until end,
              (select count(*)::integer from private.child_sessions cs
                 where cs.child_user_id = v_child and cs.ended_at is null
-                  and cs.expires_at > pg_catalog.now())
+                  and cs.expires_at > pg_catalog.now()
+                  and ((cs.method = 'pin' and cs.home_id = p_home_id)
+                       or (cs.method = 'password' and s.password_sign_in))),
+             private.child_identity_authority(v_child, v_user_id)
       from public.child_home_settings s
       left join private.child_credentials c on c.child_user_id = s.child_user_id
+      left join private.child_home_pins hp
+        on hp.home_id = s.home_id and hp.child_user_id = s.child_user_id
       where s.home_id = p_home_id and s.child_user_id = v_child;
   end
   $$;
@@ -479,8 +523,8 @@ returns table (
 revoke all on function public.child_sign_in_settings(uuid, uuid) from public, anon;
 grant execute on function public.child_sign_in_settings(uuid, uuid) to authenticated;
 
--- The child's username (protected identity: primary guardian only). 'taken' when another child
--- has it. Returns 'saved', 'unchanged', 'taken', 'not_permitted' or 'not_found'.
+-- The child's username (identity-wide: primary guardian in every Home of the child, see
+-- child_identity_authority). 'taken' when another child has it. Returns 'saved', 'unchanged', 'taken', 'not_permitted' or 'not_found'.
 create function public.set_child_username(
   p_home_id uuid, p_child_membership_id uuid, p_username text
 ) returns text
@@ -497,7 +541,7 @@ create function public.set_child_username(
     if v_guard.o_outcome <> 'ok' then
       return v_guard.o_outcome;
     end if;
-    if v_guard.o_role <> 'primary' then
+    if not private.child_identity_authority(v_guard.o_child, v_user_id) then
       return 'not_permitted';
     end if;
     perform 1 from private.child_credentials c where c.child_user_id = v_guard.o_child for update;
@@ -527,9 +571,10 @@ revoke all on function public.set_child_username(uuid, uuid, text) from public, 
 grant execute on function public.set_child_username(uuid, uuid, text) to authenticated;
 
 -- Sets (or replaces) the child's password or PIN hash, made by the web server. The password is
--- the independent credential (primary guardian only, and only once a username exists); the PIN may
--- also be reset by the secondary guardian (spec: routine help with approved-device PINs). A new
--- credential clears its lock and ends the sessions it opened. Returns 'saved', 'username_required',
+-- the identity-wide independent credential (child_identity_authority, and only once a username
+-- exists); the PIN belongs to this Home and either of its guardians may set it (spec: routine help
+-- with approved-device PINs). A new credential clears its lock and ends the sessions it opened
+-- (a PIN: only this Home's PIN sessions). Returns 'saved', 'username_required',
 -- 'not_permitted' or 'not_found'.
 create function public.set_child_credential(
   p_home_id uuid, p_child_membership_id uuid, p_kind text, p_hash text
@@ -549,34 +594,34 @@ create function public.set_child_credential(
     if v_guard.o_outcome <> 'ok' then
       return v_guard.o_outcome;
     end if;
-    if p_kind = 'password' and v_guard.o_role <> 'primary' then
-      return 'not_permitted';
-    end if;
-    perform 1 from private.child_credentials c where c.child_user_id = v_guard.o_child for update;
-    if p_kind = 'password' and not exists (
-      select 1 from private.child_credentials c
-      where c.child_user_id = v_guard.o_child and c.username is not null
-    ) then
-      return 'username_required';
-    end if;
-
-    insert into private.child_credentials (child_user_id) values (v_guard.o_child)
-      on conflict (child_user_id) do nothing;
     if p_kind = 'password' then
+      if not private.child_identity_authority(v_guard.o_child, v_user_id) then
+        return 'not_permitted';
+      end if;
+      perform 1 from private.child_credentials c where c.child_user_id = v_guard.o_child for update;
+      if not exists (
+        select 1 from private.child_credentials c
+        where c.child_user_id = v_guard.o_child and c.username is not null
+      ) then
+        return 'username_required';
+      end if;
       update private.child_credentials c
         set password_hash = p_hash, password_set_at = pg_catalog.now(), password_failures = 0,
             password_locked_until = null, password_locks = 0, password_locks_since = null,
             updated_at = pg_catalog.now()
         where c.child_user_id = v_guard.o_child;
+      perform private.end_child_sessions(v_guard.o_child, 'password', 'credential_changed');
     else
-      update private.child_credentials c
-        set pin_hash = p_hash, pin_set_at = pg_catalog.now(), pin_failures = 0,
-            pin_locked_until = null, pin_locks = 0, pin_locks_since = null,
-            updated_at = pg_catalog.now()
-        where c.child_user_id = v_guard.o_child;
+      insert into private.child_home_pins (home_id, child_user_id, pin_hash)
+        values (p_home_id, v_guard.o_child, p_hash)
+        on conflict (home_id, child_user_id) do update
+          set pin_hash = excluded.pin_hash, pin_set_at = pg_catalog.now(), pin_failures = 0,
+              pin_locked_until = null, pin_locks = 0, pin_locks_since = null,
+              updated_at = pg_catalog.now();
+      perform private.end_child_sessions(v_guard.o_child, 'pin', 'credential_changed', null,
+                                         p_home_id);
     end if;
     perform private.ensure_child_alias(v_guard.o_child);
-    perform private.end_child_sessions(v_guard.o_child, p_kind, 'credential_changed');
     perform private.audit('child.' || p_kind || '_set', p_home_id, 'user', v_guard.o_child,
       jsonb_build_object('by_role', v_guard.o_role));
     return 'saved';
@@ -586,8 +631,8 @@ create function public.set_child_credential(
 revoke all on function public.set_child_credential(uuid, uuid, text, text) from public, anon;
 grant execute on function public.set_child_credential(uuid, uuid, text, text) to authenticated;
 
--- Removes the child's password (primary guardian) or PIN (either guardian) and ends the sessions
--- it opened. Returns 'cleared', 'unchanged', 'not_permitted' or 'not_found'.
+-- Removes the child's password (child_identity_authority) or this Home's PIN (either guardian
+-- here) and ends the sessions it opened. Returns 'cleared', 'unchanged', 'not_permitted' or 'not_found'.
 create function public.clear_child_credential(
   p_home_id uuid, p_child_membership_id uuid, p_kind text
 ) returns text
@@ -604,7 +649,8 @@ create function public.clear_child_credential(
     if v_guard.o_outcome <> 'ok' then
       return v_guard.o_outcome;
     end if;
-    if p_kind = 'password' and v_guard.o_role <> 'primary' then
+    if p_kind = 'password'
+       and not private.child_identity_authority(v_guard.o_child, v_user_id) then
       return 'not_permitted';
     end if;
     if p_kind = 'password' then
@@ -615,17 +661,15 @@ create function public.clear_child_credential(
         where c.child_user_id = v_guard.o_child and c.password_hash is not null
         returning true into v_found;
     else
-      update private.child_credentials c
-        set pin_hash = null, pin_set_at = null, pin_failures = 0,
-            pin_locked_until = null, pin_locks = 0, pin_locks_since = null,
-            updated_at = pg_catalog.now()
-        where c.child_user_id = v_guard.o_child and c.pin_hash is not null
+      delete from private.child_home_pins hp
+        where hp.home_id = p_home_id and hp.child_user_id = v_guard.o_child
         returning true into v_found;
     end if;
     if v_found is null then
       return 'unchanged';
     end if;
-    perform private.end_child_sessions(v_guard.o_child, p_kind, 'credential_removed');
+    perform private.end_child_sessions(v_guard.o_child, p_kind, 'credential_removed', null,
+      case when p_kind = 'pin' then p_home_id end);
     perform private.audit('child.' || p_kind || '_cleared', p_home_id, 'user', v_guard.o_child,
       jsonb_build_object('by_role', v_guard.o_role));
     return 'cleared';
@@ -671,10 +715,8 @@ create function public.set_child_sign_in_access(
       where s.home_id = p_home_id and s.child_user_id = v_guard.o_child;
     -- PIN sessions on this Home's devices end with the switch.
     if v_before.pin_sign_in and not p_pin_sign_in then
-      update private.child_sessions cs
-        set ended_at = pg_catalog.now(), end_reason = 'sign_in_turned_off'
-        where cs.child_user_id = v_guard.o_child and cs.method = 'pin'
-          and cs.home_id = p_home_id and cs.ended_at is null;
+      perform private.end_child_sessions(v_guard.o_child, 'pin', 'sign_in_turned_off', null,
+                                         p_home_id);
     end if;
     perform private.audit('child.sign_in_access_changed', p_home_id, 'user', v_guard.o_child,
       jsonb_build_object(
@@ -691,7 +733,9 @@ revoke all on function public.set_child_sign_in_access(uuid, uuid, boolean, bool
 grant execute on function public.set_child_sign_in_access(uuid, uuid, boolean, boolean)
   to authenticated;
 
--- Lifts a lock (either guardian). Returns 'unlocked', 'unchanged', 'not_permitted' or 'not_found'.
+-- Lifts this Home's PIN lock (either guardian here) and, for a caller with
+-- child_identity_authority, the password lock. Returns 'unlocked', 'unchanged', 'not_permitted' or
+-- 'not_found'.
 create function public.unlock_child_sign_in(p_home_id uuid, p_child_membership_id uuid)
 returns text
   language plpgsql security definer set search_path = '' as $$
@@ -699,20 +743,28 @@ returns text
     v_user_id uuid := private.require_confirmed_caller();
     v_guard record;
     v_found boolean;
+    v_pin_found boolean;
   begin
     v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
     if v_guard.o_outcome <> 'ok' then
       return v_guard.o_outcome;
     end if;
-    update private.child_credentials c
-      set password_failures = 0, password_locked_until = null, password_locks = 0,
-          password_locks_since = null, pin_failures = 0, pin_locked_until = null, pin_locks = 0,
-          pin_locks_since = null, updated_at = pg_catalog.now()
-      where c.child_user_id = v_guard.o_child
-        and (c.password_locked_until > pg_catalog.now() or c.pin_locked_until > pg_catalog.now()
-             or c.password_failures > 0 or c.pin_failures > 0)
-      returning true into v_found;
-    if v_found is null then
+    update private.child_home_pins hp
+      set pin_failures = 0, pin_locked_until = null, pin_locks = 0, pin_locks_since = null,
+          updated_at = pg_catalog.now()
+      where hp.home_id = p_home_id and hp.child_user_id = v_guard.o_child
+        and (hp.pin_locked_until > pg_catalog.now() or hp.pin_failures > 0 or hp.pin_locks > 0)
+      returning true into v_pin_found;
+    if private.child_identity_authority(v_guard.o_child, v_user_id) then
+      update private.child_credentials c
+        set password_failures = 0, password_locked_until = null, password_locks = 0,
+            password_locks_since = null, updated_at = pg_catalog.now()
+        where c.child_user_id = v_guard.o_child
+          and (c.password_locked_until > pg_catalog.now() or c.password_failures > 0
+               or c.password_locks > 0)
+        returning true into v_found;
+    end if;
+    if v_found is null and v_pin_found is null then
       return 'unchanged';
     end if;
     perform private.audit('child.sign_in_unlocked', p_home_id, 'user', v_guard.o_child,
@@ -724,7 +776,9 @@ returns text
 revoke all on function public.unlock_child_sign_in(uuid, uuid) from public, anon;
 grant execute on function public.unlock_child_sign_in(uuid, uuid) to authenticated;
 
--- Signs the child out everywhere, for a lost device (either guardian). Returns the outcome and how
+-- Signs the child out, for a lost device: this Home's PIN sessions (either guardian here) and, for
+-- a caller with child_identity_authority, every password session too. A Home-only guardian cuts
+-- password access to their Home by turning password sign-in off here. Returns the outcome and how
 -- many sessions ended.
 create function public.end_child_sign_ins(p_home_id uuid, p_child_membership_id uuid)
 returns table (outcome text, ended integer)
@@ -739,7 +793,12 @@ returns table (outcome text, ended integer)
       return query select v_guard.o_outcome, 0;
       return;
     end if;
-    v_count := private.end_child_sessions(v_guard.o_child, null, 'ended_by_guardian');
+    v_count := private.end_child_sessions(v_guard.o_child, 'pin', 'ended_by_guardian', null,
+                                          p_home_id);
+    if private.child_identity_authority(v_guard.o_child, v_user_id) then
+      v_count := v_count
+        + private.end_child_sessions(v_guard.o_child, 'password', 'ended_by_guardian');
+    end if;
     perform private.audit('child.sessions_ended', p_home_id, 'user', v_guard.o_child,
       jsonb_build_object('by_role', v_guard.o_role, 'count', v_count));
     return query select 'ended'::text, v_count;
@@ -865,61 +924,72 @@ grant execute on function public.home_household_devices(uuid, text) to authentic
 
 -- Signing in (the web server only, as service_role) ------------------------------------------------------------
 
--- Counts a wrong try against one credential: the fifth since the last success or lock locks it for
--- 15 minutes, and the third lock within 24 hours locks it until a guardian unlocks it.
-create function private.count_child_failure(p_child uuid, p_kind text) returns void
-  language plpgsql security definer set search_path = '' as $$
+-- Counts a wrong try against one credential (the password, or the PIN in p_home_id): the fifth
+-- since the last success or lock locks it for 15 minutes, and the third lock within 24 hours locks
+-- it until a guardian unlocks it.
+create function private.next_child_lock(
+  p_failures integer, p_locks integer, p_since timestamptz,
+  out o_failures integer, out o_locks integer, out o_since timestamptz, out o_until timestamptz
+)
+  language plpgsql stable set search_path = '' as $$
   declare
     v_limits record := private.child_sign_in_limits();
-    v_c private.child_credentials;
-    v_failures integer;
-    v_locks integer;
-    v_since timestamptz;
   begin
-    select * into v_c from private.child_credentials c where c.child_user_id = p_child for update;
-    if not found then
-      return;
+    o_failures := p_failures + 1;
+    o_locks := p_locks;
+    o_since := p_since;
+    if o_since is null or o_since <= pg_catalog.now() - v_limits.lock_count_window then
+      o_locks := 0;
+      o_since := null;
     end if;
-    if p_kind = 'password' then
-      v_failures := v_c.password_failures + 1;
-      v_locks := v_c.password_locks;
-      v_since := v_c.password_locks_since;
-    else
-      v_failures := v_c.pin_failures + 1;
-      v_locks := v_c.pin_locks;
-      v_since := v_c.pin_locks_since;
-    end if;
-    if v_since is null or v_since <= pg_catalog.now() - v_limits.lock_count_window then
-      v_locks := 0;
-      v_since := null;
-    end if;
-    if v_failures >= v_limits.failures_before_lock then
-      v_locks := v_locks + 1;
-      v_since := coalesce(v_since, pg_catalog.now());
-      if p_kind = 'password' then
-        update private.child_credentials c
-          set password_failures = 0, password_locks = v_locks, password_locks_since = v_since,
-              password_locked_until = case when v_locks >= v_limits.locks_before_guardian_unlock
-                then 'infinity'::timestamptz else pg_catalog.now() + v_limits.lock_duration end
-          where c.child_user_id = p_child;
-      else
-        update private.child_credentials c
-          set pin_failures = 0, pin_locks = v_locks, pin_locks_since = v_since,
-              pin_locked_until = case when v_locks >= v_limits.locks_before_guardian_unlock
-                then 'infinity'::timestamptz else pg_catalog.now() + v_limits.lock_duration end
-          where c.child_user_id = p_child;
-      end if;
-    elsif p_kind = 'password' then
-      update private.child_credentials c set password_failures = v_failures
-        where c.child_user_id = p_child;
-    else
-      update private.child_credentials c set pin_failures = v_failures
-        where c.child_user_id = p_child;
+    if o_failures >= v_limits.failures_before_lock then
+      o_failures := 0;
+      o_locks := o_locks + 1;
+      o_since := coalesce(o_since, pg_catalog.now());
+      o_until := case when o_locks >= v_limits.locks_before_guardian_unlock
+        then 'infinity'::timestamptz else pg_catalog.now() + v_limits.lock_duration end;
     end if;
   end
   $$;
 
-revoke all on function private.count_child_failure(uuid, text) from public;
+revoke all on function private.next_child_lock(integer, integer, timestamptz) from public;
+
+create function private.count_child_failure(p_child uuid, p_kind text, p_home_id uuid default null)
+returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_c private.child_credentials;
+    v_p private.child_home_pins;
+    v_n record;
+  begin
+    if p_kind = 'password' then
+      select * into v_c from private.child_credentials c where c.child_user_id = p_child for update;
+      if not found then
+        return;
+      end if;
+      v_n := private.next_child_lock(v_c.password_failures, v_c.password_locks,
+                                     v_c.password_locks_since);
+      update private.child_credentials c
+        set password_failures = v_n.o_failures, password_locks = v_n.o_locks,
+            password_locks_since = v_n.o_since,
+            password_locked_until = coalesce(v_n.o_until, c.password_locked_until)
+        where c.child_user_id = p_child;
+    else
+      select * into v_p from private.child_home_pins hp
+        where hp.home_id = p_home_id and hp.child_user_id = p_child for update;
+      if not found then
+        return;
+      end if;
+      v_n := private.next_child_lock(v_p.pin_failures, v_p.pin_locks, v_p.pin_locks_since);
+      update private.child_home_pins hp
+        set pin_failures = v_n.o_failures, pin_locks = v_n.o_locks, pin_locks_since = v_n.o_since,
+            pin_locked_until = coalesce(v_n.o_until, hp.pin_locked_until)
+        where hp.home_id = p_home_id and hp.child_user_id = p_child;
+    end if;
+  end
+  $$;
+
+revoke all on function private.count_child_failure(uuid, text, uuid) from public;
 
 create function private.check_child_client_key(p_client_key text) returns void
   language plpgsql immutable set search_path = '' as $$
@@ -980,6 +1050,8 @@ returns table (outcome text, attempt_id uuid, password_hash text, locked_until t
       return;
     end if;
     perform private.count_child_failure(v_c.child_user_id, 'password');
+    update private.child_sign_in_attempts a set checked_at = pg_catalog.now()
+      where a.id = v_attempt;
     return query select 'check'::text, v_attempt, v_c.password_hash, null::timestamptz;
   end
   $$;
@@ -1007,7 +1079,7 @@ create function public.child_pin_attempt(
   declare
     v_device private.household_devices;
     v_child uuid;
-    v_c private.child_credentials;
+    v_p private.child_home_pins;
     v_attempt uuid;
   begin
     perform private.check_child_client_key(p_client_key);
@@ -1032,22 +1104,24 @@ create function public.child_pin_attempt(
     end if;
     v_child := private.child_of_membership(v_device.home_id, p_child_membership_id);
     if v_child is not null then
-      select * into v_c from private.child_credentials c
-        where c.child_user_id = v_child for update;
+      select * into v_p from private.child_home_pins hp
+        where hp.home_id = v_device.home_id and hp.child_user_id = v_child for update;
     end if;
     insert into private.child_sign_in_attempts (method, child_user_id, device_id, client_key)
-      values ('pin', v_c.child_user_id, v_device.id, p_client_key)
+      values ('pin', v_p.child_user_id, v_device.id, p_client_key)
       returning id into v_attempt;
-    if v_c.child_user_id is null or v_c.pin_hash is null then
+    if v_p.child_user_id is null then
       return query select 'unknown'::text, v_attempt, null::text, null::timestamptz;
       return;
     end if;
-    if v_c.pin_locked_until > pg_catalog.now() then
-      return query select 'locked'::text, null::uuid, null::text, v_c.pin_locked_until;
+    if v_p.pin_locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::text, v_p.pin_locked_until;
       return;
     end if;
-    perform private.count_child_failure(v_c.child_user_id, 'pin');
-    return query select 'check'::text, v_attempt, v_c.pin_hash, null::timestamptz;
+    perform private.count_child_failure(v_p.child_user_id, 'pin', v_device.home_id);
+    update private.child_sign_in_attempts a set checked_at = pg_catalog.now()
+      where a.id = v_attempt;
+    return query select 'check'::text, v_attempt, v_p.pin_hash, null::timestamptz;
   end
   $$;
 
@@ -1057,17 +1131,30 @@ grant execute on function public.child_pin_attempt(text, uuid, text) to service_
 -- Step 2, after the web server matched the hash: clears the wrong-try count and, when sign-in is
 -- allowed for this method, returns the child's id and internal alias for issuing the session.
 -- 'not_enabled' when the credential was right but sign-in is off ('expired' / 'invalid' for an
--- attempt that is too old or not in step 1's 'check' state).
+-- attempt that is too old or not in step 1's 'check' state). 'not_configured' when PostgREST's
+-- pre-request check (pgrst.db_pre_request, which confines child tokens) is not set up: no child
+-- session is issued without it.
 create function public.child_sign_in_verified(p_attempt_id uuid)
 returns table (outcome text, child_user_id uuid, alias_email text)
   language plpgsql security definer set search_path = '' as $$
   declare
     v_a private.child_sign_in_attempts;
     v_allowed boolean;
+    v_home uuid;
   begin
+    if not exists (
+      select 1 from pg_catalog.pg_db_role_setting rs
+      join pg_catalog.pg_roles r on r.oid = rs.setrole
+      where r.rolname = 'authenticator'
+        and 'pgrst.db_pre_request=public.check_request' = any (rs.setconfig)
+    ) then
+      return query select 'not_configured'::text, null::uuid, null::text;
+      return;
+    end if;
     select * into v_a from private.child_sign_in_attempts a
       where a.id = p_attempt_id for update;
-    if not found or v_a.child_user_id is null or v_a.verified_at is not null then
+    if not found or v_a.child_user_id is null or v_a.checked_at is null
+       or v_a.verified_at is not null then
       return query select 'invalid'::text, null::uuid, null::text;
       return;
     end if;
@@ -1079,18 +1166,23 @@ returns table (outcome text, child_user_id uuid, alias_email text)
     update private.child_sign_in_attempts a set verified_at = pg_catalog.now()
       where a.id = v_a.id;
     if v_a.method = 'password' then
+      -- The right password clears the count and any lock its own wrong-try count just set.
       update private.child_credentials c
-        set password_failures = 0, password_locks = 0, password_locks_since = null
-        where c.child_user_id = v_a.child_user_id;
+        set password_failures = 0, password_locks = 0, password_locks_since = null,
+            password_locked_until = null
+        where c.child_user_id = v_a.child_user_id
+          and c.password_locked_until is distinct from 'infinity'::timestamptz;
       v_allowed := exists (
         select 1 from public.home_memberships m
         join public.child_home_settings s on s.home_id = m.home_id and s.child_user_id = m.user_id
         where m.user_id = v_a.child_user_id and s.password_sign_in
       );
     else
-      update private.child_credentials c
-        set pin_failures = 0, pin_locks = 0, pin_locks_since = null
-        where c.child_user_id = v_a.child_user_id;
+      select d.home_id into v_home from private.household_devices d where d.id = v_a.device_id;
+      update private.child_home_pins hp
+        set pin_failures = 0, pin_locks = 0, pin_locks_since = null, pin_locked_until = null
+        where hp.home_id = v_home and hp.child_user_id = v_a.child_user_id
+          and hp.pin_locked_until is distinct from 'infinity'::timestamptz;
       v_allowed := exists (
         select 1 from private.household_devices d
         join public.home_memberships m on m.home_id = d.home_id and m.user_id = v_a.child_user_id
@@ -1189,9 +1281,9 @@ returns table (
     left join public.home_memberships m on m.home_id = d.home_id
       and exists (
         select 1 from public.child_home_settings s
-        join private.child_credentials c on c.child_user_id = s.child_user_id
+        join private.child_home_pins hp
+          on hp.home_id = s.home_id and hp.child_user_id = s.child_user_id
         where s.home_id = m.home_id and s.child_user_id = m.user_id and s.pin_sign_in
-          and c.pin_hash is not null
       )
     left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
     left join public.user_preferences up on up.user_id = m.user_id
@@ -1257,6 +1349,7 @@ create function public.child_end_session() returns void
     update private.child_sessions cs
       set ended_at = pg_catalog.now(), end_reason = 'signed_out'
       where cs.session_id = v_session_id and cs.child_user_id = v_user_id and cs.ended_at is null;
+    delete from auth.sessions s where s.id = v_session_id and s.user_id = v_user_id;
   end
   $$;
 

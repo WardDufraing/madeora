@@ -160,6 +160,7 @@ describe("ChildSignInSettings", () => {
     passwordLock: null,
     pinLock: "guardian",
     activeSessions: 1,
+    canManageIdentity: true,
   };
   const endpoint = `/api/v1/homes/${HOME_ID}/children/${CHILD_ID}/sign-in`;
 
@@ -232,6 +233,27 @@ describe("ChildSignInSettings", () => {
     await waitFor(() => {
       expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ action: "end-sessions" });
     });
+  });
+
+  it("keeps the identity-wide username and password from a primary guardian of only this Home", async () => {
+    const { container } = renderWithQuery(
+      <ChildSignInSettings
+        homeId={HOME_ID}
+        membershipId={CHILD_ID}
+        childName="Mia"
+        isPrimary
+        settings={{ ...settings, canManageIdentity: false }}
+      />,
+    );
+    expect(screen.getByTestId("identity-other-home")).toHaveTextContent(/also in another Home/);
+    expect(screen.queryByLabelText(/^Username/, { selector: "input" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove password" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("New PIN")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sign out on this Home's devices" }),
+    ).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
   });
 });
 

@@ -113,6 +113,10 @@ async function issueSession(
   }
   const row = verified.data[0];
   if (row?.outcome === "not_enabled") return { kind: "not-enabled" };
+  if (row?.outcome === "not_configured") {
+    log("child_sign_in.not_configured");
+    return { kind: "unavailable" };
+  }
   if (row?.outcome !== "verified" || !row.alias_email) return { kind: "invalid" };
 
   const link = await client.auth.admin.generateLink({ type: "magiclink", email: row.alias_email });
