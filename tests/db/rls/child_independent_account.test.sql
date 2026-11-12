@@ -174,6 +174,51 @@ select tests.assert_true(public.complete_child_transition(tests.ci_token('cancel
 select tests.act_as_owner();
 select tests.assert_true(private.is_child(tests.ci('mia')), 'She is still a managed child');
 
+-- A move no longer holds once her Homes change -------------------------------------------------------------
+
+-- Bob links Mia into his own Home D, where he is her primary guardian: Alice's link stops working.
+select tests.act_as('alice');
+delete from tokens where name in ('claim', 'email');
+insert into tokens select 'claim', token from public.start_child_transition(
+  tests.ci('home-a'), tests.ci('m-mia'), (current_date - interval '17 years')::date);
+select tests.act_as_service_role();
+select public.claim_child_transition(tests.ci_token('claim'), 'mia@example.org');
+select tests.act_as_owner();
+insert into tokens select 'email', e.token from private.security_emails e
+  where e.kind = 'transition_verify' and e.token <> tests.ci_token('cancelled');
+select tests.act_as('bob');
+insert into ids select 'home-d', public.create_home('Bob', 'Europe/Berlin', gen_random_uuid());
+select tests.act_as('alice');
+delete from link;
+insert into link select code from public.create_child_link_code(tests.ci('home-a'), tests.ci('m-mia'));
+select tests.act_as('bob');
+insert into ids select 'm-mia-d', membership_id from public.redeem_child_link_code(
+  tests.ci('home-d'), (select code from link), '#9333ea');
+select tests.act_as_service_role();
+select tests.assert_true(public.child_transition_review(tests.ci_token('email')) is null,
+  'Once Bob is her primary guardian in another Home, the emailed link no longer opens');
+select tests.assert_true(public.complete_child_transition(tests.ci_token('email')) = 'invalid',
+  'and cannot complete the move without his authority');
+select tests.act_as_owner();
+select tests.assert_true(private.is_child(tests.ci('mia'))
+  and (select status from private.child_transitions
+       where email_token_hash = private.token_hash(tests.ci_token('email'))) = 'cancelled',
+  'She is still a managed child and that move is cancelled');
+delete from private.home_memberships_all where id = tests.ci('m-mia-d');
+update tokens set name = 'stale' where name = 'email';
+
+-- A higher age taking effect also stops an open move.
+select tests.act_as('alice');
+insert into tokens select 'aged', token from public.start_child_transition(
+  tests.ci('home-a'), tests.ci('m-mia'), (current_date - interval '17 years')::date);
+select tests.act_as_owner();
+update private.digital_consent_ages set min_age = 18 where country = 'NL';
+select tests.act_as_service_role();
+select tests.assert_true(public.child_transition_preview(tests.ci_token('aged')) is null,
+  'A move started for age 16 stops when her Homes need 18');
+select tests.act_as_owner();
+update private.digital_consent_ages set min_age = 16 where country = 'NL';
+
 -- Restarted and completed -------------------------------------------------------------------------------
 
 select tests.act_as('alice');
@@ -184,7 +229,8 @@ select tests.act_as_service_role();
 select public.claim_child_transition(tests.ci_token('claim'), 'mia@example.org');
 select tests.act_as_owner();
 insert into tokens select 'email', e.token from private.security_emails e
-  where e.kind = 'transition_verify' and e.token <> tests.ci_token('cancelled');
+  where e.kind = 'transition_verify' and e.token is not null
+    and e.token not in (select t.token from tokens t);
 
 select tests.act_as_service_role();
 select tests.assert_true(public.complete_child_transition(tests.ci_token('email')) = 'completed',

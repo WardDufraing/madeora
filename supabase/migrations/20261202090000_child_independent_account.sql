@@ -143,6 +143,19 @@ create function private.open_child_transition(p_child uuid) returns private.chil
 
 revoke all on function private.open_child_transition(uuid) from public;
 
+-- Whether a move still holds: the child's Homes may have changed since it started (a new Home
+-- with a higher age, or one where its starter is not the primary guardian). Then it must be
+-- started again, by someone with authority in every Home, against the age they all require.
+create function private.child_transition_holds(p_t private.child_transitions) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select p_t.started_by is not null
+      and private.is_child(p_t.child_user_id)
+      and private.child_independence_age(p_t.child_user_id) <= p_t.required_age
+      and private.child_identity_authority(p_t.child_user_id, p_t.started_by)
+  $$;
+
+revoke all on function private.child_transition_holds(private.child_transitions) from public;
+
 -- 3. Guardians ------------------------------------------------------------------------------------------
 
 -- What a guardian of the child in this Home sees: whether a move is open and until when, the age
@@ -291,7 +304,7 @@ create function public.child_transition_preview(p_token text) returns jsonb
     select * into v_t from private.child_transitions t
       where t.claim_token_hash = private.token_hash(p_token) and t.status = 'started'
         and t.claim_expires_at > pg_catalog.now();
-    if v_t.id is null then
+    if v_t.id is null or not private.child_transition_holds(v_t) then
       return null;
     end if;
     return private.child_transition_summary(v_t);
@@ -312,7 +325,7 @@ create function public.claim_child_transition(p_token text, p_email text) return
       where t.claim_token_hash = private.token_hash(p_token) and t.status = 'started'
         and t.claim_expires_at > pg_catalog.now()
       for update;
-    if v_t.id is null then
+    if v_t.id is null or not private.child_transition_holds(v_t) then
       return 'invalid';
     end if;
     if pg_catalog.length(v_email) > 254 or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'
@@ -354,7 +367,7 @@ create function public.child_transition_review(p_email_token text) returns jsonb
       return pg_catalog.jsonb_build_object('completed', true);
     end if;
     if v_t.status <> 'started' or v_t.email_expires_at <= pg_catalog.now()
-       or v_t.claim_expires_at <= pg_catalog.now() then
+       or v_t.claim_expires_at <= pg_catalog.now() or not private.child_transition_holds(v_t) then
       return null;
     end if;
     return private.child_transition_summary(v_t) || pg_catalog.jsonb_build_object('completed', false);
@@ -386,7 +399,12 @@ create function public.complete_child_transition(p_email_token text) returns tex
     end if;
     v_child := v_t.child_user_id;
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('child_transition:' || v_child::text, 0));
-    if not private.is_child(v_child) then
+    if not private.child_transition_holds(v_t) then
+      update private.child_transitions t
+        set status = 'cancelled', pending_email = null
+        where t.id = v_t.id;
+      perform private.audit('child.transition_cancelled', null, 'user', v_child,
+        pg_catalog.jsonb_build_object('reason', 'homes_changed'));
       return 'invalid';
     end if;
     perform private.lock_sign_in_methods(v_child);
