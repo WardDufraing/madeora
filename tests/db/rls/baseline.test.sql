@@ -171,7 +171,11 @@ select tests.assert_true(
       'public.shared_device_board(text)',
       'public.shared_device_attempt(text,uuid,uuid,boolean,text)',
       'public.shared_device_verified(text,uuid)',
-      'public.shared_device_undo(text,uuid)'
+      'public.shared_device_undo(text,uuid)',
+      'public.child_transition_preview(text)',
+      'public.claim_child_transition(text,text)',
+      'public.child_transition_review(text)',
+      'public.complete_child_transition(text)'
     ]::regprocedure[]) as s(signature)
     where has_function_privilege('authenticated', s.signature, 'execute')
   ),

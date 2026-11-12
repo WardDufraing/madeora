@@ -18,7 +18,7 @@ import { fill, type EmailLocale } from "./messages.ts";
  * details, no Home and no code; a link is single-use and short-lived.
  */
 export type SecurityEmailKind =
-  "backup_verify" | "recovery_link" | "recovery_started" | "recovery_ready";
+  "backup_verify" | "recovery_link" | "recovery_started" | "recovery_ready" | "transition_verify";
 
 export interface SecurityEmailProps {
   readonly kind: SecurityEmailKind;
@@ -73,6 +73,14 @@ export const securityEmailMessages = {
       ignore:
         "If you didn't ask for this, ignore this email; the account owner can still stop the recovery from Settings › Security.",
     },
+    transition_verify: {
+      subject: "Confirm your email address for your own Madeora account",
+      heading: "Confirm your email address",
+      body: "You asked to manage your Madeora account yourself, with this address as its sign-in address. Open the link to review what changes and confirm. Afterwards you choose your password through a second email.",
+      button: "Review and confirm",
+      ignore:
+        "If you didn't ask for this, ignore this email: nothing changes unless the link is opened and confirmed.",
+    },
   },
   nl: {
     expires: "Deze link werkt één keer en verloopt op {date}.",
@@ -108,6 +116,14 @@ export const securityEmailMessages = {
       button: "Herstel afronden",
       ignore:
         "Heb je hier niet om gevraagd? Negeer deze e-mail; de eigenaar van het account kan het herstel nog stoppen via Instellingen › Beveiliging.",
+    },
+    transition_verify: {
+      subject: "Bevestig je e-mailadres voor je eigen Madeora-account",
+      heading: "Bevestig je e-mailadres",
+      body: "Je hebt gevraagd om je Madeora-account zelf te beheren, met dit adres als aanmeldadres. Open de link om te bekijken wat er verandert en om te bevestigen. Daarna kies je je wachtwoord via een tweede e-mail.",
+      button: "Bekijken en bevestigen",
+      ignore:
+        "Heb je hier niet om gevraagd? Negeer deze e-mail dan: er verandert niets zolang de link niet wordt geopend en bevestigd.",
     },
   },
 } as const satisfies Record<

@@ -47,7 +47,12 @@ export type EmailRecordStatus = "sent" | "failed" | "skipped" | "not_configured"
 export type SecurityEmailRead =
   | {
       readonly outcome: "ok";
-      readonly kind: "backup_verify" | "recovery_link" | "recovery_started" | "recovery_ready";
+      readonly kind:
+        | "backup_verify"
+        | "recovery_link"
+        | "recovery_started"
+        | "recovery_ready"
+        | "transition_verify";
       readonly to: string;
       readonly locale: EmailLanguage;
       /** The secret part of the link, or null for a notice without one; never logged. */

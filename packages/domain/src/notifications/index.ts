@@ -130,6 +130,9 @@ export const notificationKinds = [
   "home_copy.rejected",
   "home_copy.completed",
   "home_copy.failed",
+  // S42 part 3: a child's move to an own account, to their guardians (no name, no details).
+  "child.transition_started",
+  "child.transition_completed",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -214,6 +217,7 @@ export function notificationPath(
   if (!homeId) return "/";
   const home = `/homes/${encodeURIComponent(homeId)}`;
   if (kind === "join_request.received") return `${home}/invitations`;
+  if (kind.startsWith("child.")) return `${home}/members`;
   // S40 part 2: approvers review copy requests in the Home; the requester sees their own requests.
   if (kind === "home_copy.approval_requested") return `${home}/copy-requests`;
   if (kind.startsWith("home_copy.")) return "/settings/privacy/copies";

@@ -95,6 +95,8 @@ const kindMessage = {
   "reward.refunded": "kindRewardRefunded",
   "reward.replacement": "kindRewardReplacement",
   "home_copy.approval_requested": "kindHomeCopyApprovalRequested",
+  "child.transition_started": "kindChildTransitionStarted",
+  "child.transition_completed": "kindChildTransitionCompleted",
   "home_copy.approved": "kindHomeCopyApproved",
   "home_copy.rejected": "kindHomeCopyRejected",
   "home_copy.completed": "kindHomeCopyCompleted",

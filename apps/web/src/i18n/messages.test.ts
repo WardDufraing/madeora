@@ -334,6 +334,16 @@ describe("message dictionaries", () => {
         ]),
         ...withPrefix("capability.", childCapabilities),
       ],
+      // S42 part 3: the young person's claim failures by their codes.
+      ChildTransition: withPrefix("fail.", [
+        "invalid",
+        "invalidEmail",
+        "emailTaken",
+        "rateLimited",
+        "unavailable",
+        "network",
+        "failed",
+      ]),
       // S34: an owner's Google event state on calendar lists.
       Calendar: withPrefix("googleState_", ["saving", "deleting", "conflict", "failed"]),
       // S37: the two-factor actions' titles, and each session's device, by their values.

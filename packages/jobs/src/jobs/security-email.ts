@@ -9,6 +9,7 @@ const paths = {
   backup_verify: "/auth/confirm-backup-email",
   recovery_link: "/account-recovery/continue",
   recovery_ready: "/account-recovery/finish",
+  transition_verify: "/claim/verify",
 } as const;
 
 /**

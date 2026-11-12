@@ -47,6 +47,7 @@ const securityEmailKinds = [
   "recovery_link",
   "recovery_started",
   "recovery_ready",
+  "transition_verify",
 ] as const;
 
 const fileStatuses = ["pending", "ready", "failed", "deleted", "purged", "missing"] as const;
