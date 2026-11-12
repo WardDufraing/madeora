@@ -64,7 +64,7 @@ revoke all on table private.device_actors from public;
 create function private.device_actor(p_user_id uuid) returns private.device_actors
   language sql stable security definer set search_path = '' as $$
     select a.* from private.device_actors a
-    where a.txid = pg_catalog.txid_current() and a.user_id = p_user_id
+    where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id
   $$;
 
 revoke all on function private.device_actor(uuid) from public;
@@ -93,7 +93,7 @@ create or replace function private.can_manage_chores(p_home_id uuid, p_user_id u
   select p_home_id is not null and p_user_id is not null
     and (private.has_home_capability(p_home_id, p_user_id, 'manageHomeChores')
          or exists (select 1 from private.device_actors a
-                    where a.txid = pg_catalog.txid_current() and a.user_id = p_user_id
+                    where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id
                       and a.home_id = p_home_id and a.may_reopen is not null));
   $$;
 
@@ -102,7 +102,7 @@ create or replace function private.can_manage_points(p_home_id uuid, p_user_id u
   select p_home_id is not null and p_user_id is not null
     and (private.has_home_capability(p_home_id, p_user_id, 'manageHomePoints')
          or exists (select 1 from private.device_actors a
-                    where a.txid = pg_catalog.txid_current() and a.user_id = p_user_id
+                    where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id
                       and a.home_id = p_home_id and a.may_reopen is not null));
   $$;
 
@@ -127,7 +127,7 @@ create function private.end_device_actor(p_user_id uuid, p_claims text) returns 
   language plpgsql volatile security definer set search_path = '' as $$
   begin
     delete from private.device_actors a
-      where a.txid = pg_catalog.txid_current() and a.user_id = p_user_id;
+      where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id;
     perform pg_catalog.set_config('request.jwt.claim.sub', '', true);
     perform pg_catalog.set_config('request.jwt.claims', p_claims, true);
   end
@@ -149,6 +149,9 @@ create table private.shared_device_actions (
   verification text not null
     constraint shared_device_actions_verification_check check (verification in ('attributed', 'pin')),
   outcome text not null,
+  -- The occurrence's revision right after this completion: Undo works only while nobody else has
+  -- changed it since (an approval, points, another completion).
+  occurrence_revision integer not null,
   created_at timestamptz not null default now(),
   undone_at timestamptz
 );
@@ -378,8 +381,9 @@ create function private.device_complete(
     perform private.end_device_actor(p_member, v_claims);
     if v_outcome in ('completed', 'submitted') then
       insert into private.shared_device_actions (home_id, device_id, occurrence_id, member_user_id,
-                                                 verification, outcome)
-        values (p_device.home_id, p_device.id, p_occurrence_id, p_member, p_verification, v_outcome)
+                                                 verification, outcome, occurrence_revision)
+        values (p_device.home_id, p_device.id, p_occurrence_id, p_member, p_verification, v_outcome,
+                (select o.revision from private.chore_occurrences o where o.id = p_occurrence_id))
         returning id into v_action;
       update private.household_devices d set last_used_at = pg_catalog.now() where d.id = p_device.id;
       perform private.audit('chore_occurrence.device_completed', p_device.home_id,
@@ -578,6 +582,12 @@ create function public.shared_device_undo(p_device_hash text, p_action_id uuid) 
     end if;
     if v_action.created_at <= pg_catalog.now() - interval '2 minutes' then
       return 'expired';
+    end if;
+    -- Someone changed the chore since (approved it, gave points, completed it again): Undo would
+    -- reverse their change too, so it is refused.
+    if (select o.revision from private.chore_occurrences o where o.id = v_action.occurrence_id
+        for update) is distinct from v_action.occurrence_revision then
+      return 'invalid';
     end if;
     v_claims := private.begin_device_actor(v_action.member_user_id, v_device.home_id,
                                            v_action.occurrence_id);
