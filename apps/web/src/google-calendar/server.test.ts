@@ -32,11 +32,14 @@ describe("connect attempts", () => {
     const attempt = newConnectAttempt(USER, now);
     const cookie = sealConnectAttempt(attempt, KEY);
     expect(opened(cookie, attempt.state, { userId: OTHER })).toBeNull();
-    expect(opened(cookie, `${attempt.state.slice(0, -1)}A`)).toBeNull();
+    // A different last character (a fixed "A" was the same one whenever the random state ended in A).
+    const swapped = attempt.state.endsWith("A") ? "B" : "A";
+    expect(opened(cookie, `${attempt.state.slice(0, -1)}${swapped}`)).toBeNull();
     expect(opened(cookie, attempt.state.slice(1))).toBeNull();
     expect(opened(cookie, null)).toBeNull();
     expect(opened(cookie, attempt.state, { key: Buffer.alloc(32, 2) })).toBeNull();
-    expect(opened(`${cookie.slice(0, -2)}xx`, attempt.state)).toBeNull();
+    const tail = cookie.endsWith("xx") ? "yy" : "xx";
+    expect(opened(`${cookie.slice(0, -2)}${tail}`, attempt.state)).toBeNull();
     expect(opened(undefined, attempt.state)).toBeNull();
     expect(opened("not-a-cookie", attempt.state)).toBeNull();
   });
