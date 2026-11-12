@@ -43,6 +43,21 @@ function service(): { readonly client: SupabaseClient<Database>; readonly key: s
   return cached;
 }
 
+/** The service-role client for the other household-device flows (`null`: not configured). */
+export function householdService(): SupabaseClient<Database> | null {
+  try {
+    return service()?.client ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The client-address key for the database's per-client throttles (see `clientKey`). */
+export async function householdClientKey(): Promise<string | null> {
+  const found = service();
+  return found ? clientKey(found.key) : null;
+}
+
 /** Whether child sign-in can work here (the server has the Supabase secret key). */
 export function childSignInAvailable(): boolean {
   try {

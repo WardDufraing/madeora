@@ -6686,7 +6686,18 @@
     "recoveryUnderwayWaiting": "Iemand heeft je reserveadres en een accountherstelcode gebruikt. Als je het niet stopt, kan die persoon na {date} het reserveadres je aanmeldadres maken.",
     "recoveryUnderwayReady": "Iemand heeft je reserveadres en een accountherstelcode gebruikt, en de wachttijd is voorbij. Als je het niet stopt, kan die persoon het reserveadres nu je aanmeldadres maken.",
     "stopRecovery": "Herstel stoppen",
-    "recoveryCancelledNotice": "Het herstel is gestopt. Heb je het niet zelf gestart? Wijzig dan je wachtwoord en je accountherstelcodes."
+    "recoveryCancelledNotice": "Het herstel is gestopt. Heb je het niet zelf gestart? Wijzig dan je wachtwoord en je accountherstelcodes.",
+    "devicePinTitle": "PIN voor huishoudapparaten",
+    "devicePinIntro": "Optioneel. Hiermee bevestig je taken die je afvinkt op een huishoudapparaat dat je Home heeft goedgekeurd. Je logt er nergens mee in.",
+    "devicePinIsSet": "Je PIN voor huishoudapparaten is ingesteld.",
+    "devicePinNotSet": "Je hebt geen PIN voor huishoudapparaten.",
+    "devicePinLocked": "Vergrendeld na te veel verkeerde pogingen tot {time}.",
+    "devicePinField": "Nieuwe PIN voor huishoudapparaten",
+    "devicePinHint": "{min} tot {max} cijfers, niet één cijfer herhaald en geen eenvoudige reeks zoals 1234.",
+    "devicePinSave": "PIN instellen",
+    "devicePinRemove": "PIN verwijderen",
+    "devicePinSaved": "PIN ingesteld.",
+    "devicePinRemoved": "PIN verwijderd."
   },
   "AccountRecovery": {
     "title": "Je account herstellen",
@@ -7795,6 +7806,51 @@
       "viewPets": "De huisdieren zien",
       "editOwnAvatar": "Je eigen foto veranderen",
       "editOwnDisplayName": "Je eigen naam veranderen"
-    }
+    },
+    "choresLink": "Een taak afvinken",
+    "pinRuleLabel": "Vraag een PIN voor elke taak die op een huishoudapparaat wordt afgevinkt",
+    "pinRuleHint": "Uit: wie een taak afvinkt, kiest wie ze gedaan heeft, en wie een PIN heeft, kan nog altijd met die PIN bevestigen. Aan: elke taak vraagt de PIN van die persoon.",
+    "pinRuleSaved": "PIN-regel opgeslagen."
+  },
+  "HouseholdChores": {
+    "title": "Taken",
+    "unavailable": "Taken op dit apparaat zijn nu niet beschikbaar. Probeer het later opnieuw.",
+    "notApproved": "Taken afvinken zonder in te loggen werkt alleen op een huishoudapparaat dat een beheerder van het Home heeft goedgekeurd.",
+    "pinSignInLink": "Terug naar inloggen",
+    "unnamed": "Lid zonder naam",
+    "undone": "Ongedaan gemaakt: {chore}.",
+    "submitted": "{chore} is ter goedkeuring verstuurd.",
+    "completed": "{chore} is gedaan.",
+    "undo": "Ongedaan maken",
+    "done": "Klaar",
+    "undoFailed": "Ongedaan maken lukte niet. Misschien zijn de twee minuten voorbij.",
+    "noChores": "Geen open taken voor vandaag.",
+    "pickChore": "Welke taak is gedaan?",
+    "overdue": "Te laat sinds {date}",
+    "dueToday": "Vandaag",
+    "whoCompleted": "Wie heeft dit gedaan?",
+    "back": "Terug",
+    "fail": {
+      "lockedGuardian": "PIN-invoer is vergrendeld. Een ouder of voogd moet die ontgrendelen.",
+      "locked": "Te vaak een verkeerde PIN. Probeer het later opnieuw.",
+      "invalidPin": "Dat lukte niet. Controleer de PIN en probeer het opnieuw.",
+      "pinRequired": "Dit Home vraagt een PIN om taken te bevestigen.",
+      "pinNotSet": "Deze persoon heeft nog geen PIN. Die kan er een instellen in de instellingen, of een ouder of voogd doet het.",
+      "alreadyDone": "Deze taak was al gedaan.",
+      "stepsIncomplete": "Sommige verplichte stappen zijn nog niet gedaan.",
+      "notEligible": "Deze persoon kan niet voor deze taak gekozen worden.",
+      "deviceNotApproved": "Dit apparaat is niet meer goedgekeurd.",
+      "rateLimited": "Te veel pogingen. Wacht even en probeer het opnieuw.",
+      "network": "Geen verbinding. Controleer het netwerk en probeer het opnieuw.",
+      "failed": "Er ging iets mis. Probeer het opnieuw."
+    },
+    "confirmLine": "{name} heeft {chore} gedaan.",
+    "stepsOpen": "{count, plural, one {# verplichte stap staat nog open.} other {# verplichte stappen staan nog open.}}",
+    "needsApproval": "Een beheerder keurt deze taak goed nadat ze gedaan is.",
+    "pinRequiredHere": "Dit Home vraagt een PIN om te bevestigen.",
+    "confirmWithPin": "Bevestigen met mijn PIN",
+    "pinLabel": "PIN van {name}",
+    "confirm": "Bevestigen",
+    "notMe": "Dat ben ik niet"
   }
 }

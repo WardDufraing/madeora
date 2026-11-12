@@ -3990,7 +3990,7 @@ export type Database = {
         Returns: string;
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };
-      set_my_device_pin: { Args: { p_hash: string }; Returns: string };
+      set_my_device_pin: { Args: { p_hash?: string }; Returns: string };
       set_my_goal_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_habit_reminders: { Args: { p_enabled: boolean; p_id: string }; Returns: string };
       set_my_home_avatar: { Args: { p_file_id?: string; p_home_id: string }; Returns: string };

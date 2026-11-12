@@ -6,6 +6,7 @@ import { parseAccountChangeAction } from "@/auth/google-reauth";
 import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { getAccountSecurity, getMySessions, getMyTrustedDevices } from "@/auth/security-server";
 import { verifiedTotpFactor } from "@/auth/two-factor";
+import { getMyDevicePin } from "@/child-sign-in/server";
 import { FormAlert } from "@/components/auth/form-alert";
 import { AccountRecoveryCodesSetting } from "@/components/security/account-recovery-codes-setting";
 import { BackupEmailSetting } from "@/components/security/backup-email-setting";
@@ -15,6 +16,7 @@ import { RecoveryBanner } from "@/components/security/recovery-banner";
 import { SessionsSetting } from "@/components/security/sessions-setting";
 import { TrustedDevicesSetting } from "@/components/security/trusted-devices-setting";
 import { TwoFactorSetting } from "@/components/security/two-factor-setting";
+import { DevicePinSetting } from "@/components/security/device-pin-setting";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { pageTitle } from "@/i18n/page-title";
@@ -70,6 +72,8 @@ export default async function SecurityPage({ searchParams }: SecurityPageProps) 
       searchParams,
     ]);
   if (!user) return null;
+  // The optional household-device PIN (S42 part 2) for confirming chores on a shared device.
+  const devicePin = await getMyDevicePin();
   const email = user.email ?? "";
   const factor = verifiedTotpFactor(user);
   const status = security.status === "ok" ? security.value : null;
@@ -242,6 +246,18 @@ export default async function SecurityPage({ searchParams }: SecurityPageProps) 
             ) : null}
           </Card>
         </div>
+        {devicePin ? (
+          <div id="device-pin" className="scroll-mt-20">
+            <Card title={t("devicePinTitle")}>
+              <DevicePinSetting
+                hasPin={devicePin.hasPin}
+                lockedUntil={
+                  devicePin.lockedUntil ? formatDateTime(devicePin.lockedUntil, formats) : null
+                }
+              />
+            </Card>
+          </div>
+        ) : null}
       </div>
     </>
   );

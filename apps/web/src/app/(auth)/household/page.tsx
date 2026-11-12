@@ -76,6 +76,11 @@ export default async function HouseholdPage() {
       ) : (
         <HouseholdPinSignIn childrenOfHome={screen.children} />
       )}
+      <p className="mt-6 text-body">
+        <Link href="/household/chores" className="font-medium text-accent-fg underline">
+          {t("choresLink")}
+        </Link>
+      </p>
     </>
   );
 }

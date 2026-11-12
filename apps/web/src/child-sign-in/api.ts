@@ -7,7 +7,9 @@ import { MemberActionError, sendMemberRequest } from "@/members/manage-api";
 import type {
   ApproveDeviceInput,
   ChildSignInActionInput,
+  MyDevicePinInput,
   PasswordSignInInput,
+  PinRuleInput,
   PinSignInInput,
 } from "./schema";
 
@@ -33,6 +35,10 @@ import type {
  * - `POST /api/v1/homes/{homeId}/household-devices` `{ label }` → `201 { device: { id } }` and the
  *   httpOnly device cookie on this browser
  * - `POST /api/v1/homes/{homeId}/household-devices/{deviceId}/revoke` `{}` → `200 {}`
+ * - `POST /api/v1/homes/{homeId}/household-devices/pin-rule` `{ requirePin }` → `200 { outcome }`
+ *
+ * Adults, for themselves (children are refused):
+ * - `POST /api/v1/me/device-pin` `{ pin }` (`null` removes it) → `200 { outcome }`
  */
 
 export const CHILD_PASSWORD_SIGN_IN_ENDPOINT = "/api/v1/child-sign-in/password";
@@ -146,4 +152,109 @@ export async function revokeHouseholdDevice(homeId: string, deviceId: string): P
     `${householdDevicesEndpoint(homeId)}/${encodeURIComponent(deviceId)}/revoke`,
     {},
   );
+}
+
+const changeSchema = z.object({ outcome: z.enum(["saved", "unchanged", "cleared"]) });
+
+export async function setSharedDevicePinRule(homeId: string, input: PinRuleInput): Promise<void> {
+  await sendMemberRequest("POST", `${householdDevicesEndpoint(homeId)}/pin-rule`, input);
+}
+
+export const MY_DEVICE_PIN_ENDPOINT = "/api/v1/me/device-pin";
+
+export async function setMyDevicePin(
+  input: MyDevicePinInput,
+): Promise<"saved" | "unchanged" | "cleared"> {
+  const parsed = changeSchema.safeParse(
+    await sendMemberRequest("POST", MY_DEVICE_PIN_ENDPOINT, input),
+  );
+  if (!parsed.success) throw new MemberActionError("failed");
+  return parsed.data.outcome;
+}
+
+// Chores on a household device (S42 part 2) -----------------------------------------------------------
+//
+// - `POST /api/v1/household/chores/complete` `{ occurrenceId, membershipId, pin }` (`pin`: 4–8
+//   digits or null), approved device cookie only → `200 { outcome: "completed" | "submitted",
+//   actionId }`. Refusals: `401 invalid-pin`, `423 locked { until }`, `409 pin-required`,
+//   `409 pin-not-set`, `409 already-done`, `409 steps-incomplete`, `403 not-eligible`,
+//   `403 device-not-approved`, `429 rate-limited`, `503 unavailable`.
+// - `POST /api/v1/household/chores/undo` `{ actionId }` → `200 {}`; `409 expired | invalid`.
+
+export const DEVICE_CHORE_COMPLETE_ENDPOINT = "/api/v1/household/chores/complete";
+export const DEVICE_CHORE_UNDO_ENDPOINT = "/api/v1/household/chores/undo";
+
+export type DeviceChoreFailure =
+  | { readonly kind: "locked"; readonly until: string | null }
+  | {
+      readonly kind:
+        | "invalidPin"
+        | "pinRequired"
+        | "pinNotSet"
+        | "alreadyDone"
+        | "stepsIncomplete"
+        | "notEligible"
+        | "deviceNotApproved"
+        | "rateLimited"
+        | "network"
+        | "failed";
+    };
+
+export type DeviceChoreDone = {
+  readonly outcome: "completed" | "submitted";
+  readonly actionId: string;
+};
+
+const deviceFailureByCode: Record<string, Exclude<DeviceChoreFailure["kind"], "locked">> = {
+  "invalid-pin": "invalidPin",
+  "pin-required": "pinRequired",
+  "pin-not-set": "pinNotSet",
+  "already-done": "alreadyDone",
+  "steps-incomplete": "stepsIncomplete",
+  "not-eligible": "notEligible",
+  "device-not-approved": "deviceNotApproved",
+  "rate-limited": "rateLimited",
+};
+
+const deviceDoneSchema = z.object({
+  outcome: z.enum(["completed", "submitted"]),
+  actionId: z.uuid(),
+});
+
+async function postDevice(url: string, body: unknown): Promise<Response | null> {
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function completeChoreOnDevice(input: {
+  readonly occurrenceId: string;
+  readonly membershipId: string;
+  readonly pin: string | null;
+}): Promise<DeviceChoreDone | DeviceChoreFailure> {
+  const response = await postDevice(DEVICE_CHORE_COMPLETE_ENDPOINT, input);
+  if (!response) return { kind: "network" };
+  const body: unknown = await response.json().catch(() => ({}));
+  if (response.ok) {
+    const done = deviceDoneSchema.safeParse(body);
+    return done.success ? done.data : { kind: "failed" };
+  }
+  const parsed = errorBodySchema.safeParse(body);
+  if (!parsed.success) return { kind: "failed" };
+  if (parsed.data.error === "locked") return { kind: "locked", until: parsed.data.until ?? null };
+  return { kind: deviceFailureByCode[parsed.data.error] ?? "failed" };
+}
+
+/** `true` when undone; `false` when it is too late or not possible. */
+export async function undoChoreOnDevice(actionId: string): Promise<boolean> {
+  const response = await postDevice(DEVICE_CHORE_UNDO_ENDPOINT, { actionId });
+  return response?.ok ?? false;
 }

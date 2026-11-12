@@ -271,3 +271,13 @@ select tests.act_as_owner();
 select tests.assert_true(
   (select count(*) from private.member_device_pins where user_id = tests.sd('mia')) = 0,
   'Mia has no adult PIN');
+select tests.act_as_user(tests.sd('mia'));
+select tests.assert_denied(
+  format('select public.set_my_device_pin(%L)', tests.sd_hash('mia-pin')),
+  'A child cannot set an adult household-device PIN');
+
+-- Bob removes his PIN; removing it again changes nothing.
+select tests.act_as('bob');
+select tests.assert_true(public.set_my_device_pin() = 'cleared', 'Bob removes his PIN');
+select tests.assert_true(public.set_my_device_pin() = 'unchanged', 'Removing it twice is a no-op');
+select tests.assert_true(not (select has_pin from public.my_device_pin()), 'He sees it is gone');

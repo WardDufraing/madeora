@@ -3,8 +3,9 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { requireIdentity } from "@/auth/identity";
-import { getHouseholdDevices } from "@/child-sign-in/server";
+import { getHouseholdDevices, getSharedDevicePinRule } from "@/child-sign-in/server";
 import { HouseholdDevicesSetting } from "@/components/child-sign-in/household-devices-setting";
+import { SharedDevicePinRule } from "@/components/child-sign-in/shared-device-pin-rule";
 import { HomeSettingsForm } from "@/components/homes/home-settings-form";
 import { loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
@@ -60,8 +61,9 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
   }
   const { home, membership, permissions } = context;
   // Approved household devices for child PIN sign-in (S42): the same managers as the settings.
-  const [devices, directory, formats, tSignIn, tMembers] = await Promise.all([
+  const [devices, pinRule, directory, formats, tSignIn, tMembers] = await Promise.all([
     permissions["home.updateSettings"] ? getHouseholdDevices(home.id) : null,
+    permissions["home.updateSettings"] ? getSharedDevicePinRule(home.id) : null,
     permissions["home.updateSettings"] ? getHomeDirectory(home.id) : null,
     getDateTimeFormats(),
     getTranslations("ChildSignIn"),
@@ -114,6 +116,11 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
               isThisDevice: device.isThisDevice,
             }))}
           />
+          {pinRule === null ? null : (
+            <div className="mt-6 border-t border-line pt-6">
+              <SharedDevicePinRule homeId={home.id} requirePin={pinRule} />
+            </div>
+          )}
         </Card>
       ) : null}
       {/* The Home's trash: every member may open it and sees what they may (S16). */}

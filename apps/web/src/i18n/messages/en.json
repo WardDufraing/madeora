@@ -6686,7 +6686,18 @@
     "recoveryUnderwayWaiting": "Someone used your backup address and an account recovery code. Unless you stop it, they can make the backup address your sign-in address after {date}.",
     "recoveryUnderwayReady": "Someone used your backup address and an account recovery code, and the waiting period is over. Unless you stop it, they can make the backup address your sign-in address now.",
     "stopRecovery": "Stop the recovery",
-    "recoveryCancelledNotice": "The recovery was stopped. If you didn't start it, change your password and your account recovery codes."
+    "recoveryCancelledNotice": "The recovery was stopped. If you didn't start it, change your password and your account recovery codes.",
+    "devicePinTitle": "Household-device PIN",
+    "devicePinIntro": "Optional. Use it to confirm chores you record on a household device your Home approved. It does not sign you in anywhere.",
+    "devicePinIsSet": "Your household-device PIN is set.",
+    "devicePinNotSet": "You have no household-device PIN.",
+    "devicePinLocked": "Locked after too many wrong tries until {time}.",
+    "devicePinField": "New household-device PIN",
+    "devicePinHint": "{min} to {max} digits, not one digit repeated and not a simple run such as 1234.",
+    "devicePinSave": "Set PIN",
+    "devicePinRemove": "Remove PIN",
+    "devicePinSaved": "PIN set.",
+    "devicePinRemoved": "PIN removed."
   },
   "AccountRecovery": {
     "title": "Recover your account",
@@ -7795,6 +7806,51 @@
       "viewPets": "See the pets",
       "editOwnAvatar": "Change your own picture",
       "editOwnDisplayName": "Change your own name"
-    }
+    },
+    "choresLink": "Record a chore",
+    "pinRuleLabel": "Ask for a PIN for every chore done on a household device",
+    "pinRuleHint": "Off: whoever records a chore names the person who did it, and anyone with a PIN may still confirm with it. On: every chore needs that person's PIN.",
+    "pinRuleSaved": "PIN rule saved."
+  },
+  "HouseholdChores": {
+    "title": "Chores",
+    "unavailable": "Chores on this device aren't available right now. Try again later.",
+    "notApproved": "Recording chores without signing in works only on a household device that a Home manager approved.",
+    "pinSignInLink": "Back to sign-in",
+    "unnamed": "Unnamed member",
+    "undone": "Undone: {chore}.",
+    "submitted": "{chore} is sent for approval.",
+    "completed": "{chore} is done.",
+    "undo": "Undo",
+    "done": "Done",
+    "undoFailed": "Undo didn't work. The two minutes may have passed.",
+    "noChores": "No open chores for today.",
+    "pickChore": "Which chore is done?",
+    "overdue": "Overdue since {date}",
+    "dueToday": "Due today",
+    "whoCompleted": "Who completed this?",
+    "back": "Back",
+    "fail": {
+      "lockedGuardian": "PIN entry is locked. A guardian needs to unlock it.",
+      "locked": "Too many wrong PINs. Try again later.",
+      "invalidPin": "That didn't work. Check the PIN and try again.",
+      "pinRequired": "This Home asks for a PIN to confirm chores.",
+      "pinNotSet": "This person has no PIN yet. They can set one in their settings, or a guardian can.",
+      "alreadyDone": "This chore was already done.",
+      "stepsIncomplete": "Some required steps aren't done yet.",
+      "notEligible": "This person can't be named for this chore.",
+      "deviceNotApproved": "This device is no longer approved.",
+      "rateLimited": "Too many tries. Wait a moment and try again.",
+      "network": "No connection. Check the network and try again.",
+      "failed": "Something went wrong. Try again."
+    },
+    "confirmLine": "{name} completed {chore}.",
+    "stepsOpen": "{count, plural, one {# required step is still open.} other {# required steps are still open.}}",
+    "needsApproval": "A manager approves this chore after it's done.",
+    "pinRequiredHere": "This Home asks for a PIN to confirm.",
+    "confirmWithPin": "Confirm with my PIN",
+    "pinLabel": "PIN for {name}",
+    "confirm": "Confirm",
+    "notMe": "That's not me"
   }
 }

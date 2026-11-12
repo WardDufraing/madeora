@@ -134,3 +134,36 @@ export const getChildSession = cache(async (): Promise<ChildSession | null> => {
     })),
   };
 });
+
+/** Whether the Home asks for a PIN on its household devices; `null` for anyone but its managers. */
+export const getSharedDevicePinRule = cache(async (homeId: string): Promise<boolean | null> => {
+  if (!homeIdSchema.safeParse(homeId).success) return null;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("shared_device_pin_rule", { p_home_id: homeId });
+  if (error) {
+    if (error.code !== "42501") {
+      console.error(
+        JSON.stringify({ event: "shared_device_pin_rule.read_failed", code: error.code }),
+      );
+    }
+    return null;
+  }
+  return data;
+});
+
+/** The signed-in adult's own household-device PIN: set or not, and its lock. Never the hash. */
+export interface MyDevicePin {
+  readonly hasPin: boolean;
+  readonly lockedUntil: string | null;
+}
+
+export const getMyDevicePin = cache(async (): Promise<MyDevicePin | null> => {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("my_device_pin");
+  if (error) {
+    console.error(JSON.stringify({ event: "my_device_pin.read_failed", code: error.code }));
+    return null;
+  }
+  const row = data[0];
+  return { hasPin: row?.has_pin ?? false, lockedUntil: row?.locked_until ?? null };
+});

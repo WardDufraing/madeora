@@ -253,7 +253,7 @@ grant execute on function public.my_device_pin() to authenticated;
 
 -- Sets (p_hash, made by the web server) or removes (null) the caller's own PIN. Adults only.
 -- Returns 'saved', 'cleared' or 'unchanged'.
-create function public.set_my_device_pin(p_hash text) returns text
+create function public.set_my_device_pin(p_hash text default null) returns text
   language plpgsql security definer set search_path = '' as $$
   declare
     v_user_id uuid := private.require_confirmed_caller();
