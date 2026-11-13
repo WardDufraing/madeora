@@ -103,7 +103,7 @@ test("a paired display shows only shareable Home data, takes actions and locks",
   await page.waitForURL(/\/displays\/[0-9a-f-]{36}$/);
   expect(await axeViolations(page)).toEqual([]);
   await page.getByRole("button", { name: "Remove Shopping (position 3)" }).click();
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText(/Layout saved/)).toBeVisible();
   await screen.reload();
   await expect(screen.getByTestId("display-board")).toBeVisible();
