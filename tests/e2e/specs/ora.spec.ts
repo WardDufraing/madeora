@@ -64,8 +64,11 @@ test("Ora becomes a bottom sheet on a phone", async ({ page, baseURL }) => {
   await page.getByRole("button", { name: launcherName }).click();
   const surface = page.getByRole("dialog", { name: "Ora" });
   await expect(surface).toBeVisible();
+  // The entrance animation scales slightly, so wait for the settled size.
+  await expect
+    .poll(async () => (await surface.boundingBox())?.width ?? 0)
+    .toBeGreaterThanOrEqual(388);
   const box = await surface.boundingBox();
-  expect(box?.width).toBeGreaterThanOrEqual(388);
   // Sits at the bottom edge of the screen.
   expect((box?.y ?? 0) + (box?.height ?? 0)).toBeGreaterThanOrEqual(840);
   await expect(page.getByRole("button", { name: "Show Ora larger" })).toBeVisible();

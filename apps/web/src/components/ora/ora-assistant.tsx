@@ -144,7 +144,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
           >
             <span aria-hidden="true" className="h-1 w-10 rounded-full bg-line-control" />
           </div>
-          <header className="flex items-center gap-3 px-4 pb-2 pt-1 md:pt-4">
+          <div className="flex items-center gap-3 px-4 pb-2 pt-1 md:pt-4">
             <OraCharacter
               palette={palette}
               expression={expression}
@@ -181,7 +181,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
             >
               <CloseIcon />
             </button>
-          </header>
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4" key={homeId ?? "personal"}>
             <OraContent
               userId={userId}
