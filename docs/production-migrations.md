@@ -62,6 +62,12 @@ Each link opens one standalone migration file. Apply each file once, oldest firs
 - [`supabase/migrations/20261124090000_activity_history.sql`](../supabase/migrations/20261124090000_activity_history.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261125090000_account_lifecycle.sql`](../supabase/migrations/20261125090000_account_lifecycle.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261126090000_privacy_exports.sql`](../supabase/migrations/20261126090000_privacy_exports.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261127090000_account_home_deletion.sql`](../supabase/migrations/20261127090000_account_home_deletion.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261128090000_category_deletion_home_copies.sql`](../supabase/migrations/20261128090000_category_deletion_home_copies.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261129090000_child_profiles.sql`](../supabase/migrations/20261129090000_child_profiles.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261130090000_child_sign_in.sql`](../supabase/migrations/20261130090000_child_sign_in.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261201090000_shared_device_chores.sql`](../supabase/migrations/20261201090000_shared_device_chores.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261202090000_child_independent_account.sql`](../supabase/migrations/20261202090000_child_independent_account.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 
 ## One copyable migration for an empty database
 
@@ -61890,6 +61896,6482 @@ returns void
 
 revoke all on function public.save_my_privacy_review(text, text) from public, anon;
 grant execute on function public.save_my_privacy_review(text, text) to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261127090000_account_home_deletion.sql
+-- ============================================================================
+-- S40 (part 1): Home deletion ("Close Home") and account deletion, each with a 30-day recovery
+-- period, the final purge, and "Former member" anonymization.
+--
+-- Spec: Project-specification.md "Confirmed Madeora account deletion and recovery", "Confirmed Home
+-- deletion and recovery", "Confirmed guided transfer-or-close for departing Home Owner", "Confirmed
+-- anonymization after permanent account deletion" (12-13 October 2026). Brief: plans/steps/S40-brief.md.
+--
+-- A Home pending deletion is inaccessible to every member, Owner included, on every path. Every
+-- policy, permission helper, RPC and job resolves access through public.home_memberships, so that
+-- name becomes a view over the renamed table private.home_memberships_all that leaves out Homes
+-- pending deletion. The table keeps its constraints, indexes, triggers and foreign keys (they follow
+-- the table, not its name). Only the one-Owner check and this file's own functions read the table.
+--
+-- An account pending deletion is suspended exactly like an S38 deactivation (it has a row in
+-- private.account_deactivations too): sessions end, notifications are security-only, members see
+-- "inactive", and its only use is to see the state and cancel. Its memberships stay until the final
+-- deletion, so members can still remove it meanwhile and that removal stands.
+
+-- Settings ---------------------------------------------------------------------------------------
+
+-- Values awaiting Ward's approval (plans/steps/S40-brief.md).
+create function private.deletion_recovery_period() returns interval
+  language sql immutable set search_path = '' as $$ select interval '30 days' $$;
+
+-- Re-authentication: two more actions -------------------------------------------------------------
+
+alter table private.account_change_grants drop constraint account_change_grants_action_check;
+alter table private.account_change_grants
+  add constraint account_change_grants_action_check check (action in (
+    'password', 'email', 'two_factor_enroll', 'two_factor_disable', 'recovery_codes',
+    'backup_email', 'account_recovery_codes', 'security_report', 'deactivate_account',
+    'data_export', 'delete_account', 'close_home'
+  ));
+
+-- As S39, with two more actions: 'delete_account' and 'close_home' (close and restore a Home).
+create or replace function public.authorize_account_change(p_action text, p_session_id uuid)
+returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_expires_at timestamptz;
+  begin
+    if v_user_id is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if p_action is null or p_action not in (
+      'password', 'email', 'two_factor_enroll', 'two_factor_disable', 'recovery_codes',
+      'backup_email', 'account_recovery_codes', 'security_report', 'deactivate_account',
+      'data_export', 'delete_account', 'close_home'
+    ) then
+      raise exception 'unknown action' using errcode = '22023';
+    end if;
+    if not private.is_recent_reauthentication(v_user_id, v_session_id, p_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+    if p_session_id is null or p_session_id = v_session_id
+       or not private.session_is_live(v_user_id, p_session_id) then
+      raise exception 'unknown session' using errcode = '42501', hint = 'session_required';
+    end if;
+    if p_action = 'two_factor_enroll' and private.has_two_factor(v_user_id) then
+      raise exception 'two-factor sign-in is already on' using errcode = '42501';
+    end if;
+    if p_action in ('two_factor_disable', 'recovery_codes')
+       and not private.has_two_factor(v_user_id) then
+      raise exception 'two-factor sign-in is off' using errcode = '42501';
+    end if;
+
+    perform private.lock_sign_in_methods(v_user_id);
+    v_expires_at := pg_catalog.now() + private.account_change_grant_lifetime();
+    insert into private.account_change_grants (user_id, action, session_id, expires_at)
+      values (v_user_id, p_action, p_session_id, v_expires_at)
+      on conflict (user_id, action) do update
+        set session_id = excluded.session_id, expires_at = excluded.expires_at,
+            created_at = pg_catalog.now();
+    perform private.record_security_event(v_user_id, 'reauthenticated', v_session_id);
+    return v_expires_at;
+  end
+  $$;
+
+-- Home deletions -----------------------------------------------------------------------------------
+
+create table private.home_deletions (
+  home_id uuid primary key references public.homes (id) on delete cascade,
+  requested_by uuid references auth.users (id) on delete set null,
+  requested_at timestamptz not null default now(),
+  purge_after timestamptz not null,
+  -- The purge job's last failure, for operators; never shown to members.
+  purge_attempts integer not null default 0,
+  purge_error text,
+  constraint home_deletions_window_check check (purge_after > requested_at)
+);
+
+create index home_deletions_due_idx on private.home_deletions (purge_after);
+
+revoke all on table private.home_deletions from public;
+
+comment on table private.home_deletions is
+  'S40: Homes closed by their Owner, inaccessible until restored or purged. Not exposed.';
+
+-- Memberships: the table moves aside, the name becomes the filtered view ---------------------------
+
+alter table public.home_memberships set schema private;
+alter table private.home_memberships rename to home_memberships_all;
+
+comment on table private.home_memberships_all is
+  'Every Home membership, including Homes pending deletion (S40). Read public.home_memberships '
+  'instead; only integrity checks and the deletion functions read this table directly.';
+
+-- Whether a Home is not pending deletion. The membership view below runs as its reader (as every
+-- view in schema public must), so the API roles need to execute this; it reveals nothing more than
+-- whether a Home id is closed.
+create function private.home_is_open(p_home_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select not exists (select 1 from private.home_deletions d where d.home_id = p_home_id)
+  $$;
+
+revoke all on function private.home_is_open(uuid) from public;
+grant execute on function private.home_is_open(uuid) to authenticated, service_role;
+
+-- The view runs as its reader: the API roles keep the table's row-level policy (their own rows
+-- only, through the select grant kept below), security definer functions and the service role see
+-- every membership. The check option refuses any write that would put a membership into a Home
+-- pending deletion.
+create view public.home_memberships with (security_invoker = true, security_barrier = true) as
+  select m.id, m.home_id, m.user_id, m.role, m.created_at
+  from private.home_memberships_all m
+  where private.home_is_open(m.home_id)
+  with cascaded check option;
+
+comment on view public.home_memberships is
+  'Current Home memberships with their role; exactly one Owner per Home (S09). Homes pending '
+  'deletion are left out (S40).';
+
+revoke all on table public.home_memberships from public, anon, authenticated;
+grant select (id, home_id, user_id, role, created_at) on table public.home_memberships
+  to authenticated;
+
+-- Policies are stored bound to the table, not its name: the seven that read memberships follow it
+-- unless they are recreated against the view. Same text as before (S09, S11, S13, S22, S26).
+drop policy homes_select_member on public.homes;
+create policy homes_select_member on public.homes
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = homes.id and m.user_id = (select auth.uid())
+    )
+  );
+
+drop policy home_member_profiles_select_own on public.home_member_profiles;
+create policy home_member_profiles_select_own on public.home_member_profiles
+  for select
+  to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+drop policy home_member_profiles_insert_own on public.home_member_profiles;
+create policy home_member_profiles_insert_own on public.home_member_profiles
+  for insert
+  to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+drop policy home_member_profiles_update_own on public.home_member_profiles;
+create policy home_member_profiles_update_own on public.home_member_profiles
+  for update
+  to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = home_member_profiles.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+drop policy notifications_select_own on public.notifications;
+create policy notifications_select_own on public.notifications
+  for select
+  to authenticated
+  using (
+    user_id = (select auth.uid()) and show_in_app
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = notifications.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+drop policy chore_pool_signals_select_member on public.chore_pool_signals;
+create policy chore_pool_signals_select_member on public.chore_pool_signals
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = chore_pool_signals.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+drop policy shopping_signals_select_own on public.shopping_signals;
+create policy shopping_signals_select_own on public.shopping_signals
+  for select
+  to authenticated
+  using (
+    user_id = (select auth.uid())
+    or exists (
+      select 1 from public.home_memberships m
+      where m.home_id = shopping_signals.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+-- As S09, reading the table: a Home pending deletion still has its Owner.
+create or replace function private.check_home_has_owner() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_home_id uuid;
+  begin
+    if tg_table_name = 'homes' then
+      v_home_id := new.id;
+    else
+      v_home_id := old.home_id;
+    end if;
+
+    if exists (select 1 from public.homes h where h.id = v_home_id)
+       and not exists (
+         select 1 from private.home_memberships_all m
+         where m.home_id = v_home_id and m.role = 'owner'
+       ) then
+      raise exception 'a Home must always have an Owner'
+        using errcode = '23514',
+              hint = 'Ownership changes only through an accepted transfer (S12).';
+    end if;
+    return null;
+  end
+  $$;
+
+-- The Owner of a Home, also while it is pending deletion.
+create function private.home_owner_any(p_home_id uuid) returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from private.home_memberships_all m
+    where m.home_id = p_home_id and m.role = 'owner'
+  $$;
+
+revoke all on function private.home_owner_any(uuid) from public;
+
+-- Departure work: the three assignment rules as callable functions ----------------------------------
+--
+-- The departure triggers (S18, S19, S21-S23) stay as they are in behaviour; their bodies move here so
+-- an account deletion can apply the same rules while the membership still exists.
+
+create function private.flag_member_tasks(p_home_id uuid, p_user_id uuid) returns void
+  language sql security definer set search_path = '' as $$
+    update private.tasks t set needs_reassignment = true
+      where t.owner_home_id = p_home_id and t.completed_at is null and not t.needs_reassignment
+        and exists (
+          select 1 from private.task_assignees a where a.task_id = t.id and a.user_id = p_user_id
+        );
+  $$;
+
+create function private.flag_member_series(p_home_id uuid, p_user_id uuid) returns void
+  language sql security definer set search_path = '' as $$
+    update private.task_series s set needs_reassignment = true
+      where s.owner_home_id = p_home_id and s.deleted_at is null and s.superseded_at is null
+        and not s.needs_reassignment
+        and exists (
+          select 1 from private.task_series_assignees a where a.series_id = s.id and a.user_id = p_user_id
+        );
+  $$;
+
+-- p_departed false: the account deletion request (S40), while the person is still a member; the
+-- releases and ended requests then carry neutral reasons. Either way, while the transaction is
+-- deleting this person's account (madeora.account_deletion), nobody else is notified: the spec keeps
+-- account deletion and the reassignments it causes free of alerts to other members.
+create function private.release_member_chores(
+  p_home_id uuid, p_user_id uuid, p_departed boolean default true
+) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_request private.chore_reassignment_requests;
+    v_released uuid[];
+    v_silent boolean := coalesce(pg_catalog.current_setting('madeora.account_deletion', true), '')
+      = p_user_id::text;
+  begin
+    with released as (
+      update private.chore_occurrences o set claimed_by = null, claimed_at = null,
+          revision = o.revision + 1, updated_at = pg_catalog.now()
+        where o.home_id = p_home_id and o.status = 'open' and o.claimed_by = p_user_id
+        returning o.id
+    )
+    select coalesce(array_agg(r.id), '{}') into v_released from released r;
+    update private.chore_occurrence_steps s set checked_at = null, checked_by = null
+      where s.occurrence_id = any (v_released) and s.checked_at is not null;
+    insert into private.chore_occurrence_events (occurrence_id, kind, reason, previous_contributor_id)
+      select r, 'released', case when p_departed then 'departure' else 'unavailable' end, p_user_id
+      from unnest(v_released) as r;
+    update private.chore_occurrences o set needs_reassignment = true
+      where o.home_id = p_home_id and o.status = 'open' and not o.needs_reassignment
+        and not (o.id = any (v_released))
+        and exists (
+          select 1 from private.chore_occurrence_assignees a
+          where a.occurrence_id = o.id and a.user_id = p_user_id
+        );
+    update private.chore_schedules s set needs_reassignment = true
+      where s.home_id = p_home_id and s.superseded_at is null and not s.needs_reassignment
+        and exists (
+          select 1 from private.chore_schedule_members m
+          where m.schedule_id = s.id and m.user_id = p_user_id
+        );
+    for v_request in
+      select * from private.chore_reassignment_requests r
+      where r.home_id = p_home_id and r.status in ('pending', 'awaiting_manager')
+        and p_user_id in (r.from_user, r.to_user, r.requested_by)
+    loop
+      if v_silent then
+        update private.chore_reassignment_requests r
+          set status = 'invalidated', decided_at = pg_catalog.now(),
+              invalid_reason = case when p_departed then 'member_left' else 'assignment_changed' end
+          where r.id = v_request.id and r.status in ('pending', 'awaiting_manager');
+      else
+        perform private.invalidate_chore_request(
+          v_request, case when p_departed then 'member_left' else 'assignment_changed' end);
+      end if;
+    end loop;
+  end
+  $$;
+
+revoke all on function private.flag_member_tasks(uuid, uuid) from public;
+revoke all on function private.flag_member_series(uuid, uuid) from public;
+revoke all on function private.release_member_chores(uuid, uuid, boolean) from public;
+
+create or replace function private.flag_departed_assignments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform private.flag_member_tasks(old.home_id, old.user_id);
+    return old;
+  end
+  $$;
+
+create or replace function private.flag_departed_series_assignments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform private.flag_member_series(old.home_id, old.user_id);
+    return old;
+  end
+  $$;
+
+create or replace function private.flag_departed_chore_assignments() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform private.release_member_chores(old.home_id, old.user_id);
+    return old;
+  end
+  $$;
+
+-- Close a Home -------------------------------------------------------------------------------------
+
+-- Invitations ended by a Home deletion never become valid again (spec).
+alter table private.home_invitations drop constraint home_invitations_end_check;
+alter table private.home_invitations
+  add constraint home_invitations_end_check
+  check ((end_reason is null) = (ended_at is null)
+    and end_reason in ('revoked', 'declined', 'home_closed'));
+
+-- What closing a Home affects, for its Owner's confirmation page. Counts only: no names.
+create function public.home_closure_summary(p_home_id uuid)
+returns table (member_count integer, pending_invitations integer, shared_calendars integer)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is distinct from 'owner' then
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    return query
+      select
+        (select count(*)::integer from public.home_memberships m where m.home_id = p_home_id),
+        (select count(*)::integer from private.home_invitations i
+          where i.home_id = p_home_id and i.ended_at is null and i.expires_at > pg_catalog.now()
+            and (i.max_admissions is null or i.admissions < i.max_admissions)),
+        (select count(*)::integer from private.google_calendar_home_shares s
+          where s.home_id = p_home_id);
+  end
+  $$;
+
+-- Closes a Home: the Owner only, with a fresh 'close_home' re-authentication from this session and
+-- the Home's exact name typed. Every member (the Owner included) loses access at once; pending
+-- invitations, join requests, ownership offers and recovery cases end for good; exports of the Home
+-- end. Every member gets an in-app notice and an email. It carries no Home id (they can no longer
+-- open it) but the Home's name, which every member already knew, so they can tell which Home it is.
+-- A repeated call by the Owner returns the same deadline.
+create function public.close_home(p_home_id uuid, p_confirm_name text) returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_home public.homes;
+    v_purge_after timestamptz;
+    v_member uuid;
+    v_id uuid;
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if not private.lock_home(p_home_id) then
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    -- Already closed (a retry, a double click): the same answer, once more, for the Owner only.
+    select d.purge_after into v_purge_after from private.home_deletions d where d.home_id = p_home_id;
+    if v_purge_after is not null then
+      if private.home_owner_any(p_home_id) = v_user_id then
+        return v_purge_after;
+      end if;
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is distinct from 'owner' then
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    select * into v_home from public.homes h where h.id = p_home_id;
+    if p_confirm_name is null or pg_catalog.btrim(p_confirm_name) <> v_home.name then
+      raise exception 'confirmation does not match' using errcode = '22023', hint = 'confirmation';
+    end if;
+    if not private.consume_account_change_grant(v_user_id, 'close_home', v_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    v_purge_after := pg_catalog.now() + private.deletion_recovery_period();
+
+    -- Exports that hold this Home end now (data_export_homes still sees the Home here).
+    for v_id in
+      select e.id from private.data_exports e
+      where e.status in ('queued', 'preparing', 'ready')
+        and ((e.kind = 'home' and e.home_id = p_home_id)
+          or (e.kind = 'personal' and p_home_id = any (private.data_export_homes(e))))
+    loop
+      perform private.end_data_export(v_id, 'invalidated', 'access_changed');
+    end loop;
+
+    update private.home_invitations i
+      set ended_at = pg_catalog.now(), ended_by = v_user_id, end_reason = 'home_closed'
+      where i.home_id = p_home_id and i.ended_at is null;
+    update private.home_join_requests r
+      set status = 'expired', decided_at = pg_catalog.now()
+      where r.home_id = p_home_id and r.status = 'pending';
+    update private.home_ownership_transfers t
+      set status = 'invalid', decided_at = pg_catalog.now()
+      where t.home_id = p_home_id and t.status = 'pending';
+    update private.home_ownership_recoveries r
+      set status = 'invalid', decided_at = pg_catalog.now(), paused_from = null
+      where r.home_id = p_home_id and r.status in ('submitted', 'in_review', 'approved', 'paused');
+
+    insert into private.home_deletions (home_id, requested_by, purge_after)
+      values (p_home_id, v_user_id, v_purge_after);
+
+    perform private.audit('home.deletion_requested', p_home_id, 'home', p_home_id,
+      pg_catalog.jsonb_build_object('purge_after', v_purge_after));
+    perform private.record_account_activity(v_user_id, 'home_memberships', 'home.closed', 'pending',
+      p_home_id);
+    for v_member in
+      select m.user_id from private.home_memberships_all m where m.home_id = p_home_id
+      order by m.user_id
+    loop
+      perform private.notify_user(
+        v_member, null, 'security', 'home.deletion_started',
+        pg_catalog.jsonb_build_object('homeId', p_home_id, 'homeName', v_home.name,
+          'purgeAt', v_purge_after),
+        'home.deletion_started:' || p_home_id::text || ':'
+          || pg_catalog.to_char(v_purge_after at time zone 'UTC', 'YYYYMMDDHH24MISS'), true);
+    end loop;
+    return v_purge_after;
+  end
+  $$;
+
+-- The caller's closed Homes (they are the Owner), with the deadline, for the restore page.
+create function public.my_closed_homes()
+returns table (home_id uuid, home_name text, requested_at timestamptz, purge_after timestamptz)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    return query
+      select h.id, h.name, d.requested_at, d.purge_after
+      from private.home_deletions d
+      join public.homes h on h.id = d.home_id
+      join private.home_memberships_all m
+        on m.home_id = d.home_id and m.user_id = v_user_id and m.role = 'owner'
+      where d.purge_after > pg_catalog.now()
+      order by d.purge_after, h.id;
+  end
+  $$;
+
+-- Restores a closed Home before its deadline: its current Owner only, with a fresh 'close_home'
+-- re-authentication. Everything that stayed (members, roles, content, settings) is accessible
+-- again; ended invitations stay ended. Every member is told (in-app and email).
+create function public.restore_home(p_home_id uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_deletion private.home_deletions;
+    v_name text;
+    v_member uuid;
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if not private.lock_home(p_home_id) then
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    select * into v_deletion from private.home_deletions d where d.home_id = p_home_id for update;
+    if not found or private.home_owner_any(p_home_id) is distinct from v_user_id then
+      -- Not closed (perhaps restored by a double click), or not theirs: the Owner of an open Home
+      -- gets a quiet success, anyone else nothing.
+      if not found and private.home_role(p_home_id, v_user_id) = 'owner' then
+        return;
+      end if;
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    if v_deletion.purge_after <= pg_catalog.now() then
+      raise exception 'recovery period ended' using errcode = 'P0001', hint = 'expired';
+    end if;
+    if not private.consume_account_change_grant(v_user_id, 'close_home', v_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    delete from private.home_deletions d where d.home_id = p_home_id;
+    select h.name into v_name from public.homes h where h.id = p_home_id;
+    perform private.audit('home.restored', p_home_id, 'home', p_home_id);
+    perform private.record_account_activity(v_user_id, 'home_memberships', 'home.restored', 'completed',
+      p_home_id);
+    for v_member in
+      select m.user_id from private.home_memberships_all m where m.home_id = p_home_id
+      order by m.user_id
+    loop
+      perform private.notify_user(
+        v_member, null, 'security', 'home.restored',
+        pg_catalog.jsonb_build_object('homeId', p_home_id, 'homeName', v_name),
+        'home.restored:' || p_home_id::text || ':' || pg_catalog.gen_random_uuid()::text, true);
+    end loop;
+  end
+  $$;
+
+-- Account deletion -----------------------------------------------------------------------------------
+
+create table private.account_deletions (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  requested_at timestamptz not null default now(),
+  purge_after timestamptz not null,
+  purge_attempts integer not null default 0,
+  purge_error text,
+  constraint account_deletions_window_check check (purge_after > requested_at)
+);
+
+create index account_deletions_due_idx on private.account_deletions (purge_after);
+
+revoke all on table private.account_deletions from public;
+
+comment on table private.account_deletions is
+  'S40: accounts whose holder asked for deletion; suspended until cancelled or purged. Not exposed.';
+
+-- What an account suspension does beyond its marker row (S38 deactivation, S40 deletion): no browser
+-- stays trusted, pending ownership offers to or from the account end, Google Calendar pauses until
+-- the person reconnects it, and every session ends.
+create function private.suspend_account(p_user_id uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_transfer record;
+  begin
+    perform private.revoke_all_trust(p_user_id);
+    for v_transfer in
+      update private.home_ownership_transfers t
+        set status = 'invalid', decided_at = pg_catalog.now()
+        where t.status = 'pending' and (t.to_user_id = p_user_id or t.from_user_id = p_user_id)
+        returning t.id, t.home_id
+    loop
+      perform private.audit('home_ownership.transfer_invalid', v_transfer.home_id,
+        'ownership_transfer', v_transfer.id);
+    end loop;
+
+    perform pg_catalog.set_config('madeora.deactivating', p_user_id::text, true);
+    update private.google_calendar_connections c
+      set status = 'authorization_expired', status_changed_at = pg_catalog.now()
+      where c.user_id = p_user_id and c.status = 'connected';
+    perform pg_catalog.set_config('madeora.deactivating', '', true);
+
+    delete from auth.sessions s where s.user_id = p_user_id;
+  end
+  $$;
+
+revoke all on function private.suspend_account(uuid) from public;
+
+-- As S38, with the shared suspension steps in private.suspend_account.
+create or replace function public.deactivate_my_account() returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    perform private.lock_sign_in_methods(v_user_id);
+    if private.is_deactivated(v_user_id) then
+      return;
+    end if;
+    perform private.lock_home(m.home_id) from public.home_memberships m
+      where m.user_id = v_user_id order by m.home_id;
+    if exists (select 1 from public.my_deactivation_blockers()) then
+      raise exception 'sole owner' using errcode = 'P0001', hint = 'sole_owner';
+    end if;
+    if not private.consume_account_change_grant(v_user_id, 'deactivate_account', v_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    perform private.record_security_event(v_user_id, 'account_deactivated', v_session_id);
+    perform private.notify_user(
+      v_user_id, null, 'security', 'account.deactivated', '{}'::jsonb,
+      'account.deactivated:' || pg_catalog.gen_random_uuid()::text, true);
+    insert into private.account_deactivations (user_id) values (v_user_id);
+    perform private.suspend_account(v_user_id);
+  end
+  $$;
+
+-- Asks for the caller's account to be deleted. Needs a fresh 'delete_account' re-authentication
+-- from this session and no active Home the caller owns (a Home they closed does not block: it is
+-- purged with the account). The account is suspended at once; its Home-owned open tasks, recurring
+-- series and chores are flagged for reassignment (claims released) without any notice to other
+-- members. Returns the permanent-deletion deadline.
+create function public.request_account_deletion() returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_purge_after timestamptz;
+    v_home uuid;
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    perform private.lock_sign_in_methods(v_user_id);
+    select d.purge_after into v_purge_after from private.account_deletions d where d.user_id = v_user_id;
+    if v_purge_after is not null then
+      return v_purge_after;
+    end if;
+    perform private.lock_home(m.home_id) from public.home_memberships m
+      where m.user_id = v_user_id order by m.home_id;
+    if exists (select 1 from public.my_deactivation_blockers()) then
+      raise exception 'sole owner' using errcode = 'P0001', hint = 'sole_owner';
+    end if;
+    if not private.consume_account_change_grant(v_user_id, 'delete_account', v_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    v_purge_after := pg_catalog.now() + private.deletion_recovery_period();
+    perform private.record_account_activity(v_user_id, 'privacy', 'account_deletion_requested', 'pending');
+    perform private.notify_user(
+      v_user_id, null, 'security', 'account.deletion_requested',
+      pg_catalog.jsonb_build_object('purgeAt', v_purge_after),
+      'account.deletion_requested:' || pg_catalog.gen_random_uuid()::text, true);
+
+    perform pg_catalog.set_config('madeora.account_deletion', v_user_id::text, true);
+    for v_home in
+      select m.home_id from public.home_memberships m where m.user_id = v_user_id order by m.home_id
+    loop
+      perform private.flag_member_tasks(v_home, v_user_id);
+      perform private.flag_member_series(v_home, v_user_id);
+      perform private.release_member_chores(v_home, v_user_id, false);
+    end loop;
+    perform pg_catalog.set_config('madeora.account_deletion', '', true);
+
+    insert into private.account_deletions (user_id, purge_after) values (v_user_id, v_purge_after);
+    insert into private.account_deactivations (user_id) values (v_user_id)
+      on conflict (user_id) do nothing;
+    perform private.suspend_account(v_user_id);
+    return v_purge_after;
+  end
+  $$;
+
+-- As S38, plus when the account is pending deletion, and until when.
+drop function public.my_account_state();
+create function public.my_account_state()
+returns table (
+  deactivated_at timestamptz, review_due boolean,
+  deletion_requested_at timestamptz, deletion_purge_after timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    return query
+      select d.deactivated_at,
+             coalesce((select i.review_due from private.account_inactivity i where i.user_id = v_user_id), false),
+             x.requested_at, x.purge_after
+      from (select 1) one
+      left join private.account_deactivations d on d.user_id = v_user_id
+      left join private.account_deletions x on x.user_id = v_user_id;
+  end
+  $$;
+
+-- As S38. For an account pending deletion this is the cancellation: the account is restored with
+-- the memberships that still exist (anyone removed meanwhile stays removed), transferred ownership
+-- stays transferred, Google Calendar stays paused until reconnected, flagged work stays flagged. Too
+-- late (the deadline passed and the purge has not run yet) is refused.
+create or replace function public.reactivate_my_account() returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_since timestamptz;
+    v_deletion private.account_deletions;
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, v_session_id)
+       or private.request_session_state() not in ('ok', 'account_deactivated') then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    select * into v_deletion from private.account_deletions x where x.user_id = v_user_id for update;
+    if found and v_deletion.purge_after <= pg_catalog.now() then
+      raise exception 'recovery period ended' using errcode = 'P0001', hint = 'expired';
+    end if;
+    delete from private.account_deactivations d where d.user_id = v_user_id
+      returning d.deactivated_at into v_since;
+    if v_since is null then
+      raise exception 'not deactivated' using errcode = 'P0002';
+    end if;
+    insert into private.account_inactivity (user_id, last_active_at)
+      values (v_user_id, pg_catalog.now())
+      on conflict (user_id) do update
+        set last_active_at = excluded.last_active_at, reminders_sent = 0, last_reminder_at = null;
+    if v_deletion.user_id is not null then
+      delete from private.account_deletions x where x.user_id = v_user_id;
+      perform private.record_account_activity(v_user_id, 'privacy', 'account_deletion_canceled', 'completed');
+      perform private.notify_user(
+        v_user_id, null, 'security', 'account.deletion_canceled', '{}'::jsonb,
+        'account.deletion_canceled:' || pg_catalog.gen_random_uuid()::text, true);
+    else
+      perform private.record_security_event(v_user_id, 'account_reactivated', v_session_id);
+      perform private.notify_user(
+        v_user_id, null, 'security', 'account.reactivated', '{}'::jsonb,
+        'account.reactivated:' || pg_catalog.gen_random_uuid()::text, true);
+    end if;
+    delete from auth.sessions s where s.id = v_session_id;
+    return v_since;
+  end
+  $$;
+
+-- Purge (service role; the hourly job) ---------------------------------------------------------------
+
+-- Deletes a Home with everything it owns. The memberships go first, while the Home still exists:
+-- their departure rules update Home rows (tasks, chores), which must not happen after the Home row
+-- itself is gone in the same statement.
+create function private.purge_home(p_home_id uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from private.home_memberships_all m where m.home_id = p_home_id;
+    delete from public.homes h where h.id = p_home_id;
+    -- The closing and restoring notices carry the Home's name without a Home id column (members
+    -- could not read them otherwise); they go with the Home.
+    delete from public.notifications n
+      where n.home_id is null and n.kind in ('home.deletion_started', 'home.restored')
+        and n.params ->> 'homeId' = p_home_id::text;
+    perform private.audit('home.purged', p_home_id, 'home', p_home_id);
+  end
+  $$;
+
+revoke all on function private.purge_home(uuid) from public;
+
+-- Permanently deletes Homes and accounts whose recovery period has ended, at most p_limit of each.
+-- A Home goes with all of its data (members' personal originals stay; their shares into it end with
+-- it). An account first takes the Homes it owns that are pending deletion (nobody else could restore
+-- them), then goes itself: its personal data with it, its memberships end under the departure rules,
+-- and Home-owned history keeps its rows with the person's id gone ("Former member"). Each item runs
+-- in its own sub-transaction; a failure is recorded and retried next time. Returns the counts.
+create function public.purge_due_deletions(p_limit integer default 20) returns jsonb
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_home uuid;
+    v_user uuid;
+    v_homes integer := 0;
+    v_accounts integer := 0;
+    v_failed integer := 0;
+    v_limit integer := least(greatest(coalesce(p_limit, 20), 1), 100);
+  begin
+    for v_home in
+      select d.home_id from private.home_deletions d
+      where d.purge_after <= pg_catalog.now()
+      order by d.purge_attempts, d.purge_after
+      limit v_limit
+    loop
+      begin
+        perform 1 from private.home_deletions d
+          where d.home_id = v_home and d.purge_after <= pg_catalog.now() for update skip locked;
+        if found then
+          perform private.purge_home(v_home);
+          -- Run the deferred checks now, inside this item, so a failure stays with it.
+          set constraints all immediate;
+          set constraints all deferred;
+          v_homes := v_homes + 1;
+        end if;
+      exception when others then
+        set constraints all deferred;
+        v_failed := v_failed + 1;
+        update private.home_deletions d
+          set purge_attempts = d.purge_attempts + 1, purge_error = sqlstate
+          where d.home_id = v_home;
+      end;
+    end loop;
+
+    for v_user in
+      select x.user_id from private.account_deletions x
+      where x.purge_after <= pg_catalog.now()
+      order by x.purge_attempts, x.purge_after
+      limit v_limit
+    loop
+      begin
+        perform 1 from private.account_deletions x
+          where x.user_id = v_user and x.purge_after <= pg_catalog.now() for update skip locked;
+        if found then
+          -- Closed Homes the account owns go first; an active one it owns (it cannot have one: the
+          -- request refused it and nobody can offer it ownership while suspended) stops the purge.
+          perform private.purge_home(d.home_id)
+            from private.home_deletions d
+            join private.home_memberships_all m on m.home_id = d.home_id
+            where m.user_id = v_user and m.role = 'owner';
+          -- The memberships end first, under the departure rules but without notices to anyone
+          -- (release_member_chores), then the account with its personal data.
+          perform pg_catalog.set_config('madeora.account_deletion', v_user::text, true);
+          delete from private.home_memberships_all m where m.user_id = v_user;
+          delete from auth.users u where u.id = v_user;
+          set constraints all immediate;
+          set constraints all deferred;
+          perform pg_catalog.set_config('madeora.account_deletion', '', true);
+          perform private.audit('account.purged', null, 'user', v_user);
+          v_accounts := v_accounts + 1;
+        end if;
+      exception when others then
+        set constraints all deferred;
+        perform pg_catalog.set_config('madeora.account_deletion', '', true);
+        v_failed := v_failed + 1;
+        update private.account_deletions x
+          set purge_attempts = x.purge_attempts + 1, purge_error = sqlstate
+          where x.user_id = v_user;
+      end;
+    end loop;
+
+    return pg_catalog.jsonb_build_object('homes', v_homes, 'accounts', v_accounts, 'failed', v_failed);
+  end
+  $$;
+
+-- Grants -----------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.authorize_account_change(text, uuid)',
+    'public.home_closure_summary(uuid)',
+    'public.close_home(uuid, text)',
+    'public.my_closed_homes()',
+    'public.restore_home(uuid)',
+    'public.deactivate_my_account()',
+    'public.request_account_deletion()',
+    'public.my_account_state()',
+    'public.reactivate_my_account()'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+end
+$$;
+
+revoke all on function public.purge_due_deletions(integer) from public, anon, authenticated;
+grant execute on function public.purge_due_deletions(integer) to service_role;
+
+-- ============================================================================
+-- supabase/migrations/20261128090000_category_deletion_home_copies.sql
+-- ============================================================================
+-- S40 (part 2): deleting personal data by category, and copying personal items into Homes
+-- (brief plans/steps/S40-brief.md, "Part 2"; ADR 0050).
+--
+-- Spec: Project-specification.md "Confirmed category-based deletion of adult personal data",
+-- "Confirmed origin metadata for independent Home-owned copies", "Confirmed independent attachment
+-- ownership for Home copies", "Confirmed retention of personal original after Home ownership
+-- transfer", "Confirmed personal-to-Home ownership transfers at any time", "Confirmed transfer of
+-- personally owned shared content before account deletion", "Confirmed multi-Home transfer copies
+-- before account deletion", "Confirmed permissions for receiving personal-to-Home ownership
+-- transfers", "Confirmed self-approval for personal-to-Home transfers", "Confirmed content transfer
+-- approval expiry", "Confirmed transfer approval notifications", "Confirmed pending content
+-- transfers during account deletion".
+--
+-- Part A, category deletion: one call deletes the chosen categories of the caller's own personal
+-- data for good, each category in its own sub-transaction so one failure never undoes the others.
+-- It needs a fresh 'delete_personal_data' re-authentication and is idempotent per request id.
+-- Nothing Home-owned is touched; shares of deleted items end with them; their files are deleted
+-- and their objects queued for removal; open personal exports are invalidated by the S39 triggers.
+--
+-- Part B, Home copies: a person asks for an independent Home-owned copy of one of their personal
+-- recipes, calendar events or photo albums in one or more of their Homes. Each Home is decided on
+-- its own: directly when the person may create that content there, otherwise as a pending request
+-- for that Home's approvers (Owner, Administrators, holders of the content's creation right; an
+-- approver may approve their own request). Everything is checked again when approved and when the
+-- copy is made. A copy without files is made in the same transaction; with files, the Home's space
+-- is reserved, new Home files are created and the home-copy-files job copies the objects in the
+-- bucket, then the copy appears in one transaction. The original stays personal; the destination
+-- Home leaves its share list. Nothing ever synchronizes.
+--
+-- Lock order: the destination Home row, then the request row, then the storage pool.
+
+-- Settings -----------------------------------------------------------------------------------------
+
+-- Values awaiting Ward's approval (plans/steps/S40-brief.md, Part 2).
+create function private.home_copy_limit(p_name text) returns integer
+  language sql immutable set search_path = '' as $$
+  select case p_name
+    when 'album_photos' then 200     -- photos one album copy may hold
+    when 'open_requests' then 50     -- pending or running requests per person
+    when 'homes' then 50             -- destination Homes in one request
+    when 'copy_hours' then 6         -- a file copy that has not finished after this long failed
+  end;
+  $$;
+
+create function private.home_copy_request_lifetime() returns interval
+  language sql immutable set search_path = '' as $$ select interval '30 days' $$;
+
+-- Personal categories that can be deleted here, in the order the app shows them (the personal
+-- export's keys without 'account' and 'home_contributions').
+create function private.personal_deletion_categories() returns text[]
+  language sql immutable set search_path = '' as $$
+  select array['calendar', 'tasks', 'recipes', 'shopping', 'meals', 'habits_goals', 'media']::text[];
+  $$;
+
+-- Re-authentication: one more action ---------------------------------------------------------------
+
+alter table private.account_change_grants drop constraint account_change_grants_action_check;
+alter table private.account_change_grants
+  add constraint account_change_grants_action_check check (action in (
+    'password', 'email', 'two_factor_enroll', 'two_factor_disable', 'recovery_codes',
+    'backup_email', 'account_recovery_codes', 'security_report', 'deactivate_account',
+    'data_export', 'delete_account', 'close_home', 'delete_personal_data'
+  ));
+
+-- As S40 part 1, with one more action: 'delete_personal_data'.
+create or replace function public.authorize_account_change(p_action text, p_session_id uuid)
+returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_expires_at timestamptz;
+  begin
+    if v_user_id is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if p_action is null or p_action not in (
+      'password', 'email', 'two_factor_enroll', 'two_factor_disable', 'recovery_codes',
+      'backup_email', 'account_recovery_codes', 'security_report', 'deactivate_account',
+      'data_export', 'delete_account', 'close_home', 'delete_personal_data'
+    ) then
+      raise exception 'unknown action' using errcode = '22023';
+    end if;
+    if not private.is_recent_reauthentication(v_user_id, v_session_id, p_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+    if p_session_id is null or p_session_id = v_session_id
+       or not private.session_is_live(v_user_id, p_session_id) then
+      raise exception 'unknown session' using errcode = '42501', hint = 'session_required';
+    end if;
+    if p_action = 'two_factor_enroll' and private.has_two_factor(v_user_id) then
+      raise exception 'two-factor sign-in is already on' using errcode = '42501';
+    end if;
+    if p_action in ('two_factor_disable', 'recovery_codes')
+       and not private.has_two_factor(v_user_id) then
+      raise exception 'two-factor sign-in is off' using errcode = '42501';
+    end if;
+
+    perform private.lock_sign_in_methods(v_user_id);
+    v_expires_at := pg_catalog.now() + private.account_change_grant_lifetime();
+    insert into private.account_change_grants (user_id, action, session_id, expires_at)
+      values (v_user_id, p_action, p_session_id, v_expires_at)
+      on conflict (user_id, action) do update
+        set session_id = excluded.session_id, expires_at = excluded.expires_at,
+            created_at = pg_catalog.now();
+    perform private.record_security_event(v_user_id, 'reauthenticated', v_session_id);
+    return v_expires_at;
+  end
+  $$;
+
+-- Audit subjects: one more ------------------------------------------------------------------------
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template', 'chore_reassignment', 'chore_proposal', 'chore_volunteer_request',
+    'home_vacation', 'chore_absence', 'point_account', 'point_entry', 'reward', 'reward_redemption',
+    'point_settings', 'recipe', 'shopping_list', 'meal_plan', 'habit', 'goal', 'goal_series', 'pet',
+    'pet_medical_entry', 'pet_medical_attachment', 'pet_care_activity', 'pet_care_occurrence',
+    'calendar_event', 'photo', 'photo_album', 'home_copy'
+  ));
+
+-- Origin label on Home copies -----------------------------------------------------------------------
+
+-- When a Home-owned item was copied from someone's personal item. Nothing else is kept about the
+-- source: no id, no person, no link (spec "Confirmed origin metadata for independent Home-owned
+-- copies").
+alter table private.recipes add column copied_from_personal_at timestamptz,
+  add constraint recipes_copied_check check (copied_from_personal_at is null or owner_home_id is not null);
+alter table private.calendar_events add column copied_from_personal_at timestamptz,
+  add constraint calendar_events_copied_check check (copied_from_personal_at is null or home_id is not null);
+alter table private.photo_albums add column copied_from_personal_at timestamptz,
+  add constraint photo_albums_copied_check check (copied_from_personal_at is null or owner_home_id is not null);
+alter table private.photos add column copied_from_personal_at timestamptz,
+  add constraint photos_copied_check check (copied_from_personal_at is null or owner_home_id is not null);
+
+-- ==================================================================================================
+-- Part B tables first (Part A ends open copy requests of what it deletes)
+-- ==================================================================================================
+
+-- One row per item and destination Home. `source_id` is the personal item (no foreign key: three
+-- tables; it is read only for its owner and the destination's approvers while the request is open).
+create table private.home_copy_requests (
+  id uuid primary key default gen_random_uuid(),
+  -- One submission for several Homes shares a batch id (for "per-Home outcome" displays).
+  batch_id uuid not null,
+  requester_id uuid references auth.users (id) on delete set null,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  item_type text not null constraint home_copy_requests_item_type_check
+    check (item_type in ('recipe', 'calendar_event', 'photo_album')),
+  source_id uuid not null,
+  status text not null constraint home_copy_requests_status_check check (status in (
+    'pending', 'copying', 'completed', 'rejected', 'cancelled', 'expired', 'invalidated', 'failed'
+  )),
+  -- No approval was needed (the requester could create that content in the Home).
+  direct boolean not null,
+  requested_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  decided_by uuid references auth.users (id) on delete set null,
+  decided_at timestamptz,
+  ended_at timestamptz,
+  -- The Home item once completed (no foreign key; the Home may delete it later).
+  copy_id uuid,
+  -- Why it was invalidated or failed: a short code, never content.
+  end_code text constraint home_copy_requests_end_code_check
+    check (end_code is null or end_code ~ '^[a-z_]{1,40}$'),
+  constraint home_copy_requests_open_check check (
+    (status in ('pending', 'copying')) = (ended_at is null)),
+  constraint home_copy_requests_copy_check check ((status = 'completed') = (copy_id is not null))
+);
+
+create unique index home_copy_requests_one_open_idx on private.home_copy_requests (item_type, source_id, home_id)
+  where status in ('pending', 'copying');
+create index home_copy_requests_requester_idx on private.home_copy_requests (requester_id, requested_at desc);
+create index home_copy_requests_home_idx on private.home_copy_requests (home_id, requested_at)
+  where status = 'pending';
+create index home_copy_requests_open_idx on private.home_copy_requests (status, expires_at)
+  where status in ('pending', 'copying');
+
+-- The new Home files of a running copy: one per source file (a recipe cover, an album's photos).
+create table private.home_copy_files (
+  request_id uuid not null references private.home_copy_requests (id) on delete cascade,
+  source_file_id uuid not null,
+  dest_file_id uuid not null references private.stored_files (id) on delete cascade,
+  -- Album copies: the personal photo it copies (its size, width and height).
+  source_photo_id uuid,
+  primary key (request_id, dest_file_id)
+);
+
+alter table private.home_copy_requests enable row level security;
+alter table private.home_copy_files enable row level security;
+revoke all on private.home_copy_requests, private.home_copy_files from public, anon, authenticated;
+
+comment on table private.home_copy_requests is
+  'S40 part 2: personal-to-Home copy requests, one per item and destination Home. Not exposed.';
+
+-- ==================================================================================================
+-- Part B helpers
+-- ==================================================================================================
+
+-- Whether p_user may create that kind of Home content in p_home now.
+create function private.copy_can_create(p_item_type text, p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(case p_item_type
+    when 'recipe' then private.has_home_capability(p_home_id, p_user_id, 'manageHomeRecipes')
+    when 'calendar_event' then private.calendar_level_allows(private.calendar_level(p_home_id, p_user_id), 'edit')
+    when 'photo_album' then private.photo_access(p_home_id, p_user_id) is not null
+  end, false);
+  $$;
+
+-- Whether p_user may approve a copy of that kind into p_home now: the Owner, every Administrator,
+-- and whoever may create that content there.
+create function private.copy_can_approve(p_item_type text, p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(private.home_role(p_home_id, p_user_id) in ('owner', 'administrator'), false)
+    or private.copy_can_create(p_item_type, p_home_id, p_user_id);
+  $$;
+
+-- Whether p_id is p_user's own personal item of that kind, not in the trash, that may be copied.
+create function private.copy_item_eligible(p_item_type text, p_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and coalesce(case p_item_type
+    when 'recipe' then exists (select 1 from private.recipes r
+      where r.id = p_id and r.owner_user_id = p_user_id and r.deleted_at is null and r.status = 'published')
+    when 'calendar_event' then exists (select 1 from private.calendar_events e
+      where e.id = p_id and e.owner_user_id = p_user_id and e.deleted_at is null)
+    when 'photo_album' then exists (select 1 from private.photo_albums a
+      where a.id = p_id and a.owner_user_id = p_user_id and a.deleted_at is null)
+  end, false);
+  $$;
+
+-- The item's title as its owner wrote it (shown to its owner and to the destination's approvers).
+create function private.copy_item_label(p_item_type text, p_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select case p_item_type
+    when 'recipe' then (select r.name from private.recipes r where r.id = p_id and r.owner_user_id is not null)
+    when 'calendar_event' then (select e.title from private.calendar_events e where e.id = p_id and e.owner_user_id is not null)
+    when 'photo_album' then (select a.name from private.photo_albums a where a.id = p_id and a.owner_user_id is not null)
+  end;
+  $$;
+
+-- The personal files a copy takes along: a recipe's cover, an album's photos that are the owner's own
+-- (ready, not in the trash). Other people's photos in a shared album are never copied.
+create function private.copy_item_files(p_item_type text, p_id uuid, p_user_id uuid)
+returns table (file_id uuid, photo_id uuid, size_bytes bigint)
+  language sql stable security definer set search_path = '' as $$
+  select f.id, null::uuid, f.size_bytes
+    from private.recipes r join private.stored_files f on f.id = r.cover_file_id
+    where p_item_type = 'recipe' and r.id = p_id and r.owner_user_id = p_user_id and f.status = 'ready'
+  union all
+  select f.id, p.id, f.size_bytes
+    from private.photo_album_items i
+    join private.photos p on p.id = i.photo_id
+    join private.stored_files f on f.id = p.file_id
+    where p_item_type = 'photo_album' and i.album_id = p_id and p.owner_user_id = p_user_id
+      and p.deleted_at is null and f.status = 'ready';
+  $$;
+
+-- Whether the item is shared with the Home now (its share ends once the copy exists).
+create function private.copy_item_shared(p_item_type text, p_id uuid, p_home_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(case p_item_type
+    when 'recipe' then exists (select 1 from private.recipe_shares s where s.recipe_id = p_id and s.home_id = p_home_id)
+    when 'calendar_event' then exists (select 1 from private.calendar_event_shares s where s.event_id = p_id and s.home_id = p_home_id)
+    when 'photo_album' then exists (select 1 from private.photo_album_shares s where s.album_id = p_id and s.home_id = p_home_id)
+  end, false);
+  $$;
+
+-- Ends an open request: removes the files a running copy had reserved (their objects are queued for
+-- removal by the stored_files triggers) and records the status. Returns whether it was open.
+create function private.end_home_copy(p_request_id uuid, p_status text, p_code text default null)
+returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_pool uuid;
+  begin
+    if p_status not in ('rejected', 'cancelled', 'expired', 'invalidated', 'failed') then
+      raise exception 'not an end status' using errcode = '22023';
+    end if;
+    select f.pool_id into v_pool from private.home_copy_files c
+      join private.stored_files f on f.id = c.dest_file_id
+      where c.request_id = p_request_id limit 1;
+    delete from private.stored_files f
+      using private.home_copy_files c
+      where c.request_id = p_request_id and f.id = c.dest_file_id and f.status = 'pending';
+    update private.home_copy_requests r
+      set status = p_status, end_code = p_code, ended_at = pg_catalog.now()
+      where r.id = p_request_id and r.status in ('pending', 'copying');
+    if not found then
+      return false;
+    end if;
+    if v_pool is not null then
+      perform private.storage_reassess(v_pool);
+    end if;
+    return true;
+  end
+  $$;
+
+-- Ends every open request for the given personal items (they were deleted or moved to the trash).
+create function private.end_home_copies_of(p_item_type text, p_ids uuid[], p_code text) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+    v_count integer := 0;
+  begin
+    for v_id in
+      select r.id from private.home_copy_requests r
+        where r.item_type = p_item_type and r.source_id = any (p_ids) and r.status in ('pending', 'copying')
+        order by r.id
+    loop
+      if private.end_home_copy(v_id, 'invalidated', p_code) then
+        v_count := v_count + 1;
+      end if;
+    end loop;
+    return v_count;
+  end
+  $$;
+
+-- Tells the requester how their request ended. A Home notice when they are still a member,
+-- otherwise none (the Home notice would be invisible to them and the outcome concerns that Home).
+create function private.notify_copy_requester(p_request private.home_copy_requests, p_kind text)
+returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if p_request.requester_id is null then
+      return;
+    end if;
+    perform private.notify_user(
+      p_request.requester_id, p_request.home_id, 'approvals', p_kind,
+      pg_catalog.jsonb_build_object('itemType', p_request.item_type, 'requestId', p_request.id),
+      p_kind || ':' || p_request.id::text, false);
+  end
+  $$;
+
+-- ==================================================================================================
+-- Part A: category deletion
+-- ==================================================================================================
+
+create table private.personal_data_deletions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  -- The client's id for this request: the same id again returns the stored result.
+  request_id uuid not null,
+  categories text[] not null constraint personal_data_deletions_categories_check
+    check (cardinality(categories) between 1 and 7 and categories <@ private.personal_deletion_categories()),
+  status text not null default 'processing' constraint personal_data_deletions_status_check
+    check (status in ('processing', 'completed', 'partial', 'failed')),
+  -- Per category: {"outcome": "deleted" | "failed", "count": n}. Counts and codes only.
+  results jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  finished_at timestamptz,
+  constraint personal_data_deletions_request_key unique (user_id, request_id)
+);
+
+alter table private.personal_data_deletions enable row level security;
+revoke all on private.personal_data_deletions from public, anon, authenticated;
+
+-- Deletes the caller's files in p_ids for good (only files in their own personal pool): the
+-- stored_files triggers queue their objects (and photo variants) for removal.
+create function private.delete_personal_files(p_user_id uuid, p_ids uuid[]) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_pool private.storage_pools;
+  begin
+    if p_ids is null or cardinality(p_ids) = 0 then
+      return;
+    end if;
+    v_pool := private.lock_storage_pool(p_user_id, null);
+    delete from private.stored_files f where f.id = any (p_ids) and f.pool_id = v_pool.id;
+    perform private.storage_reassess(v_pool.id);
+  end
+  $$;
+
+-- Deletes one category of p_user_id's personal data for good. Returns how many top-level items
+-- went (lists, tasks, recipes, events, ...). Home-owned records are never touched: every statement
+-- selects on the personal owner column.
+create function private.delete_personal_category(p_user_id uuid, p_category text) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_count integer := 0;
+    v_n integer;
+    v_ids uuid[];
+    v_files uuid[];
+  begin
+    if p_category = 'calendar' then
+      select coalesce(pg_catalog.array_agg(e.id), '{}') into v_ids
+        from private.calendar_events e where e.owner_user_id = p_user_id;
+      perform private.end_home_copies_of('calendar_event', v_ids, 'item_deleted');
+      delete from private.trash_entries t where t.owner_user_id = p_user_id and t.module = 'calendar';
+      delete from private.calendar_events e where e.owner_user_id = p_user_id;
+      get diagnostics v_count = row_count;
+
+    elsif p_category = 'tasks' then
+      select coalesce(pg_catalog.array_agg(distinct x.file_id), '{}') into v_files from (
+        select a.file_id from private.task_attachments a
+          join private.tasks t on t.id = a.task_id where t.owner_user_id = p_user_id
+        union all
+        select a.file_id from private.task_series_attachments a where a.owner_user_id = p_user_id
+      ) x;
+      delete from private.trash_entries t where t.owner_user_id = p_user_id and t.module = 'tasks';
+      delete from private.tasks t where t.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.task_series s where s.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.task_series_attachments a where a.owner_user_id = p_user_id;
+      delete from private.task_series_removals r where r.owner_user_id = p_user_id;
+      delete from private.task_lists l where l.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.task_templates x where x.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.task_labels x where x.owner_user_id = p_user_id;
+      perform private.delete_personal_files(p_user_id, v_files);
+
+    elsif p_category = 'recipes' then
+      select coalesce(pg_catalog.array_agg(r.id), '{}'),
+             coalesce(pg_catalog.array_agg(r.cover_file_id) filter (where r.cover_file_id is not null), '{}')
+        into v_ids, v_files
+        from private.recipes r where r.owner_user_id = p_user_id;
+      perform private.end_home_copies_of('recipe', v_ids, 'item_deleted');
+      delete from private.trash_entries t where t.owner_user_id = p_user_id and t.module = 'recipes';
+      delete from private.recipes r where r.owner_user_id = p_user_id;
+      get diagnostics v_count = row_count;
+      perform private.delete_personal_files(p_user_id, v_files);
+
+    elsif p_category = 'shopping' then
+      delete from private.trash_entries t where t.owner_user_id = p_user_id and t.module = 'shopping';
+      delete from private.shopping_lists l where l.owner_user_id = p_user_id;
+      get diagnostics v_count = row_count;
+
+    elsif p_category = 'meals' then
+      delete from private.trash_entries t where t.owner_user_id = p_user_id and t.module = 'meals';
+      delete from private.meal_entries e where e.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.meal_series s where s.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.meal_shopping_transfers x where x.owner_user_id = p_user_id;
+      delete from private.meal_slots s where s.owner_user_id = p_user_id;
+
+    elsif p_category = 'habits_goals' then
+      delete from private.trash_entries t
+        where t.owner_user_id = p_user_id and t.module in ('habits', 'goals');
+      delete from private.goals g where g.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.goal_series s where s.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.habits h where h.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.personal_reward_redemption_events x where x.user_id = p_user_id;
+      delete from private.personal_reward_redemptions x where x.user_id = p_user_id;
+      delete from private.personal_rewards x where x.user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.personal_point_entries x where x.user_id = p_user_id;
+      delete from private.personal_point_accounts x where x.user_id = p_user_id;
+
+    elsif p_category = 'media' then
+      select coalesce(pg_catalog.array_agg(a.id), '{}') into v_ids
+        from private.photo_albums a where a.owner_user_id = p_user_id;
+      perform private.end_home_copies_of('photo_album', v_ids, 'item_deleted');
+      select coalesce(pg_catalog.array_agg(p.file_id), '{}') into v_files
+        from private.photos p where p.owner_user_id = p_user_id;
+      delete from private.trash_entries t where t.owner_user_id = p_user_id and t.module = 'photos';
+      delete from private.photo_albums a where a.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      delete from private.photos p where p.owner_user_id = p_user_id;
+      get diagnostics v_n = row_count;
+      v_count := v_count + v_n;
+      perform private.delete_personal_files(p_user_id, v_files);
+
+    else
+      raise exception 'unknown category' using errcode = '22023';
+    end if;
+    return v_count;
+  end
+  $$;
+
+revoke all on function private.delete_personal_category(uuid, text) from public;
+
+-- What deleting the chosen categories affects, for the caller's preview: per category the items
+-- (with those in the trash), how many are shared into the caller's Homes, their files, the open
+-- copy requests that end, and the personal exports in preparation or ready that become unavailable
+-- (a queued export has collected nothing yet and will reflect the deletion). Counts only.
+create function public.personal_deletion_preview(p_categories text[]) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_category text;
+    v_out jsonb := '{}';
+    v_items bigint;
+    v_trash bigint;
+    v_shared bigint;
+    v_files bigint;
+  begin
+    if p_categories is null or cardinality(p_categories) = 0
+       or not (p_categories <@ private.personal_deletion_categories()) then
+      raise exception 'invalid categories' using errcode = '22023';
+    end if;
+    foreach v_category in array private.personal_deletion_categories() loop
+      continue when not (v_category = any (p_categories));
+      v_shared := 0;
+      v_files := 0;
+      if v_category = 'calendar' then
+        select count(*), count(*) filter (where e.deleted_at is not null),
+               count(*) filter (where exists (select 1 from private.calendar_event_shares s where s.event_id = e.id))
+          into v_items, v_trash, v_shared
+          from private.calendar_events e where e.owner_user_id = v_user_id;
+      elsif v_category = 'tasks' then
+        select count(*), count(*) filter (where t.deleted_at is not null) into v_items, v_trash
+          from private.tasks t where t.owner_user_id = v_user_id;
+        select v_items + count(*) into v_items from private.task_series s
+          where s.owner_user_id = v_user_id and s.superseded_at is null;
+        select count(*) into v_files from private.task_attachments a
+          join private.tasks t on t.id = a.task_id where t.owner_user_id = v_user_id;
+      elsif v_category = 'recipes' then
+        select count(*), count(*) filter (where r.deleted_at is not null),
+               count(*) filter (where exists (select 1 from private.recipe_shares s where s.recipe_id = r.id)),
+               count(r.cover_file_id)
+          into v_items, v_trash, v_shared, v_files
+          from private.recipes r where r.owner_user_id = v_user_id;
+      elsif v_category = 'shopping' then
+        select count(*), count(*) filter (where l.deleted_at is not null) into v_items, v_trash
+          from private.shopping_lists l where l.owner_user_id = v_user_id;
+      elsif v_category = 'meals' then
+        select count(*), count(*) filter (where e.deleted_at is not null) into v_items, v_trash
+          from private.meal_entries e where e.owner_user_id = v_user_id;
+        select v_items + count(*) into v_items from private.meal_series s where s.owner_user_id = v_user_id;
+      elsif v_category = 'habits_goals' then
+        select count(*), count(*) filter (where h.deleted_at is not null) into v_items, v_trash
+          from private.habits h where h.owner_user_id = v_user_id;
+        select v_items + count(*), v_trash + count(*) filter (where g.deleted_at is not null)
+          into v_items, v_trash from private.goals g where g.owner_user_id = v_user_id;
+        select v_items + count(*) into v_items from private.personal_rewards x where x.user_id = v_user_id;
+      elsif v_category = 'media' then
+        select count(*), count(*) filter (where p.deleted_at is not null) into v_items, v_trash
+          from private.photos p where p.owner_user_id = v_user_id;
+        v_files := v_items;
+        select v_items + count(*), v_trash + count(*) filter (where a.deleted_at is not null),
+               count(*) filter (where exists (select 1 from private.photo_album_shares s where s.album_id = a.id))
+          into v_items, v_trash, v_shared
+          from private.photo_albums a where a.owner_user_id = v_user_id;
+      end if;
+      v_out := v_out || pg_catalog.jsonb_build_object(v_category, pg_catalog.jsonb_build_object(
+        'items', v_items, 'inTrash', v_trash, 'shared', v_shared, 'files', v_files,
+        'openCopies', (select count(*) from private.home_copy_requests r
+          where r.requester_id = v_user_id and r.status in ('pending', 'copying')
+            and r.item_type = case v_category when 'recipes' then 'recipe'
+              when 'calendar' then 'calendar_event' when 'media' then 'photo_album' end)));
+    end loop;
+    return pg_catalog.jsonb_build_object(
+      'categories', v_out,
+      'openExports', (select count(*) from private.data_exports e
+        where e.requester_id = v_user_id and e.kind = 'personal'
+          and e.status in ('preparing', 'ready')));
+  end
+  $$;
+
+-- Deletes the chosen categories of the caller's personal data for good. Needs a fresh
+-- 'delete_personal_data' re-authentication from this session. p_request_id makes it idempotent:
+-- the same id again returns the stored result without deleting anything (or asking for a new
+-- re-authentication). Concurrent requests of one person run one after the other. Each category
+-- runs in its own sub-transaction: a failure is reported for that category and the others stand.
+-- Returns {"status", "results": {category: {"outcome", "count"}}}.
+create function public.delete_personal_data(p_request_id uuid, p_categories text[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_session_id uuid := private.jwt_session_id();
+    v_row private.personal_data_deletions;
+    v_categories text[];
+    v_category text;
+    v_count integer;
+    v_results jsonb := '{}';
+    v_ok integer := 0;
+    v_failed integer := 0;
+    v_status text;
+  begin
+    if not private.session_is_live(v_user_id, v_session_id) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if p_request_id is null or p_categories is null or cardinality(p_categories) = 0
+       or not (p_categories <@ private.personal_deletion_categories()) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- The app's order, without repeats.
+    select pg_catalog.array_agg(c order by o) into v_categories
+      from pg_catalog.unnest(private.personal_deletion_categories()) with ordinality as x(c, o)
+      where c = any (p_categories);
+
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('personal-deletion:' || v_user_id::text, 0));
+    select * into v_row from private.personal_data_deletions d
+      where d.user_id = v_user_id and d.request_id = p_request_id;
+    if found then
+      if v_row.categories <> v_categories then
+        raise exception 'request id reused' using errcode = '22023';
+      end if;
+      return pg_catalog.jsonb_build_object('status', v_row.status, 'results', v_row.results);
+    end if;
+    if not private.consume_account_change_grant(v_user_id, 'delete_personal_data', v_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    insert into private.personal_data_deletions (user_id, request_id, categories)
+      values (v_user_id, p_request_id, v_categories) returning * into v_row;
+    foreach v_category in array v_categories loop
+      begin
+        v_count := private.delete_personal_category(v_user_id, v_category);
+        v_results := v_results || pg_catalog.jsonb_build_object(v_category,
+          pg_catalog.jsonb_build_object('outcome', 'deleted', 'count', v_count));
+        v_ok := v_ok + 1;
+      exception when others then
+        -- The category is left as it was; only the sqlstate is logged.
+        raise warning 'delete_personal_data: category failed (sqlstate %)', sqlstate;
+        v_results := v_results || pg_catalog.jsonb_build_object(v_category,
+          pg_catalog.jsonb_build_object('outcome', 'failed', 'count', 0));
+        v_failed := v_failed + 1;
+      end;
+    end loop;
+    v_status := case when v_failed = 0 then 'completed' when v_ok = 0 then 'failed' else 'partial' end;
+    update private.personal_data_deletions d
+      set status = v_status, results = v_results, finished_at = pg_catalog.now()
+      where d.id = v_row.id;
+    perform private.record_account_activity(
+      v_user_id, 'privacy', 'personal_data_deleted',
+      case when v_status = 'completed' then 'completed' else 'failed' end,
+      null, 'self', pg_catalog.jsonb_build_object('categories', pg_catalog.to_jsonb(v_categories)));
+    return pg_catalog.jsonb_build_object('status', v_status, 'results', v_results);
+  end
+  $$;
+
+-- ==================================================================================================
+-- Part B: making a copy
+-- ==================================================================================================
+
+-- Creates the Home item from the personal source and finishes the request. Everything is checked
+-- again first; any check that fails ends the request (invalidated, or failed for a full Home).
+-- Files must already be in place (pending Home files whose objects were copied), or none needed.
+-- Returns the end status: 'completed', 'invalidated' or 'failed'.
+create function private.commit_home_copy(p_request_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_req private.home_copy_requests;
+    v_copy uuid := pg_catalog.gen_random_uuid();
+    v_cover uuid;
+    v_pool uuid;
+    v_now timestamptz := pg_catalog.now();
+  begin
+    select * into v_req from private.home_copy_requests r where r.id = p_request_id for update;
+    if not found or v_req.status not in ('pending', 'copying') then
+      return 'invalidated';
+    end if;
+    if v_req.requester_id is null or private.home_role(v_req.home_id, v_req.requester_id) is null then
+      perform private.end_home_copy(v_req.id, 'invalidated', 'not_member');
+      return 'invalidated';
+    end if;
+    if not private.copy_item_eligible(v_req.item_type, v_req.source_id, v_req.requester_id) then
+      perform private.end_home_copy(v_req.id, 'invalidated', 'item_unavailable');
+      return 'invalidated';
+    end if;
+    -- The authority behind the copy must still hold at execution: the requester's creation right for
+    -- a direct copy, the approver's right to approve that content in the Home otherwise.
+    if (v_req.direct and not private.copy_can_create(v_req.item_type, v_req.home_id, v_req.requester_id))
+       or (not v_req.direct and (v_req.decided_by is null
+           or not private.copy_can_approve(v_req.item_type, v_req.home_id, v_req.decided_by))) then
+      perform private.end_home_copy(v_req.id, 'invalidated', 'not_authorized');
+      return 'invalidated';
+    end if;
+    -- Every reserved file must still be waiting (an expired reservation was removed meanwhile).
+    if exists (select 1 from private.home_copy_files c join private.stored_files f on f.id = c.dest_file_id
+               where c.request_id = v_req.id and f.status <> 'pending') then
+      perform private.end_home_copy(v_req.id, 'failed', 'files_lost');
+      return 'failed';
+    end if;
+
+    if v_req.item_type = 'recipe' then
+      perform private.lock_recipe_context(v_req.home_id, null);
+      if private.recipe_context_full(v_req.home_id, null) then
+        perform private.end_home_copy(v_req.id, 'failed', 'limit');
+        return 'failed';
+      end if;
+      select c.dest_file_id into v_cover from private.home_copy_files c where c.request_id = v_req.id limit 1;
+      insert into private.recipes (
+        id, owner_home_id, status, name, name_key, servings, servings_label, prep_minutes,
+        cook_minutes, notes, tags, tag_keys, cover_file_id, source_url, source_name, created_by,
+        updated_by, published_at, copied_from_personal_at)
+      select v_copy, v_req.home_id, 'published', r.name, r.name_key, r.servings, r.servings_label,
+             r.prep_minutes, r.cook_minutes, r.notes, r.tags, r.tag_keys, v_cover, r.source_url,
+             r.source_name, v_req.requester_id, v_req.requester_id, v_now, v_now
+        from private.recipes r where r.id = v_req.source_id;
+      insert into private.recipe_ingredients (recipe_id, position, name, name_key, quantity_num,
+                                              quantity_den, quantity_style, unit, note)
+        select v_copy, i.position, i.name, i.name_key, i.quantity_num, i.quantity_den,
+               i.quantity_style, i.unit, i.note
+          from private.recipe_ingredients i where i.recipe_id = v_req.source_id;
+      insert into private.recipe_steps (recipe_id, position, body)
+        select v_copy, s.position, s.body from private.recipe_steps s where s.recipe_id = v_req.source_id;
+      delete from private.recipe_shares s where s.recipe_id = v_req.source_id and s.home_id = v_req.home_id;
+
+    elsif v_req.item_type = 'calendar_event' then
+      perform private.lock_calendar_owner(null, v_req.home_id);
+      if private.calendar_owner_full(null, v_req.home_id) then
+        perform private.end_home_copy(v_req.id, 'failed', 'limit');
+        return 'failed';
+      end if;
+      -- Reminders and participants are the Home's to set: a copy starts without them.
+      insert into private.calendar_events (
+        id, home_id, title, location, description, all_day, starts_on, ends_on, start_time,
+        end_time, timezone, frequency, interval_count, weekdays, repeat_ends_on, max_count,
+        until_date, created_by, updated_by, copied_from_personal_at)
+      select v_copy, v_req.home_id, e.title, e.location, e.description, e.all_day, e.starts_on,
+             e.ends_on, e.start_time, e.end_time, e.timezone, e.frequency, e.interval_count,
+             e.weekdays, e.repeat_ends_on, e.max_count, e.until_date, v_req.requester_id,
+             v_req.requester_id, v_now
+        from private.calendar_events e where e.id = v_req.source_id;
+      insert into private.calendar_event_exceptions (
+        event_id, original_date, cancelled, fields, title, location, description, all_day,
+        starts_on, ends_on, start_time, end_time, participants, updated_by)
+      select v_copy, x.original_date, x.cancelled,
+             pg_catalog.array_remove(x.fields, 'participants'), x.title, x.location, x.description,
+             x.all_day, x.starts_on, x.ends_on, x.start_time, x.end_time, null, v_req.requester_id
+        from private.calendar_event_exceptions x where x.event_id = v_req.source_id;
+      delete from private.calendar_event_shares s where s.event_id = v_req.source_id and s.home_id = v_req.home_id;
+
+    elsif v_req.item_type = 'photo_album' then
+      perform private.lock_photo_library(null, v_req.home_id);
+      if private.photo_albums_full(null, v_req.home_id) then
+        perform private.end_home_copy(v_req.id, 'failed', 'limit');
+        return 'failed';
+      end if;
+      insert into private.photo_albums (id, owner_home_id, created_by, name, copied_from_personal_at)
+        select v_copy, v_req.home_id, v_req.requester_id, a.name, v_now
+          from private.photo_albums a where a.id = v_req.source_id;
+      with copied as (
+        insert into private.photos (id, file_id, owner_home_id, created_by, width, height,
+                                    copied_from_personal_at)
+        select pg_catalog.gen_random_uuid(), c.dest_file_id, v_req.home_id, v_req.requester_id,
+               p.width, p.height, v_now
+          from private.home_copy_files c join private.photos p on p.id = c.source_photo_id
+          where c.request_id = v_req.id
+        returning id
+      )
+      insert into private.photo_album_items (album_id, photo_id, added_by, added_at)
+        select v_copy, copied.id, v_req.requester_id, v_now from copied;
+      delete from private.photo_album_shares s where s.album_id = v_req.source_id and s.home_id = v_req.home_id;
+    end if;
+
+    -- The new files become the Home's own: the source's verified facts (a byte-exact copy).
+    update private.stored_files d
+      set status = 'ready', content_type = s.content_type, size_bytes = s.size_bytes,
+          sha256 = s.sha256, finalized_at = v_now
+      from private.home_copy_files c join private.stored_files s on s.id = c.source_file_id
+      where c.request_id = v_req.id and d.id = c.dest_file_id;
+    update private.photo_variants d
+      set size_bytes = s.size_bytes, width = s.width, height = s.height, sha256 = s.sha256
+      from private.home_copy_files c join private.photo_variants s on s.file_id = c.source_file_id
+      where c.request_id = v_req.id and d.file_id = c.dest_file_id and d.kind = s.kind;
+    select f.pool_id into v_pool from private.home_copy_files c
+      join private.stored_files f on f.id = c.dest_file_id where c.request_id = v_req.id limit 1;
+    delete from private.home_copy_files c where c.request_id = v_req.id;
+    if v_pool is not null then
+      perform private.storage_reassess(v_pool);
+    end if;
+
+    update private.home_copy_requests r
+      set status = 'completed', copy_id = v_copy, ended_at = v_now, end_code = null
+      where r.id = v_req.id;
+    perform private.audit('copy_request.completed', v_req.home_id, 'home_copy', v_req.id,
+      pg_catalog.jsonb_build_object('itemType', v_req.item_type, 'copyId', v_copy,
+        'requestedBy', v_req.requester_id, 'approvedBy', v_req.decided_by, 'direct', v_req.direct));
+    return 'completed';
+  end
+  $$;
+
+-- Starts making the copy of an approved (or direct) request: without files it is made at once;
+-- with files the Home's space is reserved, pending Home files are created with new keys and the
+-- home-copy-files job is queued. Returns 'completed', 'copying', 'failed' or 'invalidated'.
+create function private.start_home_copy(p_request_id uuid) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_req private.home_copy_requests;
+    v_pool private.storage_pools;
+    v_need bigint;
+    v_count integer;
+    v_used record;
+    v_file record;
+    v_dest uuid;
+  begin
+    select * into v_req from private.home_copy_requests r where r.id = p_request_id for update;
+    if not found or v_req.status <> 'pending' then
+      return 'invalidated';
+    end if;
+    select count(*), coalesce(sum(f.size_bytes), 0) into v_count, v_need
+      from private.copy_item_files(v_req.item_type, v_req.source_id, v_req.requester_id) f;
+    if v_count = 0 then
+      return private.commit_home_copy(v_req.id);
+    end if;
+    if v_req.item_type = 'photo_album' and v_count > private.home_copy_limit('album_photos') then
+      perform private.end_home_copy(v_req.id, 'failed', 'too_many_photos');
+      return 'failed';
+    end if;
+
+    v_pool := private.lock_storage_pool(null, v_req.home_id);
+    select * into v_used from private.storage_usage(v_pool.id);
+    if v_used.ready_bytes + v_used.deleted_bytes + v_used.reserved_bytes + v_need
+       > private.storage_allowance(v_pool) then
+      perform private.end_home_copy(v_req.id, 'failed', 'storage_full');
+      return 'failed';
+    end if;
+
+    for v_file in
+      select f.file_id, f.photo_id, s.purpose, s.content_type, s.size_bytes
+        from private.copy_item_files(v_req.item_type, v_req.source_id, v_req.requester_id) f
+        join private.stored_files s on s.id = f.file_id
+        order by f.file_id
+    loop
+      insert into private.stored_files (
+        pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+        declared_size, status, expires_at)
+      values (
+        v_pool.id, v_file.purpose, v_req.requester_id, pg_catalog.gen_random_uuid(),
+        private.new_object_key('h'), private.new_object_key('h'), v_file.content_type,
+        v_file.size_bytes, 'pending',
+        pg_catalog.now() + pg_catalog.make_interval(hours => private.home_copy_limit('copy_hours')))
+      returning id into v_dest;
+      insert into private.photo_variants (file_id, kind, object_key)
+        select v_dest, v.kind, private.new_object_key('h')
+          from private.photo_variants v where v.file_id = v_file.file_id;
+      insert into private.home_copy_files (request_id, source_file_id, dest_file_id, source_photo_id)
+        values (v_req.id, v_file.file_id, v_dest, v_file.photo_id);
+    end loop;
+    perform private.storage_reassess(v_pool.id);
+
+    update private.home_copy_requests r set status = 'copying' where r.id = v_req.id;
+    perform private.enqueue_job('home-copy-files', 1, 'home-copy-files:' || v_req.id::text,
+      pg_catalog.jsonb_build_object('requestId', v_req.id));
+    return 'copying';
+  end
+  $$;
+
+-- The Homes the caller could copy one of their items into, with how (direct or by approval) and
+-- whether a request is already open there or the item is shared there now. 42501 for an item that
+-- is not the caller's own eligible item (the same as a missing one).
+create function public.list_copy_destinations(p_item_type text, p_item_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if p_item_type is null or p_item_type not in ('recipe', 'calendar_event', 'photo_album') then
+      raise exception 'invalid item type' using errcode = '22023';
+    end if;
+    if not private.copy_item_eligible(p_item_type, p_item_id, v_user_id) then
+      raise exception 'not found' using errcode = 'P0002';
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'label', private.copy_item_label(p_item_type, p_item_id),
+      'files', (select count(*) from private.copy_item_files(p_item_type, p_item_id, v_user_id)),
+      'homes', (select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'homeId', h.id, 'name', h.name,
+          'mode', case when private.copy_can_create(p_item_type, h.id, v_user_id) then 'direct' else 'approval' end,
+          'shared', private.copy_item_shared(p_item_type, p_item_id, h.id),
+          'open', exists (select 1 from private.home_copy_requests r
+            where r.item_type = p_item_type and r.source_id = p_item_id and r.home_id = h.id
+              and r.status in ('pending', 'copying')))
+          order by h.name, h.id), '[]')
+        from public.home_memberships m join public.homes h on h.id = m.home_id
+        where m.user_id = v_user_id));
+  end
+  $$;
+
+-- Asks for independent copies of one of the caller's personal items in the chosen Homes. Each Home
+-- is decided on its own: 'completed' (made now), 'copying' (files being copied), 'pending' (waits
+-- for that Home's approval; approvers are notified), 'already_open', 'not_member', 'failed' (with a
+-- code). Returns {"batchId", "homes": [{homeId, outcome, requestId?, code?}]}.
+create function public.request_home_copies(p_item_type text, p_item_id uuid, p_home_ids uuid[]) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_batch uuid := pg_catalog.gen_random_uuid();
+    v_home uuid;
+    v_id uuid;
+    v_outcome text;
+    v_out jsonb := '[]';
+    v_approver uuid;
+    v_req private.home_copy_requests;
+  begin
+    if not private.session_is_live(v_user_id, private.jwt_session_id()) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    if p_item_type is null or p_item_type not in ('recipe', 'calendar_event', 'photo_album')
+       or p_home_ids is null or cardinality(p_home_ids) = 0
+       or cardinality(p_home_ids) > private.home_copy_limit('homes')
+       or exists (select 1 from pg_catalog.unnest(p_home_ids) x(id) where x.id is null) then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    -- Destination Homes first (lock order), then the item.
+    for v_home in select distinct x.id from pg_catalog.unnest(p_home_ids) x(id) order by x.id loop
+      perform private.lock_home(v_home);
+    end loop;
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('home-copies:' || v_user_id::text, 0));
+    if not private.copy_item_eligible(p_item_type, p_item_id, v_user_id) then
+      raise exception 'not found' using errcode = 'P0002';
+    end if;
+    if (select count(*) from private.home_copy_requests r
+        where r.requester_id = v_user_id and r.status in ('pending', 'copying'))
+       + cardinality(p_home_ids) > private.home_copy_limit('open_requests') then
+      raise exception 'too many open requests' using errcode = '54000';
+    end if;
+
+    for v_home in select distinct x.id from pg_catalog.unnest(p_home_ids) x(id) order by x.id loop
+      v_id := null;
+      if private.home_role(v_home, v_user_id) is null then
+        v_outcome := 'not_member';
+      elsif exists (select 1 from private.home_copy_requests r
+                    where r.item_type = p_item_type and r.source_id = p_item_id and r.home_id = v_home
+                      and r.status in ('pending', 'copying')) then
+        v_outcome := 'already_open';
+      else
+        insert into private.home_copy_requests (
+          batch_id, requester_id, home_id, item_type, source_id, status, direct, expires_at)
+        values (
+          v_batch, v_user_id, v_home, p_item_type, p_item_id, 'pending',
+          private.copy_can_create(p_item_type, v_home, v_user_id),
+          pg_catalog.now() + private.home_copy_request_lifetime())
+        returning * into v_req;
+        v_id := v_req.id;
+        perform private.audit('copy_request.requested', v_home, 'home_copy', v_req.id,
+          pg_catalog.jsonb_build_object('itemType', p_item_type, 'direct', v_req.direct));
+        if v_req.direct then
+          v_outcome := private.start_home_copy(v_req.id);
+        else
+          v_outcome := 'pending';
+          for v_approver in
+            select m.user_id from public.home_memberships m
+              where m.home_id = v_home and m.user_id <> v_user_id
+                and private.copy_can_approve(p_item_type, v_home, m.user_id)
+              order by m.user_id
+          loop
+            perform private.notify_user(
+              v_approver, v_home, 'approvals', 'home_copy.approval_requested',
+              pg_catalog.jsonb_build_object('itemType', p_item_type, 'requestId', v_req.id),
+              'home_copy.approval_requested:' || v_req.id::text, true);
+          end loop;
+        end if;
+      end if;
+      v_out := v_out || pg_catalog.jsonb_build_array(pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+        'homeId', v_home, 'outcome', v_outcome, 'requestId', v_id,
+        'code', (select r.end_code from private.home_copy_requests r where r.id = v_id))));
+    end loop;
+    return pg_catalog.jsonb_build_object('batchId', v_batch, 'homes', v_out);
+  end
+  $$;
+
+-- Approves or rejects one pending request: an approver of that Home now (the requester too when
+-- they are one: self-approval). Everything is checked again; an expired request becomes 'expired',
+-- one that no longer holds 'invalidated'. Outcomes: 'completed', 'copying', 'rejected', 'expired',
+-- 'invalidated', 'failed', 'not_pending'. P0002 for a request the caller may not decide.
+create function public.decide_home_copy(p_request_id uuid, p_approve boolean) returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_req private.home_copy_requests;
+    v_outcome text;
+  begin
+    if p_approve is null then
+      raise exception 'invalid decision' using errcode = '22023';
+    end if;
+    select * into v_req from private.home_copy_requests r where r.id = p_request_id;
+    if not found or not private.copy_can_approve(v_req.item_type, v_req.home_id, v_user_id) then
+      raise exception 'not found' using errcode = 'P0002';
+    end if;
+    perform private.lock_home(v_req.home_id);
+    select * into v_req from private.home_copy_requests r where r.id = p_request_id for update;
+    if v_req.status <> 'pending' then
+      return 'not_pending';
+    end if;
+    if not private.copy_can_approve(v_req.item_type, v_req.home_id, v_user_id) then
+      raise exception 'not found' using errcode = 'P0002';
+    end if;
+    if v_req.expires_at <= pg_catalog.now() then
+      perform private.end_home_copy(v_req.id, 'expired');
+      return 'expired';
+    end if;
+    if v_req.requester_id is null or private.home_role(v_req.home_id, v_req.requester_id) is null then
+      perform private.end_home_copy(v_req.id, 'invalidated', 'not_member');
+      return 'invalidated';
+    end if;
+    if not private.copy_item_eligible(v_req.item_type, v_req.source_id, v_req.requester_id) then
+      perform private.end_home_copy(v_req.id, 'invalidated', 'item_unavailable');
+      return 'invalidated';
+    end if;
+
+    update private.home_copy_requests r
+      set decided_by = v_user_id, decided_at = pg_catalog.now()
+      where r.id = v_req.id
+      returning * into v_req;
+    if not p_approve then
+      perform private.end_home_copy(v_req.id, 'rejected');
+      perform private.audit('copy_request.rejected', v_req.home_id, 'home_copy', v_req.id,
+        pg_catalog.jsonb_build_object('itemType', v_req.item_type));
+      select * into v_req from private.home_copy_requests r where r.id = v_req.id;
+      perform private.notify_copy_requester(v_req, 'home_copy.rejected');
+      return 'rejected';
+    end if;
+    perform private.audit('copy_request.approved', v_req.home_id, 'home_copy', v_req.id,
+      pg_catalog.jsonb_build_object('itemType', v_req.item_type,
+        'selfApproved', v_req.decided_by = v_req.requester_id));
+    v_outcome := private.start_home_copy(v_req.id);
+    select * into v_req from private.home_copy_requests r where r.id = v_req.id;
+    if v_req.requester_id <> v_user_id then
+      perform private.notify_copy_requester(v_req, case v_outcome
+        when 'completed' then 'home_copy.completed'
+        when 'copying' then 'home_copy.approved'
+        else 'home_copy.failed' end);
+    end if;
+    return v_outcome;
+  end
+  $$;
+
+-- Cancels one of the caller's own pending requests. Returns whether it was pending.
+create function public.cancel_home_copy(p_request_id uuid) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_req private.home_copy_requests;
+  begin
+    select * into v_req from private.home_copy_requests r
+      where r.id = p_request_id and r.requester_id = v_user_id for update;
+    if not found then
+      raise exception 'not found' using errcode = 'P0002';
+    end if;
+    if v_req.status <> 'pending' then
+      return false;
+    end if;
+    return private.end_home_copy(v_req.id, 'cancelled');
+  end
+  $$;
+
+-- Cancels every pending request of the caller (before account deletion). Running copies are left
+-- to finish. No one else is told. Returns how many were cancelled.
+create function public.cancel_my_pending_home_copies() returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+    v_count integer := 0;
+  begin
+    for v_id in
+      select r.id from private.home_copy_requests r
+        where r.requester_id = v_user_id and r.status = 'pending' order by r.id for update
+    loop
+      if private.end_home_copy(v_id, 'cancelled') then
+        v_count := v_count + 1;
+      end if;
+    end loop;
+    return v_count;
+  end
+  $$;
+
+-- The caller's own requests (open ones first, then the last 90 days), with the item's title while it
+-- still exists and is theirs, and the Home's name.
+create function public.list_my_home_copies() returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'id', r.id, 'batchId', r.batch_id, 'homeId', r.home_id, 'homeName', h.name,
+      'itemType', r.item_type, 'itemId', r.source_id,
+      'label', case when private.copy_item_eligible(r.item_type, r.source_id, r.requester_id)
+                    then private.copy_item_label(r.item_type, r.source_id) end,
+      'status', r.status, 'direct', r.direct, 'requestedAt', r.requested_at,
+      'expiresAt', r.expires_at, 'endedAt', r.ended_at, 'code', r.end_code,
+      'selfApproved', r.decided_by is not null and r.decided_by = r.requester_id)
+      order by (r.status in ('pending', 'copying')) desc, r.requested_at desc, r.id), '[]')
+  from private.home_copy_requests r
+  join public.homes h on h.id = r.home_id
+  where r.requester_id = private.require_confirmed_caller()
+    and (r.status in ('pending', 'copying') or r.requested_at > pg_catalog.now() - interval '90 days');
+  $$;
+
+-- A Home's pending requests for one of its approvers, with what is asked: the item's kind, title and
+-- photo count, and who asked (their name in this Home). Requests that no longer hold are left out
+-- (and end on the next decision or sweep). 42501 for anyone who approves nothing there (the same as
+-- for a Home they are not in).
+create function public.list_home_copy_requests(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.home_role(p_home_id, v_user_id) is null then
+      raise exception 'not a member' using errcode = '42501';
+    end if;
+    return pg_catalog.jsonb_build_object(
+      'canApprove', private.home_role(p_home_id, v_user_id) in ('owner', 'administrator')
+        or private.copy_can_create('recipe', p_home_id, v_user_id)
+        or private.copy_can_create('calendar_event', p_home_id, v_user_id)
+        or private.copy_can_create('photo_album', p_home_id, v_user_id),
+      'requests', (select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'id', r.id, 'itemType', r.item_type,
+          'label', private.copy_item_label(r.item_type, r.source_id),
+          'files', (select count(*) from private.copy_item_files(r.item_type, r.source_id, r.requester_id)),
+          'requester', (select coalesce(hp.nickname, hp.display_name, up.display_name, '')
+                          from public.home_memberships m
+                          left join public.home_member_profiles hp on hp.home_id = m.home_id and hp.user_id = m.user_id
+                          left join public.user_preferences up on up.user_id = m.user_id
+                          where m.home_id = r.home_id and m.user_id = r.requester_id),
+          'isMine', r.requester_id = v_user_id,
+          'requestedAt', r.requested_at, 'expiresAt', r.expires_at)
+          order by r.requested_at, r.id), '[]')
+        from private.home_copy_requests r
+        where r.home_id = p_home_id and r.status = 'pending' and r.expires_at > pg_catalog.now()
+          and private.copy_can_approve(r.item_type, r.home_id, v_user_id)
+          and private.home_role(r.home_id, r.requester_id) is not null
+          and private.copy_item_eligible(r.item_type, r.source_id, r.requester_id)));
+  end
+  $$;
+
+-- When a Home item the caller can see was copied from a personal item: the date, or null. Never the
+-- source or who copied it.
+create function public.get_copy_origin(p_item_type text, p_item_id uuid) returns timestamptz
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_home uuid;
+    v_at timestamptz;
+  begin
+    if p_item_type = 'recipe' then
+      select r.owner_home_id, r.copied_from_personal_at into v_home, v_at
+        from private.recipes r where r.id = p_item_id and r.deleted_at is null;
+    elsif p_item_type = 'calendar_event' then
+      select e.home_id, e.copied_from_personal_at into v_home, v_at
+        from private.calendar_events e where e.id = p_item_id and e.deleted_at is null;
+    elsif p_item_type = 'photo_album' then
+      select a.owner_home_id, a.copied_from_personal_at into v_home, v_at
+        from private.photo_albums a where a.id = p_item_id and a.deleted_at is null;
+    elsif p_item_type = 'photo' then
+      select p.owner_home_id, p.copied_from_personal_at into v_home, v_at
+        from private.photos p where p.id = p_item_id and p.deleted_at is null;
+    else
+      raise exception 'invalid item type' using errcode = '22023';
+    end if;
+    if v_home is null or private.home_role(v_home, v_user_id) is null then
+      return null;
+    end if;
+    return v_at;
+  end
+  $$;
+
+-- The job (service role) -----------------------------------------------------------------------------
+
+-- The objects one running copy must copy inside the bucket: the files' own objects and, for photos,
+-- their variants, each with the size the copy must have. 'skip' when the request is not copying.
+create function public.begin_home_copy_files(p_request_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  begin
+    if not exists (select 1 from private.home_copy_requests r
+                   where r.id = p_request_id and r.status = 'copying') then
+      return pg_catalog.jsonb_build_object('outcome', 'skip');
+    end if;
+    return pg_catalog.jsonb_build_object('outcome', 'ok', 'objects', (
+      select coalesce(pg_catalog.jsonb_agg(o order by o ->> 'to'), '[]') from (
+        select pg_catalog.jsonb_build_object('from', s.object_key, 'to', d.object_key, 'size', s.size_bytes) o
+          from private.home_copy_files c
+          join private.stored_files s on s.id = c.source_file_id
+          join private.stored_files d on d.id = c.dest_file_id
+          where c.request_id = p_request_id
+        union all
+        select pg_catalog.jsonb_build_object('from', sv.object_key, 'to', dv.object_key, 'size', sv.size_bytes)
+          from private.home_copy_files c
+          join private.photo_variants sv on sv.file_id = c.source_file_id
+          join private.photo_variants dv on dv.file_id = c.dest_file_id and dv.kind = sv.kind
+          where c.request_id = p_request_id
+      ) x));
+  end
+  $$;
+
+-- Records the job's result: the objects are in place (the copy is made now, after every check) or
+-- the copy failed with a short code. Returns 'completed', 'failed', 'invalidated' or 'discarded'
+-- (the request had already ended; its files were removed with it).
+create function public.finish_home_copy_files(p_request_id uuid, p_ok boolean, p_code text default null)
+returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_req private.home_copy_requests;
+    v_outcome text;
+  begin
+    if p_ok is null or (not p_ok and (p_code is null or p_code !~ '^[a-z_]{1,40}$')) then
+      raise exception 'invalid result' using errcode = '22023';
+    end if;
+    select * into v_req from private.home_copy_requests r where r.id = p_request_id;
+    if not found then
+      return 'discarded';
+    end if;
+    perform private.lock_home(v_req.home_id);
+    select * into v_req from private.home_copy_requests r where r.id = p_request_id for update;
+    if v_req.status <> 'copying' then
+      return 'discarded';
+    end if;
+    if p_ok then
+      v_outcome := private.commit_home_copy(v_req.id);
+    else
+      perform private.end_home_copy(v_req.id, 'failed', p_code);
+      v_outcome := 'failed';
+    end if;
+    select * into v_req from private.home_copy_requests r where r.id = v_req.id;
+    perform private.notify_copy_requester(v_req,
+      case when v_outcome = 'completed' then 'home_copy.completed' else 'home_copy.failed' end);
+    return v_outcome;
+  end
+  $$;
+
+-- Hourly (service role): pending requests past their 30 days expire; copies running for longer than
+-- the copy limit fail (their job died; the requester is told); open requests into a Home pending deletion or whose
+-- requester left end. Returns how many ended.
+create function public.sweep_home_copies(p_limit integer default 200) returns integer
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_req private.home_copy_requests;
+    v_count integer := 0;
+  begin
+    for v_req in
+      select * from private.home_copy_requests r
+        where r.status in ('pending', 'copying')
+          and ((r.status = 'pending' and r.expires_at <= pg_catalog.now())
+            or (r.status = 'copying' and coalesce(r.decided_at, r.requested_at) <= pg_catalog.now()
+                  - pg_catalog.make_interval(hours => private.home_copy_limit('copy_hours')))
+            or r.requester_id is null
+            or private.home_role(r.home_id, r.requester_id) is null)
+        order by r.expires_at
+        limit greatest(coalesce(p_limit, 200), 1)
+    loop
+      if v_req.status = 'pending' and v_req.expires_at <= pg_catalog.now() then
+        perform private.end_home_copy(v_req.id, 'expired');
+      elsif v_req.status = 'copying' and coalesce(v_req.decided_at, v_req.requested_at) <= pg_catalog.now()
+                  - pg_catalog.make_interval(hours => private.home_copy_limit('copy_hours'))
+            and v_req.requester_id is not null
+            and private.home_role(v_req.home_id, v_req.requester_id) is not null then
+        perform private.end_home_copy(v_req.id, 'failed', 'copy_timeout');
+        perform private.notify_copy_requester(v_req, 'home_copy.failed');
+      else
+        perform private.end_home_copy(v_req.id, 'invalidated', 'not_member');
+      end if;
+      v_count := v_count + 1;
+    end loop;
+    return v_count;
+  end
+  $$;
+
+-- Triggers: requests end with the requester's membership and with the item --------------------------
+
+create function private.end_home_copies_on_membership_end() returns trigger
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_id uuid;
+  begin
+    for v_id in
+      select r.id from private.home_copy_requests r
+        where r.home_id = old.home_id and r.requester_id = old.user_id
+          and r.status in ('pending', 'copying')
+        order by r.id
+    loop
+      perform private.end_home_copy(v_id, 'invalidated', 'not_member');
+    end loop;
+    return null;
+  end
+  $$;
+
+create trigger home_memberships_end_home_copies
+  after delete on private.home_memberships_all
+  for each row execute function private.end_home_copies_on_membership_end();
+
+-- A personal item that goes to the trash or is deleted ends its open requests.
+create function private.end_home_copies_on_item_change() returns trigger
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    if old.owner_user_id is null then
+      return null;
+    end if;
+    if tg_op = 'UPDATE' and not (old.deleted_at is null and new.deleted_at is not null) then
+      return null;
+    end if;
+    perform private.end_home_copies_of(tg_argv[0], array[old.id],
+      case when tg_op = 'DELETE' then 'item_deleted' else 'item_trashed' end);
+    return null;
+  end
+  $$;
+
+create trigger recipes_end_home_copies after update of deleted_at or delete on private.recipes
+  for each row execute function private.end_home_copies_on_item_change('recipe');
+create trigger calendar_events_end_home_copies after update of deleted_at or delete on private.calendar_events
+  for each row execute function private.end_home_copies_on_item_change('calendar_event');
+create trigger photo_albums_end_home_copies after update of deleted_at or delete on private.photo_albums
+  for each row execute function private.end_home_copies_on_item_change('photo_album');
+
+-- Account deletion: pending requests must be cancelled first ----------------------------------------
+
+-- The caller's open requests, for the Delete account page: every pending or running one, with the
+-- item's title and the Home's name.
+create function public.my_open_home_copies() returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'id', r.id, 'homeId', r.home_id, 'homeName', h.name, 'itemType', r.item_type,
+      'label', private.copy_item_label(r.item_type, r.source_id), 'status', r.status,
+      'expiresAt', r.expires_at) order by r.requested_at, r.id), '[]')
+  from private.home_copy_requests r join public.homes h on h.id = r.home_id
+  where r.requester_id = private.require_confirmed_caller() and r.status in ('pending', 'copying');
+  $$;
+
+-- The caller's own eligible personal items that are shared with a Home now, each with those Homes,
+-- for the Delete account page ("keep shared items in a Home": each item is copied on its own, to the
+-- Homes the person picks). Only Homes the caller is a member of are named.
+create function public.my_shared_copyable_items() returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  with me as (select private.require_confirmed_caller() as id),
+  shared as (
+    select 'recipe'::text as item_type, r.id, r.name as label, s.home_id
+      from private.recipe_shares s join private.recipes r on r.id = s.recipe_id, me
+      where r.owner_user_id = me.id
+    union all
+    select 'calendar_event', e.id, e.title, s.home_id
+      from private.calendar_event_shares s join private.calendar_events e on e.id = s.event_id, me
+      where e.owner_user_id = me.id
+    union all
+    select 'photo_album', a.id, a.name, s.home_id
+      from private.photo_album_shares s join private.photo_albums a on a.id = s.album_id, me
+      where a.owner_user_id = me.id
+  ),
+  eligible as (
+    select sh.item_type, sh.id, sh.label, h.name as home_name
+      from shared sh join public.homes h on h.id = sh.home_id, me
+      where private.home_role(sh.home_id, me.id) is not null
+        and private.copy_item_eligible(sh.item_type, sh.id, me.id)
+  )
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'itemType', g.item_type, 'itemId', g.id, 'label', g.label, 'homes', g.homes)
+      order by g.item_type, g.label, g.id), '[]')
+  from (select e.item_type, e.id, e.label,
+               pg_catalog.jsonb_agg(e.home_name order by e.home_name) as homes
+          from eligible e group by e.item_type, e.id, e.label) g;
+  $$;
+
+-- As S40 part 1, and refused while the caller has a pending copy request ('pending_copies': the
+-- person must cancel them explicitly first) or a copy is still being made ('copies_running').
+create or replace function public.request_account_deletion() returns timestamptz
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_purge_after timestamptz;
+    v_home uuid;
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, v_session_id) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    perform private.lock_sign_in_methods(v_user_id);
+    select d.purge_after into v_purge_after from private.account_deletions d where d.user_id = v_user_id;
+    if v_purge_after is not null then
+      return v_purge_after;
+    end if;
+    perform private.lock_home(m.home_id) from public.home_memberships m
+      where m.user_id = v_user_id order by m.home_id;
+    if exists (select 1 from public.my_deactivation_blockers()) then
+      raise exception 'sole owner' using errcode = 'P0001', hint = 'sole_owner';
+    end if;
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('home-copies:' || v_user_id::text, 0));
+    if exists (select 1 from private.home_copy_requests r
+               where r.requester_id = v_user_id and r.status = 'pending') then
+      raise exception 'pending copies' using errcode = 'P0001', hint = 'pending_copies';
+    end if;
+    if exists (select 1 from private.home_copy_requests r
+               where r.requester_id = v_user_id and r.status = 'copying') then
+      raise exception 'copies running' using errcode = 'P0001', hint = 'copies_running';
+    end if;
+    if not private.consume_account_change_grant(v_user_id, 'delete_account', v_session_id) then
+      raise exception 'recent reauthentication required'
+        using errcode = '42501', hint = 'reauthentication_required';
+    end if;
+
+    v_purge_after := pg_catalog.now() + private.deletion_recovery_period();
+    perform private.record_account_activity(v_user_id, 'privacy', 'account_deletion_requested', 'pending');
+    perform private.notify_user(
+      v_user_id, null, 'security', 'account.deletion_requested',
+      pg_catalog.jsonb_build_object('purgeAt', v_purge_after),
+      'account.deletion_requested:' || pg_catalog.gen_random_uuid()::text, true);
+
+    perform pg_catalog.set_config('madeora.account_deletion', v_user_id::text, true);
+    for v_home in
+      select m.home_id from public.home_memberships m where m.user_id = v_user_id order by m.home_id
+    loop
+      perform private.flag_member_tasks(v_home, v_user_id);
+      perform private.flag_member_series(v_home, v_user_id);
+      perform private.release_member_chores(v_home, v_user_id, false);
+    end loop;
+    perform pg_catalog.set_config('madeora.account_deletion', '', true);
+
+    insert into private.account_deletions (user_id, purge_after) values (v_user_id, v_purge_after);
+    insert into private.account_deactivations (user_id) values (v_user_id)
+      on conflict (user_id) do nothing;
+    perform private.suspend_account(v_user_id);
+    return v_purge_after;
+  end
+  $$;
+
+-- Grants -----------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_function text;
+begin
+  foreach v_function in array array[
+    'public.authorize_account_change(text, uuid)',
+    'public.personal_deletion_preview(text[])',
+    'public.delete_personal_data(uuid, text[])',
+    'public.list_copy_destinations(text, uuid)',
+    'public.request_home_copies(text, uuid, uuid[])',
+    'public.decide_home_copy(uuid, boolean)',
+    'public.cancel_home_copy(uuid)',
+    'public.cancel_my_pending_home_copies()',
+    'public.list_my_home_copies()',
+    'public.list_home_copy_requests(uuid)',
+    'public.get_copy_origin(text, uuid)',
+    'public.my_open_home_copies()',
+    'public.my_shared_copyable_items()',
+    'public.request_account_deletion()'
+  ] loop
+    execute format('revoke all on function %s from public, anon', v_function);
+    execute format('grant execute on function %s to authenticated', v_function);
+  end loop;
+  foreach v_function in array array[
+    'public.begin_home_copy_files(uuid)',
+    'public.finish_home_copy_files(uuid, boolean, text)',
+    'public.sweep_home_copies(integer)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', v_function);
+    execute format('grant execute on function %s to service_role', v_function);
+  end loop;
+end
+$$;
+
+-- ============================================================================
+-- supabase/migrations/20261129090000_child_profiles.sql
+-- ============================================================================
+-- S41: child profiles and guardians (spec "Confirmed one child identity across multiple Homes",
+-- "Confirmed guardian roles", "Confirmed quick child creation", "Confirmed age-appropriate child
+-- permission presets", "Confirmed child-controlled accent colors with guardian reset";
+-- architecture.md §4 and §34; brief plans/steps/S41-brief.md).
+--
+-- A child is one canonical identity: an auth.users row with no email, no password and no identity,
+-- so nobody can sign in as it (sign-in arrives with S42). That keeps every module that attributes
+-- work to a user id (chores, points, tasks, calendar) working for children unchanged. The row is
+-- marked as a child in public.child_profiles.
+--
+-- Per Home:
+--   * the child's membership is always a plain Member (never Administrator or Owner);
+--   * public.child_guardians holds exactly one primary and at most one secondary guardian, both adult
+--     members of that Home; guardianship in one Home grants nothing in another;
+--   * public.child_home_settings holds the guardian-selected preset (Young Child, Child, Teen) and
+--     explicit overrides. Presets describe what the child may do once they can sign in (S42);
+--     nothing here gives a child a session.
+--
+-- Ward's decisions (2026-11-11): no date of birth; an optional guardian-set age band that only
+-- suggests a preset; every child starts on Young Child; no automatic promotion; no minimum age.
+--
+-- All writes go through the security definer functions below; the tables grant no writes to the
+-- API roles.
+
+-- Child identities ---------------------------------------------------------------------------------
+
+create table public.child_profiles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  -- Only a hint for suggesting a preset; never used for access (Ward, 2026-11-11).
+  age_band text
+    constraint child_profiles_age_band_check check (age_band in ('under_8', '8_12', '13_17')),
+  created_by uuid references auth.users (id) on delete set null,
+  creation_request_id uuid not null,
+  created_at timestamptz not null default now(),
+  constraint child_profiles_request_key unique (created_by, creation_request_id)
+);
+
+alter table public.child_profiles enable row level security;
+revoke all on table public.child_profiles from public, anon, authenticated;
+
+comment on table public.child_profiles is
+  'S41: marks an auth user as a guardian-managed child identity (no email, no credentials yet).';
+
+create function private.is_child(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (select 1 from public.child_profiles c where c.user_id = p_user_id)
+  $$;
+
+revoke all on function private.is_child(uuid) from public;
+grant execute on function private.is_child(uuid) to service_role;
+
+-- An adult who can hold guardian authority: a signed-up account with a confirmed email, not a
+-- child, not deactivated or pending deletion.
+create function private.is_eligible_guardian(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select private.confirmed_email(p_user_id) is not null
+      and not private.is_child(p_user_id)
+      and not private.is_deactivated(p_user_id)
+  $$;
+
+revoke all on function private.is_eligible_guardian(uuid) from public;
+
+-- Children are always plain Members --------------------------------------------------------------
+
+create function private.child_membership_role() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if new.role <> 'member' and private.is_child(new.user_id) then
+      raise exception 'a child is always a Member' using errcode = '23514';
+    end if;
+    return new;
+  end
+  $$;
+
+revoke all on function private.child_membership_role() from public;
+
+create trigger home_memberships_child_role
+  before insert or update of role, user_id on private.home_memberships_all
+  for each row execute function private.child_membership_role();
+
+-- Guardians -----------------------------------------------------------------------------------------
+
+create table public.child_guardians (
+  home_id uuid not null,
+  child_user_id uuid not null,
+  guardian_user_id uuid not null,
+  role text not null constraint child_guardians_role_check check (role in ('primary', 'secondary')),
+  assigned_by uuid references auth.users (id) on delete set null,
+  assigned_at timestamptz not null default now(),
+  constraint child_guardians_pkey primary key (home_id, child_user_id, role),
+  constraint child_guardians_one_role_key unique (home_id, child_user_id, guardian_user_id),
+  constraint child_guardians_not_self check (guardian_user_id <> child_user_id),
+  -- Ending either membership ends the assignment. A child without a primary guardian is on hold
+  -- until the Owner appoints one.
+  constraint child_guardians_child_membership_fkey foreign key (home_id, child_user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade,
+  constraint child_guardians_guardian_membership_fkey foreign key (home_id, guardian_user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+create index child_guardians_guardian_idx on public.child_guardians (guardian_user_id);
+
+alter table public.child_guardians enable row level security;
+revoke all on table public.child_guardians from public, anon, authenticated;
+
+comment on table public.child_guardians is
+  'S41: the primary and optional secondary guardian of a child in one Home.';
+
+create function private.child_guardian_role(p_home_id uuid, p_child uuid, p_user uuid)
+returns text
+  language sql stable security definer set search_path = '' as $$
+    select g.role from public.child_guardians g
+    join public.home_memberships m on m.home_id = g.home_id and m.user_id = g.guardian_user_id
+    where g.home_id = p_home_id and g.child_user_id = p_child and g.guardian_user_id = p_user
+  $$;
+
+revoke all on function private.child_guardian_role(uuid, uuid, uuid) from public;
+
+-- The same for the signed-in caller only, for RLS policies: it can only answer about the caller.
+create function private.caller_child_guardian_role(p_home_id uuid, p_child uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+    select private.child_guardian_role(p_home_id, p_child, auth.uid())
+  $$;
+
+revoke all on function private.caller_child_guardian_role(uuid, uuid) from public;
+grant execute on function private.caller_child_guardian_role(uuid, uuid) to authenticated;
+
+-- Every member of the Home may see who a child's guardians are (spec: show guardian roles to
+-- authorized adults); nothing else about the child is in this table.
+create policy child_guardians_select_home_members on public.child_guardians
+  for select to authenticated
+  using (exists (
+    select 1 from public.home_memberships m
+    where m.home_id = child_guardians.home_id and m.user_id = (select auth.uid())
+  ));
+
+grant select on table public.child_guardians to authenticated;
+
+-- Only a guardian of the child in a Home both share sees the identity-level row (the age band).
+create policy child_profiles_select_guardians on public.child_profiles
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    or exists (
+      select 1 from public.child_guardians g
+      join public.home_memberships m on m.home_id = g.home_id and m.user_id = g.guardian_user_id
+      where g.child_user_id = child_profiles.user_id and g.guardian_user_id = (select auth.uid())
+    )
+  );
+
+grant select (user_id, age_band, created_at) on table public.child_profiles to authenticated;
+
+-- Presets and access ----------------------------------------------------------------------------------
+
+-- The capabilities a child can be given in one Home and what each preset includes (S41 brief,
+-- defaults awaiting Ward's review). packages/domain/src/permissions/children.ts lists the same.
+create function private.child_capabilities() returns text[]
+  language sql immutable parallel safe set search_path = '' as $$
+    select array[
+      'viewHomeChores', 'viewHomeCalendar', 'viewLeaderboard', 'claimPoolChores',
+      'redeemRewards', 'viewShopping', 'editShopping', 'viewMeals', 'viewRecipes', 'viewPets',
+      'editOwnAvatar', 'editOwnDisplayName'
+    ]::text[]
+  $$;
+
+create function private.child_preset_capabilities(p_preset text) returns text[]
+  language sql immutable parallel safe set search_path = '' as $$
+    select case p_preset
+      when 'young_child' then array['viewHomeChores', 'viewHomeCalendar', 'viewLeaderboard']
+      when 'child' then array[
+        'viewHomeChores', 'viewHomeCalendar', 'viewLeaderboard', 'claimPoolChores',
+        'redeemRewards', 'viewShopping', 'viewMeals', 'viewRecipes', 'viewPets', 'editOwnAvatar'
+      ]
+      when 'teen' then array[
+        'viewHomeChores', 'viewHomeCalendar', 'viewLeaderboard', 'claimPoolChores',
+        'redeemRewards', 'viewShopping', 'editShopping', 'viewMeals', 'viewRecipes', 'viewPets',
+        'editOwnAvatar', 'editOwnDisplayName'
+      ]
+    end::text[]
+  $$;
+
+-- Overrides: a JSON object whose keys are known capabilities and whose values are booleans.
+create function private.valid_child_overrides(p_overrides jsonb) returns boolean
+  language sql immutable parallel safe set search_path = '' as $$
+    select pg_catalog.jsonb_typeof(p_overrides) = 'object'
+      and not exists (
+        select 1 from pg_catalog.jsonb_each(p_overrides) e
+        where e.key <> all (private.child_capabilities())
+          or pg_catalog.jsonb_typeof(e.value) <> 'boolean'
+      )
+  $$;
+
+-- The effective capabilities: the preset's, with each override switching one on or off. Sorted, so
+-- two sets compare with = and @>.
+create function private.child_effective_capabilities(p_preset text, p_overrides jsonb)
+returns text[]
+  language sql immutable parallel safe set search_path = '' as $$
+    select coalesce(pg_catalog.array_agg(c order by c), '{}'::text[])
+    from pg_catalog.unnest(private.child_capabilities()) c
+    where coalesce(
+      (p_overrides ->> c)::boolean,
+      c = any (private.child_preset_capabilities(p_preset))
+    )
+  $$;
+
+revoke all on function private.child_capabilities() from public;
+revoke all on function private.child_preset_capabilities(text) from public;
+revoke all on function private.valid_child_overrides(jsonb) from public;
+revoke all on function private.child_effective_capabilities(text, jsonb) from public;
+
+create table public.child_home_settings (
+  home_id uuid not null,
+  child_user_id uuid not null,
+  -- Quick creation always starts on the most restrictive preset (spec; Ward, 2026-11-11).
+  preset text not null default 'young_child'
+    constraint child_home_settings_preset_check check (preset in ('young_child', 'child', 'teen')),
+  overrides jsonb not null default '{}'::jsonb
+    constraint child_home_settings_overrides_check check (private.valid_child_overrides(overrides)),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint child_home_settings_pkey primary key (home_id, child_user_id),
+  constraint child_home_settings_membership_fkey foreign key (home_id, child_user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+alter table public.child_home_settings enable row level security;
+revoke all on table public.child_home_settings from public, anon, authenticated;
+
+comment on table public.child_home_settings is
+  'S41: a child''s guardian-selected preset and explicit overrides in one Home.';
+
+-- Guardians of the child in that Home (and, from S42, the child) read the settings.
+create policy child_home_settings_select_guardians on public.child_home_settings
+  for select to authenticated
+  using (
+    (child_user_id = (select auth.uid()) and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = child_home_settings.home_id and m.user_id = (select auth.uid())
+    ))
+    or private.caller_child_guardian_role(home_id, child_user_id) is not null
+  );
+
+grant select (home_id, child_user_id, preset, overrides, updated_at)
+  on table public.child_home_settings to authenticated;
+
+-- Whether a child holds a capability in a Home now. S42 uses it when children can sign in.
+create function private.child_has_capability(p_home_id uuid, p_child uuid, p_capability text)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select coalesce((
+      select p_capability = any (private.child_effective_capabilities(s.preset, s.overrides))
+      from public.child_home_settings s
+      join public.home_memberships m on m.home_id = s.home_id and m.user_id = s.child_user_id
+      where s.home_id = p_home_id and s.child_user_id = p_child
+    ), false)
+  $$;
+
+revoke all on function private.child_has_capability(uuid, uuid, text) from public;
+
+-- Shared lookups for the functions below -----------------------------------------------------------
+
+-- The child behind a membership id in a Home, or null when it is not a child's membership.
+create function private.child_of_membership(p_home_id uuid, p_membership_id uuid) returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from public.home_memberships m
+    where m.id = p_membership_id and m.home_id = p_home_id and private.is_child(m.user_id)
+  $$;
+
+revoke all on function private.child_of_membership(uuid, uuid) from public;
+
+-- An adult member who may be a guardian in this Home, by membership id; null otherwise.
+create function private.guardian_candidate(p_home_id uuid, p_membership_id uuid) returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from public.home_memberships m
+    where m.id = p_membership_id and m.home_id = p_home_id
+      and private.is_eligible_guardian(m.user_id)
+  $$;
+
+revoke all on function private.guardian_candidate(uuid, uuid) from public;
+
+-- Guardian offers ----------------------------------------------------------------------------------
+
+-- Nobody becomes a guardian without accepting (spec "Confirmed quick child profile creation":
+-- validate the guardian's acceptance before activating; "Confirmed primary and secondary child
+-- guardian authority": controlled transfer, guardian invitation/acceptance, never silently transfer
+-- guardian authority). Every assignment of someone other than the caller is an offer the named adult
+-- accepts or declines. Kinds:
+--   'initial'   the creator named another adult as primary guardian; the child is on hold until
+--               they accept;
+--   'appoint'   the Owner names a primary guardian for a child on hold (never themselves);
+--   'handover'  the primary guardian offers the primary role;
+--   'secondary' the primary guardian offers the secondary role.
+-- One open offer per child, Home and role; a new one replaces it. Offers expire after 14 days.
+create table public.child_guardian_offers (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null,
+  child_user_id uuid not null,
+  guardian_user_id uuid not null,
+  role text not null
+    constraint child_guardian_offers_role_check check (role in ('primary', 'secondary')),
+  kind text not null
+    constraint child_guardian_offers_kind_check
+      check (kind in ('initial', 'appoint', 'handover', 'secondary')),
+  constraint child_guardian_offers_kind_role_check
+    check ((kind = 'secondary') = (role = 'secondary')),
+  offered_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '14 days',
+  constraint child_guardian_offers_one_per_role_key unique (home_id, child_user_id, role),
+  constraint child_guardian_offers_child_membership_fkey foreign key (home_id, child_user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade,
+  constraint child_guardian_offers_guardian_membership_fkey foreign key (home_id, guardian_user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+alter table public.child_guardian_offers enable row level security;
+revoke all on table public.child_guardian_offers from public, anon, authenticated;
+
+comment on table public.child_guardian_offers is
+  'S41: a guardian role offered to an adult member, active only once they accept.';
+
+-- The offered adult, whoever made the offer, and the child's guardians in that Home see it.
+create policy child_guardian_offers_select_involved on public.child_guardian_offers
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.home_memberships m
+      where m.home_id = child_guardian_offers.home_id and m.user_id = (select auth.uid())
+    )
+    and (
+      guardian_user_id = (select auth.uid())
+      or offered_by = (select auth.uid())
+      or private.caller_child_guardian_role(home_id, child_user_id) is not null
+    )
+  );
+
+grant select (id, home_id, child_user_id, guardian_user_id, role, kind, created_at, expires_at)
+  on table public.child_guardian_offers to authenticated;
+
+-- Make or replace an offer (the caller's authority is checked by the caller of this function).
+create function private.offer_child_guardian(
+  p_home_id uuid, p_child uuid, p_target uuid, p_kind text, p_actor uuid
+) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_role text := case when p_kind = 'secondary' then 'secondary' else 'primary' end;
+  begin
+    delete from public.child_guardian_offers o
+      where o.home_id = p_home_id and o.child_user_id = p_child and o.role = v_role;
+    insert into public.child_guardian_offers
+      (home_id, child_user_id, guardian_user_id, role, kind, offered_by)
+      values (p_home_id, p_child, p_target, v_role, p_kind, p_actor);
+    perform private.audit('child.guardian_offered', p_home_id, 'user', p_child,
+      jsonb_build_object('kind', p_kind, 'guardian', p_target));
+  end
+  $$;
+
+revoke all on function private.offer_child_guardian(uuid, uuid, uuid, text, uuid) from public;
+
+-- Apply an accepted assignment.
+--   * secondary: replaces any current secondary;
+--   * primary: the target becomes primary; the other adult stays as secondary (the previous
+--     secondary unless they became primary, otherwise the previous primary).
+create function private.apply_child_guardian(
+  p_home_id uuid, p_child uuid, p_target uuid, p_role text, p_actor uuid
+) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_primary uuid;
+    v_secondary uuid;
+  begin
+    select g.guardian_user_id into v_primary from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = p_child and g.role = 'primary';
+    select g.guardian_user_id into v_secondary from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = p_child and g.role = 'secondary';
+
+    if p_role = 'secondary' then
+      delete from public.child_guardians g
+        where g.home_id = p_home_id and g.child_user_id = p_child and g.role = 'secondary';
+      insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+        values (p_home_id, p_child, p_target, 'secondary', p_actor);
+    else
+      delete from public.child_guardians g
+        where g.home_id = p_home_id and g.child_user_id = p_child;
+      insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+        values (p_home_id, p_child, p_target, 'primary', p_actor);
+      if v_secondary is not null and v_secondary <> p_target then
+        insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+          values (p_home_id, p_child, v_secondary, 'secondary', p_actor);
+      elsif v_primary is not null and v_primary <> p_target then
+        insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+          values (p_home_id, p_child, v_primary, 'secondary', p_actor);
+      end if;
+    end if;
+    -- An open offer to the new guardian for the other role no longer makes sense.
+    delete from public.child_guardian_offers o
+      where o.home_id = p_home_id and o.child_user_id = p_child and o.guardian_user_id = p_target;
+    perform private.audit('child.guardian_assigned', p_home_id, 'user', p_child,
+      jsonb_build_object('role', p_role, 'guardian', p_target));
+  end
+  $$;
+
+revoke all on function private.apply_child_guardian(uuid, uuid, uuid, text, uuid) from public;
+
+-- Every guardian role that ends (step-down, hand-over, the guardian or the child leaving the Home)
+-- is audited, including the ones that end through a membership cascade.
+create function private.audit_child_guardian_end() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    insert into private.audit_events (actor_user_id, home_id, action, subject_type, subject_id, details)
+      values (auth.uid(), old.home_id, 'child.guardian_ended', 'user', old.child_user_id,
+              jsonb_build_object('role', old.role, 'guardian', old.guardian_user_id));
+    return null;
+  end
+  $$;
+
+revoke all on function private.audit_child_guardian_end() from public;
+
+create trigger child_guardians_audit_end
+  after delete on public.child_guardians
+  for each row execute function private.audit_child_guardian_end();
+
+-- Creation limits (S41 brief defaults, Ward may change): at most 10 children created per account per
+-- 24 hours, and at most 30 children in one Home.
+create function private.child_creation_limits() returns table (per_account_day integer, per_home integer)
+  language sql immutable parallel safe set search_path = '' as $$
+    select 10, 30
+  $$;
+
+revoke all on function private.child_creation_limits() from public;
+
+-- How long after creation a child created by mistake can be deleted outright (S41 brief default).
+create function private.child_correction_window() returns interval
+  language sql immutable parallel safe set search_path = '' as $$
+    select interval '24 hours'
+  $$;
+
+revoke all on function private.child_correction_window() from public;
+
+-- Create a child ---------------------------------------------------------------------------------------
+
+-- Home → Members → Add child (spec "Confirmed quick child creation"): a name, an eligible primary
+-- guardian and nothing else is required. Who may add a child: any adult member, who becomes primary
+-- guardian at once; the Owner or an Administrator holding manageInvitations may instead name another
+-- adult member, who receives an offer and becomes primary guardian only on accepting (until then the
+-- child is on hold). A repeated request id from the same caller returns the same child.
+-- Outcomes: 'created', 'not_found', 'not_permitted', 'invalid_guardian', 'limit_reached'.
+create function public.create_child(
+  p_home_id uuid,
+  p_name text,
+  p_primary_guardian_membership_id uuid,
+  p_age_band text,
+  p_accent_color text,
+  p_request_id uuid
+) returns table (outcome text, membership_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_role text;
+    v_guardian uuid;
+    v_child uuid;
+    v_membership uuid;
+    -- The API sends '' for "no age band" (generated RPC types have no nullable arguments).
+    v_age_band text := nullif(p_age_band, '');
+  begin
+    if p_request_id is null then
+      raise exception 'a request id is required' using errcode = '22023';
+    end if;
+    if p_name is null or not private.is_visible_name(p_name, 50) then
+      raise exception 'invalid name' using errcode = '22023';
+    end if;
+    if v_age_band is not null and v_age_band not in ('under_8', '8_12', '13_17') then
+      raise exception 'invalid age band' using errcode = '22023';
+    end if;
+    if p_accent_color is null or p_accent_color !~ '^#[0-9a-f]{6}$' then
+      raise exception 'invalid accent colour' using errcode = '22023';
+    end if;
+
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    v_role := private.home_role(p_home_id, v_user_id);
+    if v_role is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+
+    -- Retry of a request that already created a child.
+    select m.id into v_membership
+      from public.child_profiles c
+      join public.home_memberships m on m.user_id = c.user_id and m.home_id = p_home_id
+      where c.created_by = v_user_id and c.creation_request_id = p_request_id;
+    if found then
+      return query select 'created'::text, v_membership;
+      return;
+    end if;
+    if exists (
+      select 1 from public.child_profiles c
+      where c.created_by = v_user_id and c.creation_request_id = p_request_id
+    ) then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+
+    if private.is_child(v_user_id) or private.is_deactivated(v_user_id) then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+
+    v_guardian := private.guardian_candidate(p_home_id, p_primary_guardian_membership_id);
+    if v_guardian is null then
+      return query select 'invalid_guardian'::text, null::uuid;
+      return;
+    end if;
+    if not (
+      v_guardian = v_user_id
+      or v_role = 'owner'
+      or private.has_home_capability(p_home_id, v_user_id, 'manageInvitations')
+    ) then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+
+    if (select count(*) from public.child_profiles c
+        where c.created_by = v_user_id and c.created_at > now() - interval '24 hours')
+         >= (select l.per_account_day from private.child_creation_limits() l)
+       or (select count(*) from public.home_memberships m
+           join public.child_profiles c on c.user_id = m.user_id
+           where m.home_id = p_home_id)
+         >= (select l.per_home from private.child_creation_limits() l) then
+      return query select 'limit_reached'::text, null::uuid;
+      return;
+    end if;
+
+    -- The identity: no email, no password, no identity row. Token columns are empty strings, as
+    -- Supabase Auth expects.
+    v_child := gen_random_uuid();
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change,
+      raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+    ) values (
+      '00000000-0000-0000-0000-000000000000', v_child, 'authenticated', 'authenticated', null, '',
+      null, '', '', '', '',
+      '{"provider": "madeora_child", "providers": [], "madeora_kind": "child"}'::jsonb, '{}'::jsonb,
+      now(), now()
+    );
+    insert into public.child_profiles (user_id, age_band, created_by, creation_request_id)
+      values (v_child, v_age_band, v_user_id, p_request_id);
+    insert into public.user_preferences (user_id, display_name) values (v_child, p_name);
+
+    insert into public.home_memberships (home_id, user_id, role)
+      values (p_home_id, v_child, 'member')
+      returning id into v_membership;
+    insert into public.home_member_profiles (home_id, user_id, accent_color)
+      values (p_home_id, v_child, p_accent_color);
+    insert into public.child_home_settings (home_id, child_user_id, updated_by)
+      values (p_home_id, v_child, v_user_id);
+    perform private.audit('child.created', p_home_id, 'user', v_child,
+      jsonb_build_object('preset', 'young_child', 'primary_guardian', v_guardian));
+    if v_guardian = v_user_id then
+      insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+        values (p_home_id, v_child, v_guardian, 'primary', v_user_id);
+    else
+      perform private.offer_child_guardian(p_home_id, v_child, v_guardian, 'initial', v_user_id);
+    end if;
+    return query select 'created'::text, v_membership;
+  end
+  $$;
+
+revoke all on function public.create_child(uuid, text, uuid, text, text, uuid) from public, anon;
+grant execute on function public.create_child(uuid, text, uuid, text, text, uuid) to authenticated;
+
+-- Guardian assignments -------------------------------------------------------------------------------
+
+-- Offer a guardian role (spec "Confirmed guardian roles"); it applies when the named adult accepts:
+--   * 'secondary': only the primary guardian;
+--   * 'primary' while the child has a primary: only that primary guardian (hand-over);
+--   * 'primary' while the child has none (on hold): only the Owner, and never to themselves (being a
+--     Home manager never grants parental access; spec).
+-- Outcomes: 'offered', 'not_found', 'not_permitted', 'invalid_guardian'.
+create function public.assign_child_guardian(
+  p_home_id uuid, p_child_membership_id uuid, p_guardian_membership_id uuid, p_role text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+    v_target uuid;
+    v_caller_role text;
+    v_primary uuid;
+    v_secondary uuid;
+    v_kind text;
+  begin
+    if p_role is null or p_role not in ('primary', 'secondary') then
+      raise exception 'invalid guardian role' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return 'not_found';
+    end if;
+
+    select g.guardian_user_id into v_primary from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = v_child and g.role = 'primary';
+    select g.guardian_user_id into v_secondary from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = v_child and g.role = 'secondary';
+    v_caller_role := private.child_guardian_role(p_home_id, v_child, v_user_id);
+
+    if p_role = 'secondary' then
+      if v_caller_role is distinct from 'primary' then
+        return 'not_permitted';
+      end if;
+      v_kind := 'secondary';
+    elsif v_primary is not null then
+      if v_caller_role is distinct from 'primary' then
+        return 'not_permitted';
+      end if;
+      v_kind := 'handover';
+    else
+      if private.home_role(p_home_id, v_user_id) is distinct from 'owner' then
+        return 'not_permitted';
+      end if;
+      v_kind := 'appoint';
+    end if;
+
+    v_target := private.guardian_candidate(p_home_id, p_guardian_membership_id);
+    if v_target is null or v_target = v_user_id
+       or v_target = v_primary
+       or (p_role = 'secondary' and v_target = v_secondary) then
+      return 'invalid_guardian';
+    end if;
+
+    perform private.offer_child_guardian(p_home_id, v_child, v_target, v_kind, v_user_id);
+    return 'offered';
+  end
+  $$;
+
+revoke all on function public.assign_child_guardian(uuid, uuid, uuid, text) from public, anon;
+grant execute on function public.assign_child_guardian(uuid, uuid, uuid, text) to authenticated;
+
+-- The offered adult accepts or declines. Accepting re-checks that the offer still stands: not
+-- expired, the adult still eligible, and the authority behind it unchanged (the offering primary is
+-- still primary for 'secondary' and 'handover'; the child is still on hold for 'initial' and
+-- 'appoint', and the appointing Owner is still the Owner). Outcomes: 'accepted', 'declined',
+-- 'not_found', 'expired', 'no_longer_valid'.
+create function public.answer_child_guardian_offer(p_offer_id uuid, p_accept boolean)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_offer public.child_guardian_offers;
+    v_primary uuid;
+    v_valid boolean;
+  begin
+    if p_accept is null then
+      raise exception 'an answer is required' using errcode = '22023';
+    end if;
+    select * into v_offer from public.child_guardian_offers o
+      where o.id = p_offer_id and o.guardian_user_id = v_user_id;
+    if not found then
+      return 'not_found';
+    end if;
+    if not private.lock_home(v_offer.home_id) then
+      return 'not_found';
+    end if;
+    -- Read again under the lock.
+    select * into v_offer from public.child_guardian_offers o
+      where o.id = p_offer_id and o.guardian_user_id = v_user_id;
+    if not found or private.home_role(v_offer.home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+
+    if not p_accept then
+      delete from public.child_guardian_offers o where o.id = v_offer.id;
+      perform private.audit('child.guardian_offer_declined', v_offer.home_id, 'user',
+        v_offer.child_user_id, jsonb_build_object('kind', v_offer.kind));
+      return 'declined';
+    end if;
+    if v_offer.expires_at <= now() then
+      delete from public.child_guardian_offers o where o.id = v_offer.id;
+      return 'expired';
+    end if;
+
+    select g.guardian_user_id into v_primary from public.child_guardians g
+      where g.home_id = v_offer.home_id and g.child_user_id = v_offer.child_user_id
+        and g.role = 'primary';
+    v_valid := private.is_eligible_guardian(v_user_id)
+      and v_primary is distinct from v_user_id
+      and case v_offer.kind
+        when 'secondary' then v_primary is not null and v_primary = v_offer.offered_by
+        when 'handover' then v_primary is not null and v_primary = v_offer.offered_by
+        when 'appoint' then v_primary is null
+          and private.home_role(v_offer.home_id, v_offer.offered_by) = 'owner'
+        else v_primary is null
+      end;
+    if not coalesce(v_valid, false) then
+      delete from public.child_guardian_offers o where o.id = v_offer.id;
+      return 'no_longer_valid';
+    end if;
+
+    perform private.apply_child_guardian(v_offer.home_id, v_offer.child_user_id, v_user_id,
+      v_offer.role, v_offer.offered_by);
+    return 'accepted';
+  end
+  $$;
+
+revoke all on function public.answer_child_guardian_offer(uuid, boolean) from public, anon;
+grant execute on function public.answer_child_guardian_offer(uuid, boolean) to authenticated;
+
+-- Withdraw an open offer: whoever made it, or the child's primary guardian. Outcomes: 'cancelled',
+-- 'not_found', 'not_permitted'.
+create function public.cancel_child_guardian_offer(p_offer_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_offer public.child_guardian_offers;
+  begin
+    select * into v_offer from public.child_guardian_offers o where o.id = p_offer_id;
+    if not found or private.home_role(v_offer.home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if not private.lock_home(v_offer.home_id) then
+      return 'not_found';
+    end if;
+    if not (
+      v_offer.offered_by = v_user_id
+      or private.child_guardian_role(v_offer.home_id, v_offer.child_user_id, v_user_id)
+        is not distinct from 'primary'
+    ) then
+      return 'not_permitted';
+    end if;
+    delete from public.child_guardian_offers o where o.id = v_offer.id;
+    perform private.audit('child.guardian_offer_cancelled', v_offer.home_id, 'user',
+      v_offer.child_user_id, jsonb_build_object('kind', v_offer.kind));
+    return 'cancelled';
+  end
+  $$;
+
+revoke all on function public.cancel_child_guardian_offer(uuid) from public, anon;
+grant execute on function public.cancel_child_guardian_offer(uuid) to authenticated;
+
+-- The open offers made to the caller in a Home, for the Members page.
+create function public.my_child_guardian_offers(p_home_id uuid)
+returns table (
+  offer_id uuid,
+  child_membership_id uuid,
+  child_name text,
+  role text,
+  kind text,
+  expires_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or p_home_id is null or private.home_role(p_home_id, v_user_id) is null then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+    return query
+      select o.id, m.id, coalesce(p.nickname, p.display_name, up.display_name), o.role, o.kind,
+             o.expires_at
+      from public.child_guardian_offers o
+      join public.home_memberships m on m.home_id = o.home_id and m.user_id = o.child_user_id
+      left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+      left join public.user_preferences up on up.user_id = m.user_id
+      where o.home_id = p_home_id and o.guardian_user_id = v_user_id and o.expires_at > now()
+      order by o.created_at, o.id;
+  end
+  $$;
+
+revoke all on function public.my_child_guardian_offers(uuid) from public, anon;
+grant execute on function public.my_child_guardian_offers(uuid) to authenticated;
+
+-- Remove the secondary guardian: the primary guardian, or the secondary stepping down. The primary
+-- can only hand the role over (assign_child_guardian). Outcomes: 'removed', 'not_found',
+-- 'not_permitted'.
+create function public.remove_child_secondary_guardian(
+  p_home_id uuid, p_child_membership_id uuid
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+    v_caller_role text;
+    v_secondary uuid;
+  begin
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return 'not_found';
+    end if;
+    v_caller_role := private.child_guardian_role(p_home_id, v_child, v_user_id);
+    if v_caller_role is null then
+      return 'not_permitted';
+    end if;
+    delete from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = v_child and g.role = 'secondary'
+      returning g.guardian_user_id into v_secondary;
+    if v_secondary is null then
+      return 'removed';
+    end if;
+    perform private.audit('child.guardian_removed', p_home_id, 'user', v_child,
+      jsonb_build_object('role', 'secondary', 'guardian', v_secondary));
+    return 'removed';
+  end
+  $$;
+
+revoke all on function public.remove_child_secondary_guardian(uuid, uuid) from public, anon;
+grant execute on function public.remove_child_secondary_guardian(uuid, uuid) to authenticated;
+
+-- Correct a mistaken or duplicate creation (spec "Confirmed quick child profile creation": support
+-- an authorized retry/recovery and avoid orphan profiles): within the correction window after
+-- creation, the child's primary guardian or the adult who created the child may delete the child
+-- outright, as long as this is the child's only Home. History rows keep their place with the id set
+-- to null ("Former member"). Deleting an established child identity, with the 30-day recovery the
+-- spec gives accounts, is a later step. Outcomes: 'deleted', 'not_found', 'not_permitted',
+-- 'too_late', 'child_other_homes'.
+create function public.delete_mistaken_child(p_home_id uuid, p_child_membership_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+    v_profile public.child_profiles;
+  begin
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return 'not_found';
+    end if;
+    select * into v_profile from public.child_profiles c where c.user_id = v_child;
+    if not (
+      v_profile.created_by is not distinct from v_user_id
+      or private.child_guardian_role(p_home_id, v_child, v_user_id) is not distinct from 'primary'
+    ) then
+      return 'not_permitted';
+    end if;
+    if v_profile.created_at <= now() - private.child_correction_window() then
+      return 'too_late';
+    end if;
+    if exists (
+      select 1 from private.home_memberships_all m
+      where m.user_id = v_child and m.home_id <> p_home_id
+    ) then
+      return 'child_other_homes';
+    end if;
+    perform private.audit('child.deleted', p_home_id, 'user', v_child,
+      jsonb_build_object('reason', 'mistaken_creation'));
+    delete from auth.users u where u.id = v_child;
+    return 'deleted';
+  end
+  $$;
+
+revoke all on function public.delete_mistaken_child(uuid, uuid) from public, anon;
+grant execute on function public.delete_mistaken_child(uuid, uuid) to authenticated;
+
+-- Preset and overrides ---------------------------------------------------------------------------------
+
+-- Change a child's preset and overrides in one Home (spec "Confirmed age-appropriate child permission
+-- presets"). The primary guardian may change anything; the secondary guardian may only switch
+-- capabilities off within the current preset (routine, safe changes). A change that adds any
+-- capability needs p_confirm_expansion, so the interface has shown the before/after preview first.
+-- p_expected_updated_at refuses a write based on a stale read (two guardians editing at once).
+-- Outcomes: 'saved', 'unchanged', 'confirmation_required', 'stale', 'not_found', 'not_permitted'.
+create function public.set_child_access(
+  p_home_id uuid,
+  p_child_membership_id uuid,
+  p_preset text,
+  p_overrides jsonb,
+  p_confirm_expansion boolean,
+  p_expected_updated_at timestamptz
+) returns table (outcome text, before_capabilities text[], after_capabilities text[])
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+    v_caller_role text;
+    v_settings public.child_home_settings;
+    v_before text[];
+    v_after text[];
+  begin
+    if p_preset is null or p_preset not in ('young_child', 'child', 'teen') then
+      raise exception 'invalid preset' using errcode = '22023';
+    end if;
+    if p_overrides is null or not private.valid_child_overrides(p_overrides) then
+      raise exception 'invalid overrides' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::text[], null::text[];
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::text[], null::text[];
+      return;
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return query select 'not_found'::text, null::text[], null::text[];
+      return;
+    end if;
+    v_caller_role := private.child_guardian_role(p_home_id, v_child, v_user_id);
+    if v_caller_role is null then
+      return query select 'not_permitted'::text, null::text[], null::text[];
+      return;
+    end if;
+
+    select * into v_settings from public.child_home_settings s
+      where s.home_id = p_home_id and s.child_user_id = v_child for update;
+    v_before := private.child_effective_capabilities(v_settings.preset, v_settings.overrides);
+    v_after := private.child_effective_capabilities(p_preset, p_overrides);
+
+    if p_expected_updated_at is null or v_settings.updated_at <> p_expected_updated_at then
+      return query select 'stale'::text, v_before, v_after;
+      return;
+    end if;
+    if v_caller_role = 'secondary'
+       and (p_preset <> v_settings.preset or not (v_before @> v_after)) then
+      return query select 'not_permitted'::text, v_before, v_after;
+      return;
+    end if;
+    if p_preset = v_settings.preset and p_overrides = v_settings.overrides then
+      return query select 'unchanged'::text, v_before, v_after;
+      return;
+    end if;
+    if not (v_before @> v_after) and not coalesce(p_confirm_expansion, false) then
+      return query select 'confirmation_required'::text, v_before, v_after;
+      return;
+    end if;
+
+    update public.child_home_settings s
+      set preset = p_preset, overrides = p_overrides, updated_by = v_user_id,
+          updated_at = pg_catalog.clock_timestamp()
+      where s.home_id = p_home_id and s.child_user_id = v_child;
+    perform private.audit('child.access_changed', p_home_id, 'user', v_child,
+      jsonb_build_object(
+        'preset_before', v_settings.preset, 'preset_after', p_preset,
+        'before', to_jsonb(v_before), 'after', to_jsonb(v_after)
+      ));
+    return query select 'saved'::text, v_before, v_after;
+  end
+  $$;
+
+revoke all on function public.set_child_access(uuid, uuid, text, jsonb, boolean, timestamptz)
+  from public, anon;
+grant execute on function public.set_child_access(uuid, uuid, text, jsonb, boolean, timestamptz)
+  to authenticated;
+
+-- Presentation in one Home ----------------------------------------------------------------------------
+
+-- A guardian (primary or secondary) sets the child's display name and identifying accent in this
+-- Home, or resets the accent to a suggested default (spec: routine settings; guardian reset of a
+-- child's colour). An empty display name falls back to the name given at creation. The child's own
+-- colour changes arrive with child sign-in (S42). Outcomes: 'saved', 'not_found', 'not_permitted'.
+create function public.set_child_presentation(
+  p_home_id uuid, p_child_membership_id uuid, p_display_name text, p_accent_color text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+    -- '' (or null) clears the Home name, so the name given at creation shows.
+    v_name text := nullif(p_display_name, '');
+  begin
+    if v_name is not null and not private.is_visible_name(v_name, 50) then
+      raise exception 'invalid name' using errcode = '22023';
+    end if;
+    if p_accent_color is null or p_accent_color !~ '^#[0-9a-f]{6}$' then
+      raise exception 'invalid accent colour' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return 'not_found';
+    end if;
+    if private.child_guardian_role(p_home_id, v_child, v_user_id) is null then
+      return 'not_permitted';
+    end if;
+
+    insert into public.home_member_profiles (home_id, user_id, display_name, accent_color)
+      values (p_home_id, v_child, v_name, p_accent_color)
+      on conflict (home_id, user_id) do update
+        set display_name = excluded.display_name, accent_color = excluded.accent_color;
+    perform private.audit('child.presentation_changed', p_home_id, 'user', v_child,
+      jsonb_build_object('fields', jsonb_build_array('display_name', 'accent_color')));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_child_presentation(uuid, uuid, text, text) from public, anon;
+grant execute on function public.set_child_presentation(uuid, uuid, text, text) to authenticated;
+
+-- Linking a child to another Home ---------------------------------------------------------------------
+
+-- One child identity across Homes (spec "Confirmed one child identity across multiple Homes"):
+-- linking needs a deliberate request from each side and is never automatic. The child's primary
+-- guardian in a Home where the child already is issues a one-time link code (approval on that side);
+-- an adult member of the other Home redeems it there and becomes the child's primary guardian in
+-- that Home (approval on the other side). Knowing the child's name, being a Home manager or a shared
+-- display never claims a child. The code is shown once, stored only as a SHA-256 hash, valid for
+-- 7 days, single use; issuing a new one for the same child and Home replaces the open one. Each
+-- Home keeps its own membership, guardians, settings and history.
+create table private.child_link_codes (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null,
+  child_user_id uuid not null,
+  code_hash bytea not null constraint child_link_codes_hash_key unique,
+  created_by uuid references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '7 days',
+  constraint child_link_codes_one_open_key unique (home_id, child_user_id),
+  constraint child_link_codes_child_membership_fkey foreign key (home_id, child_user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+revoke all on table private.child_link_codes from public;
+
+comment on table private.child_link_codes is
+  'S41: one-time codes a primary guardian issues to link a child to another Home (hash only).';
+
+-- A typed code in its stored form: upper case, spaces and dashes removed, look-alikes I/L/O read as
+-- 1/1/0. Null when it cannot be a code.
+create function private.normalize_child_link_code(p_value text) returns text
+  language sql immutable parallel safe set search_path = '' as $$
+    select case
+      when p_value is null or pg_catalog.char_length(p_value) > 64 then null
+      else nullif(
+        pg_catalog.translate(
+          pg_catalog.upper(pg_catalog.regexp_replace(p_value, '[\s-]', '', 'g')), 'ILO', '110'),
+        '')
+    end
+  $$;
+
+revoke all on function private.normalize_child_link_code(text) from public;
+
+-- Issue a link code for the child in this Home: only the child's primary guardian here.
+-- Outcomes: 'issued' (with the code, shown once, as XXXX-XXXX-XXXX-XXXX), 'not_found',
+-- 'not_permitted'.
+create function public.create_child_link_code(p_home_id uuid, p_child_membership_id uuid)
+returns table (outcome text, code text, expires_at timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_alphabet constant text := '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    v_child uuid;
+    v_bytes bytea;
+    v_code text := '';
+    v_expires timestamptz;
+  begin
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::text, null::timestamptz;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::text, null::timestamptz;
+      return;
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return query select 'not_found'::text, null::text, null::timestamptz;
+      return;
+    end if;
+    if private.child_guardian_role(p_home_id, v_child, v_user_id) is distinct from 'primary' then
+      return query select 'not_permitted'::text, null::text, null::timestamptz;
+      return;
+    end if;
+
+    -- 16 characters from 32 symbols: 80 random bits.
+    v_bytes := extensions.gen_random_bytes(16);
+    for i in 0..15 loop
+      v_code := v_code
+        || pg_catalog.substr(v_alphabet, (pg_catalog.get_byte(v_bytes, i) % 32) + 1, 1);
+    end loop;
+    delete from private.child_link_codes c where c.home_id = p_home_id and c.child_user_id = v_child;
+    insert into private.child_link_codes (home_id, child_user_id, code_hash, created_by)
+      values (p_home_id, v_child, extensions.digest(v_code, 'sha256'), v_user_id)
+      returning child_link_codes.expires_at into v_expires;
+    perform private.audit('child.link_code_issued', p_home_id, 'user', v_child, '{}'::jsonb);
+    return query select 'issued'::text,
+      pg_catalog.substr(v_code, 1, 4) || '-' || pg_catalog.substr(v_code, 5, 4) || '-'
+        || pg_catalog.substr(v_code, 9, 4) || '-' || pg_catalog.substr(v_code, 13, 4),
+      v_expires;
+  end
+  $$;
+
+revoke all on function public.create_child_link_code(uuid, uuid) from public, anon;
+grant execute on function public.create_child_link_code(uuid, uuid) to authenticated;
+
+-- Withdraw the open link code for the child in this Home: the child's primary guardian here.
+-- Outcomes: 'cancelled', 'not_found', 'not_permitted'.
+create function public.cancel_child_link_code(p_home_id uuid, p_child_membership_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+  begin
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null then
+      return 'not_found';
+    end if;
+    if private.child_guardian_role(p_home_id, v_child, v_user_id) is distinct from 'primary' then
+      return 'not_permitted';
+    end if;
+    delete from private.child_link_codes c where c.home_id = p_home_id and c.child_user_id = v_child;
+    return 'cancelled';
+  end
+  $$;
+
+revoke all on function public.cancel_child_link_code(uuid, uuid) from public, anon;
+grant execute on function public.cancel_child_link_code(uuid, uuid) to authenticated;
+
+-- Redeem a link code in the caller's Home: the caller (an adult member eligible to be a guardian)
+-- becomes the child's primary guardian in this Home; the child starts on Young Child here, with the
+-- colour the caller picked. Re-checked under both Homes' locks: the code is unused and unexpired,
+-- whoever issued it is still the child's primary guardian in the issuing Home, the child is not
+-- already in this Home, and this Home's child limit. A wrong code and a used one look the same.
+-- At most 10 failed attempts per account per hour.
+-- Outcomes: 'linked', 'not_found', 'not_permitted', 'invalid_code', 'expired', 'no_longer_valid',
+-- 'already_linked', 'limit_reached', 'rate_limited'.
+create table private.child_link_failures (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  failed_at timestamptz not null default now()
+);
+
+create index child_link_failures_user_idx on private.child_link_failures (user_id, failed_at);
+revoke all on table private.child_link_failures from public;
+
+create function public.redeem_child_link_code(p_home_id uuid, p_code text, p_accent_color text)
+returns table (outcome text, membership_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_code text := private.normalize_child_link_code(p_code);
+    v_link private.child_link_codes;
+    v_membership uuid;
+  begin
+    if p_accent_color is null or p_accent_color !~ '^#[0-9a-f]{6}$' then
+      raise exception 'invalid accent colour' using errcode = '22023';
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if not private.is_eligible_guardian(v_user_id) then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+    if (select count(*) from private.child_link_failures f
+        where f.user_id = v_user_id and f.failed_at > now() - interval '1 hour') >= 10 then
+      return query select 'rate_limited'::text, null::uuid;
+      return;
+    end if;
+
+    select * into v_link from private.child_link_codes c
+      where v_code is not null and c.code_hash = extensions.digest(v_code, 'sha256');
+    if not found then
+      insert into private.child_link_failures (user_id) values (v_user_id);
+      return query select 'invalid_code'::text, null::uuid;
+      return;
+    end if;
+
+    -- Both Homes, always in the same order, so two links in opposite directions cannot deadlock.
+    if v_link.home_id = p_home_id then
+      return query select 'already_linked'::text, null::uuid;
+      return;
+    end if;
+    if not private.lock_home(least(v_link.home_id, p_home_id))
+       or not private.lock_home(greatest(v_link.home_id, p_home_id)) then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    -- Read again under the locks: it may have been used or withdrawn meanwhile.
+    select * into v_link from private.child_link_codes c where c.id = v_link.id;
+    if not found then
+      return query select 'invalid_code'::text, null::uuid;
+      return;
+    end if;
+    if private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if v_link.expires_at <= now() then
+      delete from private.child_link_codes c where c.id = v_link.id;
+      return query select 'expired'::text, null::uuid;
+      return;
+    end if;
+    if private.child_guardian_role(v_link.home_id, v_link.child_user_id, v_link.created_by)
+       is distinct from 'primary' then
+      delete from private.child_link_codes c where c.id = v_link.id;
+      return query select 'no_longer_valid'::text, null::uuid;
+      return;
+    end if;
+    if exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_link.child_user_id
+    ) then
+      return query select 'already_linked'::text, null::uuid;
+      return;
+    end if;
+    if (select count(*) from public.home_memberships m
+        join public.child_profiles c on c.user_id = m.user_id
+        where m.home_id = p_home_id)
+       >= (select l.per_home from private.child_creation_limits() l) then
+      return query select 'limit_reached'::text, null::uuid;
+      return;
+    end if;
+
+    delete from private.child_link_codes c where c.id = v_link.id;
+    insert into public.home_memberships (home_id, user_id, role)
+      values (p_home_id, v_link.child_user_id, 'member')
+      returning id into v_membership;
+    insert into public.home_member_profiles (home_id, user_id, accent_color)
+      values (p_home_id, v_link.child_user_id, p_accent_color);
+    insert into public.child_home_settings (home_id, child_user_id, updated_by)
+      values (p_home_id, v_link.child_user_id, v_user_id);
+    insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+      values (p_home_id, v_link.child_user_id, v_user_id, 'primary', v_user_id);
+    -- Each Home's record names only its own side.
+    perform private.audit('child.linked_out', v_link.home_id, 'user', v_link.child_user_id,
+      '{}'::jsonb);
+    perform private.audit('child.linked_in', p_home_id, 'user', v_link.child_user_id,
+      jsonb_build_object('primary_guardian', v_user_id));
+    return query select 'linked'::text, v_membership;
+  end
+  $$;
+
+revoke all on function public.redeem_child_link_code(uuid, text, text) from public, anon;
+grant execute on function public.redeem_child_link_code(uuid, text, text) to authenticated;
+
+-- Whether the child has an open link code in this Home (for the guardians' page); never the code.
+create function public.child_link_code_state(p_home_id uuid, p_child_membership_id uuid)
+returns timestamptz
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_child uuid;
+  begin
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_user_id is null or v_child is null
+       or private.child_guardian_role(p_home_id, v_child, v_user_id) is distinct from 'primary' then
+      return null;
+    end if;
+    return (select c.expires_at from private.child_link_codes c
+            where c.home_id = p_home_id and c.child_user_id = v_child and c.expires_at > now());
+  end
+  $$;
+
+revoke all on function public.child_link_code_state(uuid, uuid) from public, anon;
+grant execute on function public.child_link_code_state(uuid, uuid) to authenticated;
+
+-- Reading the children of a Home -------------------------------------------------------------------------
+
+-- Every member sees each child's name, colour and guardians (the directory shows them anyway).
+-- Only that child's guardians in this Home see the preset, overrides, effective capabilities and age
+-- band; for everyone else those columns are null. Pending guardian offers show who was asked; the
+-- offer ids only to whoever may withdraw them. can_delete: the caller may delete a mistaken creation.
+create function public.home_children(p_home_id uuid)
+returns table (
+  membership_id uuid,
+  name text,
+  accent_color text,
+  primary_guardian_membership_id uuid,
+  secondary_guardian_membership_id uuid,
+  my_guardian_role text,
+  preset text,
+  overrides jsonb,
+  capabilities text[],
+  age_band text,
+  settings_updated_at timestamptz,
+  pending_primary_membership_id uuid,
+  pending_secondary_membership_id uuid,
+  pending_primary_offer_id uuid,
+  pending_secondary_offer_id uuid,
+  can_delete boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or p_home_id is null or private.home_role(p_home_id, v_user_id) is null then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+
+    return query
+      select
+        m.id,
+        coalesce(p.nickname, p.display_name, up.display_name),
+        coalesce(p.accent_color, up.accent_color),
+        (select gm.id from public.child_guardians g
+           join public.home_memberships gm
+             on gm.home_id = g.home_id and gm.user_id = g.guardian_user_id
+           where g.home_id = m.home_id and g.child_user_id = m.user_id and g.role = 'primary'),
+        (select gm.id from public.child_guardians g
+           join public.home_memberships gm
+             on gm.home_id = g.home_id and gm.user_id = g.guardian_user_id
+           where g.home_id = m.home_id and g.child_user_id = m.user_id and g.role = 'secondary'),
+        r.role,
+        case when r.role is not null then s.preset end,
+        case when r.role is not null then s.overrides end,
+        case when r.role is not null
+          then private.child_effective_capabilities(s.preset, s.overrides) end,
+        case when r.role is not null then c.age_band end,
+        case when r.role is not null then s.updated_at end,
+        (select om.id from public.child_guardian_offers o
+           join public.home_memberships om
+             on om.home_id = o.home_id and om.user_id = o.guardian_user_id
+           where o.home_id = m.home_id and o.child_user_id = m.user_id and o.role = 'primary'
+             and o.expires_at > now()),
+        (select om.id from public.child_guardian_offers o
+           join public.home_memberships om
+             on om.home_id = o.home_id and om.user_id = o.guardian_user_id
+           where o.home_id = m.home_id and o.child_user_id = m.user_id and o.role = 'secondary'
+             and o.expires_at > now()),
+        -- Offer ids only for whoever may withdraw them.
+        (select o.id from public.child_guardian_offers o
+           where o.home_id = m.home_id and o.child_user_id = m.user_id and o.role = 'primary'
+             and o.expires_at > now()
+             and (o.offered_by = v_user_id or r.role = 'primary')),
+        (select o.id from public.child_guardian_offers o
+           where o.home_id = m.home_id and o.child_user_id = m.user_id and o.role = 'secondary'
+             and o.expires_at > now()
+             and (o.offered_by = v_user_id or r.role = 'primary')),
+        (c.created_by = v_user_id or r.role = 'primary')
+          and c.created_at > now() - private.child_correction_window()
+          and not exists (
+            select 1 from public.home_memberships om
+            where om.user_id = m.user_id and om.home_id <> m.home_id
+          )
+      from public.home_memberships m
+      join public.child_profiles c on c.user_id = m.user_id
+      join public.child_home_settings s on s.home_id = m.home_id and s.child_user_id = m.user_id
+      left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+      left join public.user_preferences up on up.user_id = m.user_id
+      cross join lateral (
+        select private.child_guardian_role(m.home_id, m.user_id, v_user_id) as role
+      ) r
+      where m.home_id = p_home_id
+      order by m.created_at, m.id;
+  end
+  $$;
+
+revoke all on function public.home_children(uuid) from public, anon;
+grant execute on function public.home_children(uuid) to authenticated;
+
+-- The directory says which members are children -------------------------------------------------------
+
+drop function public.home_directory(uuid);
+create function public.home_directory(p_home_id uuid)
+returns table (
+  membership_id uuid,
+  role text,
+  joined_at timestamptz,
+  is_self boolean,
+  name text,
+  accent_color text,
+  avatar_file_id uuid,
+  is_inactive boolean,
+  is_child boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is null or p_home_id is null or not exists (
+      select 1 from public.home_memberships m
+      where m.home_id = p_home_id and m.user_id = v_user_id
+    ) then
+      raise exception 'not a member of this Home' using errcode = '42501';
+    end if;
+
+    return query
+      select
+        m.id,
+        m.role,
+        m.created_at,
+        m.user_id = v_user_id,
+        coalesce(p.nickname, p.display_name, up.display_name),
+        coalesce(p.accent_color, up.accent_color),
+        coalesce(p.avatar_file_id, up.avatar_file_id),
+        private.is_deactivated(m.user_id),
+        private.is_child(m.user_id)
+      from public.home_memberships m
+      left join public.home_member_profiles p
+        on p.home_id = m.home_id and p.user_id = m.user_id
+      left join public.user_preferences up on up.user_id = m.user_id
+      where m.home_id = p_home_id
+      order by m.created_at, m.id;
+  end
+  $$;
+
+comment on function public.home_directory(uuid) is
+  'S11/S15/S38/S41: the members of a Home the caller belongs to, with effective name, colour, avatar file id, whether the account is deactivated and whether the member is a child.';
+
+revoke all on function public.home_directory(uuid) from public, anon;
+grant execute on function public.home_directory(uuid) to authenticated;
+
+-- Removing a child from a Home ------------------------------------------------------------------------
+
+-- As S12, plus: a child's membership may be removed only by the Owner or the child's primary guardian
+-- in this Home, and never from the child's last Home (removing a child from one Home keeps the
+-- identity and its other Homes; deleting a child identity is a later step). New outcome
+-- 'child_last_home'.
+create or replace function public.remove_home_member(
+  p_home_id uuid, p_membership_id uuid, p_expected_role text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_actor_role text;
+    v_target public.home_memberships;
+  begin
+    if p_expected_role is null or p_expected_role not in ('member', 'administrator', 'owner') then
+      raise exception 'invalid role' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    v_actor_role := private.home_role(p_home_id, v_user_id);
+    if v_actor_role is null then
+      return 'not_found';
+    end if;
+    select * into v_target from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = p_home_id;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_target.role <> p_expected_role then
+      return 'stale';
+    end if;
+    if v_target.user_id = v_user_id or v_target.role = 'owner' then
+      return 'not_permitted';
+    end if;
+
+    if private.is_child(v_target.user_id) then
+      if not (
+        v_actor_role = 'owner'
+        or private.child_guardian_role(p_home_id, v_target.user_id, v_user_id)
+          is not distinct from 'primary'
+      ) then
+        return 'not_permitted';
+      end if;
+      if not exists (
+        select 1 from public.home_memberships m
+        where m.user_id = v_target.user_id and m.home_id <> p_home_id
+      ) then
+        return 'child_last_home';
+      end if;
+    elsif not (
+      v_actor_role = 'owner'
+      or (v_target.role = 'member'
+          and private.has_home_capability(p_home_id, v_user_id, 'removeMembers'))
+    ) then
+      return 'not_permitted';
+    end if;
+
+    perform pg_catalog.set_config('madeora.membership_end', 'removed', true);
+    delete from public.home_memberships where id = v_target.id;
+    perform pg_catalog.set_config('madeora.membership_end', '', true);
+    return 'removed';
+  end
+  $$;
+
+-- A child's identity ends with its last Home ----------------------------------------------------------
+
+-- A child's last membership can only end when its Home is purged (S40) or deleted outright; the
+-- identity then has no Home and no guardian, so it is deleted with it (history keeps its rows with
+-- the id set to null: "Former member").
+create function private.end_orphaned_child() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if private.is_child(old.user_id) and not exists (
+      select 1 from private.home_memberships_all m where m.user_id = old.user_id
+    ) then
+      delete from auth.users u where u.id = old.user_id;
+    end if;
+    return null;
+  end
+  $$;
+
+revoke all on function private.end_orphaned_child() from public;
+
+create trigger home_memberships_end_orphaned_child
+  after delete on private.home_memberships_all
+  for each row execute function private.end_orphaned_child();
+
+-- ============================================================================
+-- supabase/migrations/20261130090000_child_sign_in.sql
+-- ============================================================================
+-- S42: child sign-in (spec "Confirmed guardian-managed child sign-in", "Confirmed primary and
+-- secondary child guardian authority"; architecture.md §7 and §34; brief plans/steps/S42-brief.md).
+--
+-- A child signs in to their own restricted identity, never a parent's account:
+--   * with a guardian-managed username and password, only where a primary guardian turned on
+--     independent (password) sign-in;
+--   * with a PIN, only on a household device a Home manager approved, only for that Home.
+-- Madeora's web server checks the password or PIN against a scrypt hash (the database never sees
+-- either), then issues an ordinary Supabase Auth session and registers it here. Nothing in this
+-- file ever stores, logs or audits a PIN, a password or a hash of one outside its credential row.
+--
+-- A child's session is locked down in three places, so no module's own checks have to know about
+-- children:
+--   1. private.confirmed_email() is null for a child, so every function behind
+--      require_confirmed_caller() refuses a child, and children receive no email or notification;
+--   2. the PostgREST pre-request check accepts a child's token only for a registered, live, still
+--      allowed child session, and then only for the child_* functions listed below; every table,
+--      view, GraphQL and other function call is refused;
+--   3. a child's auth.users row can never get a Supabase Auth password, another email address, a
+--      phone number or a provider identity, so no second way to sign in can be added.
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template', 'chore_reassignment', 'chore_proposal', 'chore_volunteer_request',
+    'home_vacation', 'chore_absence', 'point_account', 'point_entry', 'reward', 'reward_redemption',
+    'point_settings', 'recipe', 'shopping_list', 'meal_plan', 'habit', 'goal', 'goal_series', 'pet',
+    'pet_medical_entry', 'pet_medical_attachment', 'pet_care_activity', 'pet_care_occurrence',
+    'calendar_event', 'photo', 'photo_album', 'home_copy', 'household_device'
+  ));
+
+-- 1. Children are never confirmed adults -------------------------------------------------------------
+
+-- As 20261017090000_home_invitations.sql, but never for a child: a child's internal alias is
+-- confirmed for Supabase Auth's sake only (S42), it is not an email address anyone reads.
+create or replace function private.confirmed_email(p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.lower(u.email) from auth.users u
+  where u.id = p_user_id and u.email_confirmed_at is not null and u.email is not null
+    and not exists (select 1 from public.child_profiles c where c.user_id = u.id);
+  $$;
+
+-- As 20261022090000_notifications.sql, but never a child (no notifications or email yet).
+create or replace function private.can_receive_notifications(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from auth.users u
+    where u.id = p_user_id and u.email_confirmed_at is not null and u.deleted_at is null
+      and not exists (select 1 from public.child_profiles c where c.user_id = u.id)
+  );
+  $$;
+
+-- The internal, non-deliverable address Supabase Auth needs to issue a child's session. Never
+-- shown, never mailed (.invalid is reserved and cannot resolve).
+create function private.child_alias_email(p_child uuid) returns text
+  language sql immutable parallel safe set search_path = '' as $$
+    select 'child-' || p_child::text || '@children.madeora.invalid'
+  $$;
+
+revoke all on function private.child_alias_email(uuid) from public;
+
+-- Gives the child its alias, confirmed, so Supabase Auth can issue a session for it.
+create function private.ensure_child_alias(p_child uuid) returns void
+  language sql security definer set search_path = '' as $$
+    update auth.users u
+      set email = private.child_alias_email(u.id),
+          email_confirmed_at = coalesce(u.email_confirmed_at, pg_catalog.now()),
+          updated_at = pg_catalog.now()
+      where u.id = p_child and u.email is distinct from private.child_alias_email(u.id)
+  $$;
+
+revoke all on function private.ensure_child_alias(uuid) from public;
+
+-- 3. Guards on a child's Supabase Auth rows -------------------------------------------------------
+
+create function private.guard_child_auth_user() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    -- Read through jsonb so the guard does not depend on every Supabase Auth column existing.
+    v_row jsonb := pg_catalog.to_jsonb(new);
+  begin
+    if not private.is_child(new.id) then
+      return new;
+    end if;
+    if coalesce(new.encrypted_password, '') <> '' then
+      raise exception 'a child has no Supabase Auth password'
+        using errcode = '42501', hint = 'Child credentials are managed by guardians in Madeora (S42).';
+    end if;
+    if coalesce(v_row ->> 'email_change', '') <> '' or coalesce(v_row ->> 'phone_change', '') <> ''
+       or coalesce(v_row ->> 'phone', '') <> '' then
+      raise exception 'a child''s sign-in address cannot change'
+        using errcode = '42501', hint = 'Child credentials are managed by guardians in Madeora (S42).';
+    end if;
+    if new.email is not null and new.email <> private.child_alias_email(new.id) then
+      raise exception 'a child''s sign-in address cannot change'
+        using errcode = '42501', hint = 'Child credentials are managed by guardians in Madeora (S42).';
+    end if;
+    return new;
+  end
+  $$;
+
+revoke all on function private.guard_child_auth_user() from public;
+
+create trigger madeora_guard_child_auth_user
+  before update on auth.users
+  for each row execute function private.guard_child_auth_user();
+
+-- A child signs in only through Madeora: no Google or any other provider identity.
+create function private.guard_child_identity() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if private.is_child(new.user_id) and new.provider <> 'email' then
+      raise exception 'a child cannot link a sign-in provider'
+        using errcode = '42501', hint = 'Child credentials are managed by guardians in Madeora (S42).';
+    end if;
+    return new;
+  end
+  $$;
+
+revoke all on function private.guard_child_identity() from public;
+
+create trigger madeora_guard_child_identity
+  before insert on auth.identities
+  for each row execute function private.guard_child_identity();
+
+-- Limits (brief S42 defaults, owner may change) ------------------------------------------------------
+
+create function private.child_sign_in_limits(
+  out failures_before_lock integer,
+  out lock_duration interval,
+  out locks_before_guardian_unlock integer,
+  out lock_count_window interval,
+  out device_failures_per_hour integer,
+  out client_failures_per_window integer,
+  out client_window interval,
+  out pin_session interval,
+  out password_session interval,
+  out attempt_lifetime interval,
+  out devices_per_home integer
+)
+  language sql immutable set search_path = '' as $$
+    select 5, interval '15 minutes', 3, interval '24 hours', 20, 30, interval '15 minutes',
+           interval '4 hours', interval '30 days', interval '2 minutes', 20
+  $$;
+
+revoke all on function private.child_sign_in_limits() from public;
+
+-- Credentials ---------------------------------------------------------------------------------------
+
+-- The web server's scrypt format: scrypt$<log2 N>$<r>$<p>$<salt, base64url>$<key, base64url>.
+create function private.is_child_secret_hash(p_hash text) returns boolean
+  language sql immutable parallel safe set search_path = '' as $$
+    select coalesce(p_hash ~ '^scrypt\$15\$8\$1\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$', false)
+  $$;
+
+revoke all on function private.is_child_secret_hash(text) from public;
+
+create table private.child_credentials (
+  child_user_id uuid primary key references public.child_profiles (user_id) on delete cascade,
+  -- 3 to 24 characters: a-z, 0-9, '.', '_' and '-', starting and ending with a letter or digit.
+  username text
+    constraint child_credentials_username_check
+      check (username ~ '^[a-z0-9][a-z0-9._-]{1,22}[a-z0-9]$'),
+  password_hash text
+    constraint child_credentials_password_hash_check
+      check (password_hash is null or private.is_child_secret_hash(password_hash)),
+  password_set_at timestamptz,
+  -- Wrong tries since the last success or lock, the current lock, and the locks in the window.
+  password_failures integer not null default 0,
+  password_locked_until timestamptz,
+  password_locks integer not null default 0,
+  password_locks_since timestamptz,
+  updated_at timestamptz not null default now(),
+  constraint child_credentials_username_key unique (username)
+);
+
+revoke all on table private.child_credentials from public;
+
+comment on table private.child_credentials is
+  'S42: a child''s identity-wide username and scrypt hash of their independent password.';
+
+-- Per-Home switches: both off until the child's primary guardian turns them on.
+alter table public.child_home_settings
+  add column password_sign_in boolean not null default false,
+  add column pin_sign_in boolean not null default false,
+  add column sign_in_updated_at timestamptz;
+
+grant select (password_sign_in, pin_sign_in) on table public.child_home_settings to authenticated;
+
+-- A child's PIN is Home-scoped (spec: Home guardians keep the Home's approved-device PIN rules):
+-- one scrypt hash and one lock per child per Home, gone with the child's membership there.
+create table private.child_home_pins (
+  home_id uuid not null,
+  child_user_id uuid not null,
+  pin_hash text not null
+    constraint child_home_pins_pin_hash_check check (private.is_child_secret_hash(pin_hash)),
+  pin_set_at timestamptz not null default now(),
+  pin_failures integer not null default 0,
+  pin_locked_until timestamptz,
+  pin_locks integer not null default 0,
+  pin_locks_since timestamptz,
+  updated_at timestamptz not null default now(),
+  constraint child_home_pins_pkey primary key (home_id, child_user_id),
+  constraint child_home_pins_settings_fkey foreign key (home_id, child_user_id)
+    references public.child_home_settings (home_id, child_user_id) on delete cascade
+);
+
+revoke all on table private.child_home_pins from public;
+
+comment on table private.child_home_pins is
+  'S42: a child''s scrypt-hashed PIN and its lock, for one Home''s approved household devices.';
+
+-- Approved household devices ----------------------------------------------------------------------------
+
+-- A browser a Home manager approved for child PIN sign-in in one Home. The device keeps a random
+-- 32-byte secret in an httpOnly cookie; only its SHA-256 is stored here.
+create table private.household_devices (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  label text not null constraint household_devices_label_check
+    check (private.is_visible_name(label, 60)),
+  secret_hash text not null
+    constraint household_devices_secret_hash_check check (secret_hash ~ '^[0-9a-f]{64}$')
+    constraint household_devices_secret_hash_key unique,
+  approved_by uuid references auth.users (id) on delete set null,
+  approved_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  revoked_by uuid references auth.users (id) on delete set null,
+  last_used_at timestamptz
+);
+
+create index household_devices_home_idx on private.household_devices (home_id)
+  where revoked_at is null;
+
+revoke all on table private.household_devices from public;
+
+comment on table private.household_devices is
+  'S42: browsers a Home manager approved for child PIN sign-in (secret stored as SHA-256 only).';
+
+-- Sign-in attempts and sessions --------------------------------------------------------------------------
+
+-- Every attempt, counted before the hash is checked, so parallel guesses cannot exceed the limits.
+-- client_key is the SHA-256 of the client's address made by the web server; the address itself is
+-- never stored. Rows older than a day are removed by the next attempt.
+create table private.child_sign_in_attempts (
+  id uuid primary key default gen_random_uuid(),
+  method text not null constraint child_sign_in_attempts_method_check
+    check (method in ('password', 'pin')),
+  child_user_id uuid references public.child_profiles (user_id) on delete cascade,
+  device_id uuid references private.household_devices (id) on delete cascade,
+  client_key text not null
+    constraint child_sign_in_attempts_client_key_check check (client_key ~ '^[0-9a-f]{64}$'),
+  created_at timestamptz not null default now(),
+  -- Set when step 1 answered 'check' (handed out a hash); only such an attempt can be verified.
+  checked_at timestamptz,
+  verified_at timestamptz,
+  completed_at timestamptz
+);
+
+create index child_sign_in_attempts_client_idx
+  on private.child_sign_in_attempts (client_key, created_at) where verified_at is null;
+create index child_sign_in_attempts_device_idx
+  on private.child_sign_in_attempts (device_id, created_at) where verified_at is null;
+create index child_sign_in_attempts_created_idx on private.child_sign_in_attempts (created_at);
+
+revoke all on table private.child_sign_in_attempts from public;
+
+-- The Supabase Auth sessions Madeora issued to children. A child's token works only while its
+-- session is here, not ended and not expired (checked on every request, below).
+create table private.child_sessions (
+  session_id uuid primary key,
+  child_user_id uuid not null references public.child_profiles (user_id) on delete cascade,
+  method text not null constraint child_sessions_method_check check (method in ('password', 'pin')),
+  -- PIN sessions only: the device and its Home, the only Home the session reaches.
+  home_id uuid references public.homes (id) on delete cascade,
+  device_id uuid references private.household_devices (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  ended_at timestamptz,
+  end_reason text,
+  constraint child_sessions_pin_device check (
+    (method = 'pin') = (home_id is not null and device_id is not null)
+  )
+);
+
+create index child_sessions_child_idx on private.child_sessions (child_user_id)
+  where ended_at is null;
+create index child_sessions_device_idx on private.child_sessions (device_id)
+  where ended_at is null;
+
+revoke all on table private.child_sessions from public;
+
+-- The Homes a child session reaches now; none when it is not usable. A password session reaches
+-- the Homes where password sign-in is on; a PIN session only its device's Home, while the device
+-- is approved and PIN sign-in is on there.
+create function private.child_session_homes(p_child uuid, p_session uuid) returns setof uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.home_id
+    from private.child_sessions cs
+    join public.home_memberships m on m.user_id = cs.child_user_id
+    join public.child_home_settings s on s.home_id = m.home_id and s.child_user_id = m.user_id
+    left join private.household_devices d on d.id = cs.device_id
+    where cs.session_id = p_session and cs.child_user_id = p_child
+      and cs.ended_at is null and cs.expires_at > pg_catalog.now()
+      and (
+        (cs.method = 'password' and s.password_sign_in)
+        or (cs.method = 'pin' and m.home_id = cs.home_id and s.pin_sign_in
+            and d.home_id = cs.home_id and d.revoked_at is null)
+      )
+  $$;
+
+revoke all on function private.child_session_homes(uuid, uuid) from public;
+
+create function private.child_session_ok(p_child uuid, p_session uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (select 1 from private.child_session_homes(p_child, p_session))
+  $$;
+
+revoke all on function private.child_session_ok(uuid, uuid) from public;
+
+-- Ends a child's sessions (all, or one method's) and signs them out of Supabase Auth.
+create function private.end_child_sessions(
+  p_child uuid, p_method text, p_reason text, p_device_id uuid default null,
+  p_home_id uuid default null
+) returns integer
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_ids uuid[];
+  begin
+    with ended as (
+      update private.child_sessions cs
+        set ended_at = pg_catalog.now(), end_reason = p_reason
+        where cs.ended_at is null
+          and (p_child is null or cs.child_user_id = p_child)
+          and (p_method is null or cs.method = p_method)
+          and (p_device_id is null or cs.device_id = p_device_id)
+          and (p_home_id is null or cs.home_id = p_home_id)
+        returning cs.session_id
+    )
+    select coalesce(pg_catalog.array_agg(e.session_id), '{}') into v_ids from ended e;
+    delete from auth.sessions s where s.id = any (v_ids);
+    return pg_catalog.cardinality(v_ids);
+  end
+  $$;
+
+revoke all on function private.end_child_sessions(uuid, text, text, uuid, uuid) from public;
+
+-- 2. Request-level enforcement ---------------------------------------------------------------------------
+
+-- As 20261125090000_account_lifecycle.sql, plus: a child's token is 'child_session' while its
+-- session is a registered, live, allowed child session, and 'session_not_active' otherwise
+-- (including a session Supabase Auth issued some other way). Children have no two-factor sign-in
+-- and are never deactivated, so those checks do not apply to them.
+create or replace function private.request_session_state() returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_claims jsonb := auth.jwt();
+    v_user_id uuid;
+    v_session_id uuid;
+  begin
+    if v_claims is null or v_claims ->> 'role' is distinct from 'authenticated' then
+      return 'ok';
+    end if;
+    begin
+      v_user_id := (v_claims ->> 'sub')::uuid;
+      v_session_id := (v_claims ->> 'session_id')::uuid;
+    exception when invalid_text_representation then
+      return 'session_not_active';
+    end;
+    if v_user_id is null or v_session_id is null
+       or not private.session_is_live(v_user_id, v_session_id) then
+      return 'session_not_active';
+    end if;
+    if private.is_child(v_user_id) then
+      if private.child_session_ok(v_user_id, v_session_id) then
+        return 'child_session';
+      end if;
+      return 'session_not_active';
+    end if;
+    if coalesce(v_claims ->> 'aal', '') <> 'aal2' and private.has_two_factor(v_user_id)
+       and (private.is_deactivated(v_user_id)
+            or not private.session_trusted(v_user_id, v_session_id)) then
+      return 'second_factor_required';
+    end if;
+    if private.is_deactivated(v_user_id) then
+      return 'account_deactivated';
+    end if;
+    return 'ok';
+  end
+  $$;
+
+-- The only API calls a child session may make. Each checks child_has_capability itself.
+create function private.child_session_paths() returns text[]
+  language sql immutable parallel safe set search_path = '' as $$
+    select array['/rpc/child_me', '/rpc/child_end_session']::text[]
+  $$;
+
+revoke all on function private.child_session_paths() from public;
+
+-- As 20261125090000_account_lifecycle.sql, plus: a child session may only call child_session_paths().
+create or replace function private.enforce_request_session() returns void
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_state text := private.request_session_state();
+    v_path text := coalesce(pg_catalog.current_setting('request.path', true), '');
+  begin
+    if v_state = 'session_not_active' then
+      raise sqlstate 'PT401' using message = 'session_not_active';
+    end if;
+    if v_state = 'child_session' and v_path <> all (private.child_session_paths()) then
+      raise sqlstate 'PT403' using message = 'child_session_scope';
+    end if;
+    if v_state = 'second_factor_required' and v_path not in (
+         '/rpc/redeem_two_factor_recovery_code', '/rpc/use_trusted_device',
+         '/rpc/authorize_account_change', '/rpc/authorize_sign_in_method_change'
+       ) then
+      raise sqlstate 'PT401' using message = 'second_factor_required';
+    end if;
+    if v_state = 'account_deactivated' and v_path not in (
+         '/rpc/my_account_state', '/rpc/reactivate_my_account'
+       ) then
+      raise sqlstate 'PT401' using message = 'account_deactivated';
+    end if;
+  end
+  $$;
+
+-- Realtime (not PostgREST) uses request_session_ok() in its policies: 'child_session' is not 'ok',
+-- so children receive no Realtime events.
+
+-- Guardian management -------------------------------------------------------------------------------------
+
+-- The child behind a membership and the caller's guardian role for them, under the Home lock.
+-- Outcome 'not_found' for a Home the caller is not in or a membership that is not a child there;
+-- 'not_permitted' for a caller who is not one of the child's guardians in that Home.
+create function private.lock_guarded_child(
+  p_home_id uuid, p_child_membership_id uuid, p_user_id uuid,
+  out o_outcome text, out o_child uuid, out o_role text
+)
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if not private.lock_home(p_home_id) or private.home_role(p_home_id, p_user_id) is null then
+      o_outcome := 'not_found';
+      return;
+    end if;
+    o_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if o_child is null then
+      o_outcome := 'not_found';
+      return;
+    end if;
+    o_role := private.child_guardian_role(p_home_id, o_child, p_user_id);
+    o_outcome := case when o_role is null then 'not_permitted' else 'ok' end;
+  end
+  $$;
+
+revoke all on function private.lock_guarded_child(uuid, uuid, uuid) from public;
+
+-- Interim identity-level authority (spec "identity-level guardians", owner decision 2026-11-12):
+-- the child's identity-wide credentials (username, independent password, its lock and password
+-- sessions) may be changed only by a guardian who is the child's primary guardian in every Home the
+-- child belongs to. A Home-only guardian of a child in several Homes cannot reach them; dedicated
+-- identity guardians replace this rule in a later step.
+create function private.child_identity_authority(p_child uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (select 1 from public.home_memberships m where m.user_id = p_child)
+       and not exists (
+         select 1 from public.home_memberships m
+         where m.user_id = p_child
+           and private.child_guardian_role(m.home_id, p_child, p_user_id) is distinct from 'primary'
+       )
+  $$;
+
+revoke all on function private.child_identity_authority(uuid, uuid) from public;
+
+-- What a guardian sees about a child's sign-in in this Home. Never a hash, PIN or password.
+create function public.child_sign_in_settings(p_home_id uuid, p_child_membership_id uuid)
+returns table (
+  username text,
+  has_password boolean,
+  has_pin boolean,
+  password_sign_in boolean,
+  pin_sign_in boolean,
+  password_locked_until timestamptz,
+  pin_locked_until timestamptz,
+  active_sessions integer,
+  can_manage_identity boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid := private.child_of_membership(p_home_id, p_child_membership_id);
+  begin
+    if v_child is null or private.home_role(p_home_id, v_user_id) is null
+       or private.child_guardian_role(p_home_id, v_child, v_user_id) is null then
+      raise exception 'not a guardian of this child here' using errcode = '42501';
+    end if;
+    return query
+      -- Sessions count only where they reach this Home: its PIN sessions, and password sessions
+      -- while password sign-in is on here. Nothing about the child's other Homes.
+      select c.username,
+             c.password_hash is not null,
+             hp.pin_hash is not null,
+             s.password_sign_in,
+             s.pin_sign_in,
+             case when c.password_locked_until > pg_catalog.now() then c.password_locked_until end,
+             case when hp.pin_locked_until > pg_catalog.now() then hp.pin_locked_until end,
+             (select count(*)::integer from private.child_sessions cs
+                where cs.child_user_id = v_child and cs.ended_at is null
+                  and cs.expires_at > pg_catalog.now()
+                  and ((cs.method = 'pin' and cs.home_id = p_home_id)
+                       or (cs.method = 'password' and s.password_sign_in))),
+             private.child_identity_authority(v_child, v_user_id)
+      from public.child_home_settings s
+      left join private.child_credentials c on c.child_user_id = s.child_user_id
+      left join private.child_home_pins hp
+        on hp.home_id = s.home_id and hp.child_user_id = s.child_user_id
+      where s.home_id = p_home_id and s.child_user_id = v_child;
+  end
+  $$;
+
+revoke all on function public.child_sign_in_settings(uuid, uuid) from public, anon;
+grant execute on function public.child_sign_in_settings(uuid, uuid) to authenticated;
+
+-- The child's username (identity-wide: primary guardian in every Home of the child, see
+-- child_identity_authority). 'taken' when another child has it. Returns 'saved', 'unchanged', 'taken', 'not_permitted' or 'not_found'.
+create function public.set_child_username(
+  p_home_id uuid, p_child_membership_id uuid, p_username text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_guard record;
+    v_username text := pg_catalog.lower(p_username);
+  begin
+    if v_username is null or v_username !~ '^[a-z0-9][a-z0-9._-]{1,22}[a-z0-9]$' then
+      raise exception 'invalid username' using errcode = '22023';
+    end if;
+    v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
+    if v_guard.o_outcome <> 'ok' then
+      return v_guard.o_outcome;
+    end if;
+    if not private.child_identity_authority(v_guard.o_child, v_user_id) then
+      return 'not_permitted';
+    end if;
+    perform 1 from private.child_credentials c where c.child_user_id = v_guard.o_child for update;
+    if exists (select 1 from private.child_credentials c
+               where c.child_user_id = v_guard.o_child and c.username = v_username) then
+      return 'unchanged';
+    end if;
+    if exists (select 1 from private.child_credentials c
+               where c.username = v_username and c.child_user_id <> v_guard.o_child) then
+      return 'taken';
+    end if;
+    begin
+      insert into private.child_credentials (child_user_id, username)
+        values (v_guard.o_child, v_username)
+        on conflict (child_user_id) do update
+          set username = excluded.username, updated_at = pg_catalog.now();
+    exception when unique_violation then
+      return 'taken';
+    end;
+    perform private.ensure_child_alias(v_guard.o_child);
+    perform private.audit('child.username_set', p_home_id, 'user', v_guard.o_child, '{}'::jsonb);
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_child_username(uuid, uuid, text) from public, anon;
+grant execute on function public.set_child_username(uuid, uuid, text) to authenticated;
+
+-- Sets (or replaces) the child's password or PIN hash, made by the web server. The password is
+-- the identity-wide independent credential (child_identity_authority, and only once a username
+-- exists); the PIN belongs to this Home and either of its guardians may set it (spec: routine help
+-- with approved-device PINs). A new credential clears its lock and ends the sessions it opened
+-- (a PIN: only this Home's PIN sessions). Returns 'saved', 'username_required',
+-- 'not_permitted' or 'not_found'.
+create function public.set_child_credential(
+  p_home_id uuid, p_child_membership_id uuid, p_kind text, p_hash text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_guard record;
+  begin
+    if p_kind is null or p_kind not in ('password', 'pin') then
+      raise exception 'invalid credential kind' using errcode = '22023';
+    end if;
+    if not private.is_child_secret_hash(p_hash) then
+      raise exception 'invalid credential' using errcode = '22023';
+    end if;
+    v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
+    if v_guard.o_outcome <> 'ok' then
+      return v_guard.o_outcome;
+    end if;
+    if p_kind = 'password' then
+      if not private.child_identity_authority(v_guard.o_child, v_user_id) then
+        return 'not_permitted';
+      end if;
+      perform 1 from private.child_credentials c where c.child_user_id = v_guard.o_child for update;
+      if not exists (
+        select 1 from private.child_credentials c
+        where c.child_user_id = v_guard.o_child and c.username is not null
+      ) then
+        return 'username_required';
+      end if;
+      update private.child_credentials c
+        set password_hash = p_hash, password_set_at = pg_catalog.now(), password_failures = 0,
+            password_locked_until = null, password_locks = 0, password_locks_since = null,
+            updated_at = pg_catalog.now()
+        where c.child_user_id = v_guard.o_child;
+      perform private.end_child_sessions(v_guard.o_child, 'password', 'credential_changed');
+    else
+      insert into private.child_home_pins (home_id, child_user_id, pin_hash)
+        values (p_home_id, v_guard.o_child, p_hash)
+        on conflict (home_id, child_user_id) do update
+          set pin_hash = excluded.pin_hash, pin_set_at = pg_catalog.now(), pin_failures = 0,
+              pin_locked_until = null, pin_locks = 0, pin_locks_since = null,
+              updated_at = pg_catalog.now();
+      perform private.end_child_sessions(v_guard.o_child, 'pin', 'credential_changed', null,
+                                         p_home_id);
+    end if;
+    perform private.ensure_child_alias(v_guard.o_child);
+    perform private.audit('child.' || p_kind || '_set', p_home_id, 'user', v_guard.o_child,
+      jsonb_build_object('by_role', v_guard.o_role));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_child_credential(uuid, uuid, text, text) from public, anon;
+grant execute on function public.set_child_credential(uuid, uuid, text, text) to authenticated;
+
+-- Removes the child's password (child_identity_authority) or this Home's PIN (either guardian
+-- here) and ends the sessions it opened. Returns 'cleared', 'unchanged', 'not_permitted' or 'not_found'.
+create function public.clear_child_credential(
+  p_home_id uuid, p_child_membership_id uuid, p_kind text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_guard record;
+    v_found boolean;
+  begin
+    if p_kind is null or p_kind not in ('password', 'pin') then
+      raise exception 'invalid credential kind' using errcode = '22023';
+    end if;
+    v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
+    if v_guard.o_outcome <> 'ok' then
+      return v_guard.o_outcome;
+    end if;
+    if p_kind = 'password'
+       and not private.child_identity_authority(v_guard.o_child, v_user_id) then
+      return 'not_permitted';
+    end if;
+    if p_kind = 'password' then
+      update private.child_credentials c
+        set password_hash = null, password_set_at = null, password_failures = 0,
+            password_locked_until = null, password_locks = 0, password_locks_since = null,
+            updated_at = pg_catalog.now()
+        where c.child_user_id = v_guard.o_child and c.password_hash is not null
+        returning true into v_found;
+    else
+      delete from private.child_home_pins hp
+        where hp.home_id = p_home_id and hp.child_user_id = v_guard.o_child
+        returning true into v_found;
+    end if;
+    if v_found is null then
+      return 'unchanged';
+    end if;
+    perform private.end_child_sessions(v_guard.o_child, p_kind, 'credential_removed', null,
+      case when p_kind = 'pin' then p_home_id end);
+    perform private.audit('child.' || p_kind || '_cleared', p_home_id, 'user', v_guard.o_child,
+      jsonb_build_object('by_role', v_guard.o_role));
+    return 'cleared';
+  end
+  $$;
+
+revoke all on function public.clear_child_credential(uuid, uuid, text) from public, anon;
+grant execute on function public.clear_child_credential(uuid, uuid, text) to authenticated;
+
+-- Turns password (independent) and PIN sign-in on or off for this child in this Home. Turning
+-- either on is the primary guardian's decision (spec: primary-only sensitive authority); either
+-- guardian may turn one off. A change takes effect on the child's next request (the request check
+-- reads these switches). Returns 'saved', 'unchanged', 'not_permitted' or 'not_found'.
+create function public.set_child_sign_in_access(
+  p_home_id uuid, p_child_membership_id uuid, p_password_sign_in boolean, p_pin_sign_in boolean
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_guard record;
+    v_before public.child_home_settings;
+  begin
+    if p_password_sign_in is null or p_pin_sign_in is null then
+      raise exception 'both switches are required' using errcode = '22023';
+    end if;
+    v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
+    if v_guard.o_outcome <> 'ok' then
+      return v_guard.o_outcome;
+    end if;
+    select * into v_before from public.child_home_settings s
+      where s.home_id = p_home_id and s.child_user_id = v_guard.o_child for update;
+    if v_before.password_sign_in = p_password_sign_in and v_before.pin_sign_in = p_pin_sign_in then
+      return 'unchanged';
+    end if;
+    if v_guard.o_role <> 'primary'
+       and ((p_password_sign_in and not v_before.password_sign_in)
+            or (p_pin_sign_in and not v_before.pin_sign_in)) then
+      return 'not_permitted';
+    end if;
+    update public.child_home_settings s
+      set password_sign_in = p_password_sign_in, pin_sign_in = p_pin_sign_in,
+          sign_in_updated_at = pg_catalog.now()
+      where s.home_id = p_home_id and s.child_user_id = v_guard.o_child;
+    -- PIN sessions on this Home's devices end with the switch.
+    if v_before.pin_sign_in and not p_pin_sign_in then
+      perform private.end_child_sessions(v_guard.o_child, 'pin', 'sign_in_turned_off', null,
+                                         p_home_id);
+    end if;
+    perform private.audit('child.sign_in_access_changed', p_home_id, 'user', v_guard.o_child,
+      jsonb_build_object(
+        'by_role', v_guard.o_role,
+        'before', jsonb_build_object('password', v_before.password_sign_in,
+                                     'pin', v_before.pin_sign_in),
+        'after', jsonb_build_object('password', p_password_sign_in, 'pin', p_pin_sign_in)));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_child_sign_in_access(uuid, uuid, boolean, boolean)
+  from public, anon;
+grant execute on function public.set_child_sign_in_access(uuid, uuid, boolean, boolean)
+  to authenticated;
+
+-- Lifts this Home's PIN lock (either guardian here) and, for a caller with
+-- child_identity_authority, the password lock. Returns 'unlocked', 'unchanged', 'not_permitted' or
+-- 'not_found'.
+create function public.unlock_child_sign_in(p_home_id uuid, p_child_membership_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_guard record;
+    v_found boolean;
+    v_pin_found boolean;
+  begin
+    v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
+    if v_guard.o_outcome <> 'ok' then
+      return v_guard.o_outcome;
+    end if;
+    update private.child_home_pins hp
+      set pin_failures = 0, pin_locked_until = null, pin_locks = 0, pin_locks_since = null,
+          updated_at = pg_catalog.now()
+      where hp.home_id = p_home_id and hp.child_user_id = v_guard.o_child
+        and (hp.pin_locked_until > pg_catalog.now() or hp.pin_failures > 0 or hp.pin_locks > 0)
+      returning true into v_pin_found;
+    if private.child_identity_authority(v_guard.o_child, v_user_id) then
+      update private.child_credentials c
+        set password_failures = 0, password_locked_until = null, password_locks = 0,
+            password_locks_since = null, updated_at = pg_catalog.now()
+        where c.child_user_id = v_guard.o_child
+          and (c.password_locked_until > pg_catalog.now() or c.password_failures > 0
+               or c.password_locks > 0)
+        returning true into v_found;
+    end if;
+    if v_found is null and v_pin_found is null then
+      return 'unchanged';
+    end if;
+    perform private.audit('child.sign_in_unlocked', p_home_id, 'user', v_guard.o_child,
+      jsonb_build_object('by_role', v_guard.o_role));
+    return 'unlocked';
+  end
+  $$;
+
+revoke all on function public.unlock_child_sign_in(uuid, uuid) from public, anon;
+grant execute on function public.unlock_child_sign_in(uuid, uuid) to authenticated;
+
+-- Signs the child out, for a lost device: this Home's PIN sessions (either guardian here) and, for
+-- a caller with child_identity_authority, every password session too. A Home-only guardian cuts
+-- password access to their Home by turning password sign-in off here. Returns the outcome and how
+-- many sessions ended.
+create function public.end_child_sign_ins(p_home_id uuid, p_child_membership_id uuid)
+returns table (outcome text, ended integer)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_guard record;
+    v_count integer;
+  begin
+    v_guard := private.lock_guarded_child(p_home_id, p_child_membership_id, v_user_id);
+    if v_guard.o_outcome <> 'ok' then
+      return query select v_guard.o_outcome, 0;
+      return;
+    end if;
+    v_count := private.end_child_sessions(v_guard.o_child, 'pin', 'ended_by_guardian', null,
+                                          p_home_id);
+    if private.child_identity_authority(v_guard.o_child, v_user_id) then
+      v_count := v_count
+        + private.end_child_sessions(v_guard.o_child, 'password', 'ended_by_guardian');
+    end if;
+    perform private.audit('child.sessions_ended', p_home_id, 'user', v_guard.o_child,
+      jsonb_build_object('by_role', v_guard.o_role, 'count', v_count));
+    return query select 'ended'::text, v_count;
+  end
+  $$;
+
+revoke all on function public.end_child_sign_ins(uuid, uuid) from public, anon;
+grant execute on function public.end_child_sign_ins(uuid, uuid) to authenticated;
+
+-- Household devices (Home managers) ------------------------------------------------------------------------
+
+-- Approves the caller's own browser for child PIN sign-in in this Home: the Owner, or an
+-- Administrator granted manageHomeSettings. The web server made the secret and sends only its
+-- SHA-256. Returns the outcome and the device id.
+create function public.approve_household_device(
+  p_home_id uuid, p_label text, p_secret_hash text
+) returns table (outcome text, device_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_id uuid;
+  begin
+    if p_label is null or not private.is_visible_name(p_label, 60) then
+      raise exception 'invalid device name' using errcode = '22023';
+    end if;
+    if p_secret_hash is null or p_secret_hash !~ '^[0-9a-f]{64}$' then
+      raise exception 'invalid device secret' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) or private.home_role(p_home_id, v_user_id) is null then
+      return query select 'not_found'::text, null::uuid;
+      return;
+    end if;
+    if not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      return query select 'not_permitted'::text, null::uuid;
+      return;
+    end if;
+    if (select count(*) from private.household_devices d
+        where d.home_id = p_home_id and d.revoked_at is null)
+       >= (select l.devices_per_home from private.child_sign_in_limits() l) then
+      return query select 'limit_reached'::text, null::uuid;
+      return;
+    end if;
+    insert into private.household_devices (home_id, label, secret_hash, approved_by)
+      values (p_home_id, p_label, p_secret_hash, v_user_id)
+      returning id into v_id;
+    perform private.audit('household_device.approved', p_home_id, 'household_device', v_id,
+      '{}'::jsonb);
+    return query select 'approved'::text, v_id;
+  end
+  $$;
+
+revoke all on function public.approve_household_device(uuid, text, text) from public, anon;
+grant execute on function public.approve_household_device(uuid, text, text) to authenticated;
+
+-- Revokes a device (same managers); its PIN sessions end at once. Returns 'revoked', 'unchanged',
+-- 'not_permitted' or 'not_found'.
+create function public.revoke_household_device(p_home_id uuid, p_device_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_device private.household_devices;
+  begin
+    if not private.lock_home(p_home_id) or private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      return 'not_permitted';
+    end if;
+    select * into v_device from private.household_devices d
+      where d.id = p_device_id and d.home_id = p_home_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_device.revoked_at is not null then
+      return 'unchanged';
+    end if;
+    update private.household_devices d
+      set revoked_at = pg_catalog.now(), revoked_by = v_user_id
+      where d.id = p_device_id;
+    perform private.end_child_sessions(null, 'pin', 'device_revoked', p_device_id);
+    perform private.audit('household_device.revoked', p_home_id, 'household_device', p_device_id,
+      '{}'::jsonb);
+    return 'revoked';
+  end
+  $$;
+
+revoke all on function public.revoke_household_device(uuid, uuid) from public, anon;
+grant execute on function public.revoke_household_device(uuid, uuid) to authenticated;
+
+-- The Home's approved devices, for the same managers. p_current_hash (the caller's own device
+-- cookie, hashed by the web server, or '') only marks which row is the caller's browser.
+create function public.home_household_devices(p_home_id uuid, p_current_hash text)
+returns table (
+  device_id uuid,
+  label text,
+  approved_by_membership_id uuid,
+  approved_at timestamptz,
+  last_used_at timestamptz,
+  is_this_device boolean
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.home_role(p_home_id, v_user_id) is null
+       or not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    return query
+      select d.id, d.label,
+             (select m.id from public.home_memberships m
+                where m.home_id = d.home_id and m.user_id = d.approved_by),
+             d.approved_at, d.last_used_at,
+             d.secret_hash = nullif(p_current_hash, '')
+      from private.household_devices d
+      where d.home_id = p_home_id and d.revoked_at is null
+      order by d.approved_at, d.id;
+  end
+  $$;
+
+revoke all on function public.home_household_devices(uuid, text) from public, anon;
+grant execute on function public.home_household_devices(uuid, text) to authenticated;
+
+-- Signing in (the web server only, as service_role) ------------------------------------------------------------
+
+-- Counts a wrong try against one credential (the password, or the PIN in p_home_id): the fifth
+-- since the last success or lock locks it for 15 minutes, and the third lock within 24 hours locks
+-- it until a guardian unlocks it.
+create function private.next_child_lock(
+  p_failures integer, p_locks integer, p_since timestamptz,
+  out o_failures integer, out o_locks integer, out o_since timestamptz, out o_until timestamptz
+)
+  language plpgsql stable set search_path = '' as $$
+  declare
+    v_limits record := private.child_sign_in_limits();
+  begin
+    o_failures := p_failures + 1;
+    o_locks := p_locks;
+    o_since := p_since;
+    if o_since is null or o_since <= pg_catalog.now() - v_limits.lock_count_window then
+      o_locks := 0;
+      o_since := null;
+    end if;
+    if o_failures >= v_limits.failures_before_lock then
+      o_failures := 0;
+      o_locks := o_locks + 1;
+      o_since := coalesce(o_since, pg_catalog.now());
+      o_until := case when o_locks >= v_limits.locks_before_guardian_unlock
+        then 'infinity'::timestamptz else pg_catalog.now() + v_limits.lock_duration end;
+    end if;
+  end
+  $$;
+
+revoke all on function private.next_child_lock(integer, integer, timestamptz) from public;
+
+create function private.count_child_failure(p_child uuid, p_kind text, p_home_id uuid default null)
+returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_c private.child_credentials;
+    v_p private.child_home_pins;
+    v_n record;
+  begin
+    if p_kind = 'password' then
+      select * into v_c from private.child_credentials c where c.child_user_id = p_child for update;
+      if not found then
+        return;
+      end if;
+      v_n := private.next_child_lock(v_c.password_failures, v_c.password_locks,
+                                     v_c.password_locks_since);
+      update private.child_credentials c
+        set password_failures = v_n.o_failures, password_locks = v_n.o_locks,
+            password_locks_since = v_n.o_since,
+            password_locked_until = coalesce(v_n.o_until, c.password_locked_until)
+        where c.child_user_id = p_child;
+    else
+      select * into v_p from private.child_home_pins hp
+        where hp.home_id = p_home_id and hp.child_user_id = p_child for update;
+      if not found then
+        return;
+      end if;
+      v_n := private.next_child_lock(v_p.pin_failures, v_p.pin_locks, v_p.pin_locks_since);
+      update private.child_home_pins hp
+        set pin_failures = v_n.o_failures, pin_locks = v_n.o_locks, pin_locks_since = v_n.o_since,
+            pin_locked_until = coalesce(v_n.o_until, hp.pin_locked_until)
+        where hp.home_id = p_home_id and hp.child_user_id = p_child;
+    end if;
+  end
+  $$;
+
+revoke all on function private.count_child_failure(uuid, text, uuid) from public;
+
+create function private.check_child_client_key(p_client_key text) returns void
+  language plpgsql immutable set search_path = '' as $$
+  begin
+    if p_client_key is null or p_client_key !~ '^[0-9a-f]{64}$' then
+      raise exception 'invalid client key' using errcode = '22023';
+    end if;
+  end
+  $$;
+
+revoke all on function private.check_child_client_key(text) from public;
+
+-- Whether this client has used up its failed tries (both methods together).
+create function private.child_client_throttled(p_client_key text) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select (select count(*) from private.child_sign_in_attempts a
+            where a.client_key = p_client_key and a.verified_at is null
+              and a.created_at > pg_catalog.now() - (select l.client_window
+                                                      from private.child_sign_in_limits() l))
+           >= (select l.client_failures_per_window from private.child_sign_in_limits() l)
+  $$;
+
+revoke all on function private.child_client_throttled(text) from public;
+
+-- Step 1 of password sign-in. Records the attempt (and counts it as a wrong try until step 2
+-- confirms it), then returns the hash for the web server to check:
+--   'check'        compare the password with password_hash, then call child_sign_in_verified;
+--   'unknown'      no such username or no password (the server still runs a dummy comparison,
+--                  then answers exactly as for a wrong password);
+--   'locked'       too many wrong tries (locked_until; 'infinity' until a guardian unlocks);
+--   'rate_limited' too many failed tries from this client.
+create function public.child_password_attempt(p_username text, p_client_key text)
+returns table (outcome text, attempt_id uuid, password_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_c private.child_credentials;
+    v_attempt uuid;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    delete from private.child_sign_in_attempts a
+      where a.created_at < pg_catalog.now() - interval '1 day';
+    if private.child_client_throttled(p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    select * into v_c from private.child_credentials c
+      where c.username = pg_catalog.lower(coalesce(p_username, ''))
+      for update;
+    insert into private.child_sign_in_attempts (method, child_user_id, client_key)
+      values ('password', v_c.child_user_id, p_client_key)
+      returning id into v_attempt;
+    if v_c.child_user_id is null or v_c.password_hash is null then
+      return query select 'unknown'::text, v_attempt, null::text, null::timestamptz;
+      return;
+    end if;
+    if v_c.password_locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::text, v_c.password_locked_until;
+      return;
+    end if;
+    perform private.count_child_failure(v_c.child_user_id, 'password');
+    update private.child_sign_in_attempts a set checked_at = pg_catalog.now()
+      where a.id = v_attempt;
+    return query select 'check'::text, v_attempt, v_c.password_hash, null::timestamptz;
+  end
+  $$;
+
+revoke all on function public.child_password_attempt(text, text) from public, anon, authenticated;
+grant execute on function public.child_password_attempt(text, text) to service_role;
+
+-- The approved device behind a cookie's hash, or nothing (unknown, revoked, or its Home closed).
+create function private.approved_device(p_secret_hash text) returns private.household_devices
+  language sql stable security definer set search_path = '' as $$
+    select d.* from private.household_devices d
+    join public.homes h on h.id = d.home_id
+    where d.secret_hash = p_secret_hash and d.revoked_at is null
+      and private.home_is_open(d.home_id)
+  $$;
+
+revoke all on function private.approved_device(text) from public;
+
+-- Step 1 of PIN sign-in, on an approved device only. Same outcomes as child_password_attempt, plus
+-- 'device_not_approved'. The child is named by their membership in the device's Home.
+create function public.child_pin_attempt(
+  p_device_hash text, p_child_membership_id uuid, p_client_key text
+) returns table (outcome text, attempt_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_device private.household_devices;
+    v_child uuid;
+    v_p private.child_home_pins;
+    v_attempt uuid;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    delete from private.child_sign_in_attempts a
+      where a.created_at < pg_catalog.now() - interval '1 day';
+    if private.child_client_throttled(p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    v_device := private.approved_device(coalesce(p_device_hash, ''));
+    if v_device.id is null then
+      insert into private.child_sign_in_attempts (method, client_key) values ('pin', p_client_key);
+      return query select 'device_not_approved'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if (select count(*) from private.child_sign_in_attempts a
+        where a.device_id = v_device.id and a.verified_at is null
+          and a.created_at > pg_catalog.now() - interval '1 hour')
+       >= (select l.device_failures_per_hour from private.child_sign_in_limits() l) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    v_child := private.child_of_membership(v_device.home_id, p_child_membership_id);
+    if v_child is not null then
+      select * into v_p from private.child_home_pins hp
+        where hp.home_id = v_device.home_id and hp.child_user_id = v_child for update;
+    end if;
+    insert into private.child_sign_in_attempts (method, child_user_id, device_id, client_key)
+      values ('pin', v_p.child_user_id, v_device.id, p_client_key)
+      returning id into v_attempt;
+    if v_p.child_user_id is null then
+      return query select 'unknown'::text, v_attempt, null::text, null::timestamptz;
+      return;
+    end if;
+    if v_p.pin_locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::text, v_p.pin_locked_until;
+      return;
+    end if;
+    perform private.count_child_failure(v_p.child_user_id, 'pin', v_device.home_id);
+    update private.child_sign_in_attempts a set checked_at = pg_catalog.now()
+      where a.id = v_attempt;
+    return query select 'check'::text, v_attempt, v_p.pin_hash, null::timestamptz;
+  end
+  $$;
+
+revoke all on function public.child_pin_attempt(text, uuid, text) from public, anon, authenticated;
+grant execute on function public.child_pin_attempt(text, uuid, text) to service_role;
+
+-- Step 2, after the web server matched the hash: clears the wrong-try count and, when sign-in is
+-- allowed for this method, returns the child's id and internal alias for issuing the session.
+-- 'not_enabled' when the credential was right but sign-in is off ('expired' / 'invalid' for an
+-- attempt that is too old or not in step 1's 'check' state). 'not_configured' when PostgREST's
+-- pre-request check (pgrst.db_pre_request, which confines child tokens) is not set up: no child
+-- session is issued without it.
+create function public.child_sign_in_verified(p_attempt_id uuid)
+returns table (outcome text, child_user_id uuid, alias_email text)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_a private.child_sign_in_attempts;
+    v_allowed boolean;
+    v_home uuid;
+  begin
+    if not exists (
+      select 1 from pg_catalog.pg_db_role_setting rs
+      join pg_catalog.pg_roles r on r.oid = rs.setrole
+      where r.rolname = 'authenticator'
+        and 'pgrst.db_pre_request=public.check_request' = any (rs.setconfig)
+    ) then
+      return query select 'not_configured'::text, null::uuid, null::text;
+      return;
+    end if;
+    select * into v_a from private.child_sign_in_attempts a
+      where a.id = p_attempt_id for update;
+    if not found or v_a.child_user_id is null or v_a.checked_at is null
+       or v_a.verified_at is not null then
+      return query select 'invalid'::text, null::uuid, null::text;
+      return;
+    end if;
+    if v_a.created_at <= pg_catalog.now() - (select l.attempt_lifetime
+                                             from private.child_sign_in_limits() l) then
+      return query select 'expired'::text, null::uuid, null::text;
+      return;
+    end if;
+    update private.child_sign_in_attempts a set verified_at = pg_catalog.now()
+      where a.id = v_a.id;
+    if v_a.method = 'password' then
+      -- The right password clears the count and any lock its own wrong-try count just set.
+      update private.child_credentials c
+        set password_failures = 0, password_locks = 0, password_locks_since = null,
+            password_locked_until = null
+        where c.child_user_id = v_a.child_user_id
+          and c.password_locked_until is distinct from 'infinity'::timestamptz;
+      v_allowed := exists (
+        select 1 from public.home_memberships m
+        join public.child_home_settings s on s.home_id = m.home_id and s.child_user_id = m.user_id
+        where m.user_id = v_a.child_user_id and s.password_sign_in
+      );
+    else
+      select d.home_id into v_home from private.household_devices d where d.id = v_a.device_id;
+      update private.child_home_pins hp
+        set pin_failures = 0, pin_locks = 0, pin_locks_since = null, pin_locked_until = null
+        where hp.home_id = v_home and hp.child_user_id = v_a.child_user_id
+          and hp.pin_locked_until is distinct from 'infinity'::timestamptz;
+      v_allowed := exists (
+        select 1 from private.household_devices d
+        join public.home_memberships m on m.home_id = d.home_id and m.user_id = v_a.child_user_id
+        join public.child_home_settings s on s.home_id = m.home_id and s.child_user_id = m.user_id
+        where d.id = v_a.device_id and d.revoked_at is null and s.pin_sign_in
+      );
+    end if;
+    if not v_allowed then
+      return query select 'not_enabled'::text, null::uuid, null::text;
+      return;
+    end if;
+    perform private.ensure_child_alias(v_a.child_user_id);
+    return query select 'verified'::text, v_a.child_user_id,
+                        private.child_alias_email(v_a.child_user_id);
+  end
+  $$;
+
+revoke all on function public.child_sign_in_verified(uuid) from public, anon, authenticated;
+grant execute on function public.child_sign_in_verified(uuid) to service_role;
+
+-- Step 3: registers the Supabase Auth session just issued for this attempt, which is what makes the
+-- child's token usable. Returns 'registered' and when the session ends, or 'invalid'.
+create function public.child_sign_in_complete(p_attempt_id uuid, p_session_id uuid)
+returns table (outcome text, expires_at timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_limits record := private.child_sign_in_limits();
+    v_a private.child_sign_in_attempts;
+    v_device private.household_devices;
+    v_expires timestamptz;
+    v_home uuid;
+  begin
+    select * into v_a from private.child_sign_in_attempts a
+      where a.id = p_attempt_id for update;
+    if not found or v_a.verified_at is null or v_a.completed_at is not null
+       or v_a.verified_at <= pg_catalog.now() - v_limits.attempt_lifetime
+       or not exists (
+         select 1 from auth.sessions s
+         where s.id = p_session_id and s.user_id = v_a.child_user_id
+           and s.created_at > pg_catalog.now() - v_limits.attempt_lifetime
+       )
+       or exists (select 1 from private.child_sessions cs where cs.session_id = p_session_id) then
+      return query select 'invalid'::text, null::timestamptz;
+      return;
+    end if;
+    update private.child_sign_in_attempts a set completed_at = pg_catalog.now()
+      where a.id = v_a.id;
+    if v_a.method = 'pin' then
+      select * into v_device from private.household_devices d where d.id = v_a.device_id;
+      v_expires := pg_catalog.now() + v_limits.pin_session;
+      insert into private.child_sessions (session_id, child_user_id, method, home_id, device_id,
+                                          expires_at)
+        values (p_session_id, v_a.child_user_id, 'pin', v_device.home_id, v_device.id, v_expires);
+      update private.household_devices d set last_used_at = pg_catalog.now()
+        where d.id = v_device.id;
+      perform private.audit('child.signed_in', v_device.home_id, 'user', v_a.child_user_id,
+        jsonb_build_object('method', 'pin', 'device_id', v_device.id));
+    else
+      v_expires := pg_catalog.now() + v_limits.password_session;
+      insert into private.child_sessions (session_id, child_user_id, method, expires_at)
+        values (p_session_id, v_a.child_user_id, 'password', v_expires);
+      for v_home in
+        select s.home_id from public.child_home_settings s
+        join public.home_memberships m on m.home_id = s.home_id and m.user_id = s.child_user_id
+        where s.child_user_id = v_a.child_user_id and s.password_sign_in
+      loop
+        perform private.audit('child.signed_in', v_home, 'user', v_a.child_user_id,
+          jsonb_build_object('method', 'password'));
+      end loop;
+    end if;
+    return query select 'registered'::text, v_expires;
+  end
+  $$;
+
+revoke all on function public.child_sign_in_complete(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.child_sign_in_complete(uuid, uuid) to service_role;
+
+-- The PIN sign-in screen of an approved device: its Home and the children who can use a PIN there
+-- (name and colour only). Nothing for an unknown or revoked device.
+create function public.household_device_sign_in(p_device_hash text)
+returns table (
+  device_id uuid,
+  home_id uuid,
+  home_name text,
+  device_label text,
+  child_membership_id uuid,
+  child_name text,
+  child_accent_color text
+)
+  language sql stable security definer set search_path = '' as $$
+    select d.id, d.home_id, h.name, d.label, m.id,
+           coalesce(p.nickname, p.display_name, up.display_name),
+           coalesce(p.accent_color, up.accent_color)
+    from private.approved_device(coalesce(p_device_hash, '')) d
+    join public.homes h on h.id = d.home_id
+    left join public.home_memberships m on m.home_id = d.home_id
+      and exists (
+        select 1 from public.child_home_settings s
+        join private.child_home_pins hp
+          on hp.home_id = s.home_id and hp.child_user_id = s.child_user_id
+        where s.home_id = m.home_id and s.child_user_id = m.user_id and s.pin_sign_in
+      )
+    left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+    left join public.user_preferences up on up.user_id = m.user_id
+    where d.id is not null
+    order by m.created_at, m.id
+  $$;
+
+revoke all on function public.household_device_sign_in(text) from public, anon, authenticated;
+grant execute on function public.household_device_sign_in(text) to service_role;
+
+-- The child's own session --------------------------------------------------------------------------------
+
+-- The signed-in child: each Home this session reaches, their name and colour there and what they
+-- may do there. Refused for anyone but a child in a live child session.
+create function public.child_me()
+returns table (
+  home_id uuid,
+  home_name text,
+  display_name text,
+  accent_color text,
+  capabilities text[],
+  method text,
+  session_expires_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+  begin
+    if v_user_id is null or v_session_id is null or not private.is_child(v_user_id)
+       or not private.child_session_ok(v_user_id, v_session_id) then
+      raise exception 'not a child session' using errcode = '42501';
+    end if;
+    return query
+      select h.id, h.name,
+             coalesce(p.nickname, p.display_name, up.display_name),
+             coalesce(p.accent_color, up.accent_color),
+             private.child_effective_capabilities(s.preset, s.overrides),
+             cs.method, cs.expires_at
+      from private.child_session_homes(v_user_id, v_session_id) sh(home_id)
+      join public.homes h on h.id = sh.home_id
+      join public.child_home_settings s on s.home_id = sh.home_id and s.child_user_id = v_user_id
+      join private.child_sessions cs on cs.session_id = v_session_id
+      left join public.home_member_profiles p on p.home_id = sh.home_id and p.user_id = v_user_id
+      left join public.user_preferences up on up.user_id = v_user_id
+      order by h.name, h.id;
+  end
+  $$;
+
+revoke all on function public.child_me() from public, anon;
+grant execute on function public.child_me() to authenticated;
+
+-- Ends the caller's own child session (the app then signs out of Supabase Auth too).
+create function public.child_end_session() returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+  begin
+    if v_user_id is null or v_session_id is null or not private.is_child(v_user_id) then
+      raise exception 'not a child session' using errcode = '42501';
+    end if;
+    update private.child_sessions cs
+      set ended_at = pg_catalog.now(), end_reason = 'signed_out'
+      where cs.session_id = v_session_id and cs.child_user_id = v_user_id and cs.ended_at is null;
+    delete from auth.sessions s where s.id = v_session_id and s.user_id = v_user_id;
+  end
+  $$;
+
+revoke all on function public.child_end_session() from public, anon;
+grant execute on function public.child_end_session() to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261201090000_shared_device_chores.sql
+-- ============================================================================
+-- S42 part 2: chores completed on an approved household device, attributed to the member who did
+-- them, with optional PIN verification (spec "Confirmed shared-device chore attribution and
+-- optional PIN verification"; architecture.md §34).
+--
+-- - The device is one of S42's approved household devices (private.household_devices). It shows
+--   the Home's open chores and its members; nobody is signed in on it for this.
+-- - A member picks a chore, says who did it, and confirms. The web server (service role) then
+--   completes it *as that member*: for the length of one call the member is this transaction's
+--   device actor (private.device_actors), which require_confirmed_caller accepts, so every chore,
+--   approval and points rule of the ordinary completion applies unchanged.
+-- - A Home manager can require a PIN for every such completion; a member may also confirm with
+--   their PIN when it is optional. Children use their PIN for this Home (private.child_home_pins);
+--   adults may set their own household-device PIN (private.member_device_pins). A PIN check is
+--   bound to one action, one member, one device and one Home, and nothing is remembered after it.
+-- - The completion is recorded with the device, the member and the verification level
+--   ('attributed' or 'pin'), and can be undone from the same device for two minutes.
+
+-- 1. Settings and adult PINs -----------------------------------------------------------------------------
+
+-- Whether chores completed on this Home's household devices always need the member's PIN (Home
+-- managers decide; off by default, when a PIN is optional). Absent row: off.
+create table private.shared_device_settings (
+  home_id uuid primary key references public.homes (id) on delete cascade,
+  require_pin boolean not null default false,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+revoke all on table private.shared_device_settings from public;
+
+-- An adult's own optional PIN for confirming actions on household devices (owner decision
+-- 2026-11-12). Scrypt hash from the web server only; one lock, as a child's PIN.
+create table private.member_device_pins (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  pin_hash text not null
+    constraint member_device_pins_pin_hash_check check (private.is_child_secret_hash(pin_hash)),
+  pin_set_at timestamptz not null default now(),
+  pin_failures integer not null default 0,
+  pin_locked_until timestamptz,
+  pin_locks integer not null default 0,
+  pin_locks_since timestamptz
+);
+
+revoke all on table private.member_device_pins from public;
+
+comment on table private.member_device_pins is
+  'S42: an adult''s optional scrypt-hashed PIN for confirming chores on household devices.';
+
+-- 2. Acting for a member, for one call ----------------------------------------------------------------------
+
+-- The member a device action runs as, in this transaction only. Written and removed by the
+-- security-definer device functions below; nothing else can write it (no grants).
+create table private.device_actors (
+  txid bigint not null,
+  user_id uuid not null,
+  home_id uuid not null,
+  -- The one occurrence this actor may reopen (the device's Undo), or null.
+  may_reopen uuid,
+  primary key (txid, user_id)
+);
+
+revoke all on table private.device_actors from public;
+
+create function private.device_actor(p_user_id uuid) returns private.device_actors
+  language sql stable security definer set search_path = '' as $$
+    select a.* from private.device_actors a
+    where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id
+  $$;
+
+revoke all on function private.device_actor(uuid) from public;
+
+-- As 20261017090000_home_invitations.sql, plus: the member a household device acts for in this
+-- transaction (children included: they have no confirmed email).
+create or replace function private.require_confirmed_caller() returns uuid
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+  begin
+    if v_user_id is not null and (private.device_actor(v_user_id)).user_id is not null then
+      return v_user_id;
+    end if;
+    if v_user_id is null or private.confirmed_email(v_user_id) is null then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    return v_user_id;
+  end
+  $$;
+
+-- As 20261030090000_chores.sql / 20261105090000_points_rewards.sql, plus: a device Undo may reopen
+-- the one occurrence it completed moments ago (and reverse its points), and nothing else.
+create or replace function private.can_manage_chores(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and (private.has_home_capability(p_home_id, p_user_id, 'manageHomeChores')
+         or exists (select 1 from private.device_actors a
+                    where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id
+                      and a.home_id = p_home_id and a.may_reopen is not null));
+  $$;
+
+create or replace function private.can_manage_points(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_home_id is not null and p_user_id is not null
+    and (private.has_home_capability(p_home_id, p_user_id, 'manageHomePoints')
+         or exists (select 1 from private.device_actors a
+                    where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id
+                      and a.home_id = p_home_id and a.may_reopen is not null));
+  $$;
+
+-- Runs p_sql's chore call as p_user_id: sets the request's subject to the member, records the
+-- device actor, and puts both back afterwards. Only the functions below call it.
+create function private.begin_device_actor(p_user_id uuid, p_home_id uuid, p_may_reopen uuid)
+returns text
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_claims text := pg_catalog.current_setting('request.jwt.claims', true);
+  begin
+    insert into private.device_actors (txid, user_id, home_id, may_reopen)
+      values (pg_catalog.txid_current(), p_user_id, p_home_id, p_may_reopen);
+    perform pg_catalog.set_config('request.jwt.claim.sub', p_user_id::text, true);
+    perform pg_catalog.set_config('request.jwt.claims',
+      pg_catalog.jsonb_build_object('sub', p_user_id, 'role', 'authenticated')::text, true);
+    return coalesce(v_claims, '');
+  end
+  $$;
+
+create function private.end_device_actor(p_user_id uuid, p_claims text) returns void
+  language plpgsql volatile security definer set search_path = '' as $$
+  begin
+    delete from private.device_actors a
+      where a.txid = pg_catalog.txid_current_if_assigned() and a.user_id = p_user_id;
+    perform pg_catalog.set_config('request.jwt.claim.sub', '', true);
+    perform pg_catalog.set_config('request.jwt.claims', p_claims, true);
+  end
+  $$;
+
+revoke all on function private.begin_device_actor(uuid, uuid, uuid) from public;
+revoke all on function private.end_device_actor(uuid, text) from public;
+
+-- 3. Records ----------------------------------------------------------------------------------------------
+
+-- Each chore completed on a household device: who it is attributed to, how they were verified,
+-- and whether it was undone. Kept with the Home (ids only).
+create table private.shared_device_actions (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  device_id uuid not null references private.household_devices (id) on delete cascade,
+  occurrence_id uuid not null,
+  member_user_id uuid references auth.users (id) on delete set null,
+  verification text not null
+    constraint shared_device_actions_verification_check check (verification in ('attributed', 'pin')),
+  outcome text not null,
+  -- The occurrence's revision right after this completion: Undo works only while nobody else has
+  -- changed it since (an approval, points, another completion).
+  occurrence_revision integer not null,
+  created_at timestamptz not null default now(),
+  undone_at timestamptz
+);
+
+create index shared_device_actions_device_idx on private.shared_device_actions (device_id, created_at);
+
+revoke all on table private.shared_device_actions from public;
+
+-- A PIN check waiting for the web server's comparison: one action, one member, one device.
+create table private.shared_device_checks (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references private.household_devices (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  occurrence_id uuid not null,
+  member_user_id uuid not null references auth.users (id) on delete cascade,
+  client_key text not null
+    constraint shared_device_checks_client_key_check check (client_key ~ '^[0-9a-f]{64}$'),
+  created_at timestamptz not null default now(),
+  used_at timestamptz
+);
+
+create index shared_device_checks_device_idx on private.shared_device_checks (device_id, created_at)
+  where used_at is null;
+create index shared_device_checks_client_idx on private.shared_device_checks (client_key, created_at)
+  where used_at is null;
+
+revoke all on table private.shared_device_checks from public;
+
+-- 4. Managers and adults --------------------------------------------------------------------------------------
+
+-- The Home's rule, for its managers (Owner, or Administrator with manageHomeSettings).
+create function public.shared_device_pin_rule(p_home_id uuid) returns boolean
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.home_role(p_home_id, v_user_id) is null
+       or not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    return coalesce((select s.require_pin from private.shared_device_settings s
+                     where s.home_id = p_home_id), false);
+  end
+  $$;
+
+revoke all on function public.shared_device_pin_rule(uuid) from public, anon;
+grant execute on function public.shared_device_pin_rule(uuid) to authenticated;
+
+-- Sets it. Returns 'saved', 'unchanged', 'not_permitted' or 'not_found'.
+create function public.set_shared_device_pin_rule(p_home_id uuid, p_require_pin boolean)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_before boolean;
+  begin
+    if p_require_pin is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) or private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      return 'not_permitted';
+    end if;
+    select s.require_pin into v_before from private.shared_device_settings s
+      where s.home_id = p_home_id for update;
+    if coalesce(v_before, false) = p_require_pin then
+      return 'unchanged';
+    end if;
+    insert into private.shared_device_settings (home_id, require_pin, updated_by)
+      values (p_home_id, p_require_pin, v_user_id)
+      on conflict (home_id) do update
+        set require_pin = excluded.require_pin, updated_by = excluded.updated_by,
+            updated_at = pg_catalog.now();
+    perform private.audit('home.shared_device_pin_rule_changed', p_home_id, 'home', p_home_id,
+      jsonb_build_object('require_pin', p_require_pin));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_shared_device_pin_rule(uuid, boolean) from public, anon;
+grant execute on function public.set_shared_device_pin_rule(uuid, boolean) to authenticated;
+
+-- Stricter rules than the Home-wide one (spec: "member-specific PIN verification and/or
+-- verification for particular actions; the stricter applicable rule wins"; Ward, 2026-11-12):
+-- members who must always confirm with their PIN, and chores that always need the PIN.
+create table private.shared_device_member_rules (
+  home_id uuid not null,
+  user_id uuid not null,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint shared_device_member_rules_pkey primary key (home_id, user_id),
+  constraint shared_device_member_rules_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+create table private.shared_device_chore_rules (
+  chore_id uuid primary key references private.chores (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+revoke all on table private.shared_device_member_rules from public;
+revoke all on table private.shared_device_chore_rules from public;
+
+-- Whether a chore occurrence completed for this member on this Home's devices needs the PIN.
+create function private.shared_device_pin_needed(p_home_id uuid, p_user_id uuid, p_occurrence_id uuid)
+returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select coalesce((select s.require_pin from private.shared_device_settings s
+                     where s.home_id = p_home_id), false)
+      or exists (select 1 from private.shared_device_member_rules r
+                 where r.home_id = p_home_id and r.user_id = p_user_id)
+      or exists (select 1 from private.chore_occurrences o
+                 join private.shared_device_chore_rules r on r.chore_id = o.chore_id
+                 where o.id = p_occurrence_id and r.home_id = p_home_id)
+  $$;
+
+revoke all on function private.shared_device_pin_needed(uuid, uuid, uuid) from public;
+
+-- The members and chores of the Home with whether each always needs the PIN, for its managers.
+create function public.shared_device_pin_targets(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.home_role(p_home_id, v_user_id) is null
+       or not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    return jsonb_build_object(
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'membership_id', m.id,
+                 'name', coalesce(p.nickname, p.display_name, up.display_name),
+                 'required', exists (select 1 from private.shared_device_member_rules r
+                                     where r.home_id = m.home_id and r.user_id = m.user_id))
+               order by m.created_at, m.id)
+        from public.home_memberships m
+        left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+        left join public.user_preferences up on up.user_id = m.user_id
+        where m.home_id = p_home_id), '[]'::jsonb),
+      'chores', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'chore_id', c.id,
+                 'title', c.title,
+                 'required', exists (select 1 from private.shared_device_chore_rules r
+                                     where r.chore_id = c.id))
+               order by c.title, c.id)
+        from private.chores c
+        where c.home_id = p_home_id and c.deleted_at is null), '[]'::jsonb)
+    );
+  end
+  $$;
+
+revoke all on function public.shared_device_pin_targets(uuid) from public, anon;
+grant execute on function public.shared_device_pin_targets(uuid) to authenticated;
+
+-- Sets one member's or one chore's rule. p_kind: 'member' (p_target_id a membership id) or
+-- 'chore' (a chore id). Returns 'saved', 'unchanged', 'not_permitted' or 'not_found'.
+create function public.set_shared_device_pin_target(
+  p_home_id uuid, p_kind text, p_target_id uuid, p_require_pin boolean
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_target uuid;
+    v_found boolean;
+  begin
+    if p_require_pin is null or p_kind is null or p_kind not in ('member', 'chore') then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) or private.home_role(p_home_id, v_user_id) is null then
+      return 'not_found';
+    end if;
+    if not private.has_home_capability(p_home_id, v_user_id, 'manageHomeSettings') then
+      return 'not_permitted';
+    end if;
+    if p_kind = 'member' then
+      select m.user_id into v_target from public.home_memberships m
+        where m.id = p_target_id and m.home_id = p_home_id;
+      if v_target is null then
+        return 'not_found';
+      end if;
+      if p_require_pin then
+        insert into private.shared_device_member_rules (home_id, user_id, updated_by)
+          values (p_home_id, v_target, v_user_id)
+          on conflict do nothing
+          returning true into v_found;
+      else
+        delete from private.shared_device_member_rules r
+          where r.home_id = p_home_id and r.user_id = v_target
+          returning true into v_found;
+      end if;
+    else
+      select c.id into v_target from private.chores c
+        where c.id = p_target_id and c.home_id = p_home_id and c.deleted_at is null;
+      if v_target is null then
+        return 'not_found';
+      end if;
+      if p_require_pin then
+        insert into private.shared_device_chore_rules (chore_id, home_id, updated_by)
+          values (v_target, p_home_id, v_user_id)
+          on conflict do nothing
+          returning true into v_found;
+      else
+        delete from private.shared_device_chore_rules r where r.chore_id = v_target
+          returning true into v_found;
+      end if;
+    end if;
+    if v_found is null then
+      return 'unchanged';
+    end if;
+    perform private.audit('home.shared_device_pin_rule_changed', p_home_id, 'home', p_home_id,
+      jsonb_build_object('target', p_kind, 'target_id', p_target_id, 'require_pin', p_require_pin));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_shared_device_pin_target(uuid, text, uuid, boolean) from public, anon;
+grant execute on function public.set_shared_device_pin_target(uuid, text, uuid, boolean) to authenticated;
+
+-- An adult's own household-device PIN: whether it is set, and its lock. Never the hash.
+create function public.my_device_pin()
+returns table (has_pin boolean, locked_until timestamptz)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    return query
+      select p.user_id is not null,
+             case when p.pin_locked_until > pg_catalog.now() then p.pin_locked_until end
+      from (select 1) one
+      left join private.member_device_pins p on p.user_id = v_user_id;
+  end
+  $$;
+
+revoke all on function public.my_device_pin() from public, anon;
+grant execute on function public.my_device_pin() to authenticated;
+
+-- Sets (p_hash, made by the web server) or removes (null) the caller's own PIN. Adults only.
+-- Returns 'saved', 'cleared' or 'unchanged'.
+create function public.set_my_device_pin(p_hash text default null) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_found boolean;
+  begin
+    if private.is_child(v_user_id) then
+      raise exception 'children''s PINs are set by their guardians' using errcode = '42501';
+    end if;
+    if p_hash is null then
+      delete from private.member_device_pins p where p.user_id = v_user_id returning true into v_found;
+      if v_found is null then
+        return 'unchanged';
+      end if;
+      perform private.audit('user.device_pin_cleared', null, 'user', v_user_id, '{}'::jsonb);
+      return 'cleared';
+    end if;
+    if not private.is_child_secret_hash(p_hash) then
+      raise exception 'invalid PIN' using errcode = '22023';
+    end if;
+    insert into private.member_device_pins (user_id, pin_hash) values (v_user_id, p_hash)
+      on conflict (user_id) do update
+        set pin_hash = excluded.pin_hash, pin_set_at = pg_catalog.now(), pin_failures = 0,
+            pin_locked_until = null, pin_locks = 0, pin_locks_since = null;
+    perform private.audit('user.device_pin_set', null, 'user', v_user_id, '{}'::jsonb);
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.set_my_device_pin(text) from public, anon;
+grant execute on function public.set_my_device_pin(text) to authenticated;
+
+-- 5. The device (the web server only, as service_role) ------------------------------------------------------
+
+-- What an approved device's chore screen shows: the Home's rule, its members (name, colour,
+-- whether they are a child, whether they have a PIN usable here) and its open chores up to today
+-- (title, due date, assignees, open mandatory steps, approval). Empty for an unknown device.
+create function public.shared_device_board(p_device_hash text) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_device private.household_devices := private.approved_device(coalesce(p_device_hash, ''));
+    v_today date;
+  begin
+    if v_device.id is null then
+      return null;
+    end if;
+    v_today := private.task_today(v_device.home_id, null);
+    return jsonb_build_object(
+      'require_pin', coalesce((select s.require_pin from private.shared_device_settings s
+                               where s.home_id = v_device.home_id), false),
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'membership_id', m.id,
+                 'name', coalesce(p.nickname, p.display_name, up.display_name),
+                 'accent_color', coalesce(p.accent_color, up.accent_color),
+                 'is_child', private.is_child(m.user_id),
+                 'requires_pin', exists (select 1 from private.shared_device_member_rules r
+                                         where r.home_id = m.home_id and r.user_id = m.user_id),
+                 'has_pin', case when private.is_child(m.user_id)
+                   then exists (select 1 from private.child_home_pins hp
+                                where hp.home_id = m.home_id and hp.child_user_id = m.user_id)
+                   else exists (select 1 from private.member_device_pins dp
+                                where dp.user_id = m.user_id) end)
+               order by m.created_at, m.id)
+        from public.home_memberships m
+        left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+        left join public.user_preferences up on up.user_id = m.user_id
+        where m.home_id = v_device.home_id), '[]'::jsonb),
+      'chores', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'occurrence_id', o.id,
+                 'title', c.title,
+                 'due_date', o.due_date,
+                 'overdue', o.due_date < v_today,
+                 'assignee_ids', coalesce((
+                   select jsonb_agg(private.member_ref(a.home_id, a.user_id))
+                   from private.chore_occurrence_assignees a where a.occurrence_id = o.id),
+                   '[]'::jsonb),
+                 'mandatory_open', (select count(*) from private.chore_occurrence_steps st
+                   where st.occurrence_id = o.id and st.mandatory and st.checked_at is null),
+                 'requires_approval', c.requires_approval,
+                 'requires_pin', exists (select 1 from private.shared_device_chore_rules r
+                                         where r.chore_id = c.id))
+               order by o.due_date, c.title, o.id)
+        from private.chore_occurrences o
+        join private.chores c on c.id = o.chore_id
+        where o.home_id = v_device.home_id and o.status = 'open' and o.deleted_at is null
+          and c.deleted_at is null and o.due_date <= v_today), '[]'::jsonb)
+    );
+  end
+  $$;
+
+revoke all on function public.shared_device_board(text) from public, anon, authenticated;
+grant execute on function public.shared_device_board(text) to service_role;
+
+-- Who may be named for an occurrence on the device: any current member of the device's Home; a
+-- child only for a chore assigned to them (no adult or unassigned work in a child's name).
+create function private.device_member(
+  p_device private.household_devices, p_occurrence_id uuid, p_membership_id uuid
+) returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from public.home_memberships m
+    join private.chore_occurrences o on o.id = p_occurrence_id and o.home_id = m.home_id
+    where m.home_id = p_device.home_id and m.id = p_membership_id and o.deleted_at is null
+      and (not private.is_child(m.user_id)
+           or exists (select 1 from private.chore_occurrence_assignees a
+                      where a.occurrence_id = o.id and a.user_id = m.user_id))
+  $$;
+
+revoke all on function private.device_member(private.household_devices, uuid, uuid) from public;
+
+-- Completes the occurrence as the member and records it. Returns the completion's outcome and
+-- the action id (for Undo; null when nothing was completed or submitted).
+create function private.device_complete(
+  p_device private.household_devices, p_occurrence_id uuid, p_member uuid, p_verification text
+) returns table (outcome text, action_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_claims text;
+    v_outcome text;
+    v_action uuid;
+  begin
+    v_claims := private.begin_device_actor(p_member, p_device.home_id, null);
+    select c.outcome into v_outcome
+      from public.complete_chore_occurrence(p_occurrence_id,
+        private.member_ref(p_device.home_id, p_member), null) c;
+    perform private.end_device_actor(p_member, v_claims);
+    if v_outcome in ('completed', 'submitted') then
+      insert into private.shared_device_actions (home_id, device_id, occurrence_id, member_user_id,
+                                                 verification, outcome, occurrence_revision)
+        values (p_device.home_id, p_device.id, p_occurrence_id, p_member, p_verification, v_outcome,
+                (select o.revision from private.chore_occurrences o where o.id = p_occurrence_id))
+        returning id into v_action;
+      update private.household_devices d set last_used_at = pg_catalog.now() where d.id = p_device.id;
+      perform private.audit('chore_occurrence.device_completed', p_device.home_id,
+        'chore_occurrence', p_occurrence_id,
+        jsonb_build_object('device_id', p_device.id, 'verification', p_verification,
+                           'member', private.member_ref(p_device.home_id, p_member),
+                           'outcome', v_outcome));
+    end if;
+    return query select v_outcome, v_action;
+  end
+  $$;
+
+revoke all on function private.device_complete(private.household_devices, uuid, uuid, text)
+  from public;
+
+-- Step 1 of a device completion. p_pin: the member typed a PIN. Without one the chore is completed
+-- at once as 'attributed', unless the Home requires a PIN ('pin_required', nothing counted). With
+-- one, the member's PIN hash is returned with a check id for the web server to compare (the try is
+-- counted as wrong until shared_device_verified confirms it).
+-- Outcomes: the completion's own ('completed', 'submitted', 'already_completed', ...), 'check',
+-- 'pin_required',
+-- 'pin_not_set' (a PIN is needed and the member has none here), 'locked' (locked_until),
+-- 'rate_limited', 'not_eligible' (not a member here, or a child and not their chore),
+-- 'device_not_approved'.
+create function public.shared_device_attempt(
+  p_device_hash text, p_occurrence_id uuid, p_membership_id uuid, p_pin boolean, p_client_key text
+) returns table (outcome text, action_id uuid, check_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_device private.household_devices;
+    v_member uuid;
+    v_child boolean;
+    v_require boolean;
+    v_hash text;
+    v_locked timestamptz;
+    v_check uuid;
+    v_done record;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    v_device := private.approved_device(coalesce(p_device_hash, ''));
+    if v_device.id is null then
+      return query select 'device_not_approved'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_member := private.device_member(v_device, p_occurrence_id, p_membership_id);
+    if v_member is null then
+      return query select 'not_eligible'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_require := private.shared_device_pin_needed(v_device.home_id, v_member, p_occurrence_id);
+    if not coalesce(p_pin, false) then
+      if v_require then
+        return query select 'pin_required'::text, null::uuid, null::uuid, null::text,
+          null::timestamptz;
+        return;
+      end if;
+      select * into v_done from private.device_complete(v_device, p_occurrence_id, v_member,
+                                                        'attributed');
+      return query select v_done.outcome, v_done.action_id, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+
+    -- A PIN is needed: throttle failed checks per device and per client, as sign-in does.
+    delete from private.shared_device_checks c where c.created_at < pg_catalog.now() - interval '1 day';
+    if (select count(*) from private.shared_device_checks c
+        where c.device_id = v_device.id and c.used_at is null
+          and c.created_at > pg_catalog.now() - interval '1 hour')
+         >= (select l.device_failures_per_hour from private.child_sign_in_limits() l)
+       or (select count(*) from private.shared_device_checks c
+           where c.client_key = p_client_key and c.used_at is null
+             and c.created_at > pg_catalog.now() - (select l.client_window
+                                                    from private.child_sign_in_limits() l))
+         >= (select l.client_failures_per_window from private.child_sign_in_limits() l) then
+      return query select 'rate_limited'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_child := private.is_child(v_member);
+    if v_child then
+      select hp.pin_hash, hp.pin_locked_until into v_hash, v_locked
+        from private.child_home_pins hp
+        where hp.home_id = v_device.home_id and hp.child_user_id = v_member for update;
+    else
+      select dp.pin_hash, dp.pin_locked_until into v_hash, v_locked
+        from private.member_device_pins dp where dp.user_id = v_member for update;
+    end if;
+    if v_hash is null then
+      return query select 'pin_not_set'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if v_locked > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::uuid, null::text, v_locked;
+      return;
+    end if;
+    perform private.count_device_pin_failure(v_member, v_device.home_id);
+    insert into private.shared_device_checks (device_id, home_id, occurrence_id, member_user_id,
+                                              client_key)
+      values (v_device.id, v_device.home_id, p_occurrence_id, v_member, p_client_key)
+      returning id into v_check;
+    return query select 'check'::text, null::uuid, v_check, v_hash, null::timestamptz;
+  end
+  $$;
+
+-- Counts a wrong try against the PIN a device check uses (counted before the comparison).
+create function private.count_device_pin_failure(p_member uuid, p_home_id uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_p private.member_device_pins;
+    v_n record;
+  begin
+    if private.is_child(p_member) then
+      perform private.count_child_failure(p_member, 'pin', p_home_id);
+      return;
+    end if;
+    select * into v_p from private.member_device_pins dp where dp.user_id = p_member for update;
+    if not found then
+      return;
+    end if;
+    v_n := private.next_child_lock(v_p.pin_failures, v_p.pin_locks, v_p.pin_locks_since);
+    update private.member_device_pins dp
+      set pin_failures = v_n.o_failures, pin_locks = v_n.o_locks, pin_locks_since = v_n.o_since,
+          pin_locked_until = coalesce(v_n.o_until, dp.pin_locked_until)
+      where dp.user_id = p_member;
+  end
+  $$;
+
+revoke all on function private.count_device_pin_failure(uuid, uuid) from public;
+
+revoke all on function public.shared_device_attempt(text, uuid, uuid, boolean, text)
+  from public, anon, authenticated;
+grant execute on function public.shared_device_attempt(text, uuid, uuid, boolean, text)
+  to service_role;
+
+-- Step 2, after the web server matched the PIN: clears the wrong-try count and completes the chore
+-- as 'pin'. The check must be fresh (two minutes), unused, and from the same device.
+create function public.shared_device_verified(p_device_hash text, p_check_id uuid)
+returns table (outcome text, action_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_device private.household_devices := private.approved_device(coalesce(p_device_hash, ''));
+    v_check private.shared_device_checks;
+  begin
+    select * into v_check from private.shared_device_checks c where c.id = p_check_id for update;
+    if v_device.id is null or v_check.id is null or v_check.device_id <> v_device.id
+       or v_check.used_at is not null
+       or v_check.created_at <= pg_catalog.now() - interval '2 minutes' then
+      return query select 'invalid'::text, null::uuid;
+      return;
+    end if;
+    update private.shared_device_checks c set used_at = pg_catalog.now() where c.id = v_check.id;
+    if private.is_child(v_check.member_user_id) then
+      update private.child_home_pins hp
+        set pin_failures = 0, pin_locks = 0, pin_locks_since = null, pin_locked_until = null
+        where hp.home_id = v_check.home_id and hp.child_user_id = v_check.member_user_id
+          and hp.pin_locked_until is distinct from 'infinity'::timestamptz;
+    else
+      update private.member_device_pins dp
+        set pin_failures = 0, pin_locks = 0, pin_locks_since = null, pin_locked_until = null
+        where dp.user_id = v_check.member_user_id
+          and dp.pin_locked_until is distinct from 'infinity'::timestamptz;
+    end if;
+    -- Still a member, and still allowed for this chore.
+    if private.device_member(v_device, v_check.occurrence_id,
+                             private.member_ref(v_device.home_id, v_check.member_user_id)) is null then
+      return query select 'not_eligible'::text, null::uuid;
+      return;
+    end if;
+    return query select * from private.device_complete(v_device, v_check.occurrence_id,
+                                                       v_check.member_user_id, 'pin');
+  end
+  $$;
+
+revoke all on function public.shared_device_verified(text, uuid) from public, anon, authenticated;
+grant execute on function public.shared_device_verified(text, uuid) to service_role;
+
+-- Undo, from the same device within two minutes: reopens the occurrence (and reverses its points)
+-- as the member it was attributed to. Returns 'undone', 'expired' or 'invalid'.
+create function public.shared_device_undo(p_device_hash text, p_action_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_device private.household_devices := private.approved_device(coalesce(p_device_hash, ''));
+    v_action private.shared_device_actions;
+    v_claims text;
+    v_outcome text;
+  begin
+    select * into v_action from private.shared_device_actions a where a.id = p_action_id for update;
+    if v_device.id is null or v_action.id is null or v_action.device_id <> v_device.id
+       or v_action.undone_at is not null or v_action.member_user_id is null
+       or not private.is_home_member(v_device.home_id, v_action.member_user_id) then
+      return 'invalid';
+    end if;
+    if v_action.created_at <= pg_catalog.now() - interval '2 minutes' then
+      return 'expired';
+    end if;
+    -- Someone changed the chore since (approved it, gave points, completed it again): Undo would
+    -- reverse their change too, so it is refused.
+    if (select o.revision from private.chore_occurrences o where o.id = v_action.occurrence_id
+        for update) is distinct from v_action.occurrence_revision then
+      return 'invalid';
+    end if;
+    v_claims := private.begin_device_actor(v_action.member_user_id, v_device.home_id,
+                                           v_action.occurrence_id);
+    select r.outcome into v_outcome from public.reopen_chore_occurrence(v_action.occurrence_id) r;
+    perform private.end_device_actor(v_action.member_user_id, v_claims);
+    if v_outcome not in ('reopened', 'already_open') then
+      return 'invalid';
+    end if;
+    update private.shared_device_actions a set undone_at = pg_catalog.now() where a.id = v_action.id;
+    perform private.audit('chore_occurrence.device_undone', v_device.home_id, 'chore_occurrence',
+      v_action.occurrence_id, jsonb_build_object('device_id', v_device.id));
+    return 'undone';
+  end
+  $$;
+
+revoke all on function public.shared_device_undo(text, uuid) from public, anon, authenticated;
+grant execute on function public.shared_device_undo(text, uuid) to service_role;
+
+-- ============================================================================
+-- supabase/migrations/20261202090000_child_independent_account.sql
+-- ============================================================================
+-- S42 part 3: the age-aware move from a guardian-managed child profile to the same person's
+-- independent account (spec "Confirmed age-aware child-to-independent-account transition";
+-- brief plans/steps/S42-brief.md).
+--
+-- Ward's decision (2026-11-12): the child's primary guardian starts the move and enters the birth
+-- date then; the minimum age comes from the Home's country (the GDPR digital-consent age; 16 when
+-- the country is not known). A Home has no country field, so its country is read from its
+-- scheduling time zone; a child in several Homes needs the highest age of them all. The birth
+-- date is used for that check only and is never stored.
+--
+-- Steps:
+--   1. A guardian with identity authority (the primary guardian in every Home of the child) starts
+--      the move: eligible → a single-use claim link (7 days) for the young person; not yet →
+--      the date they will be, nothing kept.
+--   2. The young person opens the link (no sign-in), reviews what changes and gives an email
+--      address they control. A verification link (1 hour) is emailed to it.
+--   3. From that link they confirm. In one transaction: their child sessions end, child sign-in
+--      credentials and PINs are deleted, guardian assignments and child settings end in every
+--      Home, they stop being a child, and the verified address becomes their sign-in address.
+--      They then choose a password through the ordinary password-reset email (S06), so no
+--      password ever passes through Madeora's database functions.
+--   Their identity (user id) never changes, so every chore, point, habit, goal and setting stays
+--   theirs; their Home memberships and Member role are unchanged. Either guardian in any Home may
+--   cancel before completion (guardian disagreement). Nothing changes because of a birthday.
+
+-- 1. Ages and countries -------------------------------------------------------------------------------
+
+-- GDPR article 8 digital-consent ages by country (EU/EEA and the UK). Anything else: 16.
+create table private.digital_consent_ages (
+  country text primary key constraint digital_consent_ages_country_check check (country ~ '^[A-Z]{2}$'),
+  min_age integer not null constraint digital_consent_ages_age_check check (min_age between 13 and 18)
+);
+
+revoke all on table private.digital_consent_ages from public;
+
+insert into private.digital_consent_ages (country, min_age) values
+  ('AT', 14), ('BE', 13), ('BG', 14), ('HR', 16), ('CY', 14), ('CZ', 15), ('DK', 13), ('EE', 13),
+  ('FI', 13), ('FR', 15), ('DE', 16), ('GR', 15), ('HU', 16), ('IE', 16), ('IT', 14), ('LV', 13),
+  ('LT', 14), ('LU', 16), ('MT', 13), ('NL', 16), ('PL', 16), ('PT', 13), ('RO', 16), ('SK', 16),
+  ('SI', 15), ('ES', 14), ('SE', 13), ('IS', 13), ('LI', 16), ('NO', 13), ('GB', 13);
+
+-- The country of an IANA time zone, for the zones of the countries above.
+create table private.time_zone_countries (
+  time_zone text primary key,
+  country text not null references private.digital_consent_ages (country)
+);
+
+revoke all on table private.time_zone_countries from public;
+
+insert into private.time_zone_countries (time_zone, country) values
+  ('Europe/Vienna', 'AT'), ('Europe/Brussels', 'BE'), ('Europe/Sofia', 'BG'),
+  ('Europe/Zagreb', 'HR'), ('Asia/Nicosia', 'CY'), ('Asia/Famagusta', 'CY'),
+  ('Europe/Nicosia', 'CY'), ('Europe/Prague', 'CZ'), ('Europe/Copenhagen', 'DK'),
+  ('Europe/Tallinn', 'EE'), ('Europe/Helsinki', 'FI'), ('Europe/Mariehamn', 'FI'),
+  ('Europe/Paris', 'FR'), ('Europe/Berlin', 'DE'), ('Europe/Busingen', 'DE'),
+  ('Europe/Athens', 'GR'), ('Europe/Budapest', 'HU'), ('Europe/Dublin', 'IE'),
+  ('Europe/Rome', 'IT'), ('Europe/Riga', 'LV'), ('Europe/Vilnius', 'LT'),
+  ('Europe/Luxembourg', 'LU'), ('Europe/Malta', 'MT'), ('Europe/Amsterdam', 'NL'),
+  ('Europe/Warsaw', 'PL'), ('Europe/Lisbon', 'PT'), ('Atlantic/Madeira', 'PT'),
+  ('Atlantic/Azores', 'PT'), ('Europe/Bucharest', 'RO'), ('Europe/Bratislava', 'SK'),
+  ('Europe/Ljubljana', 'SI'), ('Europe/Madrid', 'ES'), ('Africa/Ceuta', 'ES'),
+  ('Atlantic/Canary', 'ES'), ('Europe/Stockholm', 'SE'), ('Atlantic/Reykjavik', 'IS'),
+  ('Europe/Vaduz', 'LI'), ('Europe/Oslo', 'NO'), ('Europe/London', 'GB');
+
+-- The age a person must have reached to manage their own account, for a child in all their Homes.
+create function private.child_independence_age(p_child uuid) returns integer
+  language sql stable security definer set search_path = '' as $$
+    select coalesce(pg_catalog.max(coalesce(a.min_age, 16)), 16)
+    from public.home_memberships m
+    join public.homes h on h.id = m.home_id
+    left join private.time_zone_countries z on z.time_zone = h.timezone
+    left join private.digital_consent_ages a on a.country = z.country
+    where m.user_id = p_child
+  $$;
+
+revoke all on function private.child_independence_age(uuid) from public;
+
+-- 2. Transitions ------------------------------------------------------------------------------------
+
+create table private.child_transitions (
+  id uuid primary key default gen_random_uuid(),
+  child_user_id uuid not null references auth.users (id) on delete cascade,
+  started_by uuid references auth.users (id) on delete set null,
+  required_age integer not null,
+  status text not null default 'started'
+    constraint child_transitions_status_check check (status in ('started', 'completed', 'cancelled')),
+  claim_token_hash bytea not null constraint child_transitions_claim_key unique,
+  claim_expires_at timestamptz not null,
+  -- Set when the young person gives an address; cleared on completion (it is then auth.users').
+  pending_email text,
+  email_token_hash bytea constraint child_transitions_email_key unique,
+  email_expires_at timestamptz,
+  email_sends integer not null default 0,
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+-- One open move per child.
+create unique index child_transitions_open_key on private.child_transitions (child_user_id)
+  where status = 'started';
+
+revoke all on table private.child_transitions from public;
+
+comment on table private.child_transitions is
+  'S42: a child''s move to an independent account. Token hashes only; no birth date.';
+
+-- The verification email goes through the S37 security-email job.
+alter table private.security_emails drop constraint security_emails_kind_check;
+alter table private.security_emails add constraint security_emails_kind_check check (kind in (
+  'backup_verify', 'recovery_link', 'recovery_started', 'recovery_ready', 'transition_verify'
+));
+
+create or replace function public.get_security_email(p_email_id uuid)
+returns table (
+  outcome text, kind text, recipient_email text, email_locale text, token text,
+  expires_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_e private.security_emails;
+    v_locale text;
+  begin
+    select * into v_e from private.security_emails e where e.id = p_email_id;
+    if v_e.id is null or v_e.status <> 'queued'
+       or (v_e.expires_at is not null and v_e.expires_at <= pg_catalog.now())
+       or (v_e.kind in ('backup_verify', 'recovery_link', 'recovery_ready', 'transition_verify')
+           and v_e.token is null) then
+      return query select 'skipped'::text, null::text, null::text, null::text, null::text, null::timestamptz;
+      return;
+    end if;
+    select p.locale into v_locale from public.user_preferences p where p.user_id = v_e.user_id;
+    return query select 'ok'::text, v_e.kind, v_e.to_email, coalesce(v_locale, 'en'), v_e.token,
+                        v_e.expires_at;
+  end
+  $$;
+
+-- The child's open move, if its claim link still works.
+create function private.open_child_transition(p_child uuid) returns private.child_transitions
+  language sql stable security definer set search_path = '' as $$
+    select t.* from private.child_transitions t
+    where t.child_user_id = p_child and t.status = 'started' and t.claim_expires_at > pg_catalog.now()
+  $$;
+
+revoke all on function private.open_child_transition(uuid) from public;
+
+-- Whether a move still holds: the child's Homes may have changed since it started (a new Home
+-- with a higher age, or one where its starter is not the primary guardian). Then it must be
+-- started again, by someone with authority in every Home, against the age they all require.
+create function private.child_transition_holds(p_t private.child_transitions) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select p_t.started_by is not null
+      and private.is_child(p_t.child_user_id)
+      and private.child_independence_age(p_t.child_user_id) <= p_t.required_age
+      and private.child_identity_authority(p_t.child_user_id, p_t.started_by)
+  $$;
+
+revoke all on function private.child_transition_holds(private.child_transitions) from public;
+
+-- 3. Guardians ------------------------------------------------------------------------------------------
+
+-- What a guardian of the child in this Home sees: whether a move is open and until when, the age
+-- needed, and whether they may start one. Anyone else: an error.
+create function public.child_transition_state(p_home_id uuid, p_child_membership_id uuid)
+returns table (open boolean, claim_expires_at timestamptz, email_given boolean, required_age integer,
+               can_start boolean)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid := private.child_of_membership(p_home_id, p_child_membership_id);
+    v_open private.child_transitions;
+  begin
+    if v_child is null or private.child_guardian_role(p_home_id, v_child, v_user_id) is null then
+      raise exception 'not a guardian of this child' using errcode = '42501';
+    end if;
+    v_open := private.open_child_transition(v_child);
+    return query select v_open.id is not null, v_open.claim_expires_at,
+                        v_open.pending_email is not null,
+                        private.child_independence_age(v_child),
+                        private.child_identity_authority(v_child, v_user_id);
+  end
+  $$;
+
+revoke all on function public.child_transition_state(uuid, uuid) from public, anon;
+grant execute on function public.child_transition_state(uuid, uuid) to authenticated;
+
+-- Starts (or restarts, replacing the old link) the move. Outcomes: 'started' with the claim token
+-- (shown once to the guardian, stored only as its hash), 'not_eligible' with the date the child
+-- will be, 'not_permitted', 'not_found'.
+create function public.start_child_transition(
+  p_home_id uuid, p_child_membership_id uuid, p_birth_date date
+) returns table (outcome text, token text, expires_at timestamptz, eligible_on date)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid;
+    v_age integer;
+    v_token text;
+    v_id uuid;
+    v_expires timestamptz := pg_catalog.now() + interval '7 days';
+  begin
+    if p_birth_date is null or p_birth_date > current_date
+       or p_birth_date < current_date - interval '120 years' then
+      raise exception 'invalid birth date' using errcode = '22023';
+    end if;
+    if not private.lock_home(p_home_id) then
+      return query select 'not_found'::text, null::text, null::timestamptz, null::date;
+      return;
+    end if;
+    v_child := private.child_of_membership(p_home_id, p_child_membership_id);
+    if v_child is null or private.child_guardian_role(p_home_id, v_child, v_user_id) is null then
+      return query select 'not_found'::text, null::text, null::timestamptz, null::date;
+      return;
+    end if;
+    if not private.child_identity_authority(v_child, v_user_id) then
+      return query select 'not_permitted'::text, null::text, null::timestamptz, null::date;
+      return;
+    end if;
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('child_transition:' || v_child::text, 0));
+    v_age := private.child_independence_age(v_child);
+    if (p_birth_date + pg_catalog.make_interval(years => v_age))::date > current_date then
+      perform private.audit('child.transition_not_eligible', p_home_id, 'user', v_child,
+        pg_catalog.jsonb_build_object('required_age', v_age));
+      return query select 'not_eligible'::text, null::text, null::timestamptz,
+                          (p_birth_date + pg_catalog.make_interval(years => v_age))::date;
+      return;
+    end if;
+
+    update private.child_transitions t set status = 'cancelled'
+      where t.child_user_id = v_child and t.status = 'started';
+    v_token := private.new_invitation_token('link');
+    insert into private.child_transitions (child_user_id, started_by, required_age, claim_token_hash,
+                                           claim_expires_at)
+      values (v_child, v_user_id, v_age, private.token_hash(v_token), v_expires)
+      returning id into v_id;
+    -- Every other guardian, in any of the child's Homes, is told so they can cancel in time.
+    perform private.notify_user(g.guardian_user_id, g.home_id, 'security', 'child.transition_started',
+      '{}'::jsonb, 'child.transition_started:' || v_id::text || ':' || g.guardian_user_id::text)
+    from (select distinct on (x.guardian_user_id) x.guardian_user_id, x.home_id
+          from public.child_guardians x
+          where x.child_user_id = v_child and x.guardian_user_id <> v_user_id
+          order by x.guardian_user_id, x.assigned_at) g;
+    perform private.audit('child.transition_started', p_home_id, 'user', v_child,
+      pg_catalog.jsonb_build_object('required_age', v_age));
+    return query select 'started'::text, v_token, v_expires, null::date;
+  end
+  $$;
+
+revoke all on function public.start_child_transition(uuid, uuid, date) from public, anon;
+grant execute on function public.start_child_transition(uuid, uuid, date) to authenticated;
+
+-- Either guardian of the child in this Home stops an open move. 'cancelled', 'unchanged' or
+-- 'not_found'.
+create function public.cancel_child_transition(p_home_id uuid, p_child_membership_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_child uuid := private.child_of_membership(p_home_id, p_child_membership_id);
+    v_found boolean;
+  begin
+    if v_child is null or private.child_guardian_role(p_home_id, v_child, v_user_id) is null then
+      return 'not_found';
+    end if;
+    update private.child_transitions t
+      set status = 'cancelled', pending_email = null, email_token_hash = null
+      where t.child_user_id = v_child and t.status = 'started'
+      returning true into v_found;
+    if v_found is null then
+      return 'unchanged';
+    end if;
+    perform private.audit('child.transition_cancelled', p_home_id, 'user', v_child, '{}'::jsonb);
+    return 'cancelled';
+  end
+  $$;
+
+revoke all on function public.cancel_child_transition(uuid, uuid) from public, anon;
+grant execute on function public.cancel_child_transition(uuid, uuid) to authenticated;
+
+-- 4. The young person (the web server only, as service_role; no session) ----------------------------
+
+-- What the move changes, for the review screens: their name, their Homes, and what ends.
+create function private.child_transition_summary(p_t private.child_transitions) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+    select pg_catalog.jsonb_build_object(
+      'name', (select coalesce(p.nickname, p.display_name, up.display_name)
+               from public.home_memberships m
+               left join public.home_member_profiles p
+                 on p.home_id = m.home_id and p.user_id = m.user_id
+               left join public.user_preferences up on up.user_id = m.user_id
+               where m.user_id = p_t.child_user_id order by m.created_at limit 1),
+      'homes', coalesce((select pg_catalog.jsonb_agg(h.name order by m.created_at)
+                         from public.home_memberships m join public.homes h on h.id = m.home_id
+                         where m.user_id = p_t.child_user_id), '[]'::jsonb),
+      'guardians', (select pg_catalog.count(*) from public.child_guardians g
+                    where g.child_user_id = p_t.child_user_id),
+      'has_username', exists (select 1 from private.child_credentials c
+                              where c.child_user_id = p_t.child_user_id and c.username is not null),
+      'pin_homes', (select pg_catalog.count(*) from private.child_home_pins p
+                    where p.child_user_id = p_t.child_user_id),
+      'email', p_t.pending_email,
+      'claim_expires_at', p_t.claim_expires_at
+    )
+  $$;
+
+revoke all on function private.child_transition_summary(private.child_transitions) from public;
+
+-- The claim screen; null for a wrong, used or expired link.
+create function public.child_transition_preview(p_token text) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_t private.child_transitions;
+  begin
+    select * into v_t from private.child_transitions t
+      where t.claim_token_hash = private.token_hash(p_token) and t.status = 'started'
+        and t.claim_expires_at > pg_catalog.now();
+    if v_t.id is null or not private.child_transition_holds(v_t) then
+      return null;
+    end if;
+    return private.child_transition_summary(v_t);
+  end
+  $$;
+
+-- Takes the address the young person controls and emails it a verification link. Outcomes:
+-- 'sent', 'invalid' (link), 'invalid_email', 'email_taken', 'rate_limited'.
+create function public.claim_child_transition(p_token text, p_email text) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_t private.child_transitions;
+    v_email text := private.normalise_email(p_email);
+    v_link text;
+    v_expires timestamptz := pg_catalog.now() + interval '1 hour';
+  begin
+    select * into v_t from private.child_transitions t
+      where t.claim_token_hash = private.token_hash(p_token) and t.status = 'started'
+        and t.claim_expires_at > pg_catalog.now()
+      for update;
+    if v_t.id is null or not private.child_transition_holds(v_t) then
+      return 'invalid';
+    end if;
+    if pg_catalog.length(v_email) > 254 or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+       or v_email like '%.invalid' then
+      return 'invalid_email';
+    end if;
+    if exists (select 1 from auth.users u where private.normalise_email(u.email) = v_email)
+       or exists (select 1 from private.backup_emails b where b.email = v_email) then
+      return 'email_taken';
+    end if;
+    if v_t.email_sends >= 5 then
+      return 'rate_limited';
+    end if;
+    v_link := private.new_invitation_token('link');
+    update private.child_transitions t
+      set pending_email = v_email, email_token_hash = private.token_hash(v_link),
+          email_expires_at = v_expires, email_sends = t.email_sends + 1
+      where t.id = v_t.id;
+    perform private.queue_security_email(v_t.child_user_id, 'transition_verify', v_email, v_link,
+                                         v_expires);
+    perform private.audit('child.transition_email_sent', null, 'user', v_t.child_user_id, '{}'::jsonb);
+    return 'sent';
+  end
+  $$;
+
+-- The confirmation screen, opened from the emailed link; null for a wrong or expired link.
+-- `completed` is true when this link already finished the move (a retry).
+create function public.child_transition_review(p_email_token text) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_t private.child_transitions;
+  begin
+    select * into v_t from private.child_transitions t
+      where t.email_token_hash = private.token_hash(p_email_token);
+    if v_t.id is null then
+      return null;
+    end if;
+    if v_t.status = 'completed' then
+      return pg_catalog.jsonb_build_object('completed', true);
+    end if;
+    if v_t.status <> 'started' or v_t.email_expires_at <= pg_catalog.now()
+       or v_t.claim_expires_at <= pg_catalog.now() or not private.child_transition_holds(v_t) then
+      return null;
+    end if;
+    return private.child_transition_summary(v_t) || pg_catalog.jsonb_build_object('completed', false);
+  end
+  $$;
+
+-- Completes the move (see the top of this file). Outcomes: 'completed' (also for a retry of this
+-- link), 'invalid', 'email_taken'.
+create function public.complete_child_transition(p_email_token text) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_t private.child_transitions;
+    v_child uuid;
+    v_homes uuid[];
+    v_home uuid;
+  begin
+    select * into v_t from private.child_transitions t
+      where t.email_token_hash = private.token_hash(p_email_token)
+      for update;
+    if v_t.id is null then
+      return 'invalid';
+    end if;
+    if v_t.status = 'completed' then
+      return 'completed';
+    end if;
+    if v_t.status <> 'started' or v_t.email_expires_at <= pg_catalog.now()
+       or v_t.claim_expires_at <= pg_catalog.now() or v_t.pending_email is null then
+      return 'invalid';
+    end if;
+    v_child := v_t.child_user_id;
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('child_transition:' || v_child::text, 0));
+    if not private.child_transition_holds(v_t) then
+      update private.child_transitions t
+        set status = 'cancelled', pending_email = null
+        where t.id = v_t.id;
+      perform private.audit('child.transition_cancelled', null, 'user', v_child,
+        pg_catalog.jsonb_build_object('reason', 'homes_changed'));
+      return 'invalid';
+    end if;
+    perform private.lock_sign_in_methods(v_child);
+    if exists (select 1 from auth.users u
+               where private.normalise_email(u.email) = v_t.pending_email and u.id <> v_child)
+       or exists (select 1 from private.backup_emails b where b.email = v_t.pending_email) then
+      return 'email_taken';
+    end if;
+
+    select coalesce(pg_catalog.array_agg(m.home_id), '{}') into v_homes
+      from public.home_memberships m where m.user_id = v_child;
+
+    -- Every guardian is told that their authority ended (before it is removed).
+    perform private.notify_user(g.guardian_user_id, g.home_id, 'security', 'child.transition_completed',
+      '{}'::jsonb, 'child.transition_completed:' || v_t.id::text || ':' || g.guardian_user_id::text)
+    from (select distinct on (x.guardian_user_id) x.guardian_user_id, x.home_id
+          from public.child_guardians x where x.child_user_id = v_child
+          order by x.guardian_user_id, x.assigned_at) g;
+
+    -- Child sessions end everywhere; child credentials, PINs and guardian authority end.
+    perform private.end_child_sessions(v_child, null, 'independent');
+    delete from public.child_guardian_offers o where o.child_user_id = v_child;
+    delete from private.child_link_codes c where c.child_user_id = v_child;
+    delete from public.child_guardians g where g.child_user_id = v_child;
+    delete from public.child_home_settings s where s.child_user_id = v_child;
+    delete from public.child_profiles c where c.user_id = v_child;
+    delete from auth.sessions s where s.user_id = v_child;
+
+    -- The verified address becomes the sign-in address. No password yet: they choose one through
+    -- the password-reset email, so a password never reaches the database in the clear.
+    update auth.users u
+      set email = v_t.pending_email, email_confirmed_at = pg_catalog.now(),
+          updated_at = pg_catalog.now()
+      where u.id = v_child;
+    update auth.identities i
+      set identity_data = i.identity_data || pg_catalog.jsonb_build_object('email', v_t.pending_email),
+          updated_at = pg_catalog.now()
+      where i.user_id = v_child and i.provider = 'email';
+
+    update private.child_transitions t
+      set status = 'completed', completed_at = pg_catalog.now(), pending_email = null
+      where t.id = v_t.id;
+    foreach v_home in array v_homes loop
+      perform private.audit('child.transition_completed', v_home, 'user', v_child,
+        pg_catalog.jsonb_build_object('required_age', v_t.required_age));
+    end loop;
+    return 'completed';
+  end
+  $$;
+
+revoke all on function public.child_transition_preview(text) from public, anon, authenticated;
+revoke all on function public.claim_child_transition(text, text) from public, anon, authenticated;
+revoke all on function public.child_transition_review(text) from public, anon, authenticated;
+revoke all on function public.complete_child_transition(text) from public, anon, authenticated;
+grant execute on function public.child_transition_preview(text) to service_role;
+grant execute on function public.claim_child_transition(text, text) to service_role;
+grant execute on function public.child_transition_review(text) to service_role;
+grant execute on function public.complete_child_transition(text) to service_role;
 ```
 
 ## Destructive reset: remove these migrations from the database
@@ -61924,6 +68406,8 @@ drop trigger if exists madeora_after_mfa_factor_delete on auth.mfa_factors;
 drop trigger if exists madeora_after_mfa_factor_verified on auth.mfa_factors;
 drop trigger if exists madeora_guard_mfa_challenge_insert on auth.mfa_challenges;
 drop trigger if exists madeora_guard_mfa_challenge_verify on auth.mfa_challenges;
+drop trigger if exists madeora_guard_child_auth_user on auth.users;
+drop trigger if exists madeora_guard_child_identity on auth.identities;
 
 -- Drop Madeora public RPCs by exact routine name, including all overloads.
 do $reset$
@@ -61939,93 +68423,104 @@ begin
         'abandon_my_upload', 'accept_ownership_recovery', 'acquire_recipe_lock', 'add_goal_entry', 'add_habit_contribution', 'add_photos_to_album',
         'add_shopping_items', 'add_subtask', 'add_task_comment', 'add_vacation_participants', 'adjust_personal_points', 'adjust_points',
         'advance_all_pet_care', 'advance_chores', 'advance_habit_reminders', 'advance_reminder_series', 'advance_shopping', 'advance_task_series',
-        'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'archive_goal', 'archive_habit',
-        'archive_personal_reward', 'archive_reward', 'attach_pet_medical_file', 'attach_task_file', 'authorize_account_change', 'authorize_export_download',
-        'authorize_file_read', 'authorize_photo_read', 'authorize_sign_in_method_change', 'begin_data_export', 'begin_job_execution', 'begin_recipe_import',
-        'bulk_chore_occurrences', 'bulk_update_tasks', 'calendar_notice_titles', 'cancel_account_recovery', 'cancel_backup_email_change', 'cancel_my_email_change',
-        'cancel_my_export', 'cancel_ownership_recoveries', 'cancel_ownership_transfer', 'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_goal_link_start',
-        'change_goal_series_target', 'change_goal_target', 'change_habit_schedule', 'change_habit_tracking', 'change_home_member_role', 'change_vacation_participation',
-        'check_request', 'claim_chore_occurrence', 'claim_job_outbox', 'claim_my_upload', 'clear_completed_shopping_items', 'collect_data_export',
+        'answer_child_guardian_offer', 'answer_chore_reassignment', 'answer_chore_volunteer_invitation', 'answer_vacation_date_proposal', 'appeal_ownership_recovery', 'approve_household_device',
+        'archive_goal', 'archive_habit', 'archive_personal_reward', 'archive_reward', 'assign_child_guardian', 'attach_pet_medical_file',
+        'attach_task_file', 'authorize_account_change', 'authorize_export_download', 'authorize_file_read', 'authorize_photo_read', 'authorize_sign_in_method_change',
+        'begin_data_export', 'begin_home_copy_files', 'begin_job_execution', 'begin_recipe_import', 'bulk_chore_occurrences', 'bulk_update_tasks',
+        'calendar_notice_titles', 'cancel_account_recovery', 'cancel_backup_email_change', 'cancel_child_guardian_offer', 'cancel_child_link_code', 'cancel_child_transition',
+        'cancel_home_copy', 'cancel_my_email_change', 'cancel_my_export', 'cancel_my_pending_home_copies', 'cancel_ownership_recoveries', 'cancel_ownership_transfer',
+        'cancel_reward_redemption', 'change_chore_volunteer_request', 'change_goal_link_start', 'change_goal_series_target', 'change_goal_target', 'change_habit_schedule',
+        'change_habit_tracking', 'change_home_member_role', 'change_vacation_participation', 'check_request', 'child_end_session', 'child_link_code_state',
+        'child_me', 'child_password_attempt', 'child_pin_attempt', 'child_sign_in_complete', 'child_sign_in_settings', 'child_sign_in_verified',
+        'child_transition_preview', 'child_transition_review', 'child_transition_state', 'claim_child_transition', 'claim_chore_occurrence', 'claim_job_outbox',
+        'claim_my_upload', 'clear_child_credential', 'clear_completed_shopping_items', 'close_home', 'collect_data_export', 'complete_child_transition',
         'complete_chore_occurrence', 'complete_habit', 'complete_job_outbox', 'complete_pet_care_occurrence', 'complete_security_review', 'complete_storage_object_deletion',
         'confirm_backup_email', 'continue_account_recovery', 'copy_meal_week', 'correct_chore_completion', 'correct_chore_volunteer_assignment', 'correct_pet_care_completion',
-        'count_pending_join_requests', 'create_account_recovery_codes', 'create_calendar_event', 'create_chore', 'create_chore_category', 'create_chore_template',
-        'create_chore_volunteer_request', 'create_dashboard_template', 'create_goal', 'create_goal_link', 'create_goal_series', 'create_google_calendar_event',
-        'create_habit', 'create_home', 'create_home_invitation', 'create_home_vacation', 'create_meal_entry', 'create_meal_series',
-        'create_meal_slot', 'create_personal_reward', 'create_pet', 'create_pet_care', 'create_pet_medical_attachment_intent', 'create_pet_medical_entry',
-        'create_pet_photo_intent', 'create_photo_album', 'create_photo_intent', 'create_recipe', 'create_recipe_cover_intent', 'create_reward',
-        'create_shopping_category', 'create_shopping_list', 'create_task', 'create_task_attachment_intent', 'create_task_from_template', 'create_task_label',
-        'create_task_list', 'create_task_series', 'create_task_template', 'create_two_factor_recovery_codes', 'create_upload_intent', 'deactivate_my_account',
-        'decide_chore_vacation_item', 'decide_join_request', 'delete_calendar_event', 'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences',
-        'delete_dashboard_template', 'delete_goal', 'delete_goal_series', 'delete_google_calendar_event', 'delete_habit', 'delete_meal_entry',
-        'delete_pet', 'delete_pet_care', 'delete_pet_medical_entry', 'delete_photo_album', 'delete_photos', 'delete_recipe',
-        'delete_shopping_category', 'delete_shopping_item', 'delete_shopping_list', 'delete_subtask', 'delete_task', 'delete_task_comment',
-        'delete_task_label', 'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_account_recovery_ready', 'deliver_calendar_reminder',
-        'deliver_chore_reminder', 'deliver_goal_reminder', 'deliver_habit_pause_end', 'deliver_habit_reminder', 'deliver_habit_snooze', 'deliver_pet_care_reminder',
-        'deliver_recovery_ready', 'deliver_task_reminder', 'deliver_vacation_reminder', 'discard_google_calendar_change', 'discard_security_report', 'disconnect_google_calendar',
-        'edit_meal_occurrence', 'empty_trash', 'expire_upload', 'fail_data_export', 'fail_job_outbox', 'finalize_photo',
-        'finalize_upload', 'find_recipe_duplicates', 'finish_account_recovery', 'finish_data_export', 'finish_job_execution', 'get_calendar_event',
-        'get_calendar_upcoming', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence', 'get_chore_points',
-        'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_vacation_state', 'get_chore_volunteer_state',
-        'get_dashboard', 'get_goal', 'get_goal_entries', 'get_goal_events', 'get_goal_link_candidates', 'get_goal_links',
-        'get_goal_series', 'get_goal_series_periods', 'get_goals', 'get_google_calendar_connection', 'get_google_calendar_event', 'get_habit',
-        'get_habit_calendar', 'get_habit_checkins', 'get_habit_contributions', 'get_habit_daily_totals', 'get_habit_events', 'get_habit_insights',
-        'get_habits', 'get_home_vacation', 'get_home_vacation_widget', 'get_invitation_email', 'get_meal_plan', 'get_my_upload',
-        'get_notification_email', 'get_notification_settings', 'get_personal_points', 'get_pet', 'get_pet_care', 'get_pet_care_activity',
-        'get_pet_medical', 'get_pet_medical_entry', 'get_photo', 'get_photo_upload_keys', 'get_point_leaderboard', 'get_point_summary',
-        'get_recipe', 'get_recipe_context', 'get_reward_redemption', 'get_security_alert_preferences', 'get_security_email', 'get_shopping_context',
-        'get_shopping_list', 'get_storage_object_deletion', 'get_task', 'get_task_context', 'get_task_reminder', 'get_task_template',
-        'get_vacation_habits', 'get_weekly_points', 'goal_notice_names', 'google_push_changes', 'google_push_result', 'google_sync_apply_events',
-        'google_sync_begin', 'google_sync_calendars', 'google_sync_finish', 'google_sync_finish_calendar', 'habit_notice_names', 'home_capabilities',
-        'home_directory', 'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'is_madeora_staff', 'job_outbox_stats',
+        'count_pending_join_requests', 'create_account_recovery_codes', 'create_calendar_event', 'create_child', 'create_child_link_code', 'create_chore',
+        'create_chore_category', 'create_chore_template', 'create_chore_volunteer_request', 'create_dashboard_template', 'create_goal', 'create_goal_link',
+        'create_goal_series', 'create_google_calendar_event', 'create_habit', 'create_home', 'create_home_invitation', 'create_home_vacation',
+        'create_meal_entry', 'create_meal_series', 'create_meal_slot', 'create_personal_reward', 'create_pet', 'create_pet_care',
+        'create_pet_medical_attachment_intent', 'create_pet_medical_entry', 'create_pet_photo_intent', 'create_photo_album', 'create_photo_intent', 'create_recipe',
+        'create_recipe_cover_intent', 'create_reward', 'create_shopping_category', 'create_shopping_list', 'create_task', 'create_task_attachment_intent',
+        'create_task_from_template', 'create_task_label', 'create_task_list', 'create_task_series', 'create_task_template', 'create_two_factor_recovery_codes',
+        'create_upload_intent', 'deactivate_my_account', 'decide_chore_vacation_item', 'decide_home_copy', 'decide_join_request', 'delete_calendar_event',
+        'delete_chore_absence', 'delete_chore_category', 'delete_chore_occurrences', 'delete_dashboard_template', 'delete_goal', 'delete_goal_series',
+        'delete_google_calendar_event', 'delete_habit', 'delete_meal_entry', 'delete_mistaken_child', 'delete_personal_data', 'delete_pet',
+        'delete_pet_care', 'delete_pet_medical_entry', 'delete_photo_album', 'delete_photos', 'delete_recipe', 'delete_shopping_category',
+        'delete_shopping_item', 'delete_shopping_list', 'delete_subtask', 'delete_task', 'delete_task_comment', 'delete_task_label',
+        'delete_task_list', 'delete_task_series', 'delete_task_template', 'deliver_account_recovery_ready', 'deliver_calendar_reminder', 'deliver_chore_reminder',
+        'deliver_goal_reminder', 'deliver_habit_pause_end', 'deliver_habit_reminder', 'deliver_habit_snooze', 'deliver_pet_care_reminder', 'deliver_recovery_ready',
+        'deliver_task_reminder', 'deliver_vacation_reminder', 'discard_google_calendar_change', 'discard_security_report', 'disconnect_google_calendar', 'edit_meal_occurrence',
+        'empty_trash', 'end_child_sign_ins', 'expire_upload', 'fail_data_export', 'fail_job_outbox', 'finalize_photo',
+        'finalize_upload', 'find_recipe_duplicates', 'finish_account_recovery', 'finish_data_export', 'finish_home_copy_files', 'finish_job_execution',
+        'get_calendar_event', 'get_calendar_upcoming', 'get_chore_claim_policy', 'get_chore_claim_state', 'get_chore_context', 'get_chore_occurrence',
+        'get_chore_points', 'get_chore_reminder', 'get_chore_settings', 'get_chore_summary', 'get_chore_summary_setting', 'get_chore_vacation_state',
+        'get_chore_volunteer_state', 'get_copy_origin', 'get_dashboard', 'get_goal', 'get_goal_entries', 'get_goal_events',
+        'get_goal_link_candidates', 'get_goal_links', 'get_goal_series', 'get_goal_series_periods', 'get_goals', 'get_google_calendar_connection',
+        'get_google_calendar_event', 'get_habit', 'get_habit_calendar', 'get_habit_checkins', 'get_habit_contributions', 'get_habit_daily_totals',
+        'get_habit_events', 'get_habit_insights', 'get_habits', 'get_home_vacation', 'get_home_vacation_widget', 'get_invitation_email',
+        'get_meal_plan', 'get_my_upload', 'get_notification_email', 'get_notification_settings', 'get_personal_points', 'get_pet',
+        'get_pet_care', 'get_pet_care_activity', 'get_pet_medical', 'get_pet_medical_entry', 'get_photo', 'get_photo_upload_keys',
+        'get_point_leaderboard', 'get_point_summary', 'get_recipe', 'get_recipe_context', 'get_reward_redemption', 'get_security_alert_preferences',
+        'get_security_email', 'get_shopping_context', 'get_shopping_list', 'get_storage_object_deletion', 'get_task', 'get_task_context',
+        'get_task_reminder', 'get_task_template', 'get_vacation_habits', 'get_weekly_points', 'goal_notice_names', 'google_push_changes',
+        'google_push_result', 'google_sync_apply_events', 'google_sync_begin', 'google_sync_calendars', 'google_sync_finish', 'google_sync_finish_calendar',
+        'habit_notice_names', 'home_capabilities', 'home_children', 'home_closure_summary', 'home_directory', 'home_household_devices',
+        'home_ownership_recovery_status', 'home_ownership_transfer', 'home_storage_usage', 'household_device_sign_in', 'is_madeora_staff', 'job_outbox_stats',
         'leave_home', 'list_absence_review', 'list_calendar', 'list_chore_absences', 'list_chore_approvals', 'list_chore_categories',
         'list_chore_history', 'list_chore_occurrences', 'list_chore_points', 'list_chore_pool', 'list_chore_proposals', 'list_chore_reassignment_requests',
-        'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_dashboard_templates',
-        'list_home_calendar_access', 'list_home_chore_history', 'list_home_export_access', 'list_home_invitations', 'list_home_join_requests', 'list_home_pet_care',
-        'list_home_vacation_days', 'list_home_vacations', 'list_meal_recipes', 'list_my_activity', 'list_my_activity_homes', 'list_my_exports',
-        'list_my_join_requests', 'list_my_recipe_drafts', 'list_my_security_notices', 'list_my_security_reports', 'list_my_sessions', 'list_my_trusted_devices',
-        'list_personal_reward_redemptions', 'list_personal_rewards', 'list_pet_medical_access', 'list_pets', 'list_photo_library', 'list_point_accounts',
-        'list_point_entries', 'list_recipe_shares', 'list_recipe_tags', 'list_recipes', 'list_reward_redemptions', 'list_rewards',
-        'list_shopping_lists', 'list_task_attachments', 'list_task_calendar', 'list_task_comments', 'list_task_labels', 'list_task_lists',
-        'list_task_occurrences', 'list_task_templates', 'list_tasks', 'list_trash', 'list_vacation_review', 'mark_notifications_read',
-        'meal_slot_impact', 'move_meal_slot', 'move_shopping_category', 'move_shopping_item', 'move_shopping_list', 'move_task',
-        'my_account_security', 'my_account_state', 'my_deactivation_blockers', 'my_notification_channels', 'my_privacy_review', 'my_recovered_homes',
-        'my_storage_usage', 'object_to_ownership_recovery', 'pause_habit', 'pet_care_notice_names', 'photo_deletion_impact', 'preview_chore_points_change',
-        'preview_home_invitation', 'preview_meal_copy', 'preview_meal_ingredients', 'preview_meal_series', 'process_sign_in_events', 'propose_chore',
-        'publish_recipe', 'purge_account_activity', 'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'queue_google_calendar_syncs',
-        'reactivate_habit', 'reactivate_my_account', 'recipe_delete_impact', 'recipe_widget', 'record_home_invitation_delivery', 'record_integration_failure',
-        'record_invitation_email', 'record_notification_email', 'record_security_email', 'redeem_personal_reward', 'redeem_reward', 'redeem_two_factor_recovery_code',
-        'release_chore_occurrence', 'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'release_recipe_lock', 'remove_backup_email',
+        'list_chore_schedule', 'list_chore_templates', 'list_chore_volunteer_offers', 'list_chore_widget', 'list_chores', 'list_copy_destinations',
+        'list_dashboard_templates', 'list_home_calendar_access', 'list_home_chore_history', 'list_home_copy_requests', 'list_home_export_access', 'list_home_invitations',
+        'list_home_join_requests', 'list_home_pet_care', 'list_home_vacation_days', 'list_home_vacations', 'list_meal_recipes', 'list_my_activity',
+        'list_my_activity_homes', 'list_my_exports', 'list_my_home_copies', 'list_my_join_requests', 'list_my_recipe_drafts', 'list_my_security_notices',
+        'list_my_security_reports', 'list_my_sessions', 'list_my_trusted_devices', 'list_personal_reward_redemptions', 'list_personal_rewards', 'list_pet_medical_access',
+        'list_pets', 'list_photo_library', 'list_point_accounts', 'list_point_entries', 'list_recipe_shares', 'list_recipe_tags',
+        'list_recipes', 'list_reward_redemptions', 'list_rewards', 'list_shopping_lists', 'list_task_attachments', 'list_task_calendar',
+        'list_task_comments', 'list_task_labels', 'list_task_lists', 'list_task_occurrences', 'list_task_templates', 'list_tasks',
+        'list_trash', 'list_vacation_review', 'mark_notifications_read', 'meal_slot_impact', 'move_meal_slot', 'move_shopping_category',
+        'move_shopping_item', 'move_shopping_list', 'move_task', 'my_account_security', 'my_account_state', 'my_child_guardian_offers',
+        'my_closed_homes', 'my_deactivation_blockers', 'my_device_pin', 'my_notification_channels', 'my_open_home_copies', 'my_privacy_review',
+        'my_recovered_homes', 'my_shared_copyable_items', 'my_storage_usage', 'object_to_ownership_recovery', 'pause_habit', 'personal_deletion_preview',
+        'pet_care_notice_names', 'photo_deletion_impact', 'preview_chore_points_change', 'preview_home_invitation', 'preview_meal_copy', 'preview_meal_ingredients',
+        'preview_meal_series', 'process_sign_in_events', 'propose_chore', 'publish_recipe', 'purge_account_activity', 'purge_due_deletions',
+        'purge_expired_trash_entry', 'purge_stored_file', 'purge_trash_entries', 'queue_google_calendar_syncs', 'reactivate_habit', 'reactivate_my_account',
+        'recipe_delete_impact', 'recipe_widget', 'record_home_invitation_delivery', 'record_integration_failure', 'record_invitation_email', 'record_notification_email',
+        'record_security_email', 'redeem_child_link_code', 'redeem_personal_reward', 'redeem_reward', 'redeem_two_factor_recovery_code', 'release_chore_occurrence',
+        'release_job_outbox', 'release_my_upload', 'release_overdue_chore_claim', 'release_recipe_lock', 'remove_backup_email', 'remove_child_secondary_guardian',
         'remove_chore_reminder', 'remove_goal_link', 'remove_home_member', 'remove_pet_medical_attachment', 'remove_pet_photo', 'remove_photos_from_album',
         'remove_task_attachment', 'remove_task_reminder', 'rename_dashboard_template', 'rename_photo_album', 'rename_shopping_category', 'rename_subtask',
         'renew_home_invitation', 'renew_recipe_lock', 'reopen_chore_occurrence', 'reopen_pet_care_occurrence', 'reorder_chore_categories', 'reorder_subtasks',
-        'reorder_task_lists', 'request_backup_email', 'request_chore_reassignment', 'request_google_calendar_sync', 'request_home_export', 'request_ownership_recovery',
-        'request_personal_export', 'request_security_report', 'request_to_join_home', 'requeue_job_outbox', 'resend_home_invitation', 'reset_notification_preference',
-        'reset_notification_quiet_hours', 'resolve_google_calendar_conflict', 'resolve_personal_reward_redemption', 'resolve_photo_widget', 'resolve_reward_redemption', 'respond_to_ownership_transfer',
-        'respond_to_sign_in', 'restore_google_calendar_event', 'restore_meal_occurrence', 'restore_trash_entries', 'retry_google_calendar_change', 'reverse_personal_point_entry',
-        'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission', 'review_reward_redemption', 'review_task_reminder', 'revoke_all_trusted_devices',
-        'revoke_home_invitation', 'revoke_my_session', 'revoke_trusted_device', 'roll_goal_periods', 'save_chore_absence', 'save_dashboard',
-        'save_google_calendar_connection', 'save_my_privacy_review', 'security_report_rows', 'send_chore_summaries', 'send_inactivity_reminders', 'session_is_trusted',
-        'set_administrator_capabilities', 'set_calendar_event_shares', 'set_calendar_preferences', 'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused',
-        'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting', 'set_goal_achievement', 'set_goal_reminders', 'set_goal_series_state',
-        'set_google_calendar_settings', 'set_google_calendar_write_target', 'set_habit_celebrations', 'set_habit_checkin_note', 'set_habit_day_note', 'set_habit_end',
-        'set_habit_quick_adds', 'set_habit_reminders', 'set_home_calendar_access', 'set_home_export_access', 'set_my_avatar', 'set_my_goal_reminders',
-        'set_my_habit_reminders', 'set_my_home_avatar', 'set_notification_preference', 'set_notification_quiet_hours', 'set_personal_reward_fulfillment', 'set_pet_care_state',
-        'set_pet_medical_access', 'set_pet_medical_details', 'set_pet_photo', 'set_recipe_favorite', 'set_recipe_rating', 'set_replacement_outcome',
-        'set_reward_fulfillment', 'set_security_alert_preferences', 'set_shopping_item_completed', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees',
+        'reorder_task_lists', 'request_account_deletion', 'request_backup_email', 'request_chore_reassignment', 'request_google_calendar_sync', 'request_home_copies',
+        'request_home_export', 'request_ownership_recovery', 'request_personal_export', 'request_security_report', 'request_to_join_home', 'requeue_job_outbox',
+        'resend_home_invitation', 'reset_notification_preference', 'reset_notification_quiet_hours', 'resolve_google_calendar_conflict', 'resolve_personal_reward_redemption', 'resolve_photo_widget',
+        'resolve_reward_redemption', 'respond_to_ownership_transfer', 'respond_to_sign_in', 'restore_google_calendar_event', 'restore_home', 'restore_meal_occurrence',
+        'restore_trash_entries', 'retry_google_calendar_change', 'reverse_personal_point_entry', 'reverse_point_entry', 'review_chore_proposal', 'review_chore_submission',
+        'review_reward_redemption', 'review_task_reminder', 'revoke_all_trusted_devices', 'revoke_home_invitation', 'revoke_household_device', 'revoke_my_session',
+        'revoke_trusted_device', 'roll_goal_periods', 'save_chore_absence', 'save_dashboard', 'save_google_calendar_connection', 'save_my_privacy_review',
+        'security_report_rows', 'send_chore_summaries', 'send_inactivity_reminders', 'session_is_trusted', 'set_administrator_capabilities', 'set_calendar_event_shares',
+        'set_calendar_preferences', 'set_child_access', 'set_child_credential', 'set_child_presentation', 'set_child_sign_in_access', 'set_child_username',
+        'set_chore_claim_policy', 'set_chore_occurrence_points', 'set_chore_paused', 'set_chore_reminder', 'set_chore_step', 'set_chore_summary_setting',
+        'set_goal_achievement', 'set_goal_reminders', 'set_goal_series_state', 'set_google_calendar_settings', 'set_google_calendar_write_target', 'set_habit_celebrations',
+        'set_habit_checkin_note', 'set_habit_day_note', 'set_habit_end', 'set_habit_quick_adds', 'set_habit_reminders', 'set_home_calendar_access',
+        'set_home_export_access', 'set_my_avatar', 'set_my_device_pin', 'set_my_goal_reminders', 'set_my_habit_reminders', 'set_my_home_avatar',
+        'set_notification_preference', 'set_notification_quiet_hours', 'set_personal_reward_fulfillment', 'set_pet_care_state', 'set_pet_medical_access', 'set_pet_medical_details',
+        'set_pet_photo', 'set_recipe_favorite', 'set_recipe_rating', 'set_replacement_outcome', 'set_reward_fulfillment', 'set_security_alert_preferences',
+        'set_shared_device_pin_rule', 'set_shared_device_pin_target', 'set_shopping_item_completed', 'set_storage_allowance', 'set_subtask_completion', 'set_task_assignees',
         'set_task_completion', 'set_task_reminder', 'set_task_series_paused', 'set_vacation_habit', 'share_dashboard_template', 'share_photo_album',
-        'share_recipe', 'shopping_item_history', 'shopping_widget', 'sign_out_everywhere', 'skip_chore_occurrence', 'skip_meal_occurrence',
+        'share_recipe', 'shared_device_attempt', 'shared_device_board', 'shared_device_pin_rule', 'shared_device_pin_targets', 'shared_device_undo',
+        'shared_device_verified', 'shopping_item_history', 'shopping_widget', 'sign_out_everywhere', 'skip_chore_occurrence', 'skip_meal_occurrence',
         'skip_pet_care_occurrence', 'snooze_habit_reminder', 'staff_close_recovery_appeal', 'staff_decide_ownership_recovery', 'staff_ownership_recoveries', 'staff_ownership_recovery',
-        'start_account_recovery', 'start_ownership_transfer', 'start_shopping_recurrence', 'storage_stats', 'sweep_data_exports', 'sync_goal_periods',
-        'task_attachment_scope_impact', 'task_reminder_titles', 'touch_my_activity', 'transfer_meal_ingredients', 'transfer_shopping_item', 'trash_stats',
-        'trust_this_device', 'undo_dashboard_change', 'undo_habit_checkin', 'unshare_dashboard_template', 'unshare_photo_album', 'unshare_recipe',
-        'update_calendar_event', 'update_chore', 'update_chore_category', 'update_chore_occurrence', 'update_chore_series', 'update_chore_settings',
-        'update_chore_template', 'update_goal', 'update_goal_entry', 'update_goal_series', 'update_goal_settings', 'update_google_calendar_event',
-        'update_habit', 'update_habit_contribution', 'update_habit_pause', 'update_habit_settings', 'update_home_vacation', 'update_meal_entry',
-        'update_meal_series', 'update_meal_settings', 'update_meal_slot', 'update_personal_reward', 'update_pet', 'update_pet_care',
-        'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences', 'update_point_settings', 'update_recipe', 'update_reward',
-        'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence', 'update_task', 'update_task_comment', 'update_task_label',
-        'update_task_list', 'update_task_series', 'update_task_template', 'use_trusted_device', 'withdraw_chore_proposal', 'withdraw_join_request',
-        'withdraw_ownership_recovery'
+        'start_account_recovery', 'start_child_transition', 'start_ownership_transfer', 'start_shopping_recurrence', 'storage_stats', 'sweep_data_exports',
+        'sweep_home_copies', 'sync_goal_periods', 'task_attachment_scope_impact', 'task_reminder_titles', 'touch_my_activity', 'transfer_meal_ingredients',
+        'transfer_shopping_item', 'trash_stats', 'trust_this_device', 'undo_dashboard_change', 'undo_habit_checkin', 'unlock_child_sign_in',
+        'unshare_dashboard_template', 'unshare_photo_album', 'unshare_recipe', 'update_calendar_event', 'update_chore', 'update_chore_category',
+        'update_chore_occurrence', 'update_chore_series', 'update_chore_settings', 'update_chore_template', 'update_goal', 'update_goal_entry',
+        'update_goal_series', 'update_goal_settings', 'update_google_calendar_event', 'update_habit', 'update_habit_contribution', 'update_habit_pause',
+        'update_habit_settings', 'update_home_vacation', 'update_meal_entry', 'update_meal_series', 'update_meal_settings', 'update_meal_slot',
+        'update_personal_reward', 'update_pet', 'update_pet_care', 'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences',
+        'update_point_settings', 'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence',
+        'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template',
+        'use_trusted_device', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'
       ])
   loop
     execute format('drop function if exists %s cascade', routine.signature);
@@ -62033,9 +68528,16 @@ begin
 end
 $reset$;
 
+-- Drop the filtered membership view first. Its backing table was moved to the private schema by
+-- 20261127090000 and is removed with that schema below.
+drop view if exists public.home_memberships cascade;
+
 -- Drop the Madeora public tables; CASCADE removes their policies, indexes and table triggers.
+drop table if exists public.child_guardian_offers cascade;
+drop table if exists public.child_home_settings cascade;
+drop table if exists public.child_guardians cascade;
+drop table if exists public.child_profiles cascade;
 drop table if exists public.home_member_profiles cascade;
-drop table if exists public.home_memberships cascade;
 drop table if exists public.homes cascade;
 drop table if exists public.notification_preferences cascade;
 drop table if exists public.notification_quiet_hours cascade;
@@ -62054,7 +68556,7 @@ begin
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute
       'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000']::text[];
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000']::text[];
   end if;
 end
 $reset$;
