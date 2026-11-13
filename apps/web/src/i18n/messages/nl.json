@@ -8116,5 +8116,128 @@
     "save": "Opslaan",
     "cancel": "Wijzigingen weggooien",
     "restore": "Standaard terugzetten"
+  },
+  "Ora": {
+    "title": "Ora",
+    "open": "Open Ora, je hulpje in Madeora",
+    "close": "Sluit Ora",
+    "expand": "Toon Ora groter",
+    "collapse": "Toon Ora kleiner",
+    "context": "Helpt in {context}",
+    "contextPersonal": "Persoonlijk",
+    "greetingPersonal": "Hoi! Wat wil je doen met je persoonlijke dingen?",
+    "greetingHome": "Hoi! Wat wil je doen in {home}?",
+    "empty": "Ik heb op dit moment geen suggesties voor je. Dit zijn plekken waar ik je naartoe kan brengen.",
+    "loading": "Even alles klaarzetten…",
+    "quickActions": "Snelle acties",
+    "browseAll": "Alle acties bekijken",
+    "browseFewer": "Minder acties tonen",
+    "actionFailed": "Dat is niet gelukt en er is niets gewijzigd. Probeer het opnieuw.",
+    "settingsLink": "Ora-instellingen",
+    "groups": {
+      "overview": "Overzicht",
+      "tasks": "Taken",
+      "chores": "Klusjes",
+      "meals": "Maaltijden",
+      "shopping": "Boodschappen",
+      "habits": "Gewoontes",
+      "goals": "Doelen",
+      "pets": "Huisdieren",
+      "calendar": "Agenda",
+      "photos": "Foto's",
+      "home": "Thuis",
+      "ora": "Ora"
+    },
+    "tools": {
+      "open-dashboard": "Open het dashboard",
+      "open-tasks": "Open taken",
+      "open-chores": "Open klusjes",
+      "open-meals": "Open de maaltijdplanner",
+      "open-shopping": "Open boodschappenlijsten",
+      "open-habits": "Open gewoontes",
+      "open-goals": "Open doelen",
+      "open-pets": "Open huisdieren",
+      "open-calendar": "Open de agenda",
+      "open-photos": "Open foto's",
+      "open-members": "Bekijk de leden",
+      "open-invitations": "Beheer uitnodigingen",
+      "open-displays": "Beheer Household Displays",
+      "open-home-settings": "Open Thuis-instellingen",
+      "capabilities": "Wat kun je hier doen?"
+    },
+    "intro": {
+      "title": "Maak kennis met Ora",
+      "lead": "Ik ben een klein hulpje in Madeora, geen algemene assistent. In {context} doe ik alleen wat jij mag doen.",
+      "takeYou": "Je meteen naar {modules} brengen.",
+      "onlyAllowed": "Alleen tonen wat je hier mag gebruiken, en niets wat niet mag.",
+      "noChanges": "Voorlopig open ik pagina's voor je; ik wijzig zelf niets.",
+      "tryExample": "Probeer een voorbeeld",
+      "exampleTitle": "Dit kan ik hier voor je openen:",
+      "skip": "Overslaan",
+      "done": "Klaar",
+      "saveFailed": "Dat kon niet worden opgeslagen. Je kunt Ora gewoon blijven gebruiken en het opnieuw proberen."
+    },
+    "help": {
+      "open": "Wat Ora kan",
+      "title": "Wat Ora kan",
+      "intro": "In {context} kan ik je naar deze plekken brengen:",
+      "limits": "Ik toon alleen wat je hier mag gebruiken. Ik wijzig niets en ben geen algemene assistent.",
+      "back": "Terug"
+    },
+    "unavailable": {
+      "title": "Ora is tijdelijk niet beschikbaar",
+      "body": "De rest van Madeora werkt gewoon door. Probeer het opnieuw, of ga meteen naar een pagina:",
+      "offlineTitle": "Je lijkt offline te zijn",
+      "offlineBody": "Ora heeft een verbinding nodig. Controleer je verbinding en probeer het opnieuw, of ga meteen naar een pagina:",
+      "retry": "Opnieuw proberen",
+      "pagesLabel": "Pagina's die je zonder Ora kunt openen"
+    },
+    "forbidden": {
+      "title": "Ora kan hier niet helpen",
+      "body": "Misschien heb je hier geen toegang meer. Kies een andere plek in het menu."
+    }
+  },
+  "OraSettings": {
+    "pageTitle": "Ora",
+    "cardTitle": "Ora, je hulpje",
+    "cardHint": "Verberg Ora, kies de kleur en hoeveel Ora beweegt.",
+    "cardLink": "Open Ora-instellingen",
+    "enabledTitle": "Ora tonen",
+    "enabledHint": "Ora is een klein hulpje onderaan het scherm. Verbergen geldt overal, maar alleen voor jou; je instellingen blijven bewaard en niemand anders merkt iets.",
+    "enabledOn": "Ora wordt getoond",
+    "enabledOff": "Ora is verborgen en uitgeschakeld",
+    "motionTitle": "Beweging",
+    "motionHint": "Eén instelling voor elke Thuis en voor Persoonlijk. De instelling voor minder beweging van je apparaat gaat altijd voor.",
+    "motion": {
+      "gentle": "Rustige beweging",
+      "reactions": "Alleen reacties",
+      "none": "Geen beweging"
+    },
+    "motionHints": {
+      "gentle": "Ora zweeft en knippert, en reageert kort op wat je doet.",
+      "reactions": "Ora blijft stil en reageert alleen kort op wat je doet.",
+      "none": "Ora beweegt nooit. De uitdrukking en een korte tekst tonen wat er gebeurt."
+    },
+    "coloursTitle": "Kleur",
+    "coloursHint": "Je eigen kleur voor Ora, apart voor Persoonlijk en voor elke Thuis. Andere leden houden hun eigen kleur.",
+    "personalColour": "Persoonlijk",
+    "selected": "Gekozen",
+    "palettes": {
+      "muted-teal": "Zeeglas",
+      "denim": "Denim",
+      "terracotta": "Klei",
+      "olive": "Olijf",
+      "ochre": "Honing",
+      "heather": "Heide",
+      "brick": "Baksteen",
+      "petrol": "Petrol",
+      "cocoa": "Cacao"
+    },
+    "saved": "Opgeslagen.",
+    "saveFailed": "Dat kon niet worden opgeslagen. Probeer het opnieuw.",
+    "saveNetwork": "Madeora is niet bereikbaar. Controleer je verbinding en probeer het opnieuw.",
+    "saveSignedOut": "Je bent afgemeld. Meld je opnieuw aan om op te slaan.",
+    "saveForbidden": "Je hoort niet meer bij die Thuis.",
+    "noHomes": "Word lid van een Thuis of maak er een om er een kleur voor te kiezen."
   }
 }

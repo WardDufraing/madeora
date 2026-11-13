@@ -6,6 +6,7 @@ import { AccountMemory } from "@/components/account/account-memory";
 import { SecurityReviewBanner } from "@/components/account/security-review-banner";
 import { AccentStyle } from "@/components/accent/accent-style";
 import { AppProviders } from "@/components/auth/app-providers";
+import { OraRoot } from "@/components/ora/ora-root";
 import { AppShell } from "@/components/shell/app-shell";
 import { listMyHomes } from "@/homes/server";
 import { countUnreadNotifications } from "@/notifications/server";
@@ -41,6 +42,11 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         {reviewDue ? <SecurityReviewBanner /> : null}
         {children}
       </AppShell>
+      {/* Ora (S45): its own settings decide whether it shows; the rest of the app never waits on it. */}
+      <OraRoot
+        userId={identity.userId}
+        homes={myHomes.status === "ok" ? myHomes.homes.map(({ id, name }) => ({ id, name })) : null}
+      />
     </AppProviders>
   );
 }

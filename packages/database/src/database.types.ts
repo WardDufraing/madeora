@@ -419,6 +419,68 @@ export type Database = {
           },
         ];
       };
+      ora_home_palettes: {
+        Row: {
+          created_at: string;
+          home_id: string;
+          palette: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          home_id: string;
+          palette: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          home_id?: string;
+          palette?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ora_home_palettes_membership_fkey";
+            columns: ["home_id", "user_id"];
+            isOneToOne: true;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
+      ora_preferences: {
+        Row: {
+          created_at: string;
+          enabled: boolean;
+          intro: string | null;
+          motion: string;
+          personal_palette: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          enabled?: boolean;
+          intro?: string | null;
+          motion?: string;
+          personal_palette?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          enabled?: boolean;
+          intro?: string | null;
+          motion?: string;
+          personal_palette?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       shopping_signals: {
         Row: {
           changed_at: string;

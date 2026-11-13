@@ -8116,5 +8116,128 @@
     "save": "Save",
     "cancel": "Discard changes",
     "restore": "Restore defaults"
+  },
+  "Ora": {
+    "title": "Ora",
+    "open": "Open Ora, your Madeora helper",
+    "close": "Close Ora",
+    "expand": "Show Ora larger",
+    "collapse": "Show Ora smaller",
+    "context": "Helping in {context}",
+    "contextPersonal": "Personal",
+    "greetingPersonal": "Hi! What would you like to do with your personal things?",
+    "greetingHome": "Hi! What would you like to do in {home}?",
+    "empty": "I have no suggestions for you right now. Here are places I can take you.",
+    "loading": "Getting things ready…",
+    "quickActions": "Quick actions",
+    "browseAll": "Browse all actions",
+    "browseFewer": "Show fewer actions",
+    "actionFailed": "That didn't work, and nothing was changed. Please try again.",
+    "settingsLink": "Ora settings",
+    "groups": {
+      "overview": "Overview",
+      "tasks": "Tasks",
+      "chores": "Chores",
+      "meals": "Meals",
+      "shopping": "Shopping",
+      "habits": "Habits",
+      "goals": "Goals",
+      "pets": "Pets",
+      "calendar": "Calendar",
+      "photos": "Photos",
+      "home": "Home",
+      "ora": "Ora"
+    },
+    "tools": {
+      "open-dashboard": "Open the dashboard",
+      "open-tasks": "Open tasks",
+      "open-chores": "Open chores",
+      "open-meals": "Open the meal planner",
+      "open-shopping": "Open shopping lists",
+      "open-habits": "Open habits",
+      "open-goals": "Open goals",
+      "open-pets": "Open pets",
+      "open-calendar": "Open the calendar",
+      "open-photos": "Open photos",
+      "open-members": "See the members",
+      "open-invitations": "Manage invitations",
+      "open-displays": "Manage Household Displays",
+      "open-home-settings": "Open Home settings",
+      "capabilities": "What can you do here?"
+    },
+    "intro": {
+      "title": "Meet Ora",
+      "lead": "I'm a small helper inside Madeora, not a general assistant. In {context} I only do what you're allowed to do.",
+      "takeYou": "Take you straight to {modules}.",
+      "onlyAllowed": "Offer only what you may use here, and nothing you can't.",
+      "noChanges": "For now I open pages for you; I don't change anything on my own.",
+      "tryExample": "Try an example",
+      "exampleTitle": "Here is what I can open for you here:",
+      "skip": "Skip",
+      "done": "Done",
+      "saveFailed": "That couldn't be saved. You can keep using Ora and try again."
+    },
+    "help": {
+      "open": "What Ora can do",
+      "title": "What Ora can do",
+      "intro": "In {context} I can take you to these places:",
+      "limits": "I only offer what you're allowed to use here. I don't change anything, and I'm not a general-purpose assistant.",
+      "back": "Back"
+    },
+    "unavailable": {
+      "title": "Ora is temporarily unavailable",
+      "body": "The rest of Madeora keeps working. You can try again, or go straight to a page:",
+      "offlineTitle": "You appear to be offline",
+      "offlineBody": "Ora needs a connection. Check your connection, then try again, or go straight to a page:",
+      "retry": "Try again",
+      "pagesLabel": "Pages you can open without Ora"
+    },
+    "forbidden": {
+      "title": "Ora can't help in this place",
+      "body": "You may no longer have access here. Choose another place from the menu."
+    }
+  },
+  "OraSettings": {
+    "pageTitle": "Ora",
+    "cardTitle": "Ora, your helper",
+    "cardHint": "Hide Ora, choose its colour and how much it moves.",
+    "cardLink": "Open Ora settings",
+    "enabledTitle": "Show Ora",
+    "enabledHint": "Ora is a small helper at the bottom of the screen. Hiding it removes it everywhere for you only; your settings stay, and nobody else is affected.",
+    "enabledOn": "Ora is shown",
+    "enabledOff": "Ora is hidden and disabled",
+    "motionTitle": "Movement",
+    "motionHint": "One setting for every Home and for Personal. Your device's reduced-motion setting always wins.",
+    "motion": {
+      "gentle": "Gentle motion",
+      "reactions": "Reactions only",
+      "none": "No motion"
+    },
+    "motionHints": {
+      "gentle": "Ora floats and blinks, and reacts briefly to what you do.",
+      "reactions": "Ora stays still and only reacts briefly to what you do.",
+      "none": "Ora never moves. Its expression and a short text show what is happening."
+    },
+    "coloursTitle": "Colour",
+    "coloursHint": "Your own colour for Ora, separately in Personal and in each Home. Other members keep their own.",
+    "personalColour": "Personal",
+    "selected": "Selected",
+    "palettes": {
+      "muted-teal": "Sea glass",
+      "denim": "Denim",
+      "terracotta": "Clay",
+      "olive": "Olive",
+      "ochre": "Honey",
+      "heather": "Heather",
+      "brick": "Brick",
+      "petrol": "Petrol",
+      "cocoa": "Cocoa"
+    },
+    "saved": "Saved.",
+    "saveFailed": "That couldn't be saved. Please try again.",
+    "saveNetwork": "Madeora can't be reached. Check your connection and try again.",
+    "saveSignedOut": "You've been signed out. Sign in again to save.",
+    "saveForbidden": "You no longer belong to that Home.",
+    "noHomes": "Join or create a Home to choose a colour for it."
   }
 }

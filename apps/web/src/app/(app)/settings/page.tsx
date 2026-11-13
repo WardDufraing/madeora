@@ -65,6 +65,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     tGoogle,
     tActivity,
     tPrivacy,
+    tOra,
   ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
@@ -86,6 +87,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getTranslations("GoogleCalendar"),
     getTranslations("Activity"),
     getTranslations("Privacy"),
+    getTranslations("OraSettings"),
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
@@ -182,6 +184,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             className="text-body font-medium text-accent-fg underline"
           >
             {t("notificationsLink")}
+          </Link>
+        </Card>
+        <Card title={tOra("cardTitle")} description={tOra("cardHint")}>
+          <Link
+            href="/settings/ora"
+            className="text-body font-medium text-accent-fg underline"
+            data-testid="ora-settings-link"
+          >
+            {tOra("cardLink")}
           </Link>
         </Card>
         <Card title={tGoogle("settingsCardTitle")} description={tGoogle("settingsCardHint")}>
