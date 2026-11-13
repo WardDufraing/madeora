@@ -15,6 +15,8 @@ export const oraToolIds = [
   "open-displays",
   "open-home-settings",
   "capabilities",
+  "overview",
+  "share-overview",
 ] as const;
 
 export type OraToolId = (typeof oraToolIds)[number];

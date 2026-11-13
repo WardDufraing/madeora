@@ -276,7 +276,9 @@
     "widgetPersonalPhotos": "Mijn foto's",
     "settingUpcomingDays": "Periode",
     "settingUpcomingDaysOption": "Komende {days} dagen",
-    "settingUpcomingCount": "Aantal afspraken"
+    "settingUpcomingCount": "Aantal afspraken",
+    "widgetOra": "Ora",
+    "widgetOraDescription": "Het overzicht van Ora voor vandaag met snelle acties. Het opent het paneel van Ora."
   },
   "Placeholder": {
     "title": "Nog niet gebouwd",
@@ -8164,7 +8166,9 @@
       "open-invitations": "Beheer uitnodigingen",
       "open-displays": "Beheer Household Displays",
       "open-home-settings": "Open Thuis-instellingen",
-      "capabilities": "Wat kun je hier doen?"
+      "capabilities": "Wat kun je hier doen?",
+      "overview": "Wat staat er gepland?",
+      "share-overview": "Een overzicht delen"
     },
     "intro": {
       "title": "Maak kennis met Ora",
@@ -8240,5 +8244,127 @@
     "saveSignedOut": "Je bent afgemeld. Meld je opnieuw aan om op te slaan.",
     "saveForbidden": "Je hoort niet meer bij die Thuis.",
     "noHomes": "Word lid van een Thuis of maak er een om er een kleur voor te kiezen."
+  },
+  "OraOverview": {
+    "title": "Wat staat er gepland",
+    "back": "Terug",
+    "periodLabel": "Periode",
+    "presets": {
+      "today": "Vandaag",
+      "tomorrow": "Morgen",
+      "thisWeek": "Deze week",
+      "nextWeek": "Volgende week"
+    },
+    "pickDate": "Kies een datum",
+    "thatDay": "Die dag",
+    "thatWeek": "Die week",
+    "rangeDay": "{date} · {context}",
+    "rangeWeek": "{from} – {to} · {context}",
+    "modules": {
+      "calendar": "Agenda",
+      "tasks": "Taken",
+      "chores": "Klusjes"
+    },
+    "counts": {
+      "calendar": "{count, plural, one {# afspraak} other {# afspraken}}",
+      "tasks": "{count, plural, one {# taak} other {# taken}}",
+      "chores": "{count, plural, one {# klusje} other {# klusjes}}"
+    },
+    "filtersTitle": "Filters",
+    "assigneeMe": "Aan mij toegewezen",
+    "assigneeMember": "Toegewezen aan",
+    "assigneeAnyone": "Iedereen",
+    "noName": "Een lid",
+    "completion": {
+      "open": "Open",
+      "done": "Klaar"
+    },
+    "clearFilters": "Filters wissen",
+    "subset": "Alleen items die bij je filters passen, niet het hele schema.",
+    "busier": "{count, plural, one {{days} lijkt drukker, met meerdere geplande items.} other {{days} lijken drukker, met meerdere geplande items.}}",
+    "nothingDay": "Niets zichtbaar",
+    "nothingIncomplete": "Niets zichtbaar, maar dit overzicht is onvolledig",
+    "empty": {
+      "none": "Er staat niets gepland dat je kunt zien in deze periode.",
+      "filtered": "Niets komt overeen met je filters.",
+      "incomplete": "Er kon niets getoond worden en sommige bronnen ontbreken, dus dit betekent niet dat de periode vrij is."
+    },
+    "openModule": {
+      "calendar": "Open de agenda",
+      "tasks": "Open taken"
+    },
+    "incompleteTitle": "Dit overzicht kan onvolledig zijn",
+    "notices": {
+      "unavailable": "{module} kon nu niet worden gelezen.",
+      "stale": "{source} is niet actueel. Laatst bijgewerkt {time}.",
+      "unverified": "{source} is mogelijk niet actueel. De laatste update is onbekend.",
+      "googleCalendar": "Een Google-agenda",
+      "truncated": "Niet alle items worden getoond omdat het er veel zijn."
+    },
+    "showItems": "Bekijk gerelateerde items",
+    "hideItems": "Verberg gerelateerde items",
+    "itemsIncomplete": "Deze lijst kan onvolledig zijn.",
+    "noSetTime": "Geen vast tijdstip",
+    "allDay": "Hele dag",
+    "status": {
+      "done": "Klaar",
+      "overdue": "Te laat",
+      "pending": "Wacht op goedkeuring",
+      "open": "Open"
+    },
+    "origin": {
+      "shared": "Gedeeld met deze Thuis",
+      "google": "Google Agenda"
+    },
+    "completeIn": "Open {title} om af te ronden",
+    "completeInShort": "Open om af te ronden",
+    "loading": "Je overzicht wordt voorbereid…",
+    "failed": "Ora kon het overzicht nu niet voorbereiden.",
+    "forbidden": "Je hebt geen toegang meer tot deze plek.",
+    "retry": "Vernieuwen",
+    "share": {
+      "open": "Deel een kopie",
+      "close": "Delen sluiten",
+      "title": "Deel een kopie",
+      "intro": "Maak een tekst die je zelf kunt kopiëren en versturen. Alleen items die jullie allebei mogen zien staan erin.",
+      "audience": "Voor wie is het?",
+      "choose": "Kies een lid",
+      "noName": "Een lid",
+      "prepare": "Tekst voorbereiden",
+      "prepareAgain": "Opnieuw voorbereiden",
+      "textLabel": "Tekst om te kopiëren (je kunt hem aanpassen)",
+      "warning": "Controleer de tekst voordat je kopieert. Eenmaal buiten Madeora gekopieerd kan Madeora niet beperken wie hem ziet of hem terughalen.",
+      "incomplete": "Sommige bronnen waren niet actueel, dus deze tekst kan onvolledig zijn.",
+      "copy": "Tekst kopiëren",
+      "copied": "Gekopieerd.",
+      "copyFailed": "Kopiëren lukte niet. Selecteer de tekst en kopieer hem zelf.",
+      "failed": "Ora kon de tekst nu niet voorbereiden.",
+      "invalid": "Voor die persoon kan geen tekst worden voorbereid.",
+      "textTitle": "{scope, select, day {Overzicht voor {from}} other {Overzicht voor {from} – {to}}}",
+      "textContext": "Thuis: {home}",
+      "textAudience": "Voor: {name}",
+      "textAllDay": "Hele dag",
+      "textNoTime": "Geen vast tijdstip",
+      "textDone": "klaar",
+      "textSomeone": "een lid",
+      "textEmpty": "Er staat niets gepland dat hier zichtbaar is.",
+      "textIncomplete": "Sommige bronnen waren niet actueel, dus dit kan onvolledig zijn.",
+      "textLeftOut": "Sommige informatie kan zijn weggelaten."
+    }
+  },
+  "OraWidget": {
+    "today": "Overzicht van vandaag",
+    "week": "Deze week",
+    "offTitle": "Ora staat uit",
+    "offDescription": "Zet Ora weer aan in je instellingen om hier je overzicht te zien.",
+    "settings": "Ora-instellingen",
+    "failedTitle": "Het overzicht van Ora is niet beschikbaar",
+    "failed": "Ora kon je overzicht nu niet lezen. De rest van je dashboard heeft er geen last van.",
+    "incomplete": "Sommige bronnen konden niet worden gelezen, dus het overzicht van vandaag is onvolledig.",
+    "nothing": "Er staat vandaag niets gepland dat je kunt zien.",
+    "summary": "{count, plural, one {# item gepland vandaag} other {# items gepland vandaag}}",
+    "attention": "{count, plural, one {# heeft aandacht nodig} other {# hebben aandacht nodig}}",
+    "someMissing": "Sommige bronnen ontbreken, dus dit kan onvolledig zijn.",
+    "overdue": "Te laat"
   }
 }

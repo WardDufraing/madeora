@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { checkJsonMutation, readJsonBody } from "@/api/json-request";
 import { availableTools, runTool } from "@/ora/tools/registry";
+import { runInputTool } from "@/ora/tools/run-input";
 import { resolveOraToolContext, type OraToolContextResult } from "@/ora/tools/server";
 import type { OraToolRunResponse, OraToolsErrorCode, OraToolsResponse } from "@/ora/tools/types";
 
@@ -12,7 +13,7 @@ import type { OraToolRunResponse, OraToolsErrorCode, OraToolsResponse } from "@/
  * that does not exist and a Home they do not belong to all answer the same 403.
  */
 
-const MAX_BODY_BYTES = 1024;
+const MAX_BODY_BYTES = 4096;
 
 function json(status: number, body: unknown): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -38,6 +39,8 @@ export async function GET(request: Request): Promise<Response> {
 const runSchema = z.strictObject({
   tool: z.string().min(1).max(64),
   homeId: z.string().max(64).nullish(),
+  /** For tools that take input (overviews); each tool validates it with its own schema. */
+  input: z.unknown().optional(),
 });
 
 export async function POST(request: Request): Promise<Response> {
@@ -52,7 +55,12 @@ export async function POST(request: Request): Promise<Response> {
   const resolved = await resolveOraToolContext(parsed.data.homeId);
   if (resolved.status !== "ok") return refusal(resolved);
 
-  const result = runTool(resolved.context, parsed.data.tool);
+  const result =
+    parsed.data.input === undefined
+      ? runTool(resolved.context, parsed.data.tool)
+      : await runInputTool(resolved.context, parsed.data.tool, parsed.data.input);
+  if (result.status === "invalid") return failure(400, "invalid");
+  if (result.status === "unavailable") return failure(503, "unavailable");
   if (result.status !== "ok") return failure(403, "forbidden");
   return json(200, { output: result.output } satisfies OraToolRunResponse);
 }

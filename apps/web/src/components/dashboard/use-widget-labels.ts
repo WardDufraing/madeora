@@ -39,6 +39,7 @@ export function useWidgetLabels(): {
     "pet-care": t("widgetPetCare"),
     "upcoming-events": t("widgetUpcomingEvents"),
     photos: t("widgetPhotos"),
+    ora: t("widgetOra"),
   };
   const descriptions: { readonly [T in WidgetType]: string } = {
     welcome: t("widgetWelcomeDescription"),
@@ -66,6 +67,7 @@ export function useWidgetLabels(): {
     "pet-care": t("widgetPetCareDescription"),
     "upcoming-events": t("widgetUpcomingEventsDescription"),
     photos: t("widgetPhotosDescription"),
+    ora: t("widgetOraDescription"),
   };
   const personalNames: { readonly [T in WidgetType]?: string } = {
     tasks: t("widgetPersonalTasks"),
