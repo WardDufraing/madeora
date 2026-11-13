@@ -7981,7 +7981,140 @@
     "pairingRateLimited": "Er zijn te veel codes gevraagd vanaf dit netwerk. Probeer het later opnieuw.",
     "pairingUnavailable": "Koppelen is nu niet mogelijk. Dit scherm probeert het vanzelf opnieuw.",
     "pairingNewCode": "Nieuwe code vragen",
+    "configure": "Indeling en vergrendeling",
+    "configureNamed": "Indeling en privacyvergrendeling van {name}"
+  },
+  "DisplayBoard": {
+    "widget": {
+      "clock": "Klok",
+      "chores": "Taken",
+      "shopping": "Boodschappen"
+    },
+    "noChores": "Er zijn nu geen taken te doen.",
+    "noLists": "Geen boodschappenlijsten om te tonen.",
+    "listDone": "Niets meer te kopen.",
+    "more": "{count, plural, one {nog #} other {nog #}}",
+    "dueToday": "Vandaag",
+    "overdue": "Te laat sinds {date}",
+    "offline": "Offline. Het scherm werkt weer bij zodra de verbinding terug is.",
+    "offlineReadOnly": "Offline: dit is de laatst bekende informatie. Acties zijn gepauzeerd tot de verbinding terug is.",
+    "notPairedAnyMore": "Dit scherm is niet meer gekoppeld. Terug naar het koppelscherm…",
     "pairedAs": "Gezinsscherm: {name}",
-    "offline": "Offline. Het scherm werkt weer bij zodra de verbinding terug is."
+    "lock": "Privacyvergrendeling",
+    "lockedHint": "Dit scherm staat in privacymodus. Een beheerder van het Home kan die uitzetten via Gezinsschermen in de instellingen van het Home, op hun eigen telefoon of computer.",
+    "lockedTitle": "Privacymodus staat aan",
+    "offlineTitle": "Offline",
+    "lockTitle": "Privacymodus aanzetten",
+    "lockDescription": "Het scherm toont dan alleen de tijd en een welkomstbericht, tot een beheerder van het Home het uitzet vanaf hun eigen telefoon of computer. Wie ben je?",
+    "close": "Sluiten",
+    "unnamed": "Lid zonder naam",
+    "pinLabel": "PIN van {name}",
+    "lockConfirm": "Privacymodus aanzetten",
+    "notMe": "Niet ik",
+    "lockFail": {
+      "invalidPin": "Die PIN klopt niet.",
+      "pinLocked": "Deze PIN is tijdelijk geblokkeerd na te veel foute pogingen.",
+      "pinNotSet": "Je hebt nog geen PIN voor gedeelde apparaten. Stel er een in bij je accountinstellingen, of zet privacymodus aan via Gezinsschermen op je eigen apparaat.",
+      "notPermitted": "Alleen een beheerder van het Home kan privacymodus aanzetten.",
+      "rateLimited": "Te veel pogingen op dit scherm. Wacht een paar minuten.",
+      "network": "Madeora is nu niet bereikbaar. Er is niets veranderd.",
+      "failed": "Privacymodus kon niet worden aangezet. Probeer het opnieuw."
+    }
+  },
+  "DisplayConfig": {
+    "title": "Gezinsscherm",
+    "notFoundTitle": "Scherm niet gevonden",
+    "notFound": "Dit scherm is niet meer gekoppeld aan dit Home.",
+    "applied": "Het scherm toont de laatste instellingen.",
+    "notApplied": "Nog niet toegepast: het scherm heeft de laatste wijziging nog niet opgehaald. Dat gebeurt zodra het online is.",
+    "notice": {
+      "saved": "Indeling opgeslagen. Het scherm werkt binnen enkele seconden bij.",
+      "restored": "Standaardindeling teruggezet.",
+      "locked": "Privacymodus staat aan. Het scherm toont alleen de tijd en je bericht.",
+      "unlocked": "Privacymodus staat uit. Het scherm toont weer zijn indeling.",
+      "messageSaved": "Welkomstbericht opgeslagen."
+    },
+    "lockTitle": "Privacy- en feestmodus",
+    "lockIntro": "Zet dit aan voor bezoek of een feestje: {name} toont dan alleen de tijd, de datum en je welkomstbericht, zonder namen, taken of lijsten. Het blijft aan, ook na een herstart, tot je het hier uitzet. Andere schermen veranderen niet.",
+    "lockOn": "Privacymodus staat aan.",
+    "lockOff": "Privacymodus staat uit.",
+    "messageLabel": "Welkomstbericht (optioneel)",
+    "messageHint": "Staat op het vergrendelscherm. Hoogstens {max} tekens; schrijf niets persoonlijks.",
+    "messageInvalid": "Typ een bericht van hoogstens 80 tekens, of laat het leeg.",
+    "lock": "Privacymodus aanzetten",
+    "unlock": "Privacymodus uitzetten",
+    "saveMessage": "Bericht opslaan",
+    "layoutTitle": "Widgets",
+    "layoutIntro": "Kies wat dit scherm toont en in welke volgorde. Een scherm toont alleen informatie die veilig is voor iedereen in de kamer.",
+    "missingLists": "Een gekozen boodschappenlijst bestaat niet meer. Het scherm laat ze weg; verwijder ze hier.",
+    "noWidgets": "Geen widgets. Het scherm toont alleen zijn naam.",
+    "widget": {
+      "clock": "Klok",
+      "chores": "Taken",
+      "shopping": "Boodschappen"
+    },
+    "widgetPosition": "{position}. {name}",
+    "moveUp": "Omhoog",
+    "moveDown": "Omlaag",
+    "remove": "Verwijderen",
+    "moveUpNamed": "{name} (plaats {position}) omhoog",
+    "moveDownNamed": "{name} (plaats {position}) omlaag",
+    "removeNamed": "{name} (plaats {position}) verwijderen",
+    "sizeLabel": "Grootte",
+    "size": {
+      "small": "Klein",
+      "medium": "Middel",
+      "large": "Groot (volle breedte)"
+    },
+    "showDate": "Datum tonen",
+    "choreActions": "Leden kunnen hier taken afvinken",
+    "choreActionsHint": "Met de PIN-regels van het Home voor gedeelde apparaten. Uit: de taken staan er alleen ter info.",
+    "countLabel": "Aantal taken",
+    "listsLabel": "Lijsten (hoogstens {max})",
+    "listsHint": "Geen gekozen: alle lijsten van het Home.",
+    "noLists": "Dit Thuis heeft nog geen boodschappenlijsten.",
+    "itemCountLabel": "Artikelen per lijst",
+    "addLabel": "Widget toevoegen",
+    "add": "Toevoegen",
+    "limitReached": "Een scherm heeft hoogstens {max} widgets.",
+    "presentationTitle": "Weergave",
+    "orientationLabel": "Stand",
+    "orientation": {
+      "auto": "Automatisch",
+      "landscape": "Liggend",
+      "portrait": "Staand"
+    },
+    "themeLabel": "Thema",
+    "theme": {
+      "auto": "Automatisch",
+      "light": "Licht",
+      "dark": "Donker"
+    },
+    "densityLabel": "Dichtheid",
+    "density": {
+      "comfortable": "Ruim",
+      "compact": "Compact"
+    },
+    "clockLabel": "Klok",
+    "clock": {
+      "auto": "Automatisch",
+      "12h": "12-uursklok",
+      "24h": "24-uursklok"
+    },
+    "previewTitle": "Voorbeeld",
+    "previewDragHint": "Sleep de widgets in het voorbeeld om de volgorde te wijzigen. Je kunt ook Omhoog en Omlaag gebruiken.",
+    "previewOrientation": "Stand van het voorbeeld",
+    "conflict": "Iemand anders heeft dit scherm intussen gewijzigd. Laad de pagina opnieuw om die wijzigingen te zien en doe dan de jouwe opnieuw.",
+    "saveFail": {
+      "signedOut": "Je bent afgemeld. Meld je opnieuw aan en probeer het nog eens.",
+      "notPermitted": "Alleen de Eigenaar, of een Beheerder die Home-instellingen mag beheren, kan schermen wijzigen.",
+      "notFound": "Dit scherm is niet meer gekoppeld aan dit Home.",
+      "invalid": "Deze indeling kan niet worden opgeslagen. Controleer de widgets en probeer het opnieuw.",
+      "network": "Madeora is nu niet bereikbaar. Er is niets opgeslagen.",
+      "failed": "De indeling kon niet worden opgeslagen. Probeer het opnieuw."
+    },
+    "save": "Opslaan",
+    "cancel": "Wijzigingen weggooien",
+    "restore": "Standaard terugzetten"
   }
 }

@@ -55,7 +55,7 @@ test("a manager pairs a tablet as a Household Display and revokes it", async ({
   await expect(page.getByTestId("display-row")).toContainText("Kitchen");
 
   // The tablet turns into the display by itself.
-  await expect(screen.getByTestId("paired-display")).toBeVisible({ timeout: 15_000 });
+  await expect(screen.getByTestId("display-board")).toBeVisible({ timeout: 15_000 });
   await expect(screen.getByRole("heading", { name: "Thuis" })).toBeVisible();
   await expect(screen.getByText("Household Display: Kitchen")).toBeVisible();
   expect(await axeViolations(screen)).toEqual([]);
@@ -74,7 +74,7 @@ test("a manager pairs a tablet as a Household Display and revokes it", async ({
   await screen.close();
   const restarted = await tablet.newPage();
   await restarted.goto(`${base}/display`);
-  await expect(restarted.getByTestId("paired-display")).toBeVisible();
+  await expect(restarted.getByTestId("display-board")).toBeVisible();
 
   // The display reaches nothing else: member pages send it back, the API refuses it.
   await restarted.goto(`${base}/homes/${homeId}/settings`);

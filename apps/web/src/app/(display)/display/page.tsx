@@ -3,12 +3,13 @@ import { getTranslations } from "next-intl/server";
 
 import { getAuthState } from "@/auth/identity";
 import { FormAlert } from "@/components/auth/form-alert";
+import { DisplayCentered } from "@/components/displays/display-centered";
 import { DisplayPairing } from "@/components/displays/display-pairing";
 import { DisplayReset } from "@/components/displays/display-reset";
 import { DisplayRetry } from "@/components/displays/display-retry";
-import { PairedDisplay } from "@/components/displays/paired-display";
+import { DisplayScreen } from "@/components/displays/display-screen";
 import { Button } from "@/components/ui/button";
-import { getDisplaySession } from "@/displays/server";
+import { getDisplayBoard } from "@/displays/board";
 import { pageTitle } from "@/i18n/page-title";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,40 +22,55 @@ export async function generateMetadata(): Promise<Metadata> {
  *
  * - Unregistered (no session): the pairing screen, with pairing instructions and the temporary
  *   code only (spec: no Home information or household controls before approval).
- * - Paired: the display's own screen. S43 shows its name, its Home's name and the time; the shared
- *   dashboard follows in S44. A display the database no longer accepts (revoked, Home closed) is
- *   signed out and shows the pairing screen again, without anything it showed before.
+ * - Paired: the display's own board (S44): its layout of shared-display-safe widgets, or only the
+ *   lock screen while privacy/party mode is on (the database decides; `getDisplayBoard`). A display
+ *   the database no longer accepts (revoked, Home closed) is signed out and shows the pairing
+ *   screen again, without anything it showed before.
  * - Someone's own session in this browser: pairing never replaces it, so they are asked to sign out.
  */
 export default async function DisplayPage() {
   const [state, t] = await Promise.all([getAuthState(), getTranslations("Displays")]);
 
   if (state.kind === "display") {
-    const result = await getDisplaySession();
-    if (result.kind === "refused") return <DisplayReset />;
-    if (result.kind === "unavailable") return <DisplayRetry />;
+    const result = await getDisplayBoard();
+    if (result.kind === "refused") {
+      return (
+        <DisplayCentered>
+          <DisplayReset />
+        </DisplayCentered>
+      );
+    }
+    if (result.kind === "unavailable") {
+      return (
+        <DisplayCentered>
+          <DisplayRetry />
+        </DisplayCentered>
+      );
+    }
+    return <DisplayScreen initialBoard={result.board} />;
+  }
+
+  if (state.kind === "signed-out") {
     return (
-      <PairedDisplay
-        displayName={result.session.displayName}
-        homeName={result.session.homeName}
-        timeZone={result.session.homeTimezone}
-      />
+      <DisplayCentered>
+        <DisplayPairing />
+      </DisplayCentered>
     );
   }
 
-  if (state.kind === "signed-out") return <DisplayPairing />;
-
   return (
-    <div className="flex w-full max-w-md flex-col gap-4 text-start">
-      <h1 className="text-page-title font-semibold text-fg">{t("screenTitle")}</h1>
-      <FormAlert tone="info">{t("signedInHere")}</FormAlert>
-      {/* A plain form POST: the browser comes straight back here to show the pairing code. */}
-      <form method="post" action="/auth/sign-out">
-        <input type="hidden" name="then" value="display" />
-        <Button type="submit" variant="secondary">
-          {t("signOutFirst")}
-        </Button>
-      </form>
-    </div>
+    <DisplayCentered>
+      <div className="flex w-full max-w-md flex-col gap-4 text-start">
+        <h1 className="text-page-title font-semibold text-fg">{t("screenTitle")}</h1>
+        <FormAlert tone="info">{t("signedInHere")}</FormAlert>
+        {/* A plain form POST: the browser comes straight back here to show the pairing code. */}
+        <form method="post" action="/auth/sign-out">
+          <input type="hidden" name="then" value="display" />
+          <Button type="submit" variant="secondary">
+            {t("signOutFirst")}
+          </Button>
+        </form>
+      </div>
+    </DisplayCentered>
   );
 }

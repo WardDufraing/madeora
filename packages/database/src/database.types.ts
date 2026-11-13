@@ -192,6 +192,24 @@ export type Database = {
           },
         ];
       };
+      display_signals: {
+        Row: {
+          changed_at: string;
+          display_id: string;
+          version: number;
+        };
+        Insert: {
+          changed_at?: string;
+          display_id: string;
+          version?: number;
+        };
+        Update: {
+          changed_at?: string;
+          display_id?: string;
+          version?: number;
+        };
+        Relationships: [];
+      };
       home_member_profiles: {
         Row: {
           accent_color: string | null;
@@ -1924,6 +1942,44 @@ export type Database = {
       discard_google_calendar_change: { Args: { p_change_id: string }; Returns: string };
       discard_security_report: { Args: { p_report_id: string }; Returns: boolean };
       disconnect_google_calendar: { Args: Record<PropertyKey, never>; Returns: string };
+      display_board: { Args: Record<PropertyKey, never>; Returns: Json };
+      display_chore_attempt: {
+        Args: {
+          p_client_key: string;
+          p_display_id: string;
+          p_membership_id: string;
+          p_occurrence_id: string;
+          p_pin: boolean;
+        };
+        Returns: {
+          action_id: string;
+          check_id: string;
+          locked_until: string;
+          outcome: string;
+          pin_hash: string;
+        }[];
+      };
+      display_chore_undo: { Args: { p_action_id: string; p_display_id: string }; Returns: string };
+      display_chore_verified: {
+        Args: { p_check_id: string; p_display_id: string };
+        Returns: {
+          action_id: string;
+          outcome: string;
+        }[];
+      };
+      display_lock_attempt: {
+        Args: { p_client_key: string; p_display_id: string; p_membership_id: string };
+        Returns: {
+          check_id: string;
+          locked_until: string;
+          outcome: string;
+          pin_hash: string;
+        }[];
+      };
+      display_lock_verified: {
+        Args: { p_check_id: string; p_display_id: string };
+        Returns: string;
+      };
       display_me: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -2423,6 +2479,10 @@ export type Database = {
           home_id: string;
           home_name: string;
         }[];
+      };
+      household_display_config: {
+        Args: { p_display_id: string; p_home_id: string };
+        Returns: Json;
       };
       is_madeora_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
       job_outbox_stats: {
@@ -3840,6 +3900,22 @@ export type Database = {
         Args: { p_account: string; p_scopes: string[]; p_token: string };
         Returns: string;
       };
+      save_household_display_config: {
+        Args: {
+          p_clock_format: string;
+          p_density: string;
+          p_display_id: string;
+          p_expected_revision: number;
+          p_home_id: string;
+          p_layout: Json;
+          p_orientation: string;
+          p_theme: string;
+        };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       save_my_privacy_review: { Args: { p_action: string; p_step?: string }; Returns: undefined };
       security_report_rows: {
         Args: { p_report_id: string };
@@ -4088,6 +4164,10 @@ export type Database = {
       };
       set_home_export_access: {
         Args: { p_granted: boolean; p_home_id: string; p_membership_id: string };
+        Returns: string;
+      };
+      set_household_display_lock: {
+        Args: { p_display_id: string; p_home_id: string; p_locked: boolean; p_message?: string };
         Returns: string;
       };
       set_my_avatar: { Args: { p_file_id?: string }; Returns: string };

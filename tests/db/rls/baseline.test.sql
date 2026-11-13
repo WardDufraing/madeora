@@ -67,7 +67,10 @@ select tests.assert_true(
         'private.home_is_open(uuid)',
         -- S41: the child settings policy asks whether the caller guards that child in that Home;
         -- it only answers about the caller.
-        'private.caller_child_guardian_role(uuid,uuid)'
+        'private.caller_child_guardian_role(uuid,uuid)',
+        -- S44: the display_signals Realtime policy asks whether the row is the calling display's
+        -- own (from its own session); it only answers about the caller.
+        'private.display_signal_visible(uuid)'
       ]::text[])
       and (
         has_function_privilege('anon', p.oid, 'execute')
@@ -175,7 +178,14 @@ select tests.assert_true(
       'public.child_transition_preview(text)',
       'public.claim_child_transition(text,text)',
       'public.child_transition_review(text)',
-      'public.complete_child_transition(text)'
+      'public.complete_child_transition(text)',
+      -- S44: chores completed and the privacy lock turned on at a Household Display (the web
+      -- server checks the PIN hash; the display id comes from the display's own session).
+      'public.display_chore_attempt(uuid,uuid,uuid,boolean,text)',
+      'public.display_chore_verified(uuid,uuid)',
+      'public.display_chore_undo(uuid,uuid)',
+      'public.display_lock_attempt(uuid,uuid,text)',
+      'public.display_lock_verified(uuid,uuid)'
     ]::regprocedure[]) as s(signature)
     where has_function_privilege('authenticated', s.signature, 'execute')
   ),
