@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { accentPalette } from "@madeora/design-tokens";
+import { accentPalette, oraPaletteKeys } from "@madeora/design-tokens";
 import { childCapabilities } from "@madeora/domain/permissions";
 import { createTranslator } from "next-intl";
 
@@ -17,6 +17,7 @@ import { choreStateKey } from "@/chores/calendar";
 import { stateKey } from "@/components/recovery/recovery-state-text";
 import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
+import { oraToolIds } from "@/ora/tools/ids";
 import { connectNotices, googleScopes } from "@/google-calendar/schema";
 import { changeActions, changeStates, googleFields, googleStates } from "@/google-calendar/shapes";
 import {
@@ -168,6 +169,29 @@ describe("message dictionaries", () => {
     // Navigation labels are looked up by item id (tNav(item.id)), so the ids are the keys.
     const dynamic = {
       Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
+      // Ora (S45): tool labels by tool id, module group names, palette names, motion modes.
+      Ora: [
+        ...withPrefix("tools.", oraToolIds),
+        ...withPrefix("groups.", [
+          "overview",
+          "tasks",
+          "chores",
+          "meals",
+          "shopping",
+          "habits",
+          "goals",
+          "pets",
+          "calendar",
+          "photos",
+          "home",
+          "ora",
+        ]),
+      ],
+      OraSettings: [
+        ...withPrefix("palettes.", oraPaletteKeys),
+        ...withPrefix("motion.", ["gentle", "reactions", "none"]),
+        ...withPrefix("motionHints.", ["gentle", "reactions", "none"]),
+      ],
       // Household Displays (S44): widget types, presentation options and outcome codes.
       DisplayBoard: [
         ...withPrefix("widget.", displayWidgetTypes),

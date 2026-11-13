@@ -3,6 +3,7 @@
    Tailwind theme that exposes only those tokens (Tailwind's own colour palette is removed). */
 @import "@madeora/design-tokens/tokens.css";
 @import "@madeora/design-tokens/tailwind.css";
+@import "../components/ora/ora-character.css";
 
 @layer base {
   html {

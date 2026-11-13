@@ -119,7 +119,12 @@ export async function nonTokenColours(page: Page): Promise<string[]> {
         : [style.color, style.backgroundColor, style.borderTopColor, style.outlineColor]) {
         found.add(colour);
       }
-      if (element instanceof SVGElement && style.stroke !== "none") found.add(style.stroke);
+      // Ora (S45) draws with one of nine fixed palettes from @madeora/design-tokens, chosen by
+      // the person; like member colours, they are not the interface's own colour tokens.
+      const oraColour = element.closest(".ora-char") !== null;
+      if (element instanceof SVGElement && style.stroke !== "none" && !oraColour) {
+        found.add(style.stroke);
+      }
       if (element instanceof HTMLDialogElement)
         found.add(getComputedStyle(element, "::backdrop").backgroundColor);
     }

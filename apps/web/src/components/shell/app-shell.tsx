@@ -67,7 +67,7 @@ export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: 
               <SignOutButton />
             </div>
           </header>
-          <main id="main" tabIndex={-1} className="flex-1 px-4 pb-10 md:px-8 focus:outline-none">
+          <main id="main" tabIndex={-1} className="flex-1 px-4 pb-24 md:px-8 focus:outline-none">
             {children}
           </main>
         </div>
