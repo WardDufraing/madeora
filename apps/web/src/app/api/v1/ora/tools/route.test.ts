@@ -187,6 +187,8 @@ describe("POST /api/v1/ora/tools: overview input (S46)", () => {
       {},
       { target: "month" },
       { target: "day" },
+      { target: "day", date: "2026-02-31" },
+      { target: "day", date: "9999-12-31" },
       { target: "today", date: "2026-10-01" },
       { target: "today", extra: 1 },
       { target: "today", filters: { assignee: "member" } },

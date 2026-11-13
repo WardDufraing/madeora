@@ -9,7 +9,20 @@ import { z } from "zod";
 export const overviewModules = ["calendar", "tasks", "chores"] as const;
 export type OverviewModule = (typeof overviewModules)[number];
 
-const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** A real calendar date in a sensible range (no 2026-02-31, no year 9999). */
+const dateOnly = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00Z`);
+    const year = parsed.getUTCFullYear();
+    return (
+      !Number.isNaN(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value &&
+      year >= 2000 &&
+      year <= 2100
+    );
+  });
 
 /** The days an overview can cover: a named day, a named week, or a picked day / week. */
 export const overviewTargets = [

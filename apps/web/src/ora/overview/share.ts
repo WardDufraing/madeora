@@ -100,7 +100,9 @@ export function composeShareText(
       .sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
     const rest = ofDay.filter((item) => !timed.includes(item));
     for (const item of timed) {
-      lines.push(`- ${labels.time(item) ?? ""} ${item.title} (${labels.module(item.module)})`);
+      lines.push(
+        `- ${[labels.time(item), item.title].filter(Boolean).join(" ")} (${labels.module(item.module)})`,
+      );
     }
     for (const item of rest) {
       const prefix = item.module === "calendar" ? labels.allDay : labels.noTime;

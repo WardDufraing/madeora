@@ -68,22 +68,20 @@ function matchesCompletion(filters: OverviewFilters, done: boolean): boolean {
 
 function eventItems(input: BuildInput, list: CalendarList): OverviewItem[] {
   const items: OverviewItem[] = [];
-  const seen = new Set<string>();
-  // Madeora's own events first, so a Google copy of the same commitment never counts twice.
-  const ordered = [...list.occurrences].sort(
-    (a, b) => Number(a.source === "google") - Number(b.source === "google"),
-  );
-  for (const occurrence of ordered) {
-    if (!matchesAssignee(input.filters, input.selfMembershipId, occurrence.participants)) continue;
-    // Calendar entries have no completion state: a "done" filter leaves them out.
-    if (input.filters.completion === "done") continue;
-    const duplicate = [
+  // Only a Google event that mirrors a Madeora event (same title and times) is collapsed into it;
+  // two separate Madeora events at the same time both count.
+  const key = (occurrence: Occurrence) =>
+    [
       occurrence.title.trim().toLowerCase(),
       occurrence.startsAt ?? occurrence.from,
       occurrence.endsAt ?? occurrence.to,
     ].join("|");
-    if (seen.has(duplicate)) continue;
-    seen.add(duplicate);
+  const mirrored = new Set(list.occurrences.filter((entry) => entry.source !== "google").map(key));
+  for (const occurrence of list.occurrences) {
+    if (!matchesAssignee(input.filters, input.selfMembershipId, occurrence.participants)) continue;
+    // Calendar entries have no completion state: a "done" filter leaves them out.
+    if (input.filters.completion === "done") continue;
+    if (occurrence.source === "google" && mirrored.has(key(occurrence))) continue;
     for (let date = occurrence.from > input.from ? occurrence.from : input.from; ;) {
       if (date > occurrence.to || date > input.to) break;
       items.push(eventItem(input, occurrence, date));

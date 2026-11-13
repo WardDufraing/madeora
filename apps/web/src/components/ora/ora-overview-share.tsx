@@ -40,7 +40,7 @@ export function OraOverviewShare({
   const prepared = current?.share ?? null;
   const text = current?.text ?? "";
   const [state, setState] = useState<
-    "idle" | "working" | "failed" | "invalid" | "copied" | "copyFailed"
+    "idle" | "working" | "failed" | "invalid" | "copied" | "copyFailed" | "changed"
   >("idle");
 
   if (audiences.length === 0) return null;
@@ -62,6 +62,22 @@ export function OraOverviewShare({
   }
 
   async function copy() {
+    if (!current || audience === "") return;
+    // Revalidate right before copying: if anything changed since it was prepared (membership,
+    // permissions, records, sources), show the new text and require a fresh review instead.
+    setState("working");
+    try {
+      const output = await callOraTool(homeId, "share-overview", { request, audience });
+      if (output.kind !== "share") throw new OraToolError("unavailable");
+      if (output.share.text !== current.share.text) {
+        setStored({ key: requestKey, share: output.share, text: output.share.text });
+        setState("changed");
+        return;
+      }
+    } catch {
+      setState("failed");
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       setState("copied");
@@ -142,6 +158,9 @@ export function OraOverviewShare({
                     {t("share.copy")}
                   </Button>
                 </div>
+                {state === "changed" ? (
+                  <p className="text-helper text-danger">{t("share.changed")}</p>
+                ) : null}
                 {state === "copied" ? <p className="text-helper">{t("share.copied")}</p> : null}
                 {state === "copyFailed" ? (
                   <p className="text-helper text-danger">{t("share.copyFailed")}</p>

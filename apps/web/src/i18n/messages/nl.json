@@ -8349,7 +8349,8 @@
       "textSomeone": "een lid",
       "textEmpty": "Er staat niets gepland dat hier zichtbaar is.",
       "textIncomplete": "Sommige bronnen waren niet actueel, dus dit kan onvolledig zijn.",
-      "textLeftOut": "Sommige informatie kan zijn weggelaten."
+      "textLeftOut": "Sommige informatie kan zijn weggelaten.",
+      "changed": "Er is iets veranderd sinds de tekst werd voorbereid, dus hij is vernieuwd. Controleer hem en kopieer opnieuw."
     }
   },
   "OraWidget": {

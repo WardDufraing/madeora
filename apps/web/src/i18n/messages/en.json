@@ -8349,7 +8349,8 @@
       "textSomeone": "a member",
       "textEmpty": "Nothing planned that is visible here.",
       "textIncomplete": "Some sources were not up to date, so this may be incomplete.",
-      "textLeftOut": "Some information may be left out."
+      "textLeftOut": "Some information may be left out.",
+      "changed": "Something changed since the text was prepared, so it has been refreshed. Review it, then copy again."
     }
   },
   "OraWidget": {

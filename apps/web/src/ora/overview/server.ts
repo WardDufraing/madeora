@@ -33,7 +33,8 @@ type ReadResult<T> =
 function source<T>(allowed: boolean, read: ReadResult<T> | null): Source<T> {
   if (!allowed || read === null) return { status: "off" };
   if (read.status === "ok") return { status: "ok", value: read.value };
-  if (read.status === "unavailable") return { status: "unavailable" };
+  // A rejected request is a defect, not "nothing planned": disclose it like any failed read.
+  if (read.status === "unavailable" || read.status === "invalid") return { status: "unavailable" };
   return { status: "off" };
 }
 
