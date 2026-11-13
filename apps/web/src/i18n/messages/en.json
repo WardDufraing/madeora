@@ -8002,6 +8002,8 @@
     "pairedAs": "Household Display: {name}",
     "lock": "Privacy lock",
     "lockedHint": "This display is in privacy mode. A Home manager can turn it off from Household Displays in the Home's settings, on their own phone or computer.",
+    "lockedTitle": "Privacy mode is on",
+    "offlineTitle": "Offline",
     "lockTitle": "Turn on privacy mode",
     "lockDescription": "The display then shows only the time and a welcome message until a Home manager turns it off from their own phone or computer. Who are you?",
     "close": "Close",

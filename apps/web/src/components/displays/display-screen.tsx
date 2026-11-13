@@ -212,6 +212,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 text-center"
         data-testid={board.locked ? "display-locked" : "display-offline"}
       >
+        <h1 className="sr-only">{board.locked ? t("lockedTitle") : t("offlineTitle")}</h1>
         <DisplayClock timeZone={board.timeZone} clockFormat={clockFormat} />
         {board.locked && board.lockMessage ? (
           <p className="text-section-title text-fg" dir="auto">

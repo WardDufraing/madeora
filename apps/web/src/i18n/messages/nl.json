@@ -8002,6 +8002,8 @@
     "pairedAs": "Gezinsscherm: {name}",
     "lock": "Privacyvergrendeling",
     "lockedHint": "Dit scherm staat in privacymodus. Een beheerder van het Home kan die uitzetten via Gezinsschermen in de instellingen van het Home, op hun eigen telefoon of computer.",
+    "lockedTitle": "Privacymodus staat aan",
+    "offlineTitle": "Offline",
     "lockTitle": "Privacymodus aanzetten",
     "lockDescription": "Het scherm toont dan alleen de tijd en een welkomstbericht, tot een beheerder van het Home het uitzet vanaf hun eigen telefoon of computer. Wie ben je?",
     "close": "Sluiten",
