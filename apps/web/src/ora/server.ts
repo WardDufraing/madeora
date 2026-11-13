@@ -11,14 +11,12 @@ import { isOraMotionMode } from "./types";
 
 /**
  * The signed-in person's Ora settings, read with their own session (RLS limits every row to
- * them). Rows are per request and never cached across people. If they cannot be read, Ora is
- * offered with its defaults rather than disappearing: Ora's own settings failing must not hide
- * the entry point or break the page (spec: graceful unavailability, core features never depend on
- * Ora).
+ * them). Rows are per request and never cached across people. If they cannot be read the
+ * result is `null`: Ora stays hidden (the person may have disabled it) and the page is unaffected.
  */
-export const getOraSettings = cache(async (): Promise<OraSettings> => {
+export const getOraSettings = cache(async (): Promise<OraSettings | null> => {
   const identity = await getVerifiedIdentity();
-  if (!identity) return defaultOraSettings;
+  if (!identity) return null;
   const supabase = await createSupabaseServerClient();
   const [own, homes] = await Promise.all([
     supabase
@@ -35,7 +33,9 @@ export const getOraSettings = cache(async (): Promise<OraSettings> => {
         code: (own.error ?? homes.error)?.code ?? null,
       }),
     );
-    return defaultOraSettings;
+    // Unknown whether the person disabled Ora: stay hidden rather than show it against their
+    // choice. The settings page still opens (with defaults) so it can be changed.
+    return null;
   }
   const homePalettes: Record<string, OraPaletteKey> = {};
   for (const row of homes.data) {

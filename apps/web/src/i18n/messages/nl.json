@@ -8124,6 +8124,7 @@
     "expand": "Toon Ora groter",
     "collapse": "Toon Ora kleiner",
     "context": "Helpt in {context}",
+    "contextThisHome": "deze Thuis",
     "contextPersonal": "Persoonlijk",
     "greetingPersonal": "Hoi! Wat wil je doen met je persoonlijke dingen?",
     "greetingHome": "Hoi! Wat wil je doen in {home}?",

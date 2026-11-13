@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { pageTitle } from "@/i18n/page-title";
 import { listMyHomes } from "@/homes/server";
 import { getOraSettings } from "@/ora/server";
+import { defaultOraSettings } from "@/ora/settings";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("OraSettings");
@@ -30,7 +31,7 @@ export default async function OraSettingsPage() {
     <>
       <PageHeader title={t("pageTitle")} />
       <div className="max-w-2xl">
-        <OraSettingsForm settings={settings} homes={homes} />
+        <OraSettingsForm settings={settings ?? defaultOraSettings} homes={homes} />
       </div>
     </>
   );

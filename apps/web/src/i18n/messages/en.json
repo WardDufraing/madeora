@@ -8124,6 +8124,7 @@
     "expand": "Show Ora larger",
     "collapse": "Show Ora smaller",
     "context": "Helping in {context}",
+    "contextThisHome": "this Home",
     "contextPersonal": "Personal",
     "greetingPersonal": "Hi! What would you like to do with your personal things?",
     "greetingHome": "Hi! What would you like to do in {home}?",

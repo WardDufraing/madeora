@@ -112,7 +112,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
           ? "wave"
           : "idle";
 
-  const contextLabel = homeName ?? t("contextPersonal");
+  const contextLabel = homeId === null ? t("contextPersonal") : (homeName ?? t("contextThisHome"));
   return (
     <>
       {everOpened ? (

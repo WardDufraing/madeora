@@ -102,7 +102,7 @@ export function OraContent({
     onStatus(active ? status : "idle");
   }, [active, status, onStatus]);
 
-  const contextName = homeName ?? t("contextPersonal");
+  const contextName = homeId === null ? t("contextPersonal") : (homeName ?? t("contextThisHome"));
   const toolLabel = (id: OraToolId) => t(`tools.${id}`);
 
   async function run(id: OraToolId) {
@@ -271,7 +271,9 @@ export function OraContent({
       ) : null}
 
       <p className="text-body">
-        {homeName === null ? t("greetingPersonal") : t("greetingHome", { home: homeName })}
+        {homeId === null
+          ? t("greetingPersonal")
+          : t("greetingHome", { home: homeName ?? t("contextThisHome") })}
       </p>
 
       {/* No suggestions exist yet (they arrive with S47): say so calmly instead of filling the space. */}

@@ -42,7 +42,11 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
   const [, startTransition] = useTransition();
   const [current, setCurrent] = useState(settings);
   const [saved, setSaved] = useState(false);
-  const mutation = useMutation<unknown, OraSaveError, { patch: OraPatch; revert: OraSettings }>({
+  const mutation = useMutation<
+    unknown,
+    OraSaveError,
+    { patch: OraPatch; revert: (state: OraSettings) => OraSettings }
+  >({
     mutationFn: ({ patch }) => saveOraSettings(patch),
     scope: { id: "ora-settings" },
     onSuccess: () => {
@@ -58,8 +62,12 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
     },
   });
 
-  function change(patch: OraPatch, next: OraSettings) {
-    const revert = current;
+  // `revert` undoes only this change, so a failure never undoes a later successful one.
+  function change(
+    patch: OraPatch,
+    next: (state: OraSettings) => OraSettings,
+    revert: (state: OraSettings) => OraSettings,
+  ) {
     setCurrent(next);
     setSaved(false);
     mutation.mutate({ patch, revert });
@@ -90,9 +98,11 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
             checked={current.enabled}
             aria-describedby={enabledHintId}
             onChange={(event) => {
+              const value = event.target.checked;
               change(
-                { enabled: event.target.checked },
-                { ...current, enabled: event.target.checked },
+                { enabled: value },
+                (state) => ({ ...state, enabled: value }),
+                (state) => ({ ...state, enabled: !value }),
               );
             }}
             className="mt-1 size-5 shrink-0 cursor-pointer accent-accent"
@@ -120,7 +130,12 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
               description={t(`motionHints.${mode}`)}
               checked={current.motion === mode}
               onChange={() => {
-                change({ motion: mode }, { ...current, motion: mode });
+                const previous = current.motion;
+                change(
+                  { motion: mode },
+                  (state) => ({ ...state, motion: mode }),
+                  (state) => ({ ...state, motion: previous }),
+                );
               }}
             />
           ))}
@@ -135,7 +150,12 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
             value={personalPalette}
             motion={current.motion}
             onChoose={(palette) => {
-              change({ personalPalette: palette }, { ...current, personalPalette: palette });
+              const previous = current.personalPalette;
+              change(
+                { personalPalette: palette },
+                (state) => ({ ...state, personalPalette: palette }),
+                (state) => ({ ...state, personalPalette: previous }),
+              );
             }}
           />
           {homes.map((home) => (
@@ -146,9 +166,20 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
               value={current.homePalettes[home.id] ?? defaultOraSettings.personalPalette}
               motion={current.motion}
               onChoose={(palette) => {
+                const previous = current.homePalettes[home.id];
                 change(
                   { homePalette: { homeId: home.id, palette } },
-                  { ...current, homePalettes: { ...current.homePalettes, [home.id]: palette } },
+                  (state) => ({
+                    ...state,
+                    homePalettes: { ...state.homePalettes, [home.id]: palette },
+                  }),
+                  (state) => {
+                    const homePalettes = Object.fromEntries(
+                      Object.entries(state.homePalettes).filter(([id]) => id !== home.id),
+                    );
+                    if (previous !== undefined) homePalettes[home.id] = previous;
+                    return { ...state, homePalettes };
+                  },
                 );
               }}
             />

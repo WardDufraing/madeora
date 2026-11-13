@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { touchMyActivity } from "@/activity/server";
 import { requireIdentity } from "@/auth/identity";
@@ -43,10 +43,14 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         {children}
       </AppShell>
       {/* Ora (S45): its own settings decide whether it shows; the rest of the app never waits on it. */}
-      <OraRoot
-        userId={identity.userId}
-        homes={myHomes.status === "ok" ? myHomes.homes.map(({ id, name }) => ({ id, name })) : null}
-      />
+      <Suspense fallback={null}>
+        <OraRoot
+          userId={identity.userId}
+          homes={
+            myHomes.status === "ok" ? myHomes.homes.map(({ id, name }) => ({ id, name })) : null
+          }
+        />
+      </Suspense>
     </AppProviders>
   );
 }

@@ -14,6 +14,6 @@ export interface OraRootProps {
  */
 export async function OraRoot({ userId, homes }: OraRootProps) {
   const settings = await getOraSettings();
-  if (!settings.enabled) return null;
+  if (!settings?.enabled) return null;
   return <OraAssistant key={userId} userId={userId} settings={settings} homes={homes} />;
 }
