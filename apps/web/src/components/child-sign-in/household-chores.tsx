@@ -40,6 +40,17 @@ export interface HouseholdChore {
 
 const UNDO_MS = 2 * 60 * 1000;
 
+/** Where completions and Undo go: S42's household-device routes by default, a display's in S44. */
+export interface HouseholdChoreActions {
+  readonly complete: typeof completeChoreOnDevice;
+  readonly undo: typeof undoChoreOnDevice;
+}
+
+const deviceActions: HouseholdChoreActions = {
+  complete: completeChoreOnDevice,
+  undo: undoChoreOnDevice,
+};
+
 /**
  * Chores on an approved household device (S42 part 2): pick a chore, answer "Who completed
  * this?", see the person and the chore together, confirm (with a PIN when the Home requires one,
@@ -50,10 +61,15 @@ export function HouseholdChores({
   requirePin,
   members,
   chores,
+  actions = deviceActions,
+  onChanged,
 }: {
   readonly requirePin: boolean;
   readonly members: readonly HouseholdChoreMember[];
   readonly chores: readonly HouseholdChore[];
+  readonly actions?: HouseholdChoreActions;
+  /** Called after a change instead of refreshing the page (a display re-reads its board). */
+  readonly onChanged?: () => void;
 }) {
   const t = useTranslations("HouseholdChores");
   const router = useRouter();
@@ -67,6 +83,10 @@ export function HouseholdChores({
   const [done, setDone] = useState<(DeviceChoreDone & { readonly chore: string }) | null>(null);
   const [undone, setUndone] = useState(false);
   const pinRef = useRef<HTMLInputElement>(null);
+  const changed = () => {
+    if (onChanged) onChanged();
+    else router.refresh();
+  };
 
   // The Undo offer ends after two minutes, as on the server.
   useEffect(() => {
@@ -107,11 +127,11 @@ export function HouseholdChores({
               disabled={pending}
               onClick={() => {
                 setPending(true);
-                void undoChoreOnDevice(done.actionId).then((ok) => {
+                void actions.undo(done.actionId).then((ok) => {
                   setPending(false);
                   if (ok) {
                     setUndone(true);
-                    router.refresh();
+                    changed();
                   } else setFailure({ kind: "failed" });
                 });
               }}
@@ -257,25 +277,27 @@ export function HouseholdChores({
         }
         setPending(true);
         setFailure(null);
-        void completeChoreOnDevice({
-          occurrenceId: chore.occurrenceId,
-          membershipId: member.membershipId,
-          pin: pinNeeded ? pin : null,
-        }).then((result) => {
-          setPin("");
-          setPending(false);
-          if ("actionId" in result) {
-            setDone({ ...result, chore: chore.title });
-            setUndone(false);
-            setFailure(null);
-            setChore(null);
-            setMember(null);
-            router.refresh();
-            return;
-          }
-          setFailure(result);
-          pinRef.current?.focus();
-        });
+        void actions
+          .complete({
+            occurrenceId: chore.occurrenceId,
+            membershipId: member.membershipId,
+            pin: pinNeeded ? pin : null,
+          })
+          .then((result) => {
+            setPin("");
+            setPending(false);
+            if ("actionId" in result) {
+              setDone({ ...result, chore: chore.title });
+              setUndone(false);
+              setFailure(null);
+              setChore(null);
+              setMember(null);
+              changed();
+              return;
+            }
+            setFailure(result);
+            pinRef.current?.focus();
+          });
       }}
     >
       <p className="text-body text-fg" data-testid="household-chore-summary">

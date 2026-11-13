@@ -7981,7 +7981,137 @@
     "pairingRateLimited": "Too many codes were requested from this network. Try again later.",
     "pairingUnavailable": "Pairing is not available right now. This screen tries again by itself.",
     "pairingNewCode": "Get a new code",
+    "configure": "Layout and lock",
+    "configureNamed": "Layout and privacy lock of {name}"
+  },
+  "DisplayBoard": {
+    "widget": {
+      "clock": "Clock",
+      "chores": "Chores",
+      "shopping": "Shopping"
+    },
+    "noChores": "No chores are due right now.",
+    "noLists": "No shopping lists to show.",
+    "listDone": "Nothing left to buy.",
+    "more": "{count, plural, one {# more} other {# more}}",
+    "dueToday": "Due today",
+    "overdue": "Overdue since {date}",
+    "offline": "Offline. The screen updates again once the connection is back.",
+    "offlineReadOnly": "Offline: showing the last known information. Actions are paused until the connection is back.",
+    "notPairedAnyMore": "This display is no longer paired. Returning to the pairing screen…",
     "pairedAs": "Household Display: {name}",
-    "offline": "Offline. The screen updates again once the connection is back."
+    "lock": "Privacy lock",
+    "lockedHint": "This display is in privacy mode. A Home manager can turn it off from Household Displays in the Home's settings, on their own phone or computer.",
+    "lockTitle": "Turn on privacy mode",
+    "lockDescription": "The display then shows only the time and a welcome message until a Home manager turns it off from their own phone or computer. Who are you?",
+    "close": "Close",
+    "unnamed": "Member without a name",
+    "pinLabel": "PIN of {name}",
+    "lockConfirm": "Turn on privacy mode",
+    "notMe": "Not me",
+    "lockFail": {
+      "invalidPin": "That PIN is not right.",
+      "pinLocked": "This PIN is locked for now after too many wrong tries.",
+      "pinNotSet": "You have no household-device PIN yet. Set one in your account settings, or turn on privacy mode from Household Displays on your own device.",
+      "notPermitted": "Only a Home manager can turn on privacy mode.",
+      "rateLimited": "Too many tries on this display. Wait a few minutes.",
+      "network": "Madeora cannot be reached right now. Nothing was changed.",
+      "failed": "Privacy mode could not be turned on. Try again."
+    }
+  },
+  "DisplayConfig": {
+    "title": "Household Display",
+    "notFoundTitle": "Display not found",
+    "notFound": "This display is not paired with this Home any more.",
+    "applied": "The display shows the latest settings.",
+    "notApplied": "Not applied yet: the display has not picked up the latest change. It does so as soon as it is online.",
+    "notice": {
+      "saved": "Layout saved. The display updates in a few seconds.",
+      "restored": "Default layout restored.",
+      "locked": "Privacy mode is on. The display shows only the time and your message.",
+      "unlocked": "Privacy mode is off. The display shows its layout again.",
+      "messageSaved": "Welcome message saved."
+    },
+    "lockTitle": "Privacy and party mode",
+    "lockIntro": "Turn this on for visitors or gatherings: {name} then shows only the time, the date and your welcome message, with no names, chores or lists. It stays on through restarts until you turn it off here. Other displays are not affected.",
+    "lockOn": "Privacy mode is on.",
+    "lockOff": "Privacy mode is off.",
+    "messageLabel": "Welcome message (optional)",
+    "messageHint": "Shown on the lock screen. Up to {max} characters; do not write anything private.",
+    "messageInvalid": "Enter a message of up to 80 characters, or leave it empty.",
+    "lock": "Turn on privacy mode",
+    "unlock": "Turn off privacy mode",
+    "saveMessage": "Save message",
+    "layoutTitle": "Widgets",
+    "layoutIntro": "Choose what this display shows and in which order. A display only ever shows information that is safe for everyone in the room.",
+    "missingLists": "A chosen shopping list is no longer available. The display leaves it out; remove it here.",
+    "noWidgets": "No widgets. The display shows only its name.",
+    "widget": {
+      "clock": "Clock",
+      "chores": "Chores",
+      "shopping": "Shopping"
+    },
+    "widgetPosition": "{position}. {name}",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "remove": "Remove",
+    "moveUpNamed": "Move {name} (position {position}) up",
+    "moveDownNamed": "Move {name} (position {position}) down",
+    "removeNamed": "Remove {name} (position {position})",
+    "sizeLabel": "Size",
+    "size": {
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large (full width)"
+    },
+    "showDate": "Show the date",
+    "choreActions": "Members can complete chores here",
+    "choreActionsHint": "With the Home's PIN rules for household devices. Off: the chores are shown read-only.",
+    "countLabel": "Chores shown",
+    "listsLabel": "Lists (up to {max})",
+    "listsHint": "None chosen: all of the Home's lists.",
+    "noLists": "This Home has no shopping lists yet.",
+    "itemCountLabel": "Items per list",
+    "addLabel": "Add a widget",
+    "add": "Add",
+    "limitReached": "A display has at most {max} widgets.",
+    "presentationTitle": "Presentation",
+    "orientationLabel": "Orientation",
+    "orientation": {
+      "auto": "Automatic",
+      "landscape": "Landscape",
+      "portrait": "Portrait"
+    },
+    "themeLabel": "Theme",
+    "theme": {
+      "auto": "Automatic",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "densityLabel": "Density",
+    "density": {
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    },
+    "clockLabel": "Clock",
+    "clock": {
+      "auto": "Automatic",
+      "12h": "12-hour",
+      "24h": "24-hour"
+    },
+    "previewTitle": "Preview",
+    "previewOrientation": "Preview orientation",
+    "conflict": "Someone else changed this display meanwhile. Reload the page to see their changes, then make yours again.",
+    "saveFail": {
+      "signedOut": "You are signed out. Sign in again and retry.",
+      "notPermitted": "Only the Owner, or an Administrator allowed to manage Home settings, can change displays.",
+      "notFound": "This display is not paired with this Home any more.",
+      "invalid": "This layout cannot be saved. Check the widgets and try again.",
+      "network": "Madeora cannot be reached right now. Nothing was saved.",
+      "failed": "The layout could not be saved. Try again."
+    },
+    "save": "Save",
+    "cancel": "Discard changes",
+    "restore": "Restore defaults"
   }
 }

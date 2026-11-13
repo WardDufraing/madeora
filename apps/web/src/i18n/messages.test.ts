@@ -19,6 +19,14 @@ import { staffStateKey } from "@/components/recovery/staff-state-label";
 import { primaryNav, secondaryNav } from "@/components/shell/nav-items";
 import { connectNotices, googleScopes } from "@/google-calendar/schema";
 import { changeActions, changeStates, googleFields, googleStates } from "@/google-calendar/shapes";
+import {
+  displayClockFormats,
+  displayDensities,
+  displayOrientations,
+  displayThemes,
+  displayWidgetSizes,
+  displayWidgetTypes,
+} from "@/displays/layout";
 import { unitMessageKeys } from "@/habits/numeric-keys";
 import {
   EXPORT_CATEGORIES,
@@ -160,6 +168,36 @@ describe("message dictionaries", () => {
     // Navigation labels are looked up by item id (tNav(item.id)), so the ids are the keys.
     const dynamic = {
       Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
+      // Household Displays (S44): widget types, presentation options and outcome codes.
+      DisplayBoard: [
+        ...withPrefix("widget.", displayWidgetTypes),
+        ...withPrefix("lockFail.", [
+          "invalidPin",
+          "pinLocked",
+          "pinNotSet",
+          "notPermitted",
+          "rateLimited",
+          "network",
+          "failed",
+        ]),
+      ],
+      DisplayConfig: [
+        ...withPrefix("widget.", displayWidgetTypes),
+        ...withPrefix("size.", displayWidgetSizes),
+        ...withPrefix("orientation.", displayOrientations),
+        ...withPrefix("theme.", displayThemes),
+        ...withPrefix("density.", displayDensities),
+        ...withPrefix("clock.", displayClockFormats),
+        ...withPrefix("notice.", ["saved", "restored", "locked", "unlocked", "messageSaved"]),
+        ...withPrefix("saveFail.", [
+          "signedOut",
+          "notPermitted",
+          "notFound",
+          "invalid",
+          "network",
+          "failed",
+        ]),
+      ],
       // Account activity (S38): event codes, categories, results, actors, roles and states, by the
       // value the database answers.
       Activity: [

@@ -2,8 +2,20 @@ import "server-only";
 
 import { cache } from "react";
 
+import { z } from "zod";
+
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { homeIdSchema } from "@/homes/schema";
+
+import {
+  displayClockFormats,
+  displayDensities,
+  displayOrientations,
+  displayThemes,
+  readDisplayLayout,
+  type DisplayLayout,
+  type DisplayPreferences,
+} from "./layout";
 
 /** A paired Household Display as its Home's managers see it (S43). */
 export interface HouseholdDisplay {
@@ -89,3 +101,79 @@ export const getDisplaySession = cache(async (): Promise<DisplaySessionResult> =
     },
   };
 });
+
+/** A display's configuration as its Home's managers edit it (S44). */
+export interface HouseholdDisplayConfig {
+  /** `null`: the default layout. */
+  readonly layout: DisplayLayout | null;
+  readonly preferences: DisplayPreferences;
+  readonly revision: number;
+  readonly locked: boolean;
+  readonly lockMessage: string | null;
+  readonly lockedAt: string | null;
+  /** Whether the display has read the latest change (an offline display has not). */
+  readonly applied: boolean;
+  /** The Home's active shopping lists, for the shopping widget's settings. */
+  readonly shoppingLists: readonly { readonly id: string; readonly name: string }[];
+}
+
+const configSchema = z.object({
+  layout: z.unknown(),
+  orientation: z.enum(displayOrientations),
+  theme: z.enum(displayThemes),
+  density: z.enum(displayDensities),
+  clock_format: z.enum(displayClockFormats),
+  revision: z.number().int(),
+  locked: z.boolean(),
+  lock_message: z.string().nullable(),
+  locked_at: z.string().nullable(),
+  applied: z.boolean(),
+  shopping_lists: z.array(z.object({ list_id: z.uuid(), name: z.string() })),
+});
+
+/**
+ * A display's configuration for its Home's managers: `null` for anyone else, an unknown or revoked
+ * display, or when it cannot be read (the database decides who may).
+ */
+export const getHouseholdDisplayConfig = cache(
+  async (homeId: string, displayId: string): Promise<HouseholdDisplayConfig | null> => {
+    if (!homeIdSchema.safeParse(homeId).success || !z.uuid().safeParse(displayId).success) {
+      return null;
+    }
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("household_display_config", {
+      p_home_id: homeId,
+      p_display_id: displayId,
+    });
+    if (error) {
+      if (error.code !== "42501") {
+        console.error(
+          JSON.stringify({ event: "household_display_config.read_failed", code: error.code }),
+        );
+      }
+      return null;
+    }
+    if (data === null) return null;
+    const parsed = configSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error(JSON.stringify({ event: "household_display_config.shape", code: null }));
+      return null;
+    }
+    const row = parsed.data;
+    return {
+      layout: row.layout === null ? null : readDisplayLayout(row.layout),
+      preferences: {
+        orientation: row.orientation,
+        theme: row.theme,
+        density: row.density,
+        clockFormat: row.clock_format,
+      },
+      revision: row.revision,
+      locked: row.locked,
+      lockMessage: row.lock_message,
+      lockedAt: row.locked_at,
+      applied: row.applied,
+      shoppingLists: row.shopping_lists.map((list) => ({ id: list.list_id, name: list.name })),
+    };
+  },
+);

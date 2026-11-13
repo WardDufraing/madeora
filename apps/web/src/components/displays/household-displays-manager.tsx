@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -380,7 +381,14 @@ export function HouseholdDisplaysManager({
                       : t("neverSeen")}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/homes/${encodeURIComponent(homeId)}/displays/${encodeURIComponent(display.id)}`}
+                    className="text-body font-medium text-accent-fg underline"
+                    aria-label={t("configureNamed", { name: display.name })}
+                  >
+                    {t("configure")}
+                  </Link>
                   <Button
                     type="button"
                     variant="secondary"

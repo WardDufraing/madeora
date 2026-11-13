@@ -6,7 +6,6 @@ import { renderWithQuery } from "@/test/intl";
 
 import { DisplayPairing } from "./display-pairing";
 import { HouseholdDisplaysManager, type HouseholdDisplayView } from "./household-displays-manager";
-import { PairedDisplay } from "./paired-display";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -86,49 +85,6 @@ describe("DisplayPairing", () => {
       await screen.findByText("This code has expired. Get a new code to try again."),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("pairing-code")).not.toBeInTheDocument();
-  });
-});
-
-describe("PairedDisplay", () => {
-  it("shows the display's name, its Home and the time, and nothing else", async () => {
-    const { container } = renderWithQuery(
-      <PairedDisplay displayName="Keuken" homeName="Thuis" timeZone="Europe/Brussels" />,
-    );
-    expect(screen.getByRole("heading", { name: "Thuis" })).toBeInTheDocument();
-    expect(screen.getByText("Household Display: Keuken")).toBeInTheDocument();
-    expect(await axeViolations(container)).toEqual([]);
-  });
-
-  it("clears the screen and returns to pairing when the server no longer accepts it", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    fetchMock
-      .mockReturnValueOnce(answer(401, { error: "not-paired" }))
-      .mockReturnValueOnce(answer(200, {}));
-    renderWithQuery(
-      <PairedDisplay displayName="Keuken" homeName="Thuis" timeZone="Europe/Brussels" />,
-    );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await waitFor(() => {
-      expect(replace).toHaveBeenCalledWith("/display");
-    });
-    expect(screen.queryByText("Thuis")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/display/reset");
-  });
-
-  it("says it is offline and keeps the same harmless screen", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
-    renderWithQuery(
-      <PairedDisplay displayName="Keuken" homeName="Thuis" timeZone="Europe/Brussels" />,
-    );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    expect(await screen.findByText(/^Offline\./)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Thuis" })).toBeInTheDocument();
-    expect(replace).not.toHaveBeenCalled();
   });
 });
 

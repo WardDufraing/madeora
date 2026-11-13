@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { nameProblem, normalizeName } from "@/names/visible-name";
 
+import { displayPreferencesSchema, lockMessageSchema } from "./layout";
+
 /**
  * Client-safe rules and request schemas for Household Display pairing (S43, brief defaults). The
  * server parses every body with these again; the database re-checks the name and only ever sees a
@@ -73,3 +75,21 @@ export type ApproveDisplayInput = z.input<typeof approveDisplaySchema>;
 
 export const renameDisplaySchema = z.strictObject({ name: displayNameSchema });
 export type RenameDisplayInput = z.input<typeof renameDisplaySchema>;
+
+/**
+ * A display's configuration save (S44): the layout is checked with `checkDisplayLayout` (null:
+ * restore the default layout), against the revision the manager edited.
+ */
+export const saveDisplayConfigSchema = z.strictObject({
+  expectedRevision: z.int().min(1).max(2_147_483_647),
+  layout: z.unknown(),
+  preferences: displayPreferencesSchema,
+});
+export type SaveDisplayConfigInput = z.input<typeof saveDisplayConfigSchema>;
+
+/** Locks or unlocks a display from a manager's own session, with the lock screen's message. */
+export const displayLockStateSchema = z.strictObject({
+  locked: z.boolean(),
+  message: lockMessageSchema,
+});
+export type DisplayLockStateInput = z.input<typeof displayLockStateSchema>;
