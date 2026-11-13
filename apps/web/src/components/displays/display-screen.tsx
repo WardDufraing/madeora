@@ -160,15 +160,14 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
 
   // A minute without a touch or key: forget any member selection and typed PIN.
   useEffect(() => {
-    let timer = setTimeout(() => {
+    const idle = () => {
       setResetKey((key) => key + 1);
-    }, IDLE_RESET_MS);
+      setLockOpen(false);
+    };
+    let timer = setTimeout(idle, IDLE_RESET_MS);
     const touch = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        setResetKey((key) => key + 1);
-        setLockOpen(false);
-      }, IDLE_RESET_MS);
+      timer = setTimeout(idle, IDLE_RESET_MS);
     };
     window.addEventListener("pointerdown", touch);
     window.addEventListener("keydown", touch);
@@ -351,6 +350,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
       </div>
       <p className="text-helper text-fg-muted">{t("pairedAs", { name: board.displayName })}</p>
       <DisplayLockDialog
+        key={resetKey}
         open={lockOpen}
         managers={board.lockManagers}
         onClose={() => {

@@ -45,6 +45,8 @@ create function private.valid_display_layout(p_layout jsonb) returns boolean
          or coalesce(v_widget ->> 'id', '')
               !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
          or pg_catalog.jsonb_typeof(v_widget -> 'config') is distinct from 'object'
+         or (v_widget ->> 'type' = 'chores' and v_widget -> 'config' ? 'actions'
+             and pg_catalog.jsonb_typeof(v_widget -> 'config' -> 'actions') <> 'boolean')
          or (v_widget ->> 'id') = any (v_ids) then
         return false;
       end if;

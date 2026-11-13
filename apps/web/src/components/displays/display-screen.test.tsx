@@ -259,6 +259,23 @@ describe("DisplayScreen", () => {
     expect(screen.getByRole("button", { name: /Dishes/ })).toBeInTheDocument();
   });
 
+  it("forgets the chosen manager and typed PIN of the lock dialog after a minute idle", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    renderWithQuery(<DisplayScreen initialBoard={board} />);
+    await user.click(screen.getByRole("button", { name: "Privacy lock" }));
+    await user.click(screen.getByRole("button", { name: "Alice" }));
+    await user.type(screen.getByLabelText("PIN of Alice"), "1234");
+    fetchMock.mockReturnValue(answer(200, { board }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(IDLE_RESET_MS + 100);
+    });
+    expect(screen.queryByLabelText("PIN of Alice")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Privacy lock" }));
+    expect(screen.getByRole("button", { name: "Alice" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("PIN of Alice")).not.toBeInTheDocument();
+  });
+
   it("goes read-only offline, then shows only the time", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fetchMock.mockRejectedValue(new TypeError("offline"));

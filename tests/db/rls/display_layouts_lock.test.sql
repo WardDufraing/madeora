@@ -268,6 +268,11 @@ select tests.assert_denied(
   'Duplicate widget ids are refused', '22023');
 select tests.assert_denied(
   $$select * from public.save_household_display_config(tests.dl('home-a'), tests.dl('kitchen'), 1,
+      '{"version": 1, "widgets": [{"id": "6f1c1b2e-1111-4111-8111-111111111111", "type": "chores", "size": "large", "config": {"actions": "false"}}]}',
+      'auto', 'auto', 'comfortable', 'auto')$$,
+  'A chores widget whose actions setting is not a boolean is refused', '22023');
+select tests.assert_denied(
+  $$select * from public.save_household_display_config(tests.dl('home-a'), tests.dl('kitchen'), 1,
       null, 'sideways', 'auto', 'comfortable', 'auto')$$,
   'An unknown orientation is refused', '22023');
 
