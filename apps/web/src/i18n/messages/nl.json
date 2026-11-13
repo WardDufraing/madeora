@@ -8177,7 +8177,7 @@
       "lead": "Ik ben een klein hulpje in Madeora, geen algemene assistent. In {context} doe ik alleen wat jij mag doen.",
       "takeYou": "Je meteen naar {modules} brengen.",
       "onlyAllowed": "Alleen tonen wat je hier mag gebruiken, en niets wat niet mag.",
-      "noChanges": "Voorlopig open ik pagina's voor je; ik wijzig zelf niets.",
+      "noChanges": "Ik wijzig pas iets nadat jij het hebt bekeken en op de knop hebt gedrukt.",
       "tryExample": "Probeer een voorbeeld",
       "exampleTitle": "Dit kan ik hier voor je openen:",
       "skip": "Overslaan",
@@ -8187,8 +8187,8 @@
     "help": {
       "open": "Wat Ora kan",
       "title": "Wat Ora kan",
-      "intro": "In {context} kan ik je naar deze plekken brengen:",
-      "limits": "Ik toon alleen wat je hier mag gebruiken. Ik wijzig niets en ben geen algemene assistent.",
+      "intro": "In {context} kan ik je naar deze plekken brengen en een paar wijzigingen klaarzetten die jij bevestigt:",
+      "limits": "Ik toon alleen wat je hier mag gebruiken. Ik wijzig pas iets nadat jij het bevestigt en ben geen algemene assistent.",
       "back": "Terug"
     },
     "unavailable": {

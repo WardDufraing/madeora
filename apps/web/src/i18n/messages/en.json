@@ -8177,7 +8177,7 @@
       "lead": "I'm a small helper inside Madeora, not a general assistant. In {context} I only do what you're allowed to do.",
       "takeYou": "Take you straight to {modules}.",
       "onlyAllowed": "Offer only what you may use here, and nothing you can't.",
-      "noChanges": "For now I open pages for you; I don't change anything on my own.",
+      "noChanges": "I only change something after you have reviewed it and pressed the button.",
       "tryExample": "Try an example",
       "exampleTitle": "Here is what I can open for you here:",
       "skip": "Skip",
@@ -8187,8 +8187,8 @@
     "help": {
       "open": "What Ora can do",
       "title": "What Ora can do",
-      "intro": "In {context} I can take you to these places:",
-      "limits": "I only offer what you're allowed to use here. I don't change anything, and I'm not a general-purpose assistant.",
+      "intro": "In {context} I can take you to these places and prepare a few changes for you to confirm:",
+      "limits": "I only offer what you're allowed to use here. I only change something after you confirm it, and I'm not a general-purpose assistant.",
       "back": "Back"
     },
     "unavailable": {

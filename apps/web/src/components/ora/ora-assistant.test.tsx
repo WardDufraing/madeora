@@ -360,7 +360,7 @@ describe("Ora assistant", () => {
     expect(navigation.refresh).toHaveBeenCalled();
     // Rediscoverable later without repeating the introduction.
     await user.click(screen.getByRole("button", { name: "What Ora can do" }));
-    expect(screen.getByTestId("ora-help")).toHaveTextContent("I don't change anything");
+    expect(screen.getByTestId("ora-help")).toHaveTextContent("only change something after you confirm");
   });
 
   it("never blocks Ora when the introduction cannot be saved", async () => {
