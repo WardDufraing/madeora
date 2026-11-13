@@ -533,6 +533,26 @@ select tests.assert_true(
      and details ->> 'verification' = 'pin'),
   'Recorded as PIN-verified');
 
+-- Wrong PIN tries on a display never lock a member's PIN (owner decision, 13 Nov): six chore tries
+-- and six lock tries for Alice on the living room, none of them matched, leave her PIN untouched
+-- and a seventh try is still offered.
+select tests.act_as_service_role();
+select count(*) from generate_series(1, 6) g,
+  lateral public.display_chore_attempt(tests.dl('living'), tests.dl('o-any'), tests.dl('m-alice'),
+                                       true, tests.dl_key('c9')) a;
+select count(*) from generate_series(1, 6) g,
+  lateral public.display_lock_attempt(tests.dl('living'), tests.dl('m-alice'), tests.dl_key('c9')) a;
+select tests.act_as_owner();
+select tests.assert_true(
+  (select dp.pin_failures = 0 and dp.pin_locked_until is null
+   from private.member_device_pins dp where dp.user_id = tests.dl('alice')),
+  'Wrong tries on a display do not count toward the member''s PIN lock');
+select tests.act_as_service_role();
+select tests.assert_true(
+  (select outcome from public.display_lock_attempt(tests.dl('living'), tests.dl('m-alice'),
+     tests.dl_key('c9'))) = 'check',
+  'The member can still confirm with their PIN after them');
+
 -- Required PIN: the Home's rule applies on displays too.
 select tests.act_as('alice');
 select public.set_shared_device_pin_rule(tests.dl('home-a'), true);
