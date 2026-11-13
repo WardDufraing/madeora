@@ -276,7 +276,9 @@
     "widgetPersonalPhotos": "My photos",
     "settingUpcomingDays": "Period",
     "settingUpcomingDaysOption": "Next {days} days",
-    "settingUpcomingCount": "Number of events"
+    "settingUpcomingCount": "Number of events",
+    "widgetOra": "Ora",
+    "widgetOraDescription": "Ora's overview of today with quick actions. It opens Ora's panel."
   },
   "Placeholder": {
     "title": "Not built yet",
@@ -8164,7 +8166,9 @@
       "open-invitations": "Manage invitations",
       "open-displays": "Manage Household Displays",
       "open-home-settings": "Open Home settings",
-      "capabilities": "What can you do here?"
+      "capabilities": "What can you do here?",
+      "overview": "What's planned?",
+      "share-overview": "Share an overview"
     },
     "intro": {
       "title": "Meet Ora",
@@ -8240,5 +8244,128 @@
     "saveSignedOut": "You've been signed out. Sign in again to save.",
     "saveForbidden": "You no longer belong to that Home.",
     "noHomes": "Join or create a Home to choose a colour for it."
+  },
+  "OraOverview": {
+    "title": "What's planned",
+    "back": "Back",
+    "periodLabel": "Period",
+    "presets": {
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "thisWeek": "This week",
+      "nextWeek": "Next week"
+    },
+    "pickDate": "Pick a date",
+    "thatDay": "That day",
+    "thatWeek": "That week",
+    "rangeDay": "{date} · {context}",
+    "rangeWeek": "{from} – {to} · {context}",
+    "modules": {
+      "calendar": "Calendar",
+      "tasks": "Tasks",
+      "chores": "Chores"
+    },
+    "counts": {
+      "calendar": "{count, plural, one {# event} other {# events}}",
+      "tasks": "{count, plural, one {# task} other {# tasks}}",
+      "chores": "{count, plural, one {# chore} other {# chores}}"
+    },
+    "filtersTitle": "Filters",
+    "assigneeMe": "Assigned to me",
+    "assigneeMember": "Assigned to",
+    "assigneeAnyone": "Anyone",
+    "noName": "A member",
+    "completion": {
+      "open": "Open",
+      "done": "Done"
+    },
+    "clearFilters": "Clear filters",
+    "subset": "Showing only items that match your filters, not the whole schedule.",
+    "busier": "{count, plural, one {{days} looks busier, with several scheduled items.} other {{days} look busier, with several scheduled items.}}",
+    "nothingDay": "Nothing visible",
+    "nothingIncomplete": "Nothing visible, but this overview is incomplete",
+    "empty": {
+      "none": "Nothing planned that you can see for this period.",
+      "filtered": "Nothing matches your filters.",
+      "incomplete": "Nothing could be shown and some sources are missing, so this does not mean the period is free."
+    },
+    "openModule": {
+      "calendar": "Open the calendar",
+      "tasks": "Open tasks"
+    },
+    "incompleteTitle": "This overview may be incomplete",
+    "notices": {
+      "unavailable": "{module} could not be read just now.",
+      "stale": "{source} is out of date. Last updated {time}.",
+      "unverified": "{source} may be out of date. Its last update is unknown.",
+      "googleCalendar": "A Google calendar",
+      "truncated": "Some items are not shown because there are many."
+    },
+    "showItems": "View related items",
+    "hideItems": "Hide related items",
+    "itemsIncomplete": "This list may be incomplete.",
+    "noSetTime": "No set time",
+    "allDay": "All day",
+    "status": {
+      "done": "Done",
+      "overdue": "Overdue",
+      "pending": "Waiting for approval",
+      "open": "Open"
+    },
+    "origin": {
+      "shared": "Shared with this Home",
+      "google": "Google Calendar"
+    },
+    "completeIn": "Open {title} to complete it",
+    "completeInShort": "Open to complete",
+    "loading": "Preparing your overview…",
+    "failed": "Ora could not prepare the overview just now.",
+    "forbidden": "You no longer have access to this place.",
+    "retry": "Refresh",
+    "share": {
+      "open": "Share a copy",
+      "close": "Close sharing",
+      "title": "Share a copy",
+      "intro": "Prepare a text you can copy and send yourself. Only items both of you may see are included.",
+      "audience": "Who is it for?",
+      "choose": "Choose a member",
+      "noName": "A member",
+      "prepare": "Prepare text",
+      "prepareAgain": "Prepare again",
+      "textLabel": "Text to copy (you can edit it)",
+      "warning": "Review it before copying. Once copied outside Madeora, Madeora cannot limit who sees it or take it back.",
+      "incomplete": "Some sources were not up to date, so this text may be incomplete.",
+      "copy": "Copy text",
+      "copied": "Copied.",
+      "copyFailed": "Could not copy. Select the text and copy it yourself.",
+      "failed": "Ora could not prepare the text just now.",
+      "invalid": "A text cannot be prepared for that person.",
+      "textTitle": "{scope, select, day {Overview for {from}} other {Overview for {from} – {to}}}",
+      "textContext": "Home: {home}",
+      "textAudience": "For: {name}",
+      "textAllDay": "All day",
+      "textNoTime": "No set time",
+      "textDone": "done",
+      "textSomeone": "a member",
+      "textEmpty": "Nothing planned that is visible here.",
+      "textIncomplete": "Some sources were not up to date, so this may be incomplete.",
+      "textLeftOut": "Some information may be left out.",
+      "changed": "Something changed since the text was prepared, so it has been refreshed. Review it, then copy again."
+    }
+  },
+  "OraWidget": {
+    "today": "Today's overview",
+    "week": "This week",
+    "offTitle": "Ora is turned off",
+    "offDescription": "Turn Ora on again in your settings to see your overview here.",
+    "settings": "Ora settings",
+    "failedTitle": "Ora's overview is not available",
+    "failed": "Ora could not read your overview just now. The rest of your dashboard is not affected.",
+    "incomplete": "Some sources could not be read, so today's overview is incomplete.",
+    "nothing": "Nothing planned for today that you can see.",
+    "summary": "{count, plural, one {# item planned today} other {# items planned today}}",
+    "attention": "{count, plural, one {# needs attention} other {# need attention}}",
+    "someMissing": "Some sources are missing, so this may be incomplete.",
+    "overdue": "Overdue"
   }
 }

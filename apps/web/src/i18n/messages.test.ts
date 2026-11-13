@@ -187,6 +187,16 @@ describe("message dictionaries", () => {
           "ora",
         ]),
       ],
+      // Ora overviews (S46): looked up by period, module, count, filter, empty-state and status keys.
+      OraOverview: [
+        ...withPrefix("presets.", ["today", "tomorrow", "thisWeek", "nextWeek"]),
+        ...withPrefix("modules.", ["calendar", "tasks", "chores"]),
+        ...withPrefix("counts.", ["calendar", "tasks", "chores"]),
+        ...withPrefix("completion.", ["open", "done"]),
+        ...withPrefix("empty.", ["none", "filtered", "incomplete"]),
+        ...withPrefix("openModule.", ["calendar", "tasks"]),
+        ...withPrefix("status.", ["done", "overdue", "pending", "open"]),
+      ],
       OraSettings: [
         ...withPrefix("palettes.", oraPaletteKeys),
         ...withPrefix("motion.", ["gentle", "reactions", "none"]),

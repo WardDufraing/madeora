@@ -90,6 +90,7 @@ export function WidgetSettings({
         />
       );
     case "quick-actions":
+    case "ora":
     case "home-vacation":
     case "my-points":
     case "personal-points":

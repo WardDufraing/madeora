@@ -380,4 +380,53 @@ describe("Ora assistant", () => {
     });
     expect(screen.getByTestId("ora-surface")).toBeVisible();
   });
+
+  it("opens the overview from its quick action and from the dashboard widget's request", async () => {
+    fetchState.tools = [
+      ...personalTools,
+      { id: "overview", kind: "read", group: "overview", quick: true },
+    ];
+    fetchState.runOutput = {
+      kind: "overview",
+      overview: {
+        homeId: null,
+        scope: "day",
+        from: "2026-11-16",
+        to: "2026-11-16",
+        today: "2026-11-16",
+        timeZone: "UTC",
+        filters: { modules: [], assignee: "anyone", completion: "all" },
+        members: [],
+        modules: ["calendar", "tasks"],
+        days: [
+          {
+            date: "2026-11-16",
+            timed: [],
+            untimed: [],
+            counts: { calendar: 0, tasks: 0, chores: 0 },
+            busier: false,
+          },
+        ],
+        notices: [],
+        incomplete: false,
+        empty: "none",
+        truncated: false,
+      },
+    };
+    const user = userEvent.setup();
+    setup();
+    // The widget asks while the panel has never been opened: it opens on the overview.
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("madeora:open-ora", { detail: { view: "overview", target: "this-week" } }),
+      );
+    });
+    expect(await screen.findByTestId("ora-overview")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "This week", pressed: true })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByRole("button", { name: "What's planned?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "What's planned?" }));
+    expect(await screen.findByTestId("ora-overview")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Today", pressed: true })).toBeInTheDocument();
+  });
 });

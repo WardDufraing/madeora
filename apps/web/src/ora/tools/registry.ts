@@ -1,14 +1,23 @@
 import { decideHomeAction } from "@madeora/domain/permissions";
 
-import { oraToolCatalogue, summarise } from "./catalogue";
-import type { OraToolContext, OraToolDefinition, OraToolResult, OraToolSummary } from "./types";
+import { oraInputToolCatalogue, oraToolCatalogue, summarise } from "./catalogue";
+import type {
+  OraInputToolDefinition,
+  OraToolContext,
+  OraToolDefinition,
+  OraToolResult,
+  OraToolSummary,
+} from "./types";
 
 /**
  * Whether the person may use a tool right now, where they are. The answer comes from the
  * permission engine (`decideHomeAction`) for Home tools and from the place alone for the rest; it
  * never comes from the tool's own code or from anything the browser sent.
  */
-function isAvailable(tool: OraToolDefinition, context: OraToolContext): boolean {
+export function isAvailable(
+  tool: Pick<OraToolDefinition, "requires">,
+  context: OraToolContext,
+): boolean {
   const { requires } = tool;
   switch (requires.scope) {
     case "any":
@@ -25,7 +34,9 @@ function isAvailable(tool: OraToolDefinition, context: OraToolContext): boolean 
 
 /** The tools Ora may offer or run for this person here, in catalogue order. */
 export function availableTools(context: OraToolContext): readonly OraToolSummary[] {
-  return oraToolCatalogue.filter((tool) => isAvailable(tool, context)).map(summarise);
+  return [...oraToolCatalogue, ...oraInputToolCatalogue]
+    .filter((tool) => isAvailable(tool, context))
+    .map(summarise);
 }
 
 /**
@@ -34,6 +45,14 @@ export function availableTools(context: OraToolContext): readonly OraToolSummary
  * tool of a Home the person does not belong to) returns the same `forbidden`, so the answer never
  * reveals what exists.
  */
+/** The input tool with this id, only when the person may use it here (else the caller says forbidden). */
+export function findInputTool(
+  context: OraToolContext,
+  id: string,
+): OraInputToolDefinition | undefined {
+  return oraInputToolCatalogue.find((tool) => tool.id === id && isAvailable(tool, context));
+}
+
 export function runTool(context: OraToolContext, id: string): OraToolResult {
   const tool = oraToolCatalogue.find(
     (candidate) => candidate.id === id && isAvailable(candidate, context),

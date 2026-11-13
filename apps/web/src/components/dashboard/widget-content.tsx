@@ -21,6 +21,7 @@ import {
 } from "@/components/habits/habit-widgets";
 import { GoalProgressWidget, GoalsWidget } from "@/components/goals/goal-widgets";
 import { PetCareWidget } from "@/components/pets/pet-care-widget";
+import { OraWidget } from "@/components/ora/ora-widget";
 import { UpcomingEventsWidget } from "@/components/calendar/upcoming-events-widget";
 import { PhotoWidget } from "@/components/photos/photo-widget";
 import { MealWidget } from "@/components/meals/meal-widget";
@@ -836,6 +837,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     "pet-care": t("widgetPetCare"),
     "upcoming-events": t("widgetUpcomingEvents"),
     photos: t("widgetPhotos"),
+    ora: t("widgetOra"),
   } as const;
   const unavailable: WidgetEntry = {
     id: widget.id,
@@ -1148,6 +1150,14 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         unavailable: false,
       };
     }
+    case "ora":
+      return {
+        id: widget.id,
+        title: titles.ora,
+        sourceName: null,
+        body: <OraWidget home={scope.kind === "home" ? scope.home : null} />,
+        unavailable: false,
+      };
     case "photos": {
       const parsed = widgetRegistry.photos.config.safeParse(widget.config);
       const config = parsed.success ? parsed.data : widgetRegistry.photos.config.parse({});

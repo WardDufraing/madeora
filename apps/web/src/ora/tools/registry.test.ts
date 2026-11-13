@@ -1,7 +1,7 @@
 import type { DelegableCapability, HomeRole } from "@madeora/domain/permissions";
 
-import { oraToolCatalogue } from "./catalogue";
-import { availableTools, runTool } from "./registry";
+import { oraInputToolCatalogue, oraToolCatalogue } from "./catalogue";
+import { availableTools, findInputTool, runTool } from "./registry";
 import type { OraToolContext } from "./types";
 
 const HOME_A = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
@@ -128,8 +128,31 @@ describe("Ora tools: running one", () => {
 describe("Ora tool ids", () => {
   it("lists exactly the ids the catalogue defines, for the label dictionary", async () => {
     const { oraToolIds } = await import("./ids");
-    expect([...new Set(oraToolCatalogue.map((tool) => tool.id))].sort()).toEqual(
-      [...oraToolIds].sort(),
-    );
+    const all = [...oraToolCatalogue, ...oraInputToolCatalogue];
+    expect([...new Set(all.map((tool) => tool.id))].sort()).toEqual([...oraToolIds].sort());
+  });
+});
+
+describe("Ora tools: overviews (S46)", () => {
+  it("offers the overview everywhere and sharing only inside a Home", () => {
+    expect(ids(personal)).toContain("overview");
+    expect(ids(personal)).not.toContain("share-overview");
+    expect(ids(home("member"))).toEqual(expect.arrayContaining(["overview", "share-overview"]));
+  });
+
+  it("finds an input tool only where the person may use it", () => {
+    expect(findInputTool(personal, "overview")?.id).toBe("overview");
+    expect(findInputTool(personal, "share-overview")).toBeUndefined();
+    expect(findInputTool(home("member"), "share-overview")?.id).toBe("share-overview");
+    expect(findInputTool(home("member"), "nope")).toBeUndefined();
+    expect(findInputTool(home("member"), "__proto__")).toBeUndefined();
+  });
+
+  it("does not run an input tool without input, as a plain tool", () => {
+    expect(runTool(personal, "overview")).toEqual({ status: "forbidden" });
+  });
+
+  it("only reads: input tools never change data", () => {
+    for (const tool of oraInputToolCatalogue) expect(tool.kind).toBe("read");
   });
 });

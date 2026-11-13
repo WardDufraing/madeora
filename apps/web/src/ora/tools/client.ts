@@ -42,13 +42,17 @@ export async function fetchOraTools(homeId: string | null): Promise<readonly Ora
   return tools as readonly OraToolSummary[];
 }
 
-export async function callOraTool(homeId: string | null, tool: OraToolId): Promise<OraToolOutput> {
+export async function callOraTool(
+  homeId: string | null,
+  tool: OraToolId,
+  input?: unknown,
+): Promise<OraToolOutput> {
   let response: Response;
   try {
     response = await fetch(ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tool, homeId }),
+      body: JSON.stringify(input === undefined ? { tool, homeId } : { tool, homeId, input }),
       credentials: "same-origin",
       cache: "no-store",
     });

@@ -88,6 +88,7 @@ describe("widget registry", () => {
       { type: "pet-care", needsSource: true },
       { type: "upcoming-events", needsSource: false },
       { type: "upcoming-events", needsSource: true },
+      { type: "ora", needsSource: false },
       { type: "photos", needsSource: false },
       { type: "photos", needsSource: true },
     ]);
@@ -114,6 +115,7 @@ describe("widget registry", () => {
       "goal-progress",
       "pet-care",
       "upcoming-events",
+      "ora",
       "photos",
     ]);
   });

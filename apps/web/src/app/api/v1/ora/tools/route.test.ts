@@ -31,6 +31,16 @@ vi.mock("@/homes/server", () => ({
     });
   },
 }));
+vi.mock("@/ora/overview/server", () => ({
+  loadOverview: (context: { home: { id: string } | null }) =>
+    Promise.resolve({
+      status: "ok",
+      overview: { homeId: context.home?.id ?? null, days: [], notices: [] },
+    }),
+}));
+vi.mock("@/ora/overview/share-server", () => ({
+  prepareShare: () => Promise.resolve({ status: "invalid" }),
+}));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
 }));
@@ -145,5 +155,61 @@ describe("POST /api/v1/ora/tools", () => {
     expect((await post("{not json")).status).toBe(400);
     state.identity = null;
     expect((await post({ tool: "open-tasks" })).status).toBe(401);
+  });
+});
+
+describe("POST /api/v1/ora/tools: overview input (S46)", () => {
+  const overview = { target: "today" };
+
+  it("runs an overview for the place resolved on the server, never the one the body names", async () => {
+    const personalRun = await post({ tool: "overview", homeId: null, input: overview });
+    expect(personalRun.status).toBe(200);
+    const body = (await personalRun.json()) as {
+      output: { kind: string; overview: { homeId: unknown } };
+    };
+    expect(body.output.kind).toBe("overview");
+    expect(body.output.overview.homeId).toBeNull();
+
+    const homeRun = await post({ tool: "overview", homeId: HOME_ID, input: overview });
+    const homeBody = (await homeRun.json()) as { output: { overview: { homeId: unknown } } };
+    expect(homeBody.output.overview.homeId).toBe(HOME_ID);
+  });
+
+  it("refuses a Home the person is not in, before reading anything", async () => {
+    state.context = { status: "not-found" };
+    expect((await post({ tool: "overview", homeId: OTHER_HOME_ID, input: overview })).status).toBe(
+      403,
+    );
+  });
+
+  it("rejects input that does not fit, including unknown and conflicting fields", async () => {
+    for (const input of [
+      {},
+      { target: "month" },
+      { target: "day" },
+      { target: "day", date: "2026-02-31" },
+      { target: "day", date: "9999-12-31" },
+      { target: "today", date: "2026-10-01" },
+      { target: "today", extra: 1 },
+      { target: "today", filters: { assignee: "member" } },
+      { target: "today", filters: { modules: ["photos"] } },
+    ]) {
+      expect((await post({ tool: "overview", homeId: HOME_ID, input })).status).toBe(400);
+    }
+  });
+
+  it("refuses sharing in Personal space and answers a bad audience as invalid", async () => {
+    const request = { target: "today" };
+    const audience = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0099";
+    expect(
+      (await post({ tool: "share-overview", homeId: null, input: { request, audience } })).status,
+    ).toBe(403);
+    expect(
+      (await post({ tool: "share-overview", homeId: HOME_ID, input: { request, audience } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await post({ tool: "share-overview", homeId: HOME_ID, input: { request } })).status,
+    ).toBe(400);
   });
 });

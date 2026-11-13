@@ -8,6 +8,8 @@ import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } fr
 import { cx } from "@/components/ui/cx";
 import { homeIdFromPath } from "@/components/shell/nav-items";
 import { paletteFor, type OraSettings } from "@/ora/settings";
+import { ORA_OPEN_EVENT, type OraOpenDetail } from "@/ora/open-event";
+import type { OverviewTarget } from "@/ora/overview/types";
 import type { OraExpression } from "@/ora/types";
 
 import { OraCharacter } from "./ora-character";
@@ -47,6 +49,10 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
   const [greeting, setGreeting] = useState(0);
   const [status, setStatus] = useState<OraStatus>("idle");
   const [intro, setIntro] = useState(settings.intro);
+  const [requested, setRequested] = useState<{
+    readonly id: number;
+    readonly target: OverviewTarget;
+  } | null>(null);
   const surface = useRef<HTMLDivElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
   const swipe = useRef<{ readonly startY: number; readonly pointerId: number } | null>(null);
@@ -67,6 +73,20 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
     setEverOpened(true);
     setGreeting((count) => count + 1);
   }
+
+  // The dashboard widget asks the one shared surface to open on the overview.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<OraOpenDetail>).detail;
+      setOpen(true);
+      setEverOpened(true);
+      setRequested((previous) => ({ id: (previous?.id ?? 0) + 1, target: detail.target }));
+    };
+    window.addEventListener(ORA_OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener(ORA_OPEN_EVENT, onOpen);
+    };
+  }, []);
 
   // Focus moves into the surface when it opens.
   useEffect(() => {
@@ -197,6 +217,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
                 close(false);
               }}
               onStatus={setStatus}
+              requested={requested}
             />
           </div>
         </div>

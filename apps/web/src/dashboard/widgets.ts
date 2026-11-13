@@ -72,6 +72,7 @@ function sizes(
 
 const welcomeConfig = z.strictObject({ showDate: z.boolean().default(true) });
 const quickActionsConfig = z.strictObject({});
+const oraConfig = z.strictObject({});
 export const notificationCounts = [3, 5, 10] as const;
 const notificationsConfig = z.strictObject({
   count: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(5),
@@ -502,6 +503,16 @@ export const widgetRegistry = {
     ),
     config: upcomingEventsConfig,
   },
+  ora: {
+    // Not bound to another Home: the shared Ora panel works in the place of the page it opens on.
+    surfaces: ["personal", "home"],
+    sizes: sizes(
+      { w: 6, h: 4, minW: 4, maxW: 12, minH: 3, maxH: 6 },
+      { w: 6, h: 4, minW: 3, maxW: 6, minH: 3, maxH: 6 },
+      { h: 4, minH: 3, maxH: 6 },
+    ),
+    config: oraConfig,
+  },
   photos: {
     surfaces: ["personal", "home", "home-source"],
     sizes: sizes(
@@ -544,6 +555,7 @@ export interface WidgetConfigs {
   readonly "pet-care": WidgetConfig<"pet-care">;
   readonly "upcoming-events": WidgetConfig<"upcoming-events">;
   readonly photos: WidgetConfig<"photos">;
+  readonly ora: WidgetConfig<"ora">;
 }
 
 export function isWidgetType(value: unknown): value is WidgetType {

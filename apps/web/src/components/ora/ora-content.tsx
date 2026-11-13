@@ -14,7 +14,10 @@ import { saveOraSettings } from "@/ora/api";
 import { callOraTool, fetchOraTools, isInternalPath, OraToolError } from "@/ora/tools/client";
 import type { OraToolId } from "@/ora/tools/ids";
 import type { OraToolGroup, OraToolSummary } from "@/ora/tools/types";
+import type { OverviewTarget } from "@/ora/overview/types";
 import type { OraIntroState } from "@/ora/types";
+
+import { OraOverview } from "./ora-overview";
 
 export type OraStatus = "idle" | "working" | "problem";
 
@@ -30,6 +33,8 @@ export interface OraContentProps {
   /** Leaves the panel after navigating (the page behind it changes). */
   readonly onNavigated: () => void;
   readonly onStatus: (status: OraStatus) => void;
+  /** A page asked for the overview (the dashboard widget): a new `id` re-opens it. */
+  readonly requested?: { readonly id: number; readonly target: OverviewTarget } | null;
 }
 
 const moduleGroups: readonly OraToolGroup[] = [
@@ -54,7 +59,7 @@ const subscribeOnline = (notify: () => void) => {
 };
 const isOnline = () => navigator.onLine;
 
-type View = "main" | "browse" | "help";
+type View = "main" | "browse" | "help" | "overview";
 
 /**
  * What Ora shows in its bubble or sheet: a greeting, quick actions, "browse all actions", the
@@ -72,6 +77,7 @@ export function OraContent({
   onIntroSettled,
   onNavigated,
   onStatus,
+  requested = null,
 }: OraContentProps) {
   const t = useTranslations("Ora");
   const tNav = useTranslations("Nav");
@@ -83,6 +89,14 @@ export function OraContent({
   const [failed, setFailed] = useState(false);
   const [example, setExample] = useState<readonly OraToolSummary[] | null>(null);
   const [introFailed, setIntroFailed] = useState(false);
+  const [overviewTarget, setOverviewTarget] = useState<OverviewTarget>("today");
+  const [handled, setHandled] = useState(0);
+  // A page (the dashboard widget) asked for the overview: show it, once per request.
+  if (requested && requested.id !== handled) {
+    setHandled(requested.id);
+    setOverviewTarget(requested.target);
+    setView("overview");
+  }
 
   const tools = useQuery({
     queryKey: ["ora", "tools", userId, homeId ?? "personal"],
@@ -106,6 +120,11 @@ export function OraContent({
   const toolLabel = (id: OraToolId) => t(`tools.${id}`);
 
   async function run(id: OraToolId) {
+    if (id === "overview") {
+      setOverviewTarget("today");
+      setView("overview");
+      return;
+    }
     setPending(id);
     setFailed(false);
     try {
@@ -187,6 +206,23 @@ export function OraContent({
       <p role="status" className="text-helper text-fg-muted">
         {t("loading")}
       </p>
+    );
+  }
+
+  if (view === "overview" && available.some((tool) => tool.id === "overview")) {
+    return (
+      <OraOverview
+        key={`${overviewTarget}-${String(handled)}`}
+        userId={userId}
+        homeId={homeId}
+        contextName={contextName}
+        initialTarget={overviewTarget}
+        onBack={() => {
+          setView("main");
+        }}
+        onNavigated={onNavigated}
+        onStatus={onStatus}
+      />
     );
   }
 

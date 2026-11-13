@@ -1,5 +1,6 @@
 import type { HomeAction, HomeMembershipFacts } from "@madeora/domain/permissions";
 
+import type { Overview, OverviewShare } from "../overview/types";
 import type { OraToolId } from "./ids";
 
 /**
@@ -57,17 +58,30 @@ export interface OraToolSummary {
 
 export type OraToolOutput =
   | { readonly kind: "navigate"; readonly href: string }
-  | { readonly kind: "capabilities"; readonly tools: readonly OraToolSummary[] };
+  | { readonly kind: "capabilities"; readonly tools: readonly OraToolSummary[] }
+  | { readonly kind: "overview"; readonly overview: Overview }
+  | { readonly kind: "share"; readonly share: OverviewShare };
 
 export interface OraToolDefinition extends OraToolSummary {
   readonly requires: OraRequirement;
   readonly run: (context: OraToolContext) => OraToolOutput;
 }
 
+/**
+ * A read tool that takes input (S46): it is listed and permission-checked like every other tool, but
+ * runs through the server-only executor (`run-input.ts`), which validates the input first.
+ */
+export interface OraInputToolDefinition extends OraToolSummary {
+  readonly requires: OraRequirement;
+}
+
 export type OraToolResult =
   | { readonly status: "ok"; readonly output: OraToolOutput }
   /** Unknown tool, wrong place, or not allowed: deliberately indistinguishable to the caller. */
-  | { readonly status: "forbidden" };
+  | { readonly status: "forbidden" }
+  /** Allowed, but the input did not fit the tool's schema. */
+  | { readonly status: "invalid" }
+  | { readonly status: "unavailable" };
 
 export type OraToolsErrorCode =
   | "forbidden"

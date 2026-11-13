@@ -1,7 +1,13 @@
 import type { HomeAction } from "@madeora/domain/permissions";
 
 import type { OraToolId } from "./ids";
-import type { OraToolContext, OraToolDefinition, OraToolGroup, OraToolSummary } from "./types";
+import type {
+  OraInputToolDefinition,
+  OraToolContext,
+  OraToolDefinition,
+  OraToolGroup,
+  OraToolSummary,
+} from "./types";
 
 interface Destination {
   /** Also the label key in the `Ora.tools` dictionary. */
@@ -164,6 +170,28 @@ export const oraToolCatalogue: readonly OraToolDefinition[] = [
   },
 ];
 
-export function summarise(tool: OraToolDefinition): OraToolSummary {
+export function summarise(tool: OraToolSummary): OraToolSummary {
   return { id: tool.id, kind: tool.kind, group: tool.group, quick: tool.quick };
 }
+
+/**
+ * Tools that take input (S46). Overviews read the person's own records in the place they are in
+ * (Personal, or a Home they belong to); sharing needs a Home. The records themselves are limited by
+ * the database and by the per-module permission checks in the overview loader.
+ */
+export const oraInputToolCatalogue: readonly OraInputToolDefinition[] = [
+  {
+    id: "overview",
+    kind: "read",
+    group: "overview",
+    quick: true,
+    requires: { scope: "any" },
+  },
+  {
+    id: "share-overview",
+    kind: "read",
+    group: "overview",
+    quick: false,
+    requires: { scope: "home", action: "home.view" },
+  },
+];
