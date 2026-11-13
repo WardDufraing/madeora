@@ -6,6 +6,8 @@
  * be re-tuned here without the owner's approval.
  */
 
+import type { Hex } from "./color.ts";
+
 export const oraPaletteKeys = [
   "muted-teal",
   "denim",
@@ -29,12 +31,12 @@ export function isOraPaletteKey(value: unknown): value is OraPaletteKey {
 
 export interface OraPalette {
   /** Body stops at 0 %, 32 %, 64 %, 85 % and 100 %; the hands reuse indices 0, 1, 3 and 4. */
-  readonly body: readonly [string, string, string, string, string];
+  readonly body: readonly [Hex, Hex, Hex, Hex, Hex];
   /** The smile and the closed eyes. */
-  readonly ink: string;
-  readonly brow: string;
+  readonly ink: Hex;
+  readonly brow: Hex;
   /** The cheeks (drawn at opacity 0.23). */
-  readonly blush: string;
+  readonly blush: Hex;
 }
 
 export const oraPalettes: { readonly [K in OraPaletteKey]: OraPalette } = {
