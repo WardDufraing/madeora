@@ -224,6 +224,63 @@ export function widgetSpan(
   return { columns, rows: 2 };
 }
 
+export interface DisplayPlacement {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+/**
+ * Where each widget lands on a display with `columns` columns: the same "dense" auto-placement the
+ * display's CSS grid uses (each widget, in order, takes the first free spot from the top-left where
+ * its span fits), so the editor's drag-and-drop preview shows exactly what the display will show.
+ */
+export function placeDisplayWidgets(
+  widgets: readonly Pick<DisplayWidget, "id" | "size">[],
+  columns: number,
+): DisplayPlacement[] {
+  const taken = new Set<string>();
+  const free = (x: number, y: number, w: number, h: number) => {
+    for (let dy = 0; dy < h; dy += 1) {
+      for (let dx = 0; dx < w; dx += 1)
+        if (taken.has(String(x + dx) + ":" + String(y + dy))) return false;
+    }
+    return true;
+  };
+  return widgets.map((widget) => {
+    const { columns: w, rows: h } = widgetSpan(widget.size, columns);
+    for (let y = 0; ; y += 1) {
+      for (let x = 0; x + w <= columns; x += 1) {
+        if (!free(x, y, w, h)) continue;
+        for (let dy = 0; dy < h; dy += 1) {
+          for (let dx = 0; dx < w; dx += 1) taken.add(String(x + dx) + ":" + String(y + dy));
+        }
+        return { id: widget.id, x, y, w, h };
+      }
+    }
+  });
+}
+
+/**
+ * The widget order after a drag: top to bottom, then left to right by where each widget was
+ * dropped, so the display's own placement puts them back in the arrangement the person sees.
+ */
+export function orderFromPlacements<T extends { readonly id: string }>(
+  widgets: readonly T[],
+  placements: readonly { readonly i: string; readonly x: number; readonly y: number }[],
+): T[] {
+  const at = new Map(placements.map((item) => [item.i, item]));
+  const index = new Map(widgets.map((widget, position) => [widget.id, position]));
+  return [...widgets].sort((a, b) => {
+    const pa = at.get(a.id);
+    const pb = at.get(b.id);
+    if (!pa || !pb) return (index.get(a.id) ?? 0) - (index.get(b.id) ?? 0);
+    return pa.y - pb.y || pa.x - pb.x || (index.get(a.id) ?? 0) - (index.get(b.id) ?? 0);
+  });
+}
+
 /** The lock screen's welcome message: the visible-text rule, like the database; empty is none. */
 export const lockMessageSchema = z
   .string()

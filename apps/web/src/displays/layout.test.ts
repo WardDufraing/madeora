@@ -1,4 +1,6 @@
 import {
+  orderFromPlacements,
+  placeDisplayWidgets,
   checkDisplayLayout,
   defaultDisplayLayout,
   layoutOffersActions,
@@ -100,5 +102,39 @@ describe("layout helpers", () => {
     expect(lockMessageSchema.parse(" Welkom! ")).toBe("Welkom!");
     expect(lockMessageSchema.safeParse("x".repeat(81)).success).toBe(false);
     expect(lockMessageSchema.safeParse("a\u0007b").success).toBe(false);
+  });
+});
+
+describe("drag-and-drop placement", () => {
+  const w = (id: string, size: "small" | "medium" | "large") => ({ id, size });
+
+  it("places widgets like the display's dense CSS grid", () => {
+    expect(placeDisplayWidgets([w("a", "medium"), w("b", "small"), w("c", "large")], 3)).toEqual([
+      { id: "a", x: 0, y: 0, w: 2, h: 2 },
+      { id: "b", x: 2, y: 0, w: 1, h: 1 },
+      { id: "c", x: 0, y: 2, w: 3, h: 2 },
+    ]);
+    // A later small widget fills the hole a full-width one left behind.
+    expect(placeDisplayWidgets([w("a", "small"), w("b", "large"), w("c", "small")], 3)).toEqual([
+      { id: "a", x: 0, y: 0, w: 1, h: 1 },
+      { id: "b", x: 0, y: 1, w: 3, h: 2 },
+      { id: "c", x: 1, y: 0, w: 1, h: 1 },
+    ]);
+    expect(placeDisplayWidgets([w("a", "large"), w("b", "medium")], 2)).toEqual([
+      { id: "a", x: 0, y: 0, w: 2, h: 2 },
+      { id: "b", x: 0, y: 2, w: 2, h: 2 },
+    ]);
+  });
+
+  it("orders widgets by where they were dropped, top to bottom and left to right", () => {
+    const widgets = [w("a", "medium"), w("b", "small"), w("c", "small")];
+    const dropped = [
+      { i: "a", x: 1, y: 0 },
+      { i: "b", x: 0, y: 2 },
+      { i: "c", x: 0, y: 0 },
+    ];
+    expect(orderFromPlacements(widgets, dropped).map((item) => item.id)).toEqual(["c", "a", "b"]);
+    // Unknown or missing placements keep the current order.
+    expect(orderFromPlacements(widgets, []).map((item) => item.id)).toEqual(["a", "b", "c"]);
   });
 });

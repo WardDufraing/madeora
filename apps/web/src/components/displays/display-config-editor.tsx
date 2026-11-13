@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
 import { MemberFailureAlert } from "@/components/members/manage/member-failure-alert";
@@ -28,13 +28,14 @@ import {
   displayWidgetTypes,
   lockMessageSchema,
   newDisplayWidget,
-  widgetSpan,
   type DisplayLayout,
   type DisplayPreferences,
   type DisplayWidget,
   type DisplayWidgetType,
 } from "@/displays/layout";
 import { MemberActionError, type MemberFailure } from "@/members/manage-api";
+
+import { DisplayLayoutPreview } from "./display-layout-preview";
 
 export interface DisplayConfigView {
   readonly layout: DisplayLayout | null;
@@ -55,7 +56,7 @@ function countOption(value: number) {
 /**
  * One Household Display's own configuration (S44; spec "Confirmed independent layouts for each
  * Household Display"): its privacy/party lock and welcome message, its widgets (add, remove, move
- * up and down, size and settings), orientation, theme, density and clock, with a preview of the
+ * up and down or drag in the preview, size and settings), orientation, theme, density and clock, with a preview of the
  * arrangement in landscape and portrait. Saving is checked against the revision that was loaded,
  * so a concurrent edit by another manager is reported instead of overwritten. Nothing here
  * changes another display, the Home dashboard or anyone's personal settings.
@@ -499,27 +500,16 @@ export function DisplayConfigEditor({
             {t("orientation.portrait")}
           </Button>
         </div>
-        <div
-          className={`grid gap-2 rounded-card border border-line bg-surface-sunken p-3 [grid-auto-flow:dense] [grid-template-columns:repeat(var(--preview-columns),minmax(0,1fr))] ${previewPortrait ? "aspect-[10/16] w-48" : "aspect-[16/10] w-80"}`}
-          style={{ "--preview-columns": columns } as CSSProperties}
-          data-testid="display-config-preview"
-          aria-hidden="true"
-        >
-          {layout.widgets.map((widget) => {
-            const span = widgetSpan(widget.size, columns);
-            return (
-              <div
-                key={widget.id}
-                className="flex items-center justify-center overflow-hidden rounded-control border border-line bg-surface p-1 text-helper text-fg-muted [grid-column:span_var(--span-columns)] [grid-row:span_var(--span-rows)]"
-                style={
-                  { "--span-columns": span.columns, "--span-rows": span.rows } as CSSProperties
-                }
-              >
-                {t(`widget.${widget.type}`)}
-              </div>
-            );
-          })}
-        </div>
+        <p className="text-helper text-fg-muted">{t("previewDragHint")}</p>
+        <DisplayLayoutPreview
+          widgets={layout.widgets}
+          columns={columns}
+          portrait={previewPortrait}
+          onReorder={(widgets) => {
+            setNotice(null);
+            setLayout((current) => ({ ...current, widgets }));
+          }}
+        />
       </section>
 
       {saveFailure === "conflict" ? (

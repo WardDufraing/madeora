@@ -8102,6 +8102,7 @@
       "24h": "24-uursklok"
     },
     "previewTitle": "Voorbeeld",
+    "previewDragHint": "Sleep de widgets in het voorbeeld om de volgorde te wijzigen. Je kunt ook Omhoog en Omlaag gebruiken.",
     "previewOrientation": "Stand van het voorbeeld",
     "conflict": "Iemand anders heeft dit scherm intussen gewijzigd. Laad de pagina opnieuw om die wijzigingen te zien en doe dan de jouwe opnieuw.",
     "saveFail": {

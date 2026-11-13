@@ -8102,6 +8102,7 @@
       "24h": "24-hour"
     },
     "previewTitle": "Preview",
+    "previewDragHint": "Drag the widgets in the preview to change their order. You can also use Move up and Move down.",
     "previewOrientation": "Preview orientation",
     "conflict": "Someone else changed this display meanwhile. Reload the page to see their changes, then make yours again.",
     "saveFail": {

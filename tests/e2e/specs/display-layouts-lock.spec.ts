@@ -102,7 +102,19 @@ test("a paired display shows only shareable Home data, takes actions and locks",
   await page.getByRole("link", { name: "Layout and privacy lock of Kitchen" }).click();
   await page.waitForURL(/\/displays\/[0-9a-f-]{36}$/);
   expect(await axeViolations(page)).toEqual([]);
-  await page.getByRole("button", { name: "Remove Shopping (position 3)" }).click();
+  // Drag the shopping list to the top of the preview: it becomes the first widget.
+  const preview = page.getByTestId("display-config-preview");
+  const shoppingTile = preview.locator('[data-widget-type="shopping"]');
+  const clockTile = preview.locator('[data-widget-type="clock"]');
+  const from = await shoppingTile.boundingBox();
+  const to = await clockTile.boundingBox();
+  if (!from || !to) throw new Error("preview tiles not laid out");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 10, to.y + 10, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByText("1. Shopping")).toBeVisible();
+  await page.getByRole("button", { name: "Remove Shopping (position 1)" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText(/Layout saved/)).toBeVisible();
   await screen.reload();
