@@ -28,6 +28,7 @@ const messageKey = {
   rateLimited: "failRateLimited",
   usernameTaken: "failUsernameTaken",
   usernameRequired: "failUsernameRequired",
+  alreadyUsed: "failAlreadyUsed",
   network: "failNetwork",
   failed: "failFailed",
 } as const satisfies Record<MemberFailure, string>;

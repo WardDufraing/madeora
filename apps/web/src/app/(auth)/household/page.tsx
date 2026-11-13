@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { getAuthState } from "@/auth/identity";
+import { DISPLAY_PATH } from "@/auth/redirects";
 import { currentDeviceHash } from "@/child-sign-in/device";
 import { getHouseholdDeviceScreen } from "@/child-sign-in/service";
 import { FormAlert } from "@/components/auth/form-alert";
@@ -27,6 +29,8 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function HouseholdPage() {
   const [state, t] = await Promise.all([getAuthState(), getTranslations("ChildSignIn")]);
+  // A Household Display (S43) never leaves its own screen, not even for a sign-out offer.
+  if (state.kind === "display") redirect(DISPLAY_PATH);
   const deviceHash = await currentDeviceHash();
   const screen = deviceHash ? await getHouseholdDeviceScreen(deviceHash) : null;
 

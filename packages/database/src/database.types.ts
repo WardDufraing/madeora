@@ -649,6 +649,13 @@ export type Database = {
         Args: { p_reason: string; p_recovery_id: string };
         Returns: string;
       };
+      approve_display_pairing: {
+        Args: { p_code_hash: string; p_home_id: string; p_name: string; p_request_id: string };
+        Returns: {
+          display_id: string;
+          outcome: string;
+        }[];
+      };
       approve_household_device: {
         Args: { p_home_id: string; p_label: string; p_secret_hash: string };
         Returns: {
@@ -947,6 +954,18 @@ export type Database = {
           impact: Json;
           outcome: string;
           revision: number;
+        }[];
+      };
+      check_display_pairing_code: {
+        Args: { p_code_hash: string; p_home_id: string };
+        Returns: {
+          browser: string;
+          device_kind: string;
+          expires_at: string;
+          outcome: string;
+          platform: string;
+          request_id: string;
+          requested_at: string;
         }[];
       };
       check_request: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -1905,6 +1924,47 @@ export type Database = {
       discard_google_calendar_change: { Args: { p_change_id: string }; Returns: string };
       discard_security_report: { Args: { p_report_id: string }; Returns: boolean };
       disconnect_google_calendar: { Args: Record<PropertyKey, never>; Returns: string };
+      display_me: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          display_id: string;
+          display_name: string;
+          home_id: string;
+          home_name: string;
+          home_timezone: string;
+        }[];
+      };
+      display_pairing_cancel: { Args: { p_secret_hash: string }; Returns: boolean };
+      display_pairing_claim: {
+        Args: { p_secret_hash: string };
+        Returns: {
+          alias_email: string;
+          outcome: string;
+        }[];
+      };
+      display_pairing_complete: {
+        Args: { p_secret_hash: string; p_session_id: string };
+        Returns: string;
+      };
+      display_pairing_start: {
+        Args: {
+          p_client_key: string;
+          p_code_hash: string;
+          p_secret_hash: string;
+          p_user_agent: string;
+        };
+        Returns: {
+          expires_at: string;
+          outcome: string;
+        }[];
+      };
+      display_pairing_status: {
+        Args: { p_secret_hash: string };
+        Returns: {
+          expires_at: string;
+          status: string;
+        }[];
+      };
       edit_meal_occurrence: {
         Args: {
           p_entry_id: string;
@@ -2300,6 +2360,21 @@ export type Database = {
           is_this_device: boolean;
           label: string;
           last_used_at: string;
+        }[];
+      };
+      home_household_displays: {
+        Args: { p_home_id: string };
+        Returns: {
+          browser: string;
+          device_kind: string;
+          display_id: string;
+          last_seen_at: string;
+          name: string;
+          paired_at: string;
+          paired_by_membership_id: string;
+          platform: string;
+          revoked_at: string;
+          status: string;
         }[];
       };
       home_ownership_recovery_status: {
@@ -3473,6 +3548,10 @@ export type Database = {
         Args: { p_name: string; p_template_id: string };
         Returns: string;
       };
+      rename_household_display: {
+        Args: { p_display_id: string; p_home_id: string; p_name: string };
+        Returns: string;
+      };
       rename_photo_album: {
         Args: { p_album_id: string; p_expected_revision: number; p_name: string };
         Returns: Json;
@@ -3721,6 +3800,10 @@ export type Database = {
       };
       revoke_household_device: {
         Args: { p_device_id: string; p_home_id: string };
+        Returns: string;
+      };
+      revoke_household_display: {
+        Args: { p_display_id: string; p_home_id: string };
         Returns: string;
       };
       revoke_my_session: { Args: { p_report?: boolean; p_session_id: string }; Returns: boolean };

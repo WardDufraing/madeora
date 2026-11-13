@@ -9,6 +9,9 @@ export const CHILD_HOME_PATH = "/child";
 export const CHILD_SIGN_IN_PATH = "/sign-in/child";
 export const HOUSEHOLD_SIGN_IN_PATH = "/household";
 
+/** A Household Display's only page (S43): its pairing screen until paired, then the display. */
+export const DISPLAY_PATH = "/display";
+
 /**
  * Accepts a post-sign-in destination only when it is a path on this site, such as `/tasks?x=1`.
  * Anything that a browser could resolve to another origin (`//evil.example`, `/\evil.example`,

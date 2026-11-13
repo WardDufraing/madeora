@@ -9,6 +9,7 @@ import { PATH_HEADER } from "./path-header";
 import {
   CHILD_HOME_PATH,
   CHILD_SIGN_IN_PATH,
+  DISPLAY_PATH,
   REACTIVATE_PATH,
   signInPath,
   twoFactorPath,
@@ -35,6 +36,10 @@ export interface VerifiedIdentity {
  *   database sets in the account's app metadata (users cannot change it). It may only use the
  *   child pages; the database refuses it everything but the `child_*` functions, and only while
  *   Madeora registered the session and the child's guardians still allow it.
+ * - `display`: a Household Display's session (S43), recognised the same way (`madeora_kind`
+ *   `display`). It may only use the display page; the database refuses it everything but the
+ *   `display_*` functions, and only while Madeora registered the session, the display is not
+ *   revoked and its Home is open. It is never an adult or a member of any Home.
  * - `signed-in`: everything else.
  *
  * The session cookie is only a claim: `auth.getUser(token)` asks Supabase Auth to check the access
@@ -51,11 +56,17 @@ export type AuthState =
       readonly deletionPurgeAfter: string | null;
     }
   | { readonly kind: "child"; readonly user: User }
+  | { readonly kind: "display"; readonly user: User }
   | { readonly kind: "signed-in"; readonly user: User };
 
 /** Whether a user Supabase Auth has just verified is a guardian-managed child (S42). */
 export function isChildUser(user: Pick<User, "app_metadata">): boolean {
   return user.app_metadata["madeora_kind"] === "child";
+}
+
+/** Whether a user Supabase Auth has just verified is a Household Display (S43). */
+export function isDisplayUser(user: Pick<User, "app_metadata">): boolean {
+  return user.app_metadata["madeora_kind"] === "display";
 }
 
 export const getAuthState = cache(async (): Promise<AuthState> => {
@@ -70,6 +81,7 @@ export const getAuthState = cache(async (): Promise<AuthState> => {
   // Before the email check: a child's alias is confirmed for Supabase Auth's sake only, and none of
   // the adult checks below apply to a child.
   if (isChildUser(data.user)) return { kind: "child", user: data.user };
+  if (isDisplayUser(data.user)) return { kind: "display", user: data.user };
   if (!data.user.email_confirmed_at) return { kind: "signed-out" };
   if (needsSecondFactor(data.user, session.access_token)) {
     // A browser the account holder trusted (S37) passes the second factor for this session: the
@@ -120,6 +132,7 @@ export async function requireIdentity(): Promise<VerifiedIdentity> {
   if (state.kind === "signed-in") return { userId: state.user.id };
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
   if (state.kind === "child") redirect(CHILD_HOME_PATH);
+  if (state.kind === "display") redirect(DISPLAY_PATH);
   const path = (await headers()).get(PATH_HEADER);
   redirect(state.kind === "second-factor" ? twoFactorPath(path) : signInPath(path));
 }
@@ -129,6 +142,7 @@ export async function requireChildIdentity(): Promise<VerifiedIdentity> {
   const state = await getAuthState();
   if (state.kind === "child") return { userId: state.user.id };
   if (state.kind === "signed-in") redirect("/");
+  if (state.kind === "display") redirect(DISPLAY_PATH);
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
   if (state.kind === "second-factor") redirect(twoFactorPath(null));
   redirect(CHILD_SIGN_IN_PATH);

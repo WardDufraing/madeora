@@ -7,6 +7,7 @@ import { getAuthState } from "@/auth/identity";
 import { isGoogleSignInEnabled } from "@/auth/providers";
 import {
   CHILD_HOME_PATH,
+  DISPLAY_PATH,
   CHILD_SIGN_IN_PATH,
   REACTIVATE_PATH,
   safeNextPath,
@@ -46,6 +47,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   if (state.kind === "second-factor") redirect(twoFactorPath(next));
   if (state.kind === "deactivated") redirect(REACTIVATE_PATH);
   if (state.kind === "child") redirect(CHILD_HOME_PATH);
+  if (state.kind === "display") redirect(DISPLAY_PATH);
 
   const [t, tAccounts, tLifecycle, tDeletion, googleEnabled] = await Promise.all([
     getTranslations("Auth"),

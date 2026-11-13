@@ -255,6 +255,8 @@ export function outcomeFailure(outcome: string): Response {
       return failure(409, "username-taken");
     case "username_required":
       return failure(409, "username-required");
+    case "already_used":
+      return failure(409, "already-used");
     default:
       return failure(500, "failed");
   }
