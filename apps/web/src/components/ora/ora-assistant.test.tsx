@@ -360,7 +360,9 @@ describe("Ora assistant", () => {
     expect(navigation.refresh).toHaveBeenCalled();
     // Rediscoverable later without repeating the introduction.
     await user.click(screen.getByRole("button", { name: "What Ora can do" }));
-    expect(screen.getByTestId("ora-help")).toHaveTextContent("only change something after you confirm");
+    expect(screen.getByTestId("ora-help")).toHaveTextContent(
+      "only change something after you confirm",
+    );
   });
 
   it("never blocks Ora when the introduction cannot be saved", async () => {
@@ -553,6 +555,8 @@ describe("Ora assistant", () => {
       fetchState.runResponses = [{ id: "x", revision: 1 }];
       await user.click(within(form).getByRole("button", { name: "Add task" }));
       const done = await screen.findByTestId("ora-action-done");
+      // Focus follows the pressed button's replacement instead of dropping to the page.
+      expect(screen.getByTestId("ora-action")).toHaveFocus();
       expect(done).toHaveTextContent("Added the task “Water the plants” to Inbox.");
       const created = fetchState.calls.find((call) => call.url === "/api/v1/tasks");
       expect(created?.body).toMatchObject({

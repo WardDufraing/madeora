@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
@@ -38,6 +38,11 @@ export interface OraActionProps {
   readonly onBack: () => void;
   readonly onNavigated: () => void;
   readonly onStatus: (status: OraStatus) => void;
+}
+
+interface BodyProps extends OraActionProps {
+  /** Moves focus into this view when what is shown changes (the pressed control is gone). */
+  readonly focusView: (selector?: string) => void;
 }
 
 type Phase =
@@ -78,7 +83,7 @@ const undoMessageKey = {
  * person presses the confirm button; the change goes through the module's own API (which checks the
  * person's permissions again) and a failure keeps everything typed so it can be retried.
  */
-export function OraAction({
+function OraActionBody({
   action,
   userId,
   homeId,
@@ -89,7 +94,8 @@ export function OraAction({
   onBack,
   onNavigated,
   onStatus,
-}: OraActionProps) {
+  focusView,
+}: BodyProps) {
   const t = useTranslations("OraAction");
   const toast = useToast();
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
@@ -141,6 +147,7 @@ export function OraAction({
     const parsed = (isTask ? taskTitleSchema : itemNameSchema).safeParse(draft.text);
     if (!parsed.success) {
       setFieldError(draft.text.trim() === "" ? t("errorRequired") : t("errorTooLong"));
+      focusView("input");
       return;
     }
     const label: string = parsed.data;
@@ -224,6 +231,12 @@ export function OraAction({
       window.clearTimeout(timer);
     };
   }, [doneAt]);
+
+  // When the form is replaced by the result (or the failure notice), focus follows to the new view.
+  const phaseKind = phase.kind;
+  useEffect(() => {
+    if (phaseKind === "done" || phaseKind === "failed") focusView();
+  }, [phaseKind, focusView]);
 
   if (preview.isPending) {
     return (
@@ -424,5 +437,22 @@ export function OraAction({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** One guided change; the wrapper receives focus whenever the view behind a pressed control changes. */
+export function OraAction(props: OraActionProps) {
+  const wrapper = useRef<HTMLDivElement>(null);
+  const focusView = useCallback((selector?: string) => {
+    const target = selector ? wrapper.current?.querySelector<HTMLElement>(selector) : null;
+    (target ?? wrapper.current)?.focus();
+  }, []);
+  useEffect(() => {
+    focusView();
+  }, [focusView]);
+  return (
+    <div ref={wrapper} tabIndex={-1} className="outline-none" data-testid="ora-action">
+      <OraActionBody {...props} focusView={focusView} />
+    </div>
   );
 }

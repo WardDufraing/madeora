@@ -24,7 +24,7 @@ export interface OraSuggestion {
 export const dismissSuggestionSchema = z.strictObject({
   homeId: z.uuid().nullable(),
   kind: z.enum(suggestionKinds),
-  situation: z.string().min(1).max(64),
+  situation: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 export type DismissSuggestionInput = z.output<typeof dismissSuggestionSchema>;
 

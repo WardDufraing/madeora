@@ -130,6 +130,8 @@ export function OraContent({
       dismissSuggestion({ homeId, kind: suggestion.kind, situation: suggestion.situation }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: suggestionsKey });
+      // The pressed button is gone with the suggestion: keep focus inside Ora's surface.
+      document.getElementById("ora-surface")?.focus();
     },
   });
 

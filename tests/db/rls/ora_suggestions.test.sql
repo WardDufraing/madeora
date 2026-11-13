@@ -10,6 +10,10 @@ select tests.act_as('alice');
 insert into ids select 'home-a', public.create_home('Thuis', 'Europe/Brussels', gen_random_uuid());
 select tests.act_as('bob');
 insert into ids select 'home-b', public.create_home('Kot', 'Europe/Amsterdam', gen_random_uuid());
+-- Alice is a Member of Bob's Home, so she can leave it later (a sole Owner cannot).
+select tests.act_as_owner();
+insert into public.home_memberships (home_id, user_id, role) values
+  ((select id from ids where name = 'home-b'), tests.user_id('alice'), 'member');
 
 -- Signed-out visitors ------------------------------------------------------------------------------
 
@@ -93,18 +97,29 @@ select tests.assert_allowed(
 );
 select tests.assert_allowed(
   $$insert into public.ora_dismissed_suggestions (scope, home_id, kind, situation)
-    values ((select id::text from ids where name = 'home-a'),
-            (select id from ids where name = 'home-a'), 'today-overview', '2026-11-16')$$,
-  'Alice can dismiss one in her own Home'
+    values ((select id::text from ids where name = 'home-b'),
+            (select id from ids where name = 'home-b'), 'today-overview', '2026-11-16')$$,
+  'Alice can dismiss one in a Home she belongs to'
 );
 select tests.assert_row_count('select * from public.ora_dismissed_suggestions', 2,
   'Alice reads her own two dismissals');
+select tests.assert_allowed(
+  $$insert into public.ora_dismissed_suggestions
+      (user_id, scope, home_id, kind, situation, dismissed_at)
+    values (tests.user_id('alice'), 'personal', null, 'today-overview', '2026-11-17', now())
+    on conflict (user_id, scope, kind) do update
+      set scope = excluded.scope, home_id = excluded.home_id, kind = excluded.kind,
+          situation = excluded.situation, dismissed_at = excluded.dismissed_at$$,
+  'The exact upsert the app sends (every column, both branches) is allowed'
+);
+select tests.act_as('carol');
 select tests.assert_denied(
   $$insert into public.ora_dismissed_suggestions (scope, home_id, kind, situation)
     values ((select id::text from ids where name = 'home-b'),
             (select id from ids where name = 'home-b'), 'today-overview', '2026-11-16')$$,
-  'Alice cannot dismiss in a Home she does not belong to'
+  'Carol cannot dismiss in a Home she does not belong to'
 );
+select tests.act_as('alice');
 select tests.assert_denied(
   $$insert into public.ora_dismissed_suggestions (scope, kind, situation)
     values ('personal', 'something-else', 'x')$$,
@@ -112,7 +127,7 @@ select tests.assert_denied(
 );
 select tests.assert_denied(
   $$insert into public.ora_dismissed_suggestions (scope, home_id, kind, situation)
-    values ('personal', (select id from ids where name = 'home-a'), 'today-overview', 'x')$$,
+    values ('personal', (select id from ids where name = 'home-b'), 'today-overview', '2026-11-16')$$,
   'A place and its Home must agree', '23514'
 );
 select tests.assert_denied(
@@ -137,10 +152,10 @@ select tests.assert_row_count(
 
 select tests.act_as_owner();
 delete from public.home_memberships
-  where home_id = (select id from ids where name = 'home-a') and user_id = tests.user_id('alice');
+  where home_id = (select id from ids where name = 'home-b') and user_id = tests.user_id('alice');
 select tests.assert_row_count(
   $$select * from public.ora_dismissed_suggestions
-    where home_id = (select id from ids where name = 'home-a')$$,
+    where home_id = (select id from ids where name = 'home-b')$$,
   0,
   'Leaving a Home deletes the dismissals there'
 );

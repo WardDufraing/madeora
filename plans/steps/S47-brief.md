@@ -29,3 +29,4 @@ Seven-day history with Clear, long-term memories and their management, celebrati
 - [x] UI: `ora-action.tsx`, suggestions in `ora-content.tsx`, `ora-teaser.tsx`, settings switch, i18n en/nl
 - [x] Local checks: prettier, eslint (touched dirs, max-warnings 0), tsc, relevant unit/component tests (ora, api/v1, i18n, settings): all pass; boundary check passes
 - Not run locally by design: full suite, build, DB (needs Supabase), Playwright (CI runs them). No Playwright spec added; the component tests cover the journey.
+- [x] Independent review: CHANGES_REQUIRED (1 BLOCKER, 1 HIGH, 4 MEDIUM, 4 LOW) -> reviews/steps/S47-review.md. Fixed the BLOCKER (missing column grant), focus handling, DB test, date validation; the HIGH (Undo is two calls) is a documented limitation in ADR 0052.

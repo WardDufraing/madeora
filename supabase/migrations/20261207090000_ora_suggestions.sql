@@ -29,7 +29,7 @@ create table public.ora_dismissed_suggestions (
     constraint ora_dismissed_kind_check check (kind in ('today-overview')),
   -- What was dismissed (for an overview: the day). A different situation may be offered again.
   situation text not null
-    constraint ora_dismissed_situation_check check (char_length(situation) between 1 and 64),
+    constraint ora_dismissed_situation_check check (situation ~ '^\d{4}-\d{2}-\d{2}$'),
   dismissed_at timestamptz not null default now(),
   constraint ora_dismissed_suggestions_pkey primary key (user_id, scope, kind),
   constraint ora_dismissed_home_check check (
@@ -46,9 +46,11 @@ comment on table public.ora_dismissed_suggestions is
 
 revoke all on table public.ora_dismissed_suggestions from anon, authenticated;
 grant select on table public.ora_dismissed_suggestions to authenticated;
-grant insert (user_id, scope, home_id, kind, situation)
+-- dismissed_at is granted too: the app's upsert names it, and the ON CONFLICT branch needs the same
+-- column privilege as the INSERT.
+grant insert (user_id, scope, home_id, kind, situation, dismissed_at)
   on table public.ora_dismissed_suggestions to authenticated;
-grant update (user_id, scope, home_id, kind, situation)
+grant update (user_id, scope, home_id, kind, situation, dismissed_at)
   on table public.ora_dismissed_suggestions to authenticated;
 
 create policy ora_dismissed_select_own on public.ora_dismissed_suggestions
