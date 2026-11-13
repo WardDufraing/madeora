@@ -114,7 +114,7 @@ Configure these values directly in Vercel Production and Trigger.dev Production:
 
 Never use a public bucket. The app authorizes upload/download through signed requests. Follow the repository storage guide for CORS, lifecycle, alerts, budget and smoke tests. R2 usage can be billed to the payment method attached to Cloudflare, so keep the configured usage alert and review the cost register.
 
-Personal and Home privacy exports require storage to be enabled. The web app and `privacy-export-build` job must share the same production R2 settings so the job can write a private archive and the app can authorize its short-lived download. With `STORAGE_DRIVER=off`, export preparation is intentionally unavailable.
+Personal and Home privacy exports require storage to be enabled. The web app and `privacy-export-build` job must share the same production R2 settings so the job can write a private archive and the app can authorize its short-lived download. With `STORAGE_DRIVER=off`, export preparation is intentionally unavailable. Personal-to-Home recipe and photo-album copies that contain files also require the web app and `home-copy-files` job to share this bucket configuration; copied bytes stay inside the private bucket.
 
 ## 9. Trigger.dev background jobs
 
@@ -134,7 +134,7 @@ Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and
 | `GOOGLE_CALENDAR_CLIENT_SECRET`  | production Calendar OAuth client secret, when enabled |
 | `GOOGLE_CALENDAR_TOKEN_KEY`      | production token key; identical to Vercel Production  |
 
-Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev, including `security-email`, `account-recovery-ready` and `privacy-export-build` when their migrations are released. The hourly maintenance run must also remain active so expired or stalled export archives are swept. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
+Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev, including `security-email`, `account-recovery-ready`, `privacy-export-build` and `home-copy-files` when their migrations are released. The hourly maintenance run must remain active so expired/stalled exports and Home-copy requests are swept and due account/Home closures are purged. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
 
 ## 10. Vercel Production environment variables
 
@@ -189,6 +189,9 @@ Use a private browser window and the canonical production URL.
 - If Google Calendar is enabled, connect a production test user, verify an inbound event appears, create or edit one event from Madeora, run Sync now, and confirm it reaches Google. Verify an unshared calendar and a Google-private event reveal nothing in a Home.
 - If storage is enabled, upload and read a profile picture and a photo-library image; check quota accounting, album sharing/access, derivatives, trash recovery, and that files remain private.
 - If privacy exports are enabled, request and download a personal export after reauthentication; verify the private ZIP contains its manifest and expected selected categories. Grant `exportHomeData` to a production test member, verify only permitted Home data can be exported, then revoke it and confirm further build/download access ends.
+- With synthetic production test data, copy a personal recipe or album into a Home through both a direct and approval-required path; confirm the destination is independent, file copies remain private, and revoking access ends a pending request.
+- Exercise account/Home lifecycle safeguards with disposable test records: verify sole-Owner and open-copy blockers, close and restore a test Home within its recovery period, and confirm normal access ends while closure is pending. Do not wait for or force the destructive 30-day purge during a smoke test.
+- Create a test child profile and accepted guardian relationship, verify cross-Home isolation, approve a household device, and test restricted child password/PIN sign-in plus an attributed chore completion. Revoke the device/session afterwards; never reuse a real child's data for this check.
 - If background jobs are enabled, run the `sample-ping` smoke test and check the outbox status.
 - Preview deployments must still require Vercel Authentication and must point only at `madeora-preview`.
 
@@ -199,6 +202,7 @@ Use a private browser window and the canonical production URL.
 - **Rollbacks:** use Vercel Instant Rollback for an urgent rollback, then fix source and release through Git. A rollback does not reverse a database migration; migrations are forward-only. Never run the destructive reset section in [production migrations](production-migrations.md) as a rollback.
 - **Secrets:** rotate credentials in their provider, update only the intended environment, then redeploy the app/jobs. Keep preview and production credentials separate.
 - **Privacy exports:** monitor `privacy-export-build` failures and the hourly sweep. Ready archives expire after seven days; the sweep expires or times out stale work and queues private R2 objects for removal. Investigate repeated partial exports, storage failures or stalled preparations using the [background-jobs runbook](background-jobs.md).
+- **Deletion and Home copies:** monitor `home-copy-files` plus the hourly `purge_due_deletions` and `sweep_home_copies` work. Review recorded purge/copy errors and retry through the documented job recovery flow; never manually delete source objects or bypass the 30-day account/Home recovery period.
 - **Costs and limits:** review [provider cost register](provider-cost-register.md), including Vercel commercial-use limits, Supabase quotas, Resend email quotas, Trigger.dev usage and Cloudflare R2 billing.
 - **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), [Google Calendar](google-calendar-setup.md), and [adult account security](adult-security-setup.md).
 
