@@ -27,11 +27,12 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.success) return json(400, { error: "invalid" });
 
   const resolved = await resolveOraToolContext(parsed.data.homeId);
-  if (resolved.status === "unauthenticated") return json(401, { error: "unauthenticated" });
-  if (resolved.status === "forbidden") return json(403, { error: "forbidden" });
-  if (resolved.status !== "ok") return json(503, { error: "unavailable" });
+  // A teaser is a courtesy, asked for on page load: signed out, not a member, or unreadable all
+  // answer "no teaser" with 200, so a page the person lost access to logs no failed request.
+  const none: OraTeaserResponse = { teaser: null };
+  if (resolved.status !== "ok") return json(200, none);
 
   const result = await claimTeaser(resolved.context);
-  if (result.status !== "ok") return json(503, { error: "unavailable" });
+  if (result.status !== "ok") return json(200, none);
   return json(200, { teaser: result.teaser } satisfies OraTeaserResponse);
 }

@@ -30,7 +30,20 @@ export function OraTeaser({
 
   useEffect(() => {
     let cancelled = false;
+    // Once per tab per place per day is enough to ask: the server keeps the real limit, and asking on
+    // every full page load would read the person's day each time for nothing.
+    const key = `ora-teaser:${homeId ?? "personal"}:${new Date().toDateString()}`;
+    try {
+      if (window.sessionStorage.getItem(key) !== null) return;
+    } catch {
+      // Storage unavailable: ask anyway.
+    }
     void claimTeaser(homeId).then((suggestion) => {
+      try {
+        window.sessionStorage.setItem(key, suggestion ? "shown" : "none");
+      } catch {
+        // Not remembered; the server still limits it.
+      }
       if (!cancelled && suggestion) setTeaser({ suggestion, homeId });
     });
     return () => {

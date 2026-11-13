@@ -134,6 +134,7 @@ function setup(settings: Partial<OraSettings> = {}) {
 }
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   navigation.pathname = "/";
   navigation.push.mockReset();
   navigation.refresh.mockReset();

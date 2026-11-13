@@ -72,19 +72,25 @@ describe("POST /api/v1/ora/teaser", () => {
     expect(await (await post({ homeId: HOME_ID })).json()).toEqual({ teaser: null });
   });
 
-  it("claims nothing for a signed-out visitor, a foreign Home or a bad request", async () => {
+  it("claims nothing, and answers no teaser with 200, for a signed-out visitor or a foreign Home", async () => {
     state.identity = null;
-    expect((await post({ homeId: null })).status).toBe(401);
+    expect(await (await post({ homeId: null })).json()).toEqual({ teaser: null });
     state.identity = { userId: "user-a" };
     state.context = { status: "not-found" };
-    expect((await post({ homeId: HOME_ID })).status).toBe(403);
+    const foreign = await post({ homeId: HOME_ID });
+    expect(foreign.status).toBe(200);
+    expect(await foreign.json()).toEqual({ teaser: null });
+    expect(state.claims).toBe(0);
+  });
+
+  it("refuses a bad request or a cross-site one before claiming anything", async () => {
     expect((await post({ homeId: "nope" })).status).toBe(400);
     expect((await post({ homeId: null }, { origin: "https://evil.example" })).status).toBe(403);
     expect(state.claims).toBe(0);
   });
 
-  it("answers 503 when it cannot be worked out", async () => {
+  it("answers no teaser when it cannot be worked out", async () => {
     state.claim = { status: "unavailable" };
-    expect((await post({ homeId: null })).status).toBe(503);
+    expect(await (await post({ homeId: null })).json()).toEqual({ teaser: null });
   });
 });
