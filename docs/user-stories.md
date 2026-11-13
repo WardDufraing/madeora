@@ -2,7 +2,7 @@
 
 **Purpose:** Map the user-facing workflows represented in the current repository and give contributors concise acceptance checks.  
 **Scope:** Implementation-aligned documentation, not a replacement for approved product requirements.  
-**Last reviewed:** 11 November 2026
+**Last reviewed:** 13 November 2026
 
 > **Source of truth:** `docs/product/Project-entry.md`, `Modules.md`, and `Project-specification.md` remain the binding product documents. This file summarizes workflows visible in the repository. A listed story does not mean every product-level requirement or edge case is complete. When code, tests, and this summary disagree, verify the behavior and update this file; do not silently change the binding product requirements.
 
@@ -78,6 +78,29 @@ As an account holder or authorized Home member, I want to review privacy setting
 - A ready export expires after seven days, requires a fresh authorization check before a short-lived download, and is invalidated when relevant access or source data changes. Cancellation, download, expiry and failure states are visible.
 - Personal exports, Home exports and their archives remain isolated by account and Home. Losing a Home or export permission ends access without granting a copy of data that is no longer permitted.
 
+### US-043 — Delete personal data or close an account or Home safely
+
+As an account holder or Home Owner, I want scoped deletion and a recovery period for major closures so I can remove data deliberately without exposing or silently orphaning shared information.
+
+**Acceptance checks**
+
+- I can preview personal-data deletion by supported category, acknowledge each selected category, type the required confirmation and reauthenticate; results are reported per category so a failed category can be retried without repeating completed deletion.
+- Deleting my account requires the localized typed confirmation and fresh reauthentication, is blocked while I still own an active Home or have unresolved copy work, suspends normal access immediately, and offers only cancellation/recovery during the 30-day period.
+- Closing a Home requires the Owner, the typed Home name and fresh reauthentication. Member access ends immediately, open invitations/transfers/recoveries/exports are ended, and affected members receive the security notification without gaining access to another Home.
+- The closing Owner can restore the Home during the 30-day period. Expired account/Home closures are purged by the hourly maintenance job, with failures recorded and retried rather than skipping unrelated due deletions.
+- Deletion previews, blockers and results reveal only records I may manage; copied or shared records follow their explicit ownership and impact rules rather than being silently deleted across Homes.
+
+### US-044 — Copy selected personal items into a Home
+
+As a person who belongs to one or more Homes, I want to copy an eligible personal recipe, calendar event or photo album into chosen Homes so each Home receives an independent record under its own permissions.
+
+**Acceptance checks**
+
+- Before requesting copies I can review eligible destinations and whether each copy is direct or requires approval; a request never reveals unrelated Homes, members or source-private details.
+- Destination permissions are checked at request, approval and execution. Authorized self-approval is recorded, pending requests expire after 30 days, and either side losing the required access ends the open request.
+- A completed copy is a new Home-owned recipe, event or album with a limited origin label, not a live share or a backdoor to the personal source.
+- File-bearing recipe/album copies use the private in-bucket copy job; missing, mismatched or unauthorized files fail safely and reserved destination files are removed.
+- I can review and cancel my pending requests. Home reviewers can approve or reject only requests for the Home they may manage, and account deletion waits until open requests are resolved or cancelled.
 ## 2. Personal dashboard
 
 ### US-002 — Use Madeora without joining a Home
@@ -143,6 +166,42 @@ As a Home member, I want to leave a Home when I no longer participate so my acce
 - After leaving, I no longer have access to that Home's protected information.
 - Ownership and last-owner safeguards prevent an invalid transfer of control.
 
+### US-045 — Manage child profiles and guardians within each Home
+
+As an authorized adult, I want to create and link child profiles with explicit guardianship so children can participate without being treated as ordinary adult accounts.
+
+**Acceptance checks**
+
+- An authorized adult can create a child identity without an email, subject to creation limits, and can delete a mistaken creation only during the supported 24-hour window.
+- Primary and secondary guardian assignments apply per Home only after the named adult accepts. A pending, rejected, removed or forged guardian relationship grants no access.
+- Guardians can apply Young Child, Child or Teen access presets and supported overrides; widening access requires the explicit confirmation and never widens another Home automatically.
+- A one-time, expiring link code can connect the same child identity to another Home after the receiving Home rechecks authority. It does not expose the child's other Homes or guardians.
+- Guardian-set presentation details and child records remain isolated to authorized guardians/Home members under the applicable policies; removing a child or guardian cannot orphan the child contrary to the safeguards.
+
+### US-046 — Let a child sign in with restricted access and use a household chore device
+
+As a child or household member, I want age-appropriate credentials or an approved shared device so I can access only the permitted child experience and record chores under the right person.
+
+**Acceptance checks**
+
+- A child may sign in with a guardian-managed username/password only when the primary guardian in every linked Home permits it, or with a per-Home PIN on an approved household device.
+- Passwords and PINs are server-hashed and excluded from database/audit logs. Attempt limits, temporary locks, the PostgREST request check and registered child sessions prevent a child session from becoming an adult session.
+- Guardians manage only credentials and sessions they are authorized to manage; Home managers approve/revoke devices, and disabling a sign-in method or signing out ends the corresponding sessions.
+- The household screen always asks who is acting. The Home's per-person and per-chore PIN rules determine whether confirmation is optional or required before a chore completion is attributed.
+- An approved device can complete only eligible chores for its Home. Undo is limited to two minutes and is refused if someone else has changed the occurrence since the device action.
+- Device, PIN, child and chore actions preserve Home boundaries; a device approved for one Home grants no access to another.
+
+### US-047 — Move a child identity to an independent account
+
+As an eligible young person, I want to claim my existing child identity as my own account so my history and Home memberships continue while guardian control ends.
+
+**Acceptance checks**
+
+- The primary guardian in every linked Home starts the transition using a birth date checked against each Home's country age; the birth date is used for eligibility and is not stored.
+- The young person claims the same identity with a verified email address, reviews the transition and explicitly confirms completion.
+- Either authorized guardian can cancel before completion. Guardians are notified when a transition starts and all guardians are notified when it completes.
+- If the child's linked Homes, applicable age, or primary-guardian authority changes before completion, the open transition is cancelled and must be started again.
+- Completion removes guardian authority, child credentials, PINs and child sessions while preserving the person's history, identity continuity and Home roles under the new independent account.
 ## 4. Tasks and planning
 
 ### US-008 — Organize personal or Home tasks
@@ -523,9 +582,9 @@ These checks apply to every story above:
 - The experience remains usable on supported screen sizes and with keyboard navigation.
 - Automated tests cover important behavior and access boundaries, especially database RLS policies.
 
-## Implementation evidence for security, activity, privacy, lifecycle, chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
+## Implementation evidence for security, activity, privacy, deletion, copies, children, lifecycle, chore, vacation, points, rewards, recipe, shopping, meal, habit, goal, pet, calendar, integration and photo workflows
 
-The additional workflows are represented by [account-switching and lifecycle browser tests](../tests/e2e/specs/account-switching.spec.ts), [privacy-review and export browser tests](../tests/e2e/specs/privacy-lifecycle.spec.ts), activity unit and component tests under `apps/web/src/activity/` and `apps/web/src/components/activity/`, privacy component tests under `apps/web/src/components/privacy/`, [privacy-export job tests](../packages/jobs/src/jobs/privacy-export.test.ts), activity, lifecycle and export database/RLS tests under `tests/db/rls/`, [adult-security browser tests](../tests/e2e/specs/adult-security.spec.ts), [security component tests](../apps/web/src/components/security/security.test.tsx), [account-recovery component tests](../apps/web/src/components/security/recovery.test.tsx), authentication unit tests under `apps/web/src/auth/`, [trusted-device route tests](../apps/web/src/app/api/v1/me/trusted-device/route.test.ts), [adult-security database/RLS tests](../tests/db/rls/adult_security.test.sql), [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
+The additional workflows are represented by [privacy, deletion and copy browser tests](../tests/e2e/specs/privacy-lifecycle.spec.ts), [child sign-in browser tests](../tests/e2e/specs/child-sign-in.spec.ts), child, guardian, transition, shared-device, deletion and copy component/route tests under `apps/web/src/components/` and `apps/web/src/app/api/v1/`, child sign-in service tests under `apps/web/src/child-sign-in/`, [home-copy job tests](../packages/jobs/src/jobs/home-copy.test.ts), deletion, copy, child-profile, child-sign-in, shared-device and independent-account database/RLS tests under `tests/db/rls/`, [account-switching and lifecycle browser tests](../tests/e2e/specs/account-switching.spec.ts), [privacy-review and export browser tests](../tests/e2e/specs/privacy-lifecycle.spec.ts), activity unit and component tests under `apps/web/src/activity/` and `apps/web/src/components/activity/`, privacy component tests under `apps/web/src/components/privacy/`, [privacy-export job tests](../packages/jobs/src/jobs/privacy-export.test.ts), activity, lifecycle and export database/RLS tests under `tests/db/rls/`, [adult-security browser tests](../tests/e2e/specs/adult-security.spec.ts), [security component tests](../apps/web/src/components/security/security.test.tsx), [account-recovery component tests](../apps/web/src/components/security/recovery.test.tsx), authentication unit tests under `apps/web/src/auth/`, [trusted-device route tests](../apps/web/src/app/api/v1/me/trusted-device/route.test.ts), [adult-security database/RLS tests](../tests/db/rls/adult_security.test.sql), [chore pool browser tests](../tests/e2e/specs/chore-pool.spec.ts), [chore overview browser tests](../tests/e2e/specs/chore-overview.spec.ts), [chore workflow browser tests](../tests/e2e/specs/chores.spec.ts), [Home vacation browser tests](../tests/e2e/specs/home-vacations.spec.ts), [points and rewards browser tests](../tests/e2e/specs/points-rewards.spec.ts), [recipe browser tests](../tests/e2e/specs/recipes.spec.ts), [shopping list browser tests](../tests/e2e/specs/shopping.spec.ts), [meal planner browser tests](../tests/e2e/specs/meal-planner.spec.ts), [habit browser tests](../tests/e2e/specs/habits.spec.ts), [numeric-habit browser tests](../tests/e2e/specs/numeric-habits.spec.ts), [personal points and rewards browser tests](../tests/e2e/specs/personal-points-rewards.spec.ts), [goal browser tests](../tests/e2e/specs/goals.spec.ts), [recurring-goal browser tests](../tests/e2e/specs/recurring-goals.spec.ts), [habit-to-goal link browser tests](../tests/e2e/specs/habit-goal-links.spec.ts), [pet-profile browser tests](../tests/e2e/specs/pets.spec.ts), [pet-care browser tests](../tests/e2e/specs/pet-care.spec.ts), [calendar browser tests](../tests/e2e/specs/calendar.spec.ts), [Google Calendar route tests](../apps/web/src/app/api/v1/integrations/google-calendar/google-calendar.test.ts), [Google event route tests](../apps/web/src/app/api/v1/calendar/google-events/google-events.test.ts), tests for the Google client, encryption, normalization, push and sync behavior under `packages/google-calendar/src/`, [photo-library route tests](../apps/web/src/app/api/v1/photos/photos.test.ts), [photo-sharing route tests](../apps/web/src/app/api/v1/photos/photo-sharing.test.ts), [photo component tests](../apps/web/src/components/photos/photos.test.tsx), and their corresponding database and concurrency tests under `tests/db/`. The migrations define the schema and authorization layer, but are not treated as proof that a workflow is implemented. These tests verify selected paths; they do not certify every product requirement or all failure and permission cases.
 
 ## Repository areas to verify
 
