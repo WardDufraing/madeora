@@ -6,15 +6,18 @@
 **Done when:** the "Ora change" journey passes without free text.
 
 ## Scope of this PR (S47a)
+
 1. **Guided changes** (tool kind `action`): `add-task` and `add-shopping-item`, Personal or Home, editable preview inside the bubble/sheet, confirm button named for the action, result with Undo (toast if Ora is closed), failure keeps the preview with Retry, duplicates ask first, in-memory drafts.
 2. **Quick Undo**: server step that re-checks place, revision (anyone's later edit blocks it), window (5 minutes) and permission; moves to Trash; truthful answers for changed, gone, expired and not permitted.
 3. **Suggestions**: one deterministic kind (`today-overview`), shown in the panel, dismissible, suppressed per person/place/kind/situation in the database.
 4. **Daily teaser**: at most one per person per day across Homes and devices (`claim_ora_teaser`), personal mute (Ora settings page), small note beside the button, never modal.
 
 ## Deferred to a follow-up step (S47b), by choice, to keep this PR reviewable
+
 Seven-day history with Clear, long-term memories and their management, celebrations, display-only Ora, more actions (complete task, change due date, recurring, meal to shopping, multi-record updates, deletion), proactive frequency/quiet hours/category toggles, "explain this suggestion". The build plan's S47 line lists these; Ward decides whether they become S47b or later.
 
 ## Defaults picked (Ward may change)
+
 1. Two actions only, both additive and cleanly reversible by Trash. Edits and deletions need per-module reversal rules and come later.
 2. Undo window 5 minutes (spec asks for a specified window and gives none).
 3. Change execution goes through the module APIs from the browser after confirmation, not through a second server write path; Ora's tools layer still lists/prepares/undoes with the permission engine.
@@ -23,6 +26,7 @@ Seven-day history with Clear, long-term memories and their management, celebrati
 6. Settings page gets a "Suggestions from Ora" switch (mute teasers); the mute does not hide in-panel suggestions (handoff).
 
 ## Status
+
 - [x] Scoping and brief, ADR 0052
 - [x] Migration `20261207090000_ora_suggestions.sql`, types, DB RLS test `tests/db/rls/ora_suggestions.test.sql`
 - [x] Server: `ora/actions`, `ora/suggestions`, routes `/api/v1/ora/suggestions`, `/api/v1/ora/teaser`, tool catalogue
