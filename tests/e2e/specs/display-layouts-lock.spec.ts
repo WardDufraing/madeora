@@ -106,6 +106,7 @@ test("a paired display shows only shareable Home data, takes actions and locks",
   const preview = page.getByTestId("display-config-preview");
   const shoppingTile = preview.locator('[data-widget-type="shopping"]');
   const clockTile = preview.locator('[data-widget-type="clock"]');
+  await preview.scrollIntoViewIfNeeded();
   const from = await shoppingTile.boundingBox();
   const to = await clockTile.boundingBox();
   if (!from || !to) throw new Error("preview tiles not laid out");
