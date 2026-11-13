@@ -8168,7 +8168,9 @@
       "open-home-settings": "Open Thuis-instellingen",
       "capabilities": "Wat kun je hier doen?",
       "overview": "Wat staat er gepland?",
-      "share-overview": "Een overzicht delen"
+      "share-overview": "Een overzicht delen",
+      "add-task": "Taak toevoegen",
+      "add-shopping-item": "Boodschap toevoegen"
     },
     "intro": {
       "title": "Maak kennis met Ora",
@@ -8200,6 +8202,13 @@
     "forbidden": {
       "title": "Ora kan hier niet helpen",
       "body": "Misschien heb je hier geen toegang meer. Kies een andere plek in het menu."
+    },
+    "suggestions": {
+      "title": "Suggesties",
+      "today-overview": "{count, plural, one {Je hebt vandaag # ding te doen.} other {Je hebt vandaag # dingen te doen.}}",
+      "open": "Toon vandaag",
+      "dismiss": "Nu niet",
+      "dismissFailed": "Dat kon ik niet opslaan. Probeer het opnieuw."
     }
   },
   "OraSettings": {
@@ -8243,7 +8252,11 @@
     "saveNetwork": "Madeora is niet bereikbaar. Controleer je verbinding en probeer het opnieuw.",
     "saveSignedOut": "Je bent afgemeld. Meld je opnieuw aan om op te slaan.",
     "saveForbidden": "Je hoort niet meer bij die Thuis.",
-    "noHomes": "Word lid van een Thuis of maak er een om er een kleur voor te kiezen."
+    "noHomes": "Word lid van een Thuis of maak er een om er een kleur voor te kiezen.",
+    "teasersTitle": "Suggesties van Ora",
+    "teasersOn": "Ora mag één korte suggestie per dag tonen",
+    "teasersOff": "Ora toont geen ongevraagde suggesties",
+    "teasersHint": "Hooguit één klein bericht per dag, voor al je Homes en apparaten samen. Dempen geldt overal tot je het weer aanzet; suggesties blijven beschikbaar in Ora."
   },
   "OraOverview": {
     "title": "Wat staat er gepland",
@@ -8367,5 +8380,49 @@
     "attention": "{count, plural, one {# heeft aandacht nodig} other {# hebben aandacht nodig}}",
     "someMissing": "Sommige bronnen ontbreken, dus dit kan onvolledig zijn.",
     "overdue": "Te laat"
+  },
+  "OraAction": {
+    "loading": "Even voorbereiden…",
+    "unavailable": "Ik kan dit nu niet voorbereiden. Er is niets gewijzigd.",
+    "retry": "Opnieuw proberen",
+    "back": "Terug",
+    "cancel": "Annuleren",
+    "lead": "Ik bereid dit voor in {context}. Er wordt niets opgeslagen voordat je bevestigt.",
+    "titleTask": "Taak toevoegen",
+    "titleItem": "Boodschap toevoegen",
+    "fieldTask": "Taak",
+    "fieldItem": "Artikel",
+    "fieldDue": "Deadline (optioneel)",
+    "fieldTaskList": "Takenlijst",
+    "fieldShoppingList": "Boodschappenlijst",
+    "errorRequired": "Vul eerst een naam in.",
+    "errorTooLong": "Die naam is te lang.",
+    "summaryEmpty": "Typ wat je wilt toevoegen, dan laat ik zien wat er gebeurt.",
+    "summaryTask": "Ik voeg de taak “{name}” toe aan {list} in {context}{hasDue, select, yes { met deadline {due}} other {}}.",
+    "summaryItem": "Ik voeg “{name}” toe aan de boodschappenlijst {list} in {context}.",
+    "confirmTask": "Taak toevoegen",
+    "confirmItem": "Aan boodschappenlijst toevoegen",
+    "doneTask": "De taak “{name}” is toegevoegd aan {list}.",
+    "doneItem": "“{name}” is toegevoegd aan {list}.",
+    "undo": "Ongedaan maken",
+    "undone": "Klaar. Het staat nu in de prullenbak en kan nog worden hersteld.",
+    "undoChanged": "Iemand heeft het na het toevoegen aangepast, dus ik heb het gelaten zoals het is.",
+    "undoGone": "Het is al weg, dus er is niets om ongedaan te maken.",
+    "undoExpired": "Ongedaan maken kan niet meer. Je kunt het nog aanpassen op de eigen pagina.",
+    "undoNotPermitted": "Je kunt het hier niet meer verwijderen. Open het om het aan te passen.",
+    "undoFailed": "Ongedaan maken is niet gelukt. Het staat er nog.",
+    "another": "Nog een toevoegen",
+    "openTasks": "Taken openen",
+    "openShopping": "Boodschappen openen",
+    "noTaskList": "Er is hier nog geen takenlijst waaraan je kunt toevoegen. Open taken om er een te maken.",
+    "noShoppingList": "Er is hier nog geen boodschappenlijst waaraan je kunt toevoegen. Open boodschappen om er een te maken.",
+    "failSignedOut": "Je bent uitgelogd. Log opnieuw in; je tekst staat er nog.",
+    "failNotPermitted": "Je mag dit hier niet meer toevoegen. Er is niets gewijzigd.",
+    "failDuplicate": "Dat staat al op de lijst.",
+    "addAnyway": "Toch toevoegen",
+    "failListUnavailable": "Die lijst is niet meer beschikbaar. Kies een andere en probeer opnieuw.",
+    "failInvalid": "Er klopt iets niet. Controleer het en probeer opnieuw.",
+    "failNetwork": "Ik kon Madeora niet bereiken. Je tekst blijft staan; probeer opnieuw.",
+    "failGeneric": "Dat is niet gelukt en er is niets toegevoegd. Je tekst blijft staan; probeer opnieuw."
   }
 }

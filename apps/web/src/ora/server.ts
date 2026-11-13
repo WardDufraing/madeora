@@ -21,7 +21,7 @@ export const getOraSettings = cache(async (): Promise<OraSettings | null> => {
   const [own, homes] = await Promise.all([
     supabase
       .from("ora_preferences")
-      .select("enabled, motion, intro, personal_palette")
+      .select("enabled, motion, intro, personal_palette, teasers_muted")
       .eq("user_id", identity.userId)
       .maybeSingle(),
     supabase.from("ora_home_palettes").select("home_id, palette").eq("user_id", identity.userId),
@@ -46,6 +46,7 @@ export const getOraSettings = cache(async (): Promise<OraSettings | null> => {
   return {
     enabled: row.enabled,
     motion: isOraMotionMode(row.motion) ? row.motion : defaultOraSettings.motion,
+    teasersMuted: row.teasers_muted,
     intro: row.intro === "completed" || row.intro === "skipped" ? row.intro : null,
     personalPalette: isOraPaletteKey(row.personal_palette)
       ? row.personal_palette

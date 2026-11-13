@@ -76,6 +76,8 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
   const failure = mutation.error?.failure ?? null;
   const enabledId = useId();
   const enabledHintId = useId();
+  const teasersId = useId();
+  const teasersHintId = useId();
   const personalPalette = current.personalPalette;
 
   return (
@@ -113,6 +115,35 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
             </label>
             <p id={enabledHintId} className="text-helper text-fg-muted">
               {t("enabledHint")}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card title={t("teasersTitle")}>
+        <div className="flex items-start gap-3">
+          <input
+            id={teasersId}
+            type="checkbox"
+            role="switch"
+            checked={!current.teasersMuted}
+            aria-describedby={teasersHintId}
+            onChange={(event) => {
+              const muted = !event.target.checked;
+              change(
+                { teasersMuted: muted },
+                (state) => ({ ...state, teasersMuted: muted }),
+                (state) => ({ ...state, teasersMuted: !muted }),
+              );
+            }}
+            className="mt-1 size-5 shrink-0 cursor-pointer accent-accent"
+          />
+          <div className="flex flex-col gap-1">
+            <label htmlFor={teasersId} className="cursor-pointer text-body font-medium">
+              {current.teasersMuted ? t("teasersOff") : t("teasersOn")}
+            </label>
+            <p id={teasersHintId} className="text-helper text-fg-muted">
+              {t("teasersHint")}
             </p>
           </div>
         </div>

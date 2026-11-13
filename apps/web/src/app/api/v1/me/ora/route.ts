@@ -36,6 +36,7 @@ export async function PATCH(request: Request): Promise<Response> {
     ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
     ...(patch.motion !== undefined ? { motion: patch.motion } : {}),
     ...(patch.intro !== undefined ? { intro: patch.intro } : {}),
+    ...(patch.teasersMuted !== undefined ? { teasers_muted: patch.teasersMuted } : {}),
     ...(patch.personalPalette !== undefined ? { personal_palette: patch.personalPalette } : {}),
   };
   if (Object.keys(personal).length > 0) {

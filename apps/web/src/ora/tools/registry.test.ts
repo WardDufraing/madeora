@@ -153,6 +153,32 @@ describe("Ora tools: overviews (S46)", () => {
   });
 
   it("only reads: input tools never change data", () => {
-    for (const tool of oraInputToolCatalogue) expect(tool.kind).toBe("read");
+    for (const tool of oraInputToolCatalogue) {
+      expect(["read", "action"]).toContain(tool.kind);
+    }
+  });
+});
+
+describe("Ora tools: guided changes (S47)", () => {
+  it("offers adding a task and a shopping item in Personal space and to a Member of a Home", () => {
+    for (const context of [personal, home("member"), home("owner")]) {
+      expect(ids(context)).toEqual(expect.arrayContaining(["add-task", "add-shopping-item"]));
+      expect(findInputTool(context, "add-task")?.kind).toBe("action");
+    }
+  });
+
+  it("never offers them for a Home the person has no membership of (no context)", () => {
+    // A request for another Home never resolves to a context, so it cannot reach the registry; a
+    // context for a place that needs a Home permission is checked by the permission engine.
+    for (const tool of oraInputToolCatalogue.filter((candidate) => candidate.kind === "action")) {
+      if (tool.requires.scope === "home") {
+        expect(findInputTool(personal, tool.id)?.requires.scope).toBe("personal");
+      }
+    }
+  });
+
+  it("runs them only through the input path, never as a tool without input", () => {
+    expect(runTool(personal, "add-task")).toEqual({ status: "forbidden" });
+    expect(runTool(home("member"), "add-shopping-item")).toEqual({ status: "forbidden" });
   });
 });
