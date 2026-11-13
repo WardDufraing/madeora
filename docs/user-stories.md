@@ -101,6 +101,7 @@ As a person who belongs to one or more Homes, I want to copy an eligible persona
 - A completed copy is a new Home-owned recipe, event or album with a limited origin label, not a live share or a backdoor to the personal source.
 - File-bearing recipe/album copies use the private in-bucket copy job; missing, mismatched or unauthorized files fail safely and reserved destination files are removed.
 - I can review and cancel my pending requests. Home reviewers can approve or reject only requests for the Home they may manage, and account deletion waits until open requests are resolved or cancelled.
+
 ## 2. Personal dashboard
 
 ### US-002 — Use Madeora without joining a Home
@@ -202,6 +203,7 @@ As an eligible young person, I want to claim my existing child identity as my ow
 - Either authorized guardian can cancel before completion. Guardians are notified when a transition starts and all guardians are notified when it completes.
 - If the child's linked Homes, applicable age, or primary-guardian authority changes before completion, the open transition is cancelled and must be started again.
 - Completion removes guardian authority, child credentials, PINs and child sessions while preserving the person's history, identity continuity and Home roles under the new independent account.
+
 ## 4. Tasks and planning
 
 ### US-008 — Organize personal or Home tasks
