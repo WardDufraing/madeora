@@ -8,3 +8,5 @@
 
 **Review:** `reviews/steps/fix-e2e-global-timeout-review.md` (PASS, 2 medium, 2 low). Adopted: shorter config comment; a concrete trigger below. Not adopted: `globalTimeout`.
 **Shard trigger:** if the suite exceeds 40 minutes, or any test times out at 60 s, shard the E2E job (`--shard=i/n` matrix, merged reports) instead of raising limits again. Many specs already use `test.slow()` (now 180 s); revisit them after the next green run.
+
+**Extra fix (no separate independent review):** the audit-trail PIN checks in `display-layouts-lock.spec.ts` and `child-sign-in.spec.ts` matched a 4-digit PIN as a bare substring of the row's JSON, which also hits uuid segments and timestamps by chance (one run failed with "0" expected, "1" received). They now strip uuids and require non-alphanumeric boundaries. Both still expect 0.
