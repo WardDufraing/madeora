@@ -194,4 +194,34 @@ export const oraInputToolCatalogue: readonly OraInputToolDefinition[] = [
     quick: false,
     requires: { scope: "home", action: "home.view" },
   },
+  // Guided changes (S47): the same action in Personal space and in a Home, where the person's role
+  // must allow creating. The change itself goes through the module's own API after confirmation.
+  {
+    id: "add-task",
+    kind: "action",
+    group: "tasks",
+    quick: true,
+    requires: { scope: "personal" },
+  },
+  {
+    id: "add-task",
+    kind: "action",
+    group: "tasks",
+    quick: true,
+    requires: { scope: "home", action: "home.tasks.create" },
+  },
+  {
+    id: "add-shopping-item",
+    kind: "action",
+    group: "shopping",
+    quick: true,
+    requires: { scope: "personal" },
+  },
+  {
+    id: "add-shopping-item",
+    kind: "action",
+    group: "shopping",
+    quick: true,
+    requires: { scope: "home", action: "home.shopping.create" },
+  },
 ];

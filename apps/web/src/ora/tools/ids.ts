@@ -17,6 +17,8 @@ export const oraToolIds = [
   "capabilities",
   "overview",
   "share-overview",
+  "add-task",
+  "add-shopping-item",
 ] as const;
 
 export type OraToolId = (typeof oraToolIds)[number];

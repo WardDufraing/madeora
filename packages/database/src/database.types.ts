@@ -419,6 +419,41 @@ export type Database = {
           },
         ];
       };
+      ora_dismissed_suggestions: {
+        Row: {
+          dismissed_at: string;
+          home_id: string | null;
+          kind: string;
+          scope: string;
+          situation: string;
+          user_id: string;
+        };
+        Insert: {
+          dismissed_at?: string;
+          home_id?: string | null;
+          kind: string;
+          scope: string;
+          situation: string;
+          user_id?: string;
+        };
+        Update: {
+          dismissed_at?: string;
+          home_id?: string | null;
+          kind?: string;
+          scope?: string;
+          situation?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ora_dismissed_membership_fkey";
+            columns: ["home_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
       ora_home_palettes: {
         Row: {
           created_at: string;
@@ -456,8 +491,10 @@ export type Database = {
           created_at: string;
           enabled: boolean;
           intro: string | null;
+          last_teaser_on: string | null;
           motion: string;
           personal_palette: string;
+          teasers_muted: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -465,8 +502,10 @@ export type Database = {
           created_at?: string;
           enabled?: boolean;
           intro?: string | null;
+          last_teaser_on?: string | null;
           motion?: string;
           personal_palette?: string;
+          teasers_muted?: boolean;
           updated_at?: string;
           user_id?: string;
         };
@@ -474,8 +513,10 @@ export type Database = {
           created_at?: string;
           enabled?: boolean;
           intro?: string | null;
+          last_teaser_on?: string | null;
           motion?: string;
           personal_palette?: string;
+          teasers_muted?: boolean;
           updated_at?: string;
           user_id?: string;
         };
@@ -1149,6 +1190,7 @@ export type Database = {
         }[];
       };
       claim_my_upload: { Args: { p_file_id: string }; Returns: string };
+      claim_ora_teaser: { Args: { p_today: string }; Returns: boolean };
       clear_child_credential: {
         Args: { p_child_membership_id: string; p_home_id: string; p_kind: string };
         Returns: string;

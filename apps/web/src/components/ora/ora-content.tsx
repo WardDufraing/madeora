@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckIcon, ChevronDownIcon, HelpIcon, SettingsIcon } from "@madeora/icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,13 +10,18 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { contextHref, primaryNav } from "@/components/shell/nav-items";
+import type { ActionDraft, ActionDrafts } from "@/ora/actions/draft";
+import { isOraActionId, type OraActionId } from "@/ora/actions/types";
 import { saveOraSettings } from "@/ora/api";
+import { dismissSuggestion, fetchSuggestions } from "@/ora/suggestions/client";
+import type { OraSuggestion } from "@/ora/suggestions/types";
 import { callOraTool, fetchOraTools, isInternalPath, OraToolError } from "@/ora/tools/client";
 import type { OraToolId } from "@/ora/tools/ids";
 import type { OraToolGroup, OraToolSummary } from "@/ora/tools/types";
 import type { OverviewTarget } from "@/ora/overview/types";
 import type { OraIntroState } from "@/ora/types";
 
+import { OraAction } from "./ora-action";
 import { OraOverview } from "./ora-overview";
 
 export type OraStatus = "idle" | "working" | "problem";
@@ -59,7 +64,7 @@ const subscribeOnline = (notify: () => void) => {
 };
 const isOnline = () => navigator.onLine;
 
-type View = "main" | "browse" | "help" | "overview";
+type View = "main" | "browse" | "help" | "overview" | "action";
 
 /**
  * What Ora shows in its bubble or sheet: a greeting, quick actions, "browse all actions", the
@@ -91,6 +96,10 @@ export function OraContent({
   const [introFailed, setIntroFailed] = useState(false);
   const [overviewTarget, setOverviewTarget] = useState<OverviewTarget>("today");
   const [handled, setHandled] = useState(0);
+  const [actionId, setActionId] = useState<OraActionId>("add-task");
+  // Unfinished changes live here, in memory: this component is rebuilt for another Home or Personal.
+  const [drafts, setDrafts] = useState<ActionDrafts>({});
+  const queryClient = useQueryClient();
   // A page (the dashboard widget) asked for the overview: show it, once per request.
   if (requested && requested.id !== handled) {
     setHandled(requested.id);
@@ -105,6 +114,25 @@ export function OraContent({
     retry: false,
     staleTime: 0,
     refetchOnWindowFocus: false,
+  });
+
+  const suggestionsKey = ["ora", "suggestions", userId, homeId ?? "personal"] as const;
+  const suggestions = useQuery({
+    queryKey: suggestionsKey,
+    queryFn: () => fetchSuggestions(homeId),
+    enabled: active,
+    retry: false,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const dismiss = useMutation({
+    mutationFn: (suggestion: OraSuggestion) =>
+      dismissSuggestion({ homeId, kind: suggestion.kind, situation: suggestion.situation }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: suggestionsKey });
+      // The pressed button is gone with the suggestion: keep focus inside Ora's surface.
+      document.getElementById("ora-surface")?.focus();
+    },
   });
 
   const forbidden = tools.error instanceof OraToolError && tools.error.failure === "forbidden";
@@ -123,6 +151,11 @@ export function OraContent({
     if (id === "overview") {
       setOverviewTarget("today");
       setView("overview");
+      return;
+    }
+    if (isOraActionId(id)) {
+      setActionId(id);
+      setView("action");
       return;
     }
     setPending(id);
@@ -226,6 +259,28 @@ export function OraContent({
     );
   }
 
+  if (view === "action" && available.some((tool) => tool.id === actionId)) {
+    return (
+      <OraAction
+        key={actionId}
+        action={actionId}
+        userId={userId}
+        homeId={homeId}
+        contextName={contextName}
+        active={active}
+        draft={drafts[actionId]}
+        onDraft={(draft: ActionDraft | undefined) => {
+          setDrafts((previous) => ({ ...previous, [actionId]: draft }));
+        }}
+        onBack={() => {
+          setView("main");
+        }}
+        onNavigated={onNavigated}
+        onStatus={onStatus}
+      />
+    );
+  }
+
   if (view === "help") {
     return (
       <HelpView
@@ -312,8 +367,52 @@ export function OraContent({
           : t("greetingHome", { home: homeName ?? t("contextThisHome") })}
       </p>
 
-      {/* No suggestions exist yet (they arrive with S47): say so calmly instead of filling the space. */}
-      <p className="text-helper text-fg-muted">{t("empty")}</p>
+      {(suggestions.data ?? []).length > 0 ? (
+        <section aria-labelledby="ora-suggestions-title" className="flex flex-col gap-2">
+          <h3 id="ora-suggestions-title" className="sr-only">
+            {t("suggestions.title")}
+          </h3>
+          <ul className="flex flex-col gap-2">
+            {(suggestions.data ?? []).slice(0, 3).map((suggestion) => (
+              <li
+                key={`${suggestion.kind}:${suggestion.situation}`}
+                className="flex flex-wrap items-center gap-2 rounded-control border border-line p-3"
+              >
+                <span className="min-w-0 flex-1 text-helper">
+                  {t(`suggestions.${suggestion.kind}`, { count: suggestion.count })}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setOverviewTarget("today");
+                    setView("overview");
+                  }}
+                >
+                  {t("suggestions.open")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={dismiss.isPending}
+                  onClick={() => {
+                    dismiss.mutate(suggestion);
+                  }}
+                >
+                  {t("suggestions.dismiss")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {dismiss.isError ? (
+            <p role="alert" className="text-helper text-danger">
+              {t("suggestions.dismissFailed")}
+            </p>
+          ) : null}
+        </section>
+      ) : (
+        <p className="text-helper text-fg-muted">{t("empty")}</p>
+      )}
 
       {failed ? (
         <p role="alert" className="text-helper text-danger">
@@ -343,7 +442,7 @@ export function OraContent({
         </section>
       ) : null}
 
-      {available.some((tool) => tool.kind === "navigate") ? (
+      {available.some((tool) => tool.kind === "navigate" || tool.kind === "action") ? (
         <div>
           <button
             type="button"
@@ -363,7 +462,9 @@ export function OraContent({
           {view === "browse" ? (
             <div id="ora-browse" className="mt-2 flex flex-col gap-3">
               <GroupedTools
-                tools={available.filter((tool) => tool.kind === "navigate")}
+                tools={available.filter(
+                  (tool) => tool.kind === "navigate" || tool.kind === "action",
+                )}
                 toolLabel={toolLabel}
                 pending={pending}
                 onRun={(id) => void run(id)}
@@ -452,7 +553,7 @@ function HelpView({
   readonly onBack: () => void;
 }) {
   const t = useTranslations("Ora");
-  const navigate = tools.filter((tool) => tool.kind === "navigate");
+  const navigate = tools.filter((tool) => tool.kind === "navigate" || tool.kind === "action");
   const groups = [...new Set(navigate.map((tool) => tool.group))];
   return (
     <div className="flex flex-col gap-3" data-testid="ora-help">

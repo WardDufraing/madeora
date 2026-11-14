@@ -19,6 +19,7 @@ describe("paletteFor", () => {
 describe("oraPatchSchema", () => {
   it("accepts one or more known fields", () => {
     expect(oraPatchSchema.safeParse({ enabled: false }).success).toBe(true);
+    expect(oraPatchSchema.safeParse({ teasersMuted: true }).success).toBe(true);
     expect(oraPatchSchema.safeParse({ motion: "reactions", intro: "completed" }).success).toBe(
       true,
     );
@@ -31,6 +32,7 @@ describe("oraPatchSchema", () => {
       { motion: "fast" },
       { intro: null },
       { personalPalette: "pink" },
+      { teasersMuted: "yes" },
       { homePalette: { homeId: "x", palette: "olive" } },
     ]) {
       expect(oraPatchSchema.safeParse(value).success).toBe(false);

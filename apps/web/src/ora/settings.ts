@@ -14,6 +14,8 @@ export interface OraSettings {
   /** One personal setting for Personal space and every Home. */
   readonly motion: OraMotionMode;
   readonly intro: OraIntroState;
+  /** No unsolicited teasers, in every Home, until the person turns them back on (S47). */
+  readonly teasersMuted: boolean;
   /** The colour in Personal space. */
   readonly personalPalette: OraPaletteKey;
   /** The colour chosen in each Home; a Home without an entry uses Heather. */
@@ -24,6 +26,7 @@ export const defaultOraSettings: OraSettings = {
   enabled: true,
   motion: defaultOraMotion,
   intro: null,
+  teasersMuted: false,
   personalPalette: defaultOraPalette,
   homePalettes: {},
 };
@@ -36,6 +39,7 @@ export const oraPatchSchema = z
     enabled: z.boolean().optional(),
     motion: z.enum(oraMotionModes).optional(),
     intro: z.enum(["completed", "skipped"]).optional(),
+    teasersMuted: z.boolean().optional(),
     personalPalette: paletteSchema.optional(),
     homePalette: z.strictObject({ homeId: z.uuid(), palette: paletteSchema }).optional(),
   })

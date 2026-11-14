@@ -171,6 +171,7 @@ describe("message dictionaries", () => {
       Nav: [...primaryNav, ...secondaryNav].map((item) => item.id),
       // Ora (S45): tool labels by tool id, module group names, palette names, motion modes.
       Ora: [
+        "suggestions.today-overview",
         ...withPrefix("tools.", oraToolIds),
         ...withPrefix("groups.", [
           "overview",

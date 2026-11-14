@@ -14,6 +14,7 @@ import type { OraExpression } from "@/ora/types";
 
 import { OraCharacter } from "./ora-character";
 import { OraContent, type OraStatus } from "./ora-content";
+import { OraTeaser } from "./ora-teaser";
 
 export interface OraAssistantProps {
   /** The account the server confirmed; the assistant is remounted for another account. */
@@ -222,6 +223,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
           </div>
         </div>
       ) : null}
+      {settings.teasersMuted ? null : <OraTeaser homeId={homeId} hidden={open} />}
       <button
         ref={launcher}
         type="button"

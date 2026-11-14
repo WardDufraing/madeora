@@ -65,6 +65,15 @@ describe("PATCH /api/v1/me/ora", () => {
     );
   });
 
+  it("saves the teaser mute as the person's own setting", async () => {
+    await patch({ teasersMuted: true });
+    expect(state.upsert).toHaveBeenCalledWith(
+      "ora_preferences",
+      { user_id: "user-a", teasers_muted: true },
+      { onConflict: "user_id" },
+    );
+  });
+
   it("records the introduction and the Personal colour", async () => {
     await patch({ intro: "skipped", personalPalette: "denim" });
     expect(state.upsert).toHaveBeenCalledWith(

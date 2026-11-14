@@ -1,5 +1,6 @@
 import type { HomeAction, HomeMembershipFacts } from "@madeora/domain/permissions";
 
+import type { ActionPreview, UndoResult } from "../actions/types";
 import type { Overview, OverviewShare } from "../overview/types";
 import type { OraToolId } from "./ids";
 
@@ -11,11 +12,12 @@ import type { OraToolId } from "./ids";
  * forged request for a tool they may not use is refused.
  *
  * Kinds: `navigate` opens a Madeora page (no data is read or changed), `read` returns data the
- * person may already see. Tools that change data (previews, confirmation, Undo) arrive in S47 with
- * their own kind; none exists yet, so nothing Ora does in S45 can change a record.
+ * person may already see. `action` (S47) is a guided change: the tool prepares an editable preview
+ * and can undo, while the change itself is made, after the person confirms, through the module's
+ * own authorized API, so Ora never writes anything the module would refuse.
  */
 
-export type OraToolKind = "navigate" | "read";
+export type OraToolKind = "navigate" | "read" | "action";
 
 /** The modules a tool belongs to, for grouping in "Browse all actions". */
 export type OraToolGroup =
@@ -60,7 +62,9 @@ export type OraToolOutput =
   | { readonly kind: "navigate"; readonly href: string }
   | { readonly kind: "capabilities"; readonly tools: readonly OraToolSummary[] }
   | { readonly kind: "overview"; readonly overview: Overview }
-  | { readonly kind: "share"; readonly share: OverviewShare };
+  | { readonly kind: "share"; readonly share: OverviewShare }
+  | { readonly kind: "action-preview"; readonly preview: ActionPreview }
+  | { readonly kind: "action-undo"; readonly result: UndoResult };
 
 export interface OraToolDefinition extends OraToolSummary {
   readonly requires: OraRequirement;
