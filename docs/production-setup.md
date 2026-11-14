@@ -159,7 +159,7 @@ Do not set `EMAIL_FROM`, `RESEND_API_KEY`, Trigger.dev tokens, database password
 
 Leave `NODE_USE_ENV_PROXY` unset. Recipe URL import validates and pins a public destination address itself; enabling Node's environment-proxy support could bypass that SSRF control.
 
-Check the environment scope for each Supabase variable: Preview values point to `madeora-preview`, while Production values point to `madeora-production`. Existing production variables take effect only in a new deployment.
+Check the environment scope for each Supabase variable: Preview values point to `madeora-preview`, while Production values point to `madeora-production`. Existing production variables take effect only in a new deployment. Household Displays and Ora use the existing application, Supabase and Realtime configuration; they add no provider credentials or environment variables.
 
 ## 11. Apply the database migrations
 
@@ -192,6 +192,8 @@ Use a private browser window and the canonical production URL.
 - With synthetic production test data, copy a personal recipe or album into a Home through both a direct and approval-required path; confirm the destination is independent, file copies remain private, and revoking access ends a pending request.
 - Exercise account/Home lifecycle safeguards with disposable test records: verify sole-Owner and open-copy blockers, close and restore a test Home within its recovery period, and confirm normal access ends while closure is pending. Do not wait for or force the destructive 30-day purge during a smoke test.
 - Create a test child profile and accepted guardian relationship, verify cross-Home isolation, approve a household device, and test restricted child password/PIN sign-in plus an attributed chore completion. Revoke the device/session afterwards; never reuse a real child's data for this check.
+- Pair a disposable tablet/browser as a Household Display in a test Home. Verify its independent layout, privacy/party lock, member chore action and PIN handling, offline read-only fallback, and revocation/reset. Confirm the display cannot open member pages or reveal another Home, and unlock it only from a manager's separate session.
+- Open Ora in Personal space and a test Home. Verify its settings, daily/weekly overview, permission-filtered destinations, suggestion dismissal and teaser mute. Preview and explicitly confirm one test task or shopping item, exercise Undo within five minutes, and confirm a disallowed destination/action is unavailable without exposing another Home.
 - If background jobs are enabled, run the `sample-ping` smoke test and check the outbox status.
 - Preview deployments must still require Vercel Authentication and must point only at `madeora-preview`.
 
@@ -203,6 +205,8 @@ Use a private browser window and the canonical production URL.
 - **Secrets:** rotate credentials in their provider, update only the intended environment, then redeploy the app/jobs. Keep preview and production credentials separate.
 - **Privacy exports:** monitor `privacy-export-build` failures and the hourly sweep. Ready archives expire after seven days; the sweep expires or times out stale work and queues private R2 objects for removal. Investigate repeated partial exports, storage failures or stalled preparations using the [background-jobs runbook](background-jobs.md).
 - **Deletion and Home copies:** monitor `home-copy-files` plus the hourly `purge_due_deletions` and `sweep_home_copies` work. Review recorded purge/copy errors and retry through the documented job recovery flow; never manually delete source objects or bypass the 30-day account/Home recovery period.
+- **Household Displays:** review last-seen status for shared devices, revoke lost or replaced displays promptly, and confirm privacy lock and action settings after layout changes. A display is a restricted device identity, not a Home member.
+- **Ora:** recheck permission-filtered overviews and guided-action confirmation/undo after module permission changes. Ora has no separate external AI provider or secret in the current implementation.
 - **Costs and limits:** review [provider cost register](provider-cost-register.md), including Vercel commercial-use limits, Supabase quotas, Resend email quotas, Trigger.dev usage and Cloudflare R2 billing.
 - **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), [Google Calendar](google-calendar-setup.md), and [adult account security](adult-security-setup.md).
 
