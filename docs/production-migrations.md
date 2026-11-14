@@ -68,6 +68,11 @@ Each link opens one standalone migration file. Apply each file once, oldest firs
 - [`supabase/migrations/20261130090000_child_sign_in.sql`](../supabase/migrations/20261130090000_child_sign_in.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261201090000_shared_device_chores.sql`](../supabase/migrations/20261201090000_shared_device_chores.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261202090000_child_independent_account.sql`](../supabase/migrations/20261202090000_child_independent_account.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261203090000_household_displays.sql`](../supabase/migrations/20261203090000_household_displays.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261204090000_display_layouts_lock.sql`](../supabase/migrations/20261204090000_display_layouts_lock.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261205090000_display_pin_no_lockout.sql`](../supabase/migrations/20261205090000_display_pin_no_lockout.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261206090000_ora_settings.sql`](../supabase/migrations/20261206090000_ora_settings.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261207090000_ora_suggestions.sql`](../supabase/migrations/20261207090000_ora_suggestions.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 
 ## One copyable migration for an empty database
 
@@ -68372,6 +68377,2334 @@ grant execute on function public.child_transition_preview(text) to service_role;
 grant execute on function public.claim_child_transition(text, text) to service_role;
 grant execute on function public.child_transition_review(text) to service_role;
 grant execute on function public.complete_child_transition(text) to service_role;
+
+-- ============================================================================
+-- supabase/migrations/20261203090000_household_displays.sql
+-- ============================================================================
+-- S43: Household Display pairing and identity (spec "Confirmed dedicated household display identity
+-- and privacy lock screen", "Confirmed manager-approved pairing for household displays";
+-- architecture.md §7 and §33; brief plans/steps/S43-brief.md).
+--
+-- An unregistered tablet shows a short-lived, single-use pairing code. A Home manager, in their own
+-- session, enters the code, reviews the device, names it and approves it into one Home. The tablet
+-- then turns the approval into its own Supabase Auth session, using a secret only it holds:
+--   * the tablet keeps a random 32-byte claim secret in an httpOnly cookie; its 8-character code is
+--     derived from that secret by the web server. Only SHA-256 hashes of both are stored here;
+--   * approval locks the request row and binds it, in one transaction, to the reviewed request, the
+--     Home, the manager and a new device record with its own Supabase Auth user. A second approval
+--     of the same code (concurrent claim, replay, another Home) finds it already used;
+--   * only the browser holding the claim secret can register a session for the approval, once.
+--
+-- A display's session is locked down at the same choke points as a child's (S42):
+--   1. private.confirmed_email() is null for a display, so every function behind
+--      require_confirmed_caller() refuses it, and it never receives email or notifications;
+--   2. the PostgREST pre-request check accepts a display's token only for a registered session of
+--      an unrevoked display in an open Home, and then only for display_session_paths(); every table,
+--      view, GraphQL and other function call is refused, and Realtime is refused;
+--   3. a display's auth.users row can never get a password, another email address, a phone number
+--      or a provider identity.
+-- A display is never a Home member, so no membership-based policy ever matches it.
+
+alter table private.audit_events drop constraint audit_events_subject_type_check;
+alter table private.audit_events add constraint audit_events_subject_type_check
+  check (subject_type in (
+    'home', 'user', 'invitation', 'join_request', 'ownership_transfer', 'ownership_recovery',
+    'stored_file', 'trash_entry', 'dashboard_template', 'task', 'task_list', 'task_label',
+    'task_series', 'task_template', 'task_attachment', 'chore', 'chore_occurrence', 'chore_category',
+    'chore_template', 'chore_reassignment', 'chore_proposal', 'chore_volunteer_request',
+    'home_vacation', 'chore_absence', 'point_account', 'point_entry', 'reward', 'reward_redemption',
+    'point_settings', 'recipe', 'shopping_list', 'meal_plan', 'habit', 'goal', 'goal_series', 'pet',
+    'pet_medical_entry', 'pet_medical_attachment', 'pet_care_activity', 'pet_care_occurrence',
+    'calendar_event', 'photo', 'photo_album', 'home_copy', 'household_device', 'household_display'
+  ));
+
+-- Limits (brief S43 defaults, owner may change) ------------------------------------------------------
+
+create function private.display_limits(
+  out code_lifetime interval,
+  out claim_window interval,
+  out codes_per_client integer,
+  out client_window interval,
+  out failures_per_manager integer,
+  out manager_window interval,
+  out displays_per_home integer,
+  out seen_interval interval,
+  out revoked_listed interval
+)
+  language sql immutable parallel safe set search_path = '' as $$
+    select interval '10 minutes', interval '10 minutes', 30, interval '1 hour', 10,
+           interval '15 minutes', 10, interval '1 minute', interval '30 days'
+  $$;
+
+revoke all on function private.display_limits() from public;
+
+-- Identity -------------------------------------------------------------------------------------------
+
+-- Whether a user is a Household Display: the kind Madeora's approval wrote into the account's app
+-- metadata (users cannot edit app metadata; the guard below keeps it). Read from auth.users, not the
+-- device record, so a display account can never be taken for an adult's.
+create function private.is_display(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (
+      select 1 from auth.users u
+      where u.id = p_user_id and u.raw_app_meta_data ->> 'madeora_kind' = 'display'
+    )
+  $$;
+
+revoke all on function private.is_display(uuid) from public;
+grant execute on function private.is_display(uuid) to service_role;
+
+-- The internal, non-deliverable address Supabase Auth needs to issue a display's session. Never
+-- shown, never mailed (.invalid is reserved and cannot resolve).
+create function private.display_alias_email(p_display_user uuid) returns text
+  language sql immutable parallel safe set search_path = '' as $$
+    select 'display-' || p_display_user::text || '@displays.madeora.invalid'
+  $$;
+
+revoke all on function private.display_alias_email(uuid) from public;
+
+-- As 20261130090000_child_sign_in.sql, and never for a display either.
+create or replace function private.confirmed_email(p_user_id uuid) returns text
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.lower(u.email) from auth.users u
+  where u.id = p_user_id and u.email_confirmed_at is not null and u.email is not null
+    and not exists (select 1 from public.child_profiles c where c.user_id = u.id)
+    and u.raw_app_meta_data ->> 'madeora_kind' is distinct from 'display';
+  $$;
+
+-- As 20261130090000_child_sign_in.sql, and never a display either.
+create or replace function private.can_receive_notifications(p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from auth.users u
+    where u.id = p_user_id and u.email_confirmed_at is not null and u.deleted_at is null
+      and not exists (select 1 from public.child_profiles c where c.user_id = u.id)
+      and u.raw_app_meta_data ->> 'madeora_kind' is distinct from 'display'
+  );
+  $$;
+
+-- Guards on a display's Supabase Auth rows ---------------------------------------------------------
+
+create function private.guard_display_auth_user() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_row jsonb := pg_catalog.to_jsonb(new);
+    v_was boolean := old.raw_app_meta_data ->> 'madeora_kind' = 'display';
+    v_is boolean := new.raw_app_meta_data ->> 'madeora_kind' = 'display';
+  begin
+    if v_was is distinct from v_is and (v_was or v_is) then
+      raise exception 'an account cannot become or stop being a Household Display'
+        using errcode = '42501', hint = 'Household Displays are paired by Home managers (S43).';
+    end if;
+    if not coalesce(v_is, false) then
+      return new;
+    end if;
+    if coalesce(new.encrypted_password, '') <> '' then
+      raise exception 'a Household Display has no Supabase Auth password'
+        using errcode = '42501', hint = 'Household Displays are paired by Home managers (S43).';
+    end if;
+    if coalesce(v_row ->> 'email_change', '') <> '' or coalesce(v_row ->> 'phone_change', '') <> ''
+       or coalesce(v_row ->> 'phone', '') <> ''
+       or new.email is distinct from private.display_alias_email(new.id) then
+      raise exception 'a Household Display''s sign-in address cannot change'
+        using errcode = '42501', hint = 'Household Displays are paired by Home managers (S43).';
+    end if;
+    return new;
+  end
+  $$;
+
+revoke all on function private.guard_display_auth_user() from public;
+
+create trigger madeora_guard_display_auth_user
+  before update on auth.users
+  for each row execute function private.guard_display_auth_user();
+
+-- A display signs in only through Madeora's pairing: no Google or any other provider identity.
+create function private.guard_display_identity() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if private.is_display(new.user_id) and new.provider <> 'email' then
+      raise exception 'a Household Display cannot link a sign-in provider'
+        using errcode = '42501', hint = 'Household Displays are paired by Home managers (S43).';
+    end if;
+    return new;
+  end
+  $$;
+
+revoke all on function private.guard_display_identity() from public;
+
+create trigger madeora_guard_display_identity
+  before insert on auth.identities
+  for each row execute function private.guard_display_identity();
+
+-- Displays -------------------------------------------------------------------------------------------
+
+-- A Household Display paired into one Home. user_id is its own Supabase Auth user while it is
+-- active; revoking it deletes that user (every session and refresh token with it) and keeps this
+-- row as the record managers see.
+create table private.household_displays (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  user_id uuid constraint household_displays_user_key unique
+    references auth.users (id) on delete set null,
+  name text not null constraint household_displays_name_check
+    check (private.is_visible_name(name, 40)),
+  -- Best-effort description of the tablet when it asked for its code (S38 device_labels).
+  device_kind text not null,
+  browser text not null,
+  platform text not null,
+  paired_by uuid references auth.users (id) on delete set null,
+  paired_at timestamptz not null default now(),
+  last_seen_at timestamptz,
+  revoked_at timestamptz,
+  revoked_by uuid references auth.users (id) on delete set null,
+  constraint household_displays_revoked_no_user check (revoked_at is null or user_id is null)
+);
+
+create index household_displays_home_idx on private.household_displays (home_id);
+
+revoke all on table private.household_displays from public;
+
+comment on table private.household_displays is
+  'S43: Household Displays paired into a Home, each with its own display-only Supabase Auth user.';
+
+-- Deleting a display record (its Home purged) deletes its Supabase Auth user too, so no display
+-- account outlives its Home.
+create function private.delete_display_user() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if old.user_id is not null then
+      delete from auth.users u where u.id = old.user_id;
+    end if;
+    return null;
+  end
+  $$;
+
+revoke all on function private.delete_display_user() from public;
+
+create trigger household_displays_delete_user
+  after delete on private.household_displays
+  for each row execute function private.delete_display_user();
+
+-- The Supabase Auth sessions Madeora registered for displays. A display's token works only while
+-- its session is here and not ended, the display is not revoked and its Home is open.
+create table private.display_sessions (
+  session_id uuid primary key,
+  display_id uuid not null references private.household_displays (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  ended_at timestamptz,
+  end_reason text
+);
+
+create index display_sessions_display_idx on private.display_sessions (display_id)
+  where ended_at is null;
+
+revoke all on table private.display_sessions from public;
+
+-- Pairing requests -------------------------------------------------------------------------------------
+
+-- A tablet's request to be paired. Pending until a manager approves it into a Home ('approved'),
+-- the tablet registers its session ('claimed'), or the tablet asks for a new code ('cancelled').
+-- client_key is the web server's HMAC of the client address; the address is never stored. Rows
+-- older than a day are removed by the next request.
+create table private.display_pairing_requests (
+  id uuid primary key default gen_random_uuid(),
+  secret_hash text not null
+    constraint display_pairing_requests_secret_hash_check check (secret_hash ~ '^[0-9a-f]{64}$')
+    constraint display_pairing_requests_secret_hash_key unique,
+  code_hash text not null
+    constraint display_pairing_requests_code_hash_check check (code_hash ~ '^[0-9a-f]{64}$'),
+  client_key text not null
+    constraint display_pairing_requests_client_key_check check (client_key ~ '^[0-9a-f]{64}$'),
+  device_kind text not null,
+  browser text not null,
+  platform text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  status text not null default 'pending' constraint display_pairing_requests_status_check
+    check (status in ('pending', 'approved', 'claimed', 'cancelled')),
+  home_id uuid references public.homes (id) on delete cascade,
+  display_id uuid references private.household_displays (id) on delete cascade,
+  approved_by uuid references auth.users (id) on delete set null,
+  approved_at timestamptz,
+  claimed_at timestamptz,
+  constraint display_pairing_requests_approval_check check (
+    (status in ('approved', 'claimed'))
+      = (home_id is not null and display_id is not null and approved_at is not null)
+  ),
+  constraint display_pairing_requests_claim_check check ((status = 'claimed') = (claimed_at is not null))
+);
+
+-- One pending request per code, so a code names exactly one tablet.
+create unique index display_pairing_requests_code_idx on private.display_pairing_requests (code_hash)
+  where status = 'pending';
+create index display_pairing_requests_client_idx
+  on private.display_pairing_requests (client_key, created_at);
+create index display_pairing_requests_created_idx on private.display_pairing_requests (created_at);
+
+revoke all on table private.display_pairing_requests from public;
+
+comment on table private.display_pairing_requests is
+  'S43: Household Display pairing codes (SHA-256 of the code and of the tablet''s secret only).';
+
+-- A manager's wrong, expired or used code, counted before the code is looked at so parallel
+-- guesses cannot exceed the limit. Rows older than a day are removed by the next attempt.
+create table private.display_pairing_failures (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create index display_pairing_failures_user_idx on private.display_pairing_failures (user_id, created_at);
+
+revoke all on table private.display_pairing_failures from public;
+
+-- 2. Request-level enforcement ---------------------------------------------------------------------------
+
+-- Whether a display's token is usable: a registered, not ended session of this display, which is
+-- not revoked and whose Home is open.
+create function private.display_session_ok(p_user_id uuid, p_session_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select exists (
+      select 1 from private.display_sessions ds
+      join private.household_displays d on d.id = ds.display_id
+      where ds.session_id = p_session_id and d.user_id = p_user_id
+        and ds.ended_at is null and d.revoked_at is null
+        and private.home_is_open(d.home_id)
+    )
+  $$;
+
+revoke all on function private.display_session_ok(uuid, uuid) from public;
+
+-- As 20261130090000_child_sign_in.sql, plus: a display's token is 'display_session' while its
+-- session is usable (display_session_ok) and 'session_not_active' otherwise (including a session
+-- Supabase Auth issued some other way). Displays have no two-factor sign-in and are never
+-- deactivated.
+create or replace function private.request_session_state() returns text
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_claims jsonb := auth.jwt();
+    v_user_id uuid;
+    v_session_id uuid;
+  begin
+    if v_claims is null or v_claims ->> 'role' is distinct from 'authenticated' then
+      return 'ok';
+    end if;
+    begin
+      v_user_id := (v_claims ->> 'sub')::uuid;
+      v_session_id := (v_claims ->> 'session_id')::uuid;
+    exception when invalid_text_representation then
+      return 'session_not_active';
+    end;
+    if v_user_id is null or v_session_id is null
+       or not private.session_is_live(v_user_id, v_session_id) then
+      return 'session_not_active';
+    end if;
+    if private.is_display(v_user_id) then
+      if private.display_session_ok(v_user_id, v_session_id) then
+        return 'display_session';
+      end if;
+      return 'session_not_active';
+    end if;
+    if private.is_child(v_user_id) then
+      if private.child_session_ok(v_user_id, v_session_id) then
+        return 'child_session';
+      end if;
+      return 'session_not_active';
+    end if;
+    if coalesce(v_claims ->> 'aal', '') <> 'aal2' and private.has_two_factor(v_user_id)
+       and (private.is_deactivated(v_user_id)
+            or not private.session_trusted(v_user_id, v_session_id)) then
+      return 'second_factor_required';
+    end if;
+    if private.is_deactivated(v_user_id) then
+      return 'account_deactivated';
+    end if;
+    return 'ok';
+  end
+  $$;
+
+-- The only API calls a display session may make.
+create function private.display_session_paths() returns text[]
+  language sql immutable parallel safe set search_path = '' as $$
+    select array['/rpc/display_me']::text[]
+  $$;
+
+revoke all on function private.display_session_paths() from public;
+
+-- As 20261130090000_child_sign_in.sql, plus: a display session may only call display_session_paths().
+create or replace function private.enforce_request_session() returns void
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_state text := private.request_session_state();
+    v_path text := coalesce(pg_catalog.current_setting('request.path', true), '');
+  begin
+    if v_state = 'session_not_active' then
+      raise sqlstate 'PT401' using message = 'session_not_active';
+    end if;
+    if v_state = 'display_session' and v_path <> all (private.display_session_paths()) then
+      raise sqlstate 'PT403' using message = 'display_session_scope';
+    end if;
+    if v_state = 'child_session' and v_path <> all (private.child_session_paths()) then
+      raise sqlstate 'PT403' using message = 'child_session_scope';
+    end if;
+    if v_state = 'second_factor_required' and v_path not in (
+         '/rpc/redeem_two_factor_recovery_code', '/rpc/use_trusted_device',
+         '/rpc/authorize_account_change', '/rpc/authorize_sign_in_method_change'
+       ) then
+      raise sqlstate 'PT401' using message = 'second_factor_required';
+    end if;
+    if v_state = 'account_deactivated' and v_path not in (
+         '/rpc/my_account_state', '/rpc/reactivate_my_account'
+       ) then
+      raise sqlstate 'PT401' using message = 'account_deactivated';
+    end if;
+  end
+  $$;
+
+-- Realtime (not PostgREST) uses request_session_ok() in its policies: 'display_session' is not
+-- 'ok', so displays receive no Realtime events (S44 opens shared-display-safe ones).
+
+-- 3. The tablet (the web server only, as service_role) ------------------------------------------------
+
+-- Starts a pairing request for a tablet. The web server made the secret, derived the code from it
+-- and sends only their SHA-256 hashes, a client key and the user agent (kept as labels only).
+-- Returns 'created' and when the code expires, 'rate_limited' or 'collision' (another pending code
+-- is the same; the server tries a new secret).
+create function public.display_pairing_start(
+  p_secret_hash text, p_code_hash text, p_client_key text, p_user_agent text
+) returns table (outcome text, expires_at timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_limits record := private.display_limits();
+    v_labels record := private.device_labels(p_user_agent);
+    v_expires timestamptz := pg_catalog.now() + v_limits.code_lifetime;
+  begin
+    if p_secret_hash is null or p_secret_hash !~ '^[0-9a-f]{64}$'
+       or p_code_hash is null or p_code_hash !~ '^[0-9a-f]{64}$'
+       or p_client_key is null or p_client_key !~ '^[0-9a-f]{64}$' then
+      raise exception 'invalid pairing request' using errcode = '22023';
+    end if;
+    -- One request at a time per client counts the throttle exactly.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('display_pairing_client:' || p_client_key, 0));
+    delete from private.display_pairing_requests r
+      where r.created_at < pg_catalog.now() - interval '1 day';
+    if (select count(*) from private.display_pairing_requests r
+        where r.client_key = p_client_key
+          and r.created_at > pg_catalog.now() - v_limits.client_window)
+       >= v_limits.codes_per_client then
+      return query select 'rate_limited'::text, null::timestamptz;
+      return;
+    end if;
+    -- An expired pending code no longer blocks the same code for a new tablet.
+    update private.display_pairing_requests r set status = 'cancelled'
+      where r.code_hash = p_code_hash and r.status = 'pending' and r.expires_at <= pg_catalog.now();
+    begin
+      insert into private.display_pairing_requests
+          (secret_hash, code_hash, client_key, device_kind, browser, platform, expires_at)
+        values (p_secret_hash, p_code_hash, p_client_key, v_labels.device_kind, v_labels.browser,
+                v_labels.platform, v_expires);
+    exception when unique_violation then
+      return query select 'collision'::text, null::timestamptz;
+      return;
+    end;
+    return query select 'created'::text, v_expires;
+  end
+  $$;
+
+revoke all on function public.display_pairing_start(text, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.display_pairing_start(text, text, text, text) to service_role;
+
+-- Where a tablet's request stands: 'pending' (with its expiry), 'approved' (claimable now),
+-- 'expired' (code or claim window over, cancelled, or the display already gone) or 'unknown'
+-- (no such request, or already claimed).
+create function public.display_pairing_status(p_secret_hash text)
+returns table (status text, expires_at timestamptz)
+  language sql stable security definer set search_path = '' as $$
+    select coalesce(
+             (select case
+                when r.status = 'pending' and r.expires_at > pg_catalog.now() then 'pending'
+                when r.status = 'approved'
+                     and r.approved_at > pg_catalog.now() - (select l.claim_window
+                                                             from private.display_limits() l)
+                     and d.revoked_at is null and d.user_id is not null
+                     and private.home_is_open(d.home_id) then 'approved'
+                when r.status = 'claimed' then 'unknown'
+                else 'expired'
+              end
+              from private.display_pairing_requests r
+              left join private.household_displays d on d.id = r.display_id
+              where r.secret_hash = coalesce(p_secret_hash, '')),
+             'unknown'),
+           (select r.expires_at from private.display_pairing_requests r
+            where r.secret_hash = coalesce(p_secret_hash, '') and r.status = 'pending')
+  $$;
+
+revoke all on function public.display_pairing_status(text) from public, anon, authenticated;
+grant execute on function public.display_pairing_status(text) to service_role;
+
+-- The tablet asks for a new code: its pending request is cancelled. Returns whether one was.
+create function public.display_pairing_cancel(p_secret_hash text) returns boolean
+  language sql security definer set search_path = '' as $$
+    with cancelled as (
+      update private.display_pairing_requests r set status = 'cancelled'
+        where r.secret_hash = coalesce(p_secret_hash, '') and r.status = 'pending'
+        returning r.id
+    )
+    select exists (select 1 from cancelled)
+  $$;
+
+revoke all on function public.display_pairing_cancel(text) from public, anon, authenticated;
+grant execute on function public.display_pairing_cancel(text) to service_role;
+
+-- The approved request behind a tablet's secret, locked, when it can still be claimed.
+create function private.claimable_pairing(p_secret_hash text)
+returns private.display_pairing_requests
+  language sql security definer set search_path = '' as $$
+    select r.* from private.display_pairing_requests r
+    join private.household_displays d on d.id = r.display_id
+    where r.secret_hash = coalesce(p_secret_hash, '') and r.status = 'approved'
+      and r.approved_at > pg_catalog.now() - (select l.claim_window from private.display_limits() l)
+      and d.revoked_at is null and d.user_id is not null and private.home_is_open(d.home_id)
+    for update of r
+  $$;
+
+revoke all on function private.claimable_pairing(text) from public;
+
+-- Step 1 of claiming: when the tablet's request was approved and can still be claimed, the display
+-- account's internal alias, for issuing its session. Returns 'ready' or 'invalid'. Does not change
+-- anything, so an interrupted claim can be retried within the claim window.
+create function public.display_pairing_claim(p_secret_hash text)
+returns table (outcome text, alias_email text)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_r private.display_pairing_requests := private.claimable_pairing(p_secret_hash);
+    v_user uuid;
+  begin
+    if v_r.id is null then
+      return query select 'invalid'::text, null::text;
+      return;
+    end if;
+    select d.user_id into v_user from private.household_displays d where d.id = v_r.display_id;
+    return query select 'ready'::text, private.display_alias_email(v_user);
+  end
+  $$;
+
+revoke all on function public.display_pairing_claim(text) from public, anon, authenticated;
+grant execute on function public.display_pairing_claim(text) to service_role;
+
+-- Step 2: registers the Supabase Auth session just issued for the display, which is what makes its
+-- token usable. Once only: the request is then 'claimed' and its secret is worthless. Returns
+-- 'registered' or 'invalid'.
+create function public.display_pairing_complete(p_secret_hash text, p_session_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_r private.display_pairing_requests := private.claimable_pairing(p_secret_hash);
+    v_display private.household_displays;
+  begin
+    if v_r.id is null then
+      return 'invalid';
+    end if;
+    select * into v_display from private.household_displays d where d.id = v_r.display_id;
+    if p_session_id is null
+       or not exists (
+         select 1 from auth.sessions s
+         where s.id = p_session_id and s.user_id = v_display.user_id
+           and s.created_at > v_r.approved_at - interval '1 minute'
+       )
+       or exists (select 1 from private.display_sessions ds where ds.session_id = p_session_id) then
+      return 'invalid';
+    end if;
+    update private.display_pairing_requests r
+      set status = 'claimed', claimed_at = pg_catalog.now()
+      where r.id = v_r.id;
+    insert into private.display_sessions (session_id, display_id) values (p_session_id, v_display.id);
+    update private.household_displays d set last_seen_at = pg_catalog.now() where d.id = v_display.id;
+    perform private.audit('display.signed_in', v_display.home_id, 'household_display',
+      v_display.id, '{}'::jsonb);
+    return 'registered';
+  end
+  $$;
+
+revoke all on function public.display_pairing_complete(text, uuid) from public, anon, authenticated;
+grant execute on function public.display_pairing_complete(text, uuid) to service_role;
+
+-- 4. Home managers ---------------------------------------------------------------------------------------
+
+-- The caller's manager standing in a Home: 'ok', 'not_found' (not a member, or closed) or
+-- 'not_permitted' (not the Owner or an Administrator granted manageHomeSettings).
+create function private.display_manager_check(p_home_id uuid, p_user_id uuid, p_lock boolean)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if p_home_id is null then
+      return 'not_found';
+    end if;
+    if p_lock and not private.lock_home(p_home_id) then
+      return 'not_found';
+    end if;
+    if private.home_role(p_home_id, p_user_id) is null then
+      return 'not_found';
+    end if;
+    if not private.has_home_capability(p_home_id, p_user_id, 'manageHomeSettings') then
+      return 'not_permitted';
+    end if;
+    return 'ok';
+  end
+  $$;
+
+revoke all on function private.display_manager_check(uuid, uuid, boolean) from public;
+
+-- Serializes one manager's code attempts and says whether they used up their wrong tries.
+create function private.display_manager_throttled(p_user_id uuid) returns boolean
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_limits record := private.display_limits();
+  begin
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('display_pairing_manager:' || p_user_id::text, 0));
+    delete from private.display_pairing_failures f
+      where f.user_id = p_user_id and f.created_at < pg_catalog.now() - interval '1 day';
+    return (select count(*) from private.display_pairing_failures f
+            where f.user_id = p_user_id
+              and f.created_at > pg_catalog.now() - v_limits.manager_window)
+           >= v_limits.failures_per_manager;
+  end
+  $$;
+
+revoke all on function private.display_manager_throttled(uuid) from public;
+
+-- Records a manager's failed code and audits it in the Home (reason only, never the code).
+create function private.display_pairing_failed(p_home_id uuid, p_user_id uuid, p_reason text)
+returns void
+  language sql security definer set search_path = '' as $$
+    insert into private.display_pairing_failures (user_id) values (p_user_id);
+    select private.audit('display.pairing_failed', p_home_id, 'home', p_home_id,
+      pg_catalog.jsonb_build_object('reason', p_reason));
+  $$;
+
+revoke all on function private.display_pairing_failed(uuid, uuid, text) from public;
+
+-- Step 1 for a manager: looks a code up so they can review the tablet before approving. Changes
+-- nothing but the wrong-try count. Outcomes: 'found' (with the request and its device labels),
+-- 'invalid_code', 'expired', 'already_used', 'rate_limited', 'not_permitted', 'not_found'.
+create function public.check_display_pairing_code(p_home_id uuid, p_code_hash text)
+returns table (
+  outcome text,
+  request_id uuid,
+  device_kind text,
+  browser text,
+  platform text,
+  requested_at timestamptz,
+  expires_at timestamptz
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_check text;
+    v_r private.display_pairing_requests;
+  begin
+    if p_code_hash is null or p_code_hash !~ '^[0-9a-f]{64}$' then
+      raise exception 'invalid code' using errcode = '22023';
+    end if;
+    v_check := private.display_manager_check(p_home_id, v_user_id, false);
+    if v_check <> 'ok' then
+      return query select v_check, null::uuid, null::text, null::text, null::text,
+                          null::timestamptz, null::timestamptz;
+      return;
+    end if;
+    if private.display_manager_throttled(v_user_id) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::text, null::text,
+                          null::timestamptz, null::timestamptz;
+      return;
+    end if;
+    select * into v_r from private.display_pairing_requests r
+      where r.code_hash = p_code_hash and r.status <> 'cancelled'
+      order by (r.status = 'pending') desc, r.created_at desc
+      limit 1;
+    if v_r.id is null then
+      perform private.display_pairing_failed(p_home_id, v_user_id, 'invalid_code');
+      return query select 'invalid_code'::text, null::uuid, null::text, null::text, null::text,
+                          null::timestamptz, null::timestamptz;
+      return;
+    end if;
+    if v_r.status <> 'pending' then
+      perform private.display_pairing_failed(p_home_id, v_user_id, 'already_used');
+      return query select 'already_used'::text, null::uuid, null::text, null::text, null::text,
+                          null::timestamptz, null::timestamptz;
+      return;
+    end if;
+    if v_r.expires_at <= pg_catalog.now() then
+      perform private.display_pairing_failed(p_home_id, v_user_id, 'expired');
+      return query select 'expired'::text, null::uuid, null::text, null::text, null::text,
+                          null::timestamptz, null::timestamptz;
+      return;
+    end if;
+    return query select 'found'::text, v_r.id, v_r.device_kind, v_r.browser, v_r.platform,
+                        v_r.created_at, v_r.expires_at;
+  end
+  $$;
+
+revoke all on function public.check_display_pairing_code(uuid, text) from public, anon;
+grant execute on function public.check_display_pairing_code(uuid, text) to authenticated;
+
+-- Step 2: approves the reviewed request into this Home under the chosen name. The request row is
+-- locked, so of two managers approving the same code only the first succeeds; the code must still
+-- match the reviewed request (a tablet that asked for a new code meanwhile is not paired), and the
+-- request must still be pending and unexpired. Creates the display's own Supabase Auth user (no
+-- password, internal alias) and its device record. The same manager retrying the same approval
+-- for the same Home (an interrupted response) gets the same display back.
+-- Outcomes: 'approved' (with the display id), 'invalid_code', 'expired', 'already_used',
+-- 'limit_reached', 'rate_limited', 'not_permitted', 'not_found'.
+create function public.approve_display_pairing(
+  p_home_id uuid, p_request_id uuid, p_code_hash text, p_name text
+) returns table (outcome text, display_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_limits record := private.display_limits();
+    v_check text;
+    v_r private.display_pairing_requests;
+    v_display uuid;
+    v_account uuid := gen_random_uuid();
+  begin
+    if p_name is null or not private.is_visible_name(p_name, 40) then
+      raise exception 'invalid display name' using errcode = '22023';
+    end if;
+    if p_code_hash is null or p_code_hash !~ '^[0-9a-f]{64}$' then
+      raise exception 'invalid code' using errcode = '22023';
+    end if;
+    v_check := private.display_manager_check(p_home_id, v_user_id, true);
+    if v_check <> 'ok' then
+      return query select v_check, null::uuid;
+      return;
+    end if;
+    if private.display_manager_throttled(v_user_id) then
+      return query select 'rate_limited'::text, null::uuid;
+      return;
+    end if;
+    select * into v_r from private.display_pairing_requests r
+      where r.id = p_request_id for update;
+    if v_r.id is null or v_r.code_hash <> p_code_hash then
+      perform private.display_pairing_failed(p_home_id, v_user_id, 'invalid_code');
+      return query select 'invalid_code'::text, null::uuid;
+      return;
+    end if;
+    if v_r.status in ('approved', 'claimed') then
+      if v_r.approved_by = v_user_id and v_r.home_id = p_home_id and v_r.status = 'approved' then
+        return query select 'approved'::text, v_r.display_id;
+        return;
+      end if;
+      perform private.display_pairing_failed(p_home_id, v_user_id, 'already_used');
+      return query select 'already_used'::text, null::uuid;
+      return;
+    end if;
+    if v_r.status = 'cancelled' or v_r.expires_at <= pg_catalog.now() then
+      perform private.display_pairing_failed(p_home_id, v_user_id, 'expired');
+      return query select 'expired'::text, null::uuid;
+      return;
+    end if;
+    if (select count(*) from private.household_displays d
+        where d.home_id = p_home_id and d.revoked_at is null and d.user_id is not null)
+       >= v_limits.displays_per_home then
+      return query select 'limit_reached'::text, null::uuid;
+      return;
+    end if;
+
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change,
+      raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+    ) values (
+      '00000000-0000-0000-0000-000000000000', v_account, 'authenticated', 'authenticated',
+      private.display_alias_email(v_account), '', pg_catalog.now(), '', '', '', '',
+      '{"provider": "madeora_display", "providers": [], "madeora_kind": "display"}'::jsonb,
+      '{}'::jsonb, pg_catalog.now(), pg_catalog.now()
+    );
+    insert into private.household_displays
+        (home_id, user_id, name, device_kind, browser, platform, paired_by)
+      values (p_home_id, v_account, p_name, v_r.device_kind, v_r.browser, v_r.platform, v_user_id)
+      returning id into v_display;
+    update private.display_pairing_requests r
+      set status = 'approved', home_id = p_home_id, display_id = v_display,
+          approved_by = v_user_id, approved_at = pg_catalog.now()
+      where r.id = v_r.id;
+    perform private.audit('display.paired', p_home_id, 'household_display', v_display,
+      pg_catalog.jsonb_build_object('name', p_name));
+    return query select 'approved'::text, v_display;
+  end
+  $$;
+
+revoke all on function public.approve_display_pairing(uuid, uuid, text, text) from public, anon;
+grant execute on function public.approve_display_pairing(uuid, uuid, text, text) to authenticated;
+
+-- Renames an active display (same managers). Returns 'saved', 'unchanged', 'not_permitted' or
+-- 'not_found'.
+create function public.rename_household_display(p_home_id uuid, p_display_id uuid, p_name text)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_check text;
+    v_old text;
+  begin
+    if p_name is null or not private.is_visible_name(p_name, 40) then
+      raise exception 'invalid display name' using errcode = '22023';
+    end if;
+    v_check := private.display_manager_check(p_home_id, v_user_id, true);
+    if v_check <> 'ok' then
+      return v_check;
+    end if;
+    select d.name into v_old from private.household_displays d
+      where d.id = p_display_id and d.home_id = p_home_id and d.revoked_at is null
+      for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_old = p_name then
+      return 'unchanged';
+    end if;
+    update private.household_displays d set name = p_name where d.id = p_display_id;
+    perform private.audit('display.renamed', p_home_id, 'household_display', p_display_id,
+      pg_catalog.jsonb_build_object('from', v_old, 'to', p_name));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.rename_household_display(uuid, uuid, text) from public, anon;
+grant execute on function public.rename_household_display(uuid, uuid, text) to authenticated;
+
+-- Revokes a display (same managers), at once: its sessions end and its Supabase Auth user is
+-- deleted with every refresh token, so neither a stale session nor an offline device can use it
+-- again. Returns 'revoked', 'unchanged', 'not_permitted' or 'not_found'.
+create function public.revoke_household_display(p_home_id uuid, p_display_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_check text;
+    v_display private.household_displays;
+  begin
+    v_check := private.display_manager_check(p_home_id, v_user_id, true);
+    if v_check <> 'ok' then
+      return v_check;
+    end if;
+    select * into v_display from private.household_displays d
+      where d.id = p_display_id and d.home_id = p_home_id for update;
+    if not found then
+      return 'not_found';
+    end if;
+    if v_display.revoked_at is not null then
+      return 'unchanged';
+    end if;
+    update private.household_displays d
+      set revoked_at = pg_catalog.now(), revoked_by = v_user_id, user_id = null
+      where d.id = p_display_id;
+    update private.display_sessions ds
+      set ended_at = pg_catalog.now(), end_reason = 'revoked'
+      where ds.display_id = p_display_id and ds.ended_at is null;
+    if v_display.user_id is not null then
+      delete from auth.users u where u.id = v_display.user_id;
+    end if;
+    perform private.audit('display.revoked', p_home_id, 'household_display', p_display_id,
+      '{}'::jsonb);
+    return 'revoked';
+  end
+  $$;
+
+revoke all on function public.revoke_household_display(uuid, uuid) from public, anon;
+grant execute on function public.revoke_household_display(uuid, uuid) to authenticated;
+
+-- The Home's displays for the same managers: active ones and those revoked in the last 30 days.
+create function public.home_household_displays(p_home_id uuid)
+returns table (
+  display_id uuid,
+  name text,
+  status text,
+  device_kind text,
+  browser text,
+  platform text,
+  paired_by_membership_id uuid,
+  paired_at timestamptz,
+  last_seen_at timestamptz,
+  revoked_at timestamptz
+)
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.display_manager_check(p_home_id, v_user_id, false) <> 'ok' then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    return query
+      select d.id, d.name,
+             case when d.revoked_at is null and d.user_id is not null then 'active'
+                  else 'revoked' end,
+             d.device_kind, d.browser, d.platform,
+             (select m.id from public.home_memberships m
+                where m.home_id = d.home_id and m.user_id = d.paired_by),
+             d.paired_at, d.last_seen_at, d.revoked_at
+      from private.household_displays d
+      where d.home_id = p_home_id
+        and (d.revoked_at is null
+             or d.revoked_at > pg_catalog.now() - (select l.revoked_listed
+                                                   from private.display_limits() l))
+      order by (d.revoked_at is null) desc, d.paired_at, d.id;
+  end
+  $$;
+
+revoke all on function public.home_household_displays(uuid) from public, anon;
+grant execute on function public.home_household_displays(uuid) to authenticated;
+
+-- 5. The display's own session -----------------------------------------------------------------------------
+
+-- The signed-in display: its name and its Home's name and timezone. Notes that the display was
+-- seen (at most once a minute). Refused for anyone but a display in a usable display session.
+create function public.display_me()
+returns table (
+  display_id uuid,
+  display_name text,
+  home_id uuid,
+  home_name text,
+  home_timezone text
+)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+  begin
+    if v_user_id is null or v_session_id is null or not private.is_display(v_user_id)
+       or not private.display_session_ok(v_user_id, v_session_id) then
+      raise exception 'not a display session' using errcode = '42501';
+    end if;
+    update private.household_displays d set last_seen_at = pg_catalog.now()
+      where d.user_id = v_user_id
+        and (d.last_seen_at is null
+             or d.last_seen_at < pg_catalog.now() - (select l.seen_interval
+                                                     from private.display_limits() l));
+    return query
+      select d.id, d.name, h.id, h.name, h.timezone
+      from private.household_displays d
+      join public.homes h on h.id = d.home_id
+      where d.user_id = v_user_id;
+  end
+  $$;
+
+revoke all on function public.display_me() from public, anon;
+grant execute on function public.display_me() to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261204090000_display_layouts_lock.sql
+-- ============================================================================
+-- S44: Household Display layouts, privacy lock and member actions (spec "Confirmed dedicated household
+-- display identity and privacy lock screen", "Confirmed independent layouts for each Household
+-- Display", "Confirmed Household Display member-only actions"; architecture.md §33, §40; brief
+-- plans/steps/S44-brief.md).
+--
+-- - Each display has its own configuration (layout, orientation, theme, density, clock format) and
+--   its own privacy/party lock, kept here so both survive refresh, reconnect and restart. Home
+--   managers change them from their own session, with a revision check against concurrent edits.
+-- - The display reads everything it shows through one function, public.display_board(), which
+--   decides in SQL what is shared-display-safe, whatever the layout asks for. While locked it
+--   returns the lock screen's fields only.
+-- - Member actions (completing a chore) and locking on the display run through the web
+--   server as the service role: PIN hashes never reach a display's token. The web server learns
+--   which display is asking from the display's own session (display_me) and passes its id; the
+--   functions check again that the display is active and its Home open. Unlocking needs a
+--   manager's own session (spec: "privacy-mode unlock ... a Home manager must use an
+--   independently authorized session"); tapping the display or picking a member never unlocks.
+-- - public.display_signals carries one version per display (no content) for Realtime; only that
+--   display's own live session can read its row.
+
+-- 1. Configuration ------------------------------------------------------------------------------------------
+
+-- The outer shape of a display layout (the web server checks every detail with its schema):
+-- version 1, at most 8 widgets of the display catalogue, each with a unique id, a size and a
+-- settings object, and at most 8 KB.
+create function private.valid_display_layout(p_layout jsonb) returns boolean
+  language plpgsql immutable set search_path = '' as $$
+  declare
+    v_widget jsonb;
+    v_ids text[] := '{}';
+  begin
+    if p_layout is null or pg_catalog.jsonb_typeof(p_layout) <> 'object'
+       or p_layout -> 'version' is distinct from '1'::jsonb
+       or pg_catalog.jsonb_typeof(p_layout -> 'widgets') is distinct from 'array'
+       or pg_catalog.jsonb_array_length(p_layout -> 'widgets') > 8
+       or pg_catalog.octet_length(p_layout::text) > 8192
+       or exists (select 1 from pg_catalog.jsonb_object_keys(p_layout) k
+                  where k not in ('version', 'widgets')) then
+      return false;
+    end if;
+    for v_widget in select w from pg_catalog.jsonb_array_elements(p_layout -> 'widgets') w loop
+      if pg_catalog.jsonb_typeof(v_widget) <> 'object'
+         or coalesce(v_widget ->> 'type', '') not in ('clock', 'chores', 'shopping')
+         or coalesce(v_widget ->> 'size', '') not in ('small', 'medium', 'large')
+         or coalesce(v_widget ->> 'id', '')
+              !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+         or pg_catalog.jsonb_typeof(v_widget -> 'config') is distinct from 'object'
+         or (v_widget ->> 'type' = 'chores' and v_widget -> 'config' ? 'actions'
+             and pg_catalog.jsonb_typeof(v_widget -> 'config' -> 'actions') <> 'boolean')
+         or (v_widget ->> 'id') = any (v_ids) then
+        return false;
+      end if;
+      v_ids := v_ids || (v_widget ->> 'id');
+    end loop;
+    return true;
+  end
+  $$;
+
+revoke all on function private.valid_display_layout(jsonb) from public;
+
+-- One row per display, created with the defaults the first time it is read. layout null: the
+-- default layout (apps/web/src/displays/layout.ts). revision moves with every layout or preference
+-- change (managers' edits are checked against it); lock_version with every lock change. The
+-- synced_* columns are what the display last read, so managers see whether a change has reached it.
+create table private.display_configs (
+  display_id uuid primary key references private.household_displays (id) on delete cascade,
+  layout jsonb constraint display_configs_layout_check
+    check (layout is null or private.valid_display_layout(layout)),
+  orientation text not null default 'auto'
+    constraint display_configs_orientation_check check (orientation in ('auto', 'landscape', 'portrait')),
+  theme text not null default 'auto'
+    constraint display_configs_theme_check check (theme in ('auto', 'light', 'dark')),
+  density text not null default 'comfortable'
+    constraint display_configs_density_check check (density in ('comfortable', 'compact')),
+  clock_format text not null default 'auto'
+    constraint display_configs_clock_check check (clock_format in ('auto', '12h', '24h')),
+  revision integer not null default 1 constraint display_configs_revision_check check (revision >= 1),
+  locked boolean not null default false,
+  -- The optional, non-sensitive welcome message of the lock screen (kept while unlocked).
+  lock_message text constraint display_configs_lock_message_check
+    check (lock_message is null or private.is_visible_name(lock_message, 80)),
+  lock_version integer not null default 1
+    constraint display_configs_lock_version_check check (lock_version >= 1),
+  locked_at timestamptz,
+  locked_by uuid references auth.users (id) on delete set null,
+  synced_revision integer,
+  synced_lock_version integer,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+revoke all on table private.display_configs from public;
+
+comment on table private.display_configs is
+  'S44: each Household Display''s own layout, presentation and privacy lock.';
+
+-- A display's configuration row, created with the defaults when missing.
+create function private.display_config(p_display_id uuid) returns private.display_configs
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_config private.display_configs;
+  begin
+    insert into private.display_configs (display_id) values (p_display_id) on conflict do nothing;
+    select * into v_config from private.display_configs c where c.display_id = p_display_id;
+    return v_config;
+  end
+  $$;
+
+revoke all on function private.display_config(uuid) from public;
+
+-- Whether the display's layout offers member actions: the default layout does; a saved one does
+-- when it has a chores widget whose settings do not turn actions off.
+create function private.display_actions_enabled(p_layout jsonb) returns boolean
+  language sql immutable set search_path = '' as $$
+    select p_layout is null
+      or exists (select 1 from pg_catalog.jsonb_array_elements(p_layout -> 'widgets') w
+                 where w ->> 'type' = 'chores'
+                   and (w -> 'config' -> 'actions') is distinct from 'false'::jsonb)
+  $$;
+
+revoke all on function private.display_actions_enabled(jsonb) from public;
+
+-- An active display: not revoked, still with its account, its Home open.
+create function private.active_display(p_display_id uuid) returns private.household_displays
+  language sql stable security definer set search_path = '' as $$
+    select d.* from private.household_displays d
+    where d.id = p_display_id and d.revoked_at is null and d.user_id is not null
+      and private.home_is_open(d.home_id)
+  $$;
+
+revoke all on function private.active_display(uuid) from public;
+
+-- Whether a member may lock the display on the display itself: an adult manager of its Home.
+create function private.display_lock_manager(p_home_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select p_user_id is not null and private.is_home_member(p_home_id, p_user_id)
+      and not private.is_child(p_user_id)
+      and private.has_home_capability(p_home_id, p_user_id, 'manageHomeSettings')
+  $$;
+
+revoke all on function private.display_lock_manager(uuid, uuid) from public;
+
+-- 2. Realtime signals ----------------------------------------------------------------------------------------
+
+-- One row per display whose version moves when what it shows may have changed: its Home's chores or
+-- shopping lists (through the S21/S26 signal rows), or its own configuration or lock. No content.
+create table public.display_signals (
+  display_id uuid primary key references private.household_displays (id) on delete cascade,
+  version bigint not null default 1,
+  changed_at timestamptz not null default now()
+);
+
+alter table public.display_signals enable row level security;
+revoke all on table public.display_signals from public, anon, authenticated;
+grant select on table public.display_signals to authenticated;
+
+-- Only the display itself, in its own usable display session (S43's request state), sees its row.
+create function private.display_signal_visible(p_display_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select private.request_session_state() = 'display_session'
+      and exists (select 1 from private.household_displays d
+                  where d.id = p_display_id and d.user_id = auth.uid() and d.revoked_at is null)
+  $$;
+
+revoke all on function private.display_signal_visible(uuid) from public;
+grant execute on function private.display_signal_visible(uuid) to authenticated;
+
+create policy display_signals_select_own on public.display_signals
+  for select
+  to authenticated
+  using ((select private.display_signal_visible(display_id)));
+
+comment on table public.display_signals is
+  'S44: a per-display version that moves when what the display shows may have changed (Realtime). No content.';
+
+do $$
+begin
+  if exists (select 1 from pg_catalog.pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.display_signals;
+  end if;
+end
+$$;
+
+create function private.bump_display_signal(p_display_id uuid) returns void
+  language sql security definer set search_path = '' as $$
+    insert into public.display_signals as s (display_id) values (p_display_id)
+      on conflict (display_id) do update set version = s.version + 1, changed_at = pg_catalog.now();
+  $$;
+
+revoke all on function private.bump_display_signal(uuid) from public;
+
+-- Moves the signal of every active display of a Home.
+create function private.bump_home_display_signals() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if new.home_id is null then
+      return null;
+    end if;
+    insert into public.display_signals as s (display_id)
+      select d.id from private.household_displays d
+      where d.home_id = new.home_id and d.revoked_at is null and d.user_id is not null
+      on conflict (display_id) do update set version = s.version + 1, changed_at = pg_catalog.now();
+    return null;
+  end
+  $$;
+
+revoke all on function private.bump_home_display_signals() from public;
+
+create trigger display_signals_from_chores
+  after insert or update on public.chore_pool_signals
+  for each row execute function private.bump_home_display_signals();
+
+create trigger display_signals_from_shopping
+  after insert or update on public.shopping_signals
+  for each row execute function private.bump_home_display_signals();
+
+create function private.bump_config_display_signal() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    perform private.bump_display_signal(new.display_id);
+    return null;
+  end
+  $$;
+
+revoke all on function private.bump_config_display_signal() from public;
+
+create trigger display_signals_from_config
+  after update on private.display_configs
+  for each row
+  when (old.revision is distinct from new.revision or old.lock_version is distinct from new.lock_version)
+  execute function private.bump_config_display_signal();
+
+-- 3. The display's own session --------------------------------------------------------------------------------
+
+-- The only API calls a display session may make (S43 plus the board).
+create or replace function private.display_session_paths() returns text[]
+  language sql immutable parallel safe set search_path = '' as $$
+    select array['/rpc/display_me', '/rpc/display_board']::text[]
+  $$;
+
+-- Everything a display shows, decided here. Notes that the display was seen and which configuration
+-- it now shows. While locked: the lock screen's fields only (its own id for Realtime, but no Home or
+-- display name, members,
+-- chores, lists or actions). Otherwise: the display's layout and presentation, and the Home's
+-- shared-display-safe data for the display catalogue:
+--   * members (name, colour, whether a child, PIN rules) only when the layout offers actions, and
+--     the Home's adult managers (name, colour) who may lock the display with their PIN;
+--   * open chores up to today (title, due date, assignees, open mandatory steps, approval);
+--   * active Home shopping lists (name) with their active items (name, quantity, unit; never notes
+--     or who added or completed them).
+-- Refused for anyone but a display in a usable display session.
+create function public.display_board() returns jsonb
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_session_id uuid := private.jwt_session_id();
+    v_display private.household_displays;
+    v_config private.display_configs;
+    v_home public.homes;
+    v_today date;
+    v_actions boolean;
+    v_base jsonb;
+  begin
+    if v_user_id is null or v_session_id is null or not private.is_display(v_user_id)
+       or not private.display_session_ok(v_user_id, v_session_id) then
+      raise exception 'not a display session' using errcode = '42501';
+    end if;
+    select * into v_display from private.household_displays d where d.user_id = v_user_id;
+    select * into v_home from public.homes h where h.id = v_display.home_id;
+    v_config := private.display_config(v_display.id);
+    update private.display_configs c
+      set synced_revision = c.revision, synced_lock_version = c.lock_version
+      where c.display_id = v_display.id
+        and (c.synced_revision is distinct from c.revision
+             or c.synced_lock_version is distinct from c.lock_version);
+    update private.household_displays d set last_seen_at = pg_catalog.now()
+      where d.id = v_display.id
+        and (d.last_seen_at is null
+             or d.last_seen_at < pg_catalog.now() - (select l.seen_interval
+                                                     from private.display_limits() l));
+    v_base := pg_catalog.jsonb_build_object(
+      'display_id', v_display.id,
+      'locked', v_config.locked,
+      'timezone', v_home.timezone,
+      'theme', v_config.theme,
+      'clock_format', v_config.clock_format,
+      'density', v_config.density,
+      'orientation', v_config.orientation,
+      'signal_version', coalesce((select s.version from public.display_signals s
+                                  where s.display_id = v_display.id), 0)
+    );
+    if v_config.locked then
+      return v_base || pg_catalog.jsonb_build_object('lock_message', v_config.lock_message);
+    end if;
+
+    v_today := private.task_today(v_display.home_id, null);
+    v_actions := private.display_actions_enabled(v_config.layout);
+    return v_base || pg_catalog.jsonb_build_object(
+      'display_name', v_display.name,
+      'home_name', v_home.name,
+      'layout', v_config.layout,
+      'actions', v_actions,
+      'require_pin', coalesce((select s.require_pin from private.shared_device_settings s
+                               where s.home_id = v_display.home_id), false),
+      'members', case when not v_actions then '[]'::jsonb else coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 'membership_id', m.id,
+                 'name', coalesce(p.nickname, p.display_name, up.display_name),
+                 'accent_color', coalesce(p.accent_color, up.accent_color),
+                 'is_child', private.is_child(m.user_id),
+                 'requires_pin', exists (select 1 from private.shared_device_member_rules r
+                                         where r.home_id = m.home_id and r.user_id = m.user_id),
+                 'has_pin', case when private.is_child(m.user_id)
+                   then exists (select 1 from private.child_home_pins hp
+                                where hp.home_id = m.home_id and hp.child_user_id = m.user_id)
+                   else exists (select 1 from private.member_device_pins dp
+                                where dp.user_id = m.user_id) end)
+               order by m.created_at, m.id)
+        from public.home_memberships m
+        left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+        left join public.user_preferences up on up.user_id = m.user_id
+        where m.home_id = v_display.home_id), '[]'::jsonb) end,
+      'chores', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 'occurrence_id', o.id,
+                 'title', o.title,
+                 'due_date', o.due_date,
+                 'overdue', o.due_date < v_today,
+                 'assignee_ids', coalesce((
+                   select pg_catalog.jsonb_agg(private.member_ref(a.home_id, a.user_id))
+                   from private.chore_occurrence_assignees a where a.occurrence_id = o.id),
+                   '[]'::jsonb),
+                 'mandatory_open', (select count(*) from private.chore_occurrence_steps st
+                   where st.occurrence_id = o.id and st.mandatory and st.checked_at is null),
+                 'requires_approval', o.requires_approval,
+                 'requires_pin', exists (select 1 from private.shared_device_chore_rules r
+                                         where r.chore_id = o.chore_id))
+               order by o.due_date, o.title, o.id)
+        from (select oc.id, oc.chore_id, oc.due_date, c.title, c.requires_approval
+              from private.chore_occurrences oc
+              join private.chores c on c.id = oc.chore_id
+              where oc.home_id = v_display.home_id and oc.status = 'open' and oc.deleted_at is null
+                and c.deleted_at is null and oc.due_date <= v_today
+              order by oc.due_date, c.title, oc.id
+              limit 50) o), '[]'::jsonb),
+      -- Who may lock this display here with their PIN (name and colour only).
+      'lock_managers', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 'membership_id', m.id,
+                 'name', coalesce(p.nickname, p.display_name, up.display_name),
+                 'accent_color', coalesce(p.accent_color, up.accent_color))
+               order by m.created_at, m.id)
+        from public.home_memberships m
+        left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+        left join public.user_preferences up on up.user_id = m.user_id
+        where m.home_id = v_display.home_id
+          and private.display_lock_manager(m.home_id, m.user_id)), '[]'::jsonb),
+      'shopping', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                 'list_id', l.id,
+                 'name', l.name,
+                 'remaining', (select count(*) from private.shopping_items i
+                               where i.list_id = l.id and i.deleted_at is null
+                                 and i.completed_at is null),
+                 'items', coalesce((
+                   select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+                            'item_id', i.id, 'name', i.name,
+                            'quantity', pg_catalog.trim_scale(i.quantity)::text,
+                            'unit', i.unit)
+                          order by i.position, i.id)
+                   from (select si.id, si.name, si.quantity, si.unit, si.position
+                         from private.shopping_items si
+                         where si.list_id = l.id and si.deleted_at is null
+                           and si.completed_at is null
+                         order by si.position, si.id
+                         limit 15) i), '[]'::jsonb))
+               order by l.position, l.id)
+        from (select sl.id, sl.name, sl.position from private.shopping_lists sl
+              where sl.owner_home_id = v_display.home_id and sl.deleted_at is null
+                and sl.archived_at is null
+              order by sl.position, sl.id
+              limit 20) l), '[]'::jsonb)
+    );
+  end
+  $$;
+
+revoke all on function public.display_board() from public, anon;
+grant execute on function public.display_board() to authenticated;
+
+-- 4. Home managers ---------------------------------------------------------------------------------------------
+
+-- A display's configuration for the same managers as S43 (Owner, or Administrator with
+-- manageHomeSettings), with whether the display has picked up the latest change ('applied') and
+-- the Home's active shopping lists for the widget settings. Null for an unknown or revoked display.
+create function public.household_display_config(p_home_id uuid, p_display_id uuid) returns jsonb
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_config private.display_configs;
+  begin
+    if private.display_manager_check(p_home_id, v_user_id, false) <> 'ok' then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    if not exists (select 1 from private.household_displays d
+                   where d.id = p_display_id and d.home_id = p_home_id and d.revoked_at is null
+                     and d.user_id is not null) then
+      return null;
+    end if;
+    v_config := private.display_config(p_display_id);
+    return pg_catalog.jsonb_build_object(
+      'layout', v_config.layout,
+      'orientation', v_config.orientation,
+      'theme', v_config.theme,
+      'density', v_config.density,
+      'clock_format', v_config.clock_format,
+      'revision', v_config.revision,
+      'locked', v_config.locked,
+      'lock_message', v_config.lock_message,
+      'locked_at', v_config.locked_at,
+      'applied', v_config.synced_revision is not distinct from v_config.revision
+                 and v_config.synced_lock_version is not distinct from v_config.lock_version,
+      'shopping_lists', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('list_id', l.id, 'name', l.name)
+                                    order by l.position, l.id)
+        from private.shopping_lists l
+        where l.owner_home_id = p_home_id and l.deleted_at is null and l.archived_at is null),
+        '[]'::jsonb)
+    );
+  end
+  $$;
+
+revoke all on function public.household_display_config(uuid, uuid) from public, anon;
+grant execute on function public.household_display_config(uuid, uuid) to authenticated;
+
+-- Saves a display's layout and presentation when nobody changed them since p_expected_revision
+-- (else 'conflict', nothing saved). p_layout null restores the default layout. Outcomes: 'saved'
+-- (with the new revision), 'unchanged', 'conflict', 'not_permitted', 'not_found'.
+create function public.save_household_display_config(
+  p_home_id uuid,
+  p_display_id uuid,
+  p_expected_revision integer,
+  p_layout jsonb,
+  p_orientation text,
+  p_theme text,
+  p_density text,
+  p_clock_format text
+) returns table (outcome text, revision integer)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_check text;
+    v_config private.display_configs;
+  begin
+    if p_expected_revision is null
+       or (p_layout is not null and not private.valid_display_layout(p_layout))
+       or p_orientation is null or p_orientation not in ('auto', 'landscape', 'portrait')
+       or p_theme is null or p_theme not in ('auto', 'light', 'dark')
+       or p_density is null or p_density not in ('comfortable', 'compact')
+       or p_clock_format is null or p_clock_format not in ('auto', '12h', '24h') then
+      raise exception 'invalid display configuration' using errcode = '22023';
+    end if;
+    v_check := private.display_manager_check(p_home_id, v_user_id, true);
+    if v_check <> 'ok' then
+      return query select v_check, null::integer;
+      return;
+    end if;
+    if private.active_display(p_display_id) is null
+       or (private.active_display(p_display_id)).home_id is distinct from p_home_id then
+      return query select 'not_found'::text, null::integer;
+      return;
+    end if;
+    perform private.display_config(p_display_id);
+    select * into v_config from private.display_configs c where c.display_id = p_display_id
+      for update;
+    if v_config.revision <> p_expected_revision then
+      return query select 'conflict'::text, v_config.revision;
+      return;
+    end if;
+    if v_config.layout is not distinct from p_layout and v_config.orientation = p_orientation
+       and v_config.theme = p_theme and v_config.density = p_density
+       and v_config.clock_format = p_clock_format then
+      return query select 'unchanged'::text, v_config.revision;
+      return;
+    end if;
+    update private.display_configs c
+      set layout = p_layout, orientation = p_orientation, theme = p_theme, density = p_density,
+          clock_format = p_clock_format, revision = c.revision + 1, updated_by = v_user_id,
+          updated_at = pg_catalog.now()
+      where c.display_id = p_display_id;
+    perform private.audit(case when p_layout is null then 'display.config_reset'
+                               else 'display.configured' end,
+      p_home_id, 'household_display', p_display_id,
+      pg_catalog.jsonb_build_object(
+        'widgets', coalesce((select pg_catalog.jsonb_agg(w ->> 'type')
+                             from pg_catalog.jsonb_array_elements(p_layout -> 'widgets') w),
+                            '[]'::jsonb),
+        'orientation', p_orientation));
+    return query select 'saved'::text, v_config.revision + 1;
+  end
+  $$;
+
+revoke all on function public.save_household_display_config(uuid, uuid, integer, jsonb, text, text, text, text)
+  from public, anon;
+grant execute on function public.save_household_display_config(uuid, uuid, integer, jsonb, text, text, text, text)
+  to authenticated;
+
+-- Applies a lock change to a display (callers checked who may). Returns 'saved' or 'unchanged'.
+create function private.apply_display_lock(
+  p_display_id uuid, p_home_id uuid, p_locked boolean, p_message text, p_by uuid, p_via text
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_config private.display_configs;
+  begin
+    perform private.display_config(p_display_id);
+    select * into v_config from private.display_configs c where c.display_id = p_display_id
+      for update;
+    if v_config.locked = p_locked and v_config.lock_message is not distinct from p_message then
+      return 'unchanged';
+    end if;
+    update private.display_configs c
+      set locked = p_locked, lock_message = p_message, lock_version = c.lock_version + 1,
+          locked_at = case when p_locked and not c.locked then pg_catalog.now()
+                           when not p_locked then null else c.locked_at end,
+          locked_by = case when p_locked then coalesce(p_by, c.locked_by) end
+      where c.display_id = p_display_id;
+    if v_config.locked <> p_locked then
+      perform private.audit(case when p_locked then 'display.locked' else 'display.unlocked' end,
+        p_home_id, 'household_display', p_display_id,
+        pg_catalog.jsonb_build_object('via', p_via, 'member', private.member_ref(p_home_id, p_by)));
+    end if;
+    return 'saved';
+  end
+  $$;
+
+revoke all on function private.apply_display_lock(uuid, uuid, boolean, text, uuid, text) from public;
+
+-- Locks or unlocks a display, and sets its lock screen's welcome message (null: none), from a
+-- manager's own session. Outcomes: 'saved', 'unchanged', 'not_permitted', 'not_found'.
+create function public.set_household_display_lock(
+  p_home_id uuid, p_display_id uuid, p_locked boolean, p_message text default null
+) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_check text;
+  begin
+    if p_locked is null or (p_message is not null and not private.is_visible_name(p_message, 80)) then
+      raise exception 'invalid lock' using errcode = '22023';
+    end if;
+    v_check := private.display_manager_check(p_home_id, v_user_id, true);
+    if v_check <> 'ok' then
+      return v_check;
+    end if;
+    if private.active_display(p_display_id) is null
+       or (private.active_display(p_display_id)).home_id is distinct from p_home_id then
+      return 'not_found';
+    end if;
+    return private.apply_display_lock(p_display_id, p_home_id, p_locked, p_message, v_user_id,
+                                      'manager_session');
+  end
+  $$;
+
+revoke all on function public.set_household_display_lock(uuid, uuid, boolean, text) from public, anon;
+grant execute on function public.set_household_display_lock(uuid, uuid, boolean, text) to authenticated;
+
+-- 5. Actions on the display (the web server only, as service_role) -------------------------------------------
+
+-- Each chore completed on a display: who it is attributed to, how they were verified, and whether
+-- it was undone (as S42's shared_device_actions, with the display as the device origin).
+create table private.display_actions (
+  id uuid primary key default gen_random_uuid(),
+  home_id uuid not null references public.homes (id) on delete cascade,
+  display_id uuid not null references private.household_displays (id) on delete cascade,
+  occurrence_id uuid not null,
+  member_user_id uuid references auth.users (id) on delete set null,
+  verification text not null
+    constraint display_actions_verification_check check (verification in ('attributed', 'pin')),
+  outcome text not null,
+  occurrence_revision integer not null,
+  created_at timestamptz not null default now(),
+  undone_at timestamptz
+);
+
+create index display_actions_display_idx on private.display_actions (display_id, created_at);
+
+revoke all on table private.display_actions from public;
+
+-- A PIN check on a display waiting for the web server's comparison: one purpose (a chore, or
+-- locking the display), one member, one display.
+create table private.display_checks (
+  id uuid primary key default gen_random_uuid(),
+  display_id uuid not null references private.household_displays (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  purpose text not null constraint display_checks_purpose_check
+    check (purpose in ('chore', 'lock')),
+  occurrence_id uuid,
+  member_user_id uuid not null references auth.users (id) on delete cascade,
+  client_key text not null
+    constraint display_checks_client_key_check check (client_key ~ '^[0-9a-f]{64}$'),
+  created_at timestamptz not null default now(),
+  used_at timestamptz,
+  constraint display_checks_occurrence_check check ((purpose = 'chore') = (occurrence_id is not null))
+);
+
+create index display_checks_display_idx on private.display_checks (display_id, created_at)
+  where used_at is null;
+create index display_checks_client_idx on private.display_checks (client_key, created_at)
+  where used_at is null;
+
+revoke all on table private.display_checks from public;
+
+-- Who may be named for an occurrence on a display: any current member of the display's Home; a
+-- child only for a chore assigned to them (as S42's device_member).
+create function private.display_member(p_home_id uuid, p_occurrence_id uuid, p_membership_id uuid)
+returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from public.home_memberships m
+    join private.chore_occurrences o on o.id = p_occurrence_id and o.home_id = m.home_id
+    where m.home_id = p_home_id and m.id = p_membership_id and o.deleted_at is null
+      and (not private.is_child(m.user_id)
+           or exists (select 1 from private.chore_occurrence_assignees a
+                      where a.occurrence_id = o.id and a.user_id = m.user_id))
+  $$;
+
+revoke all on function private.display_member(uuid, uuid, uuid) from public;
+
+-- Completes the occurrence as the member (S42's device actor) and records it with the display as
+-- the device origin. Returns the completion's outcome and the action id (for Undo).
+create function private.display_complete(
+  p_display private.household_displays, p_occurrence_id uuid, p_member uuid, p_verification text
+) returns table (outcome text, action_id uuid)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_claims text;
+    v_outcome text;
+    v_action uuid;
+  begin
+    v_claims := private.begin_device_actor(p_member, p_display.home_id, null);
+    select c.outcome into v_outcome
+      from public.complete_chore_occurrence(p_occurrence_id,
+        private.member_ref(p_display.home_id, p_member), null) c;
+    perform private.end_device_actor(p_member, v_claims);
+    if v_outcome in ('completed', 'submitted') then
+      insert into private.display_actions (home_id, display_id, occurrence_id, member_user_id,
+                                           verification, outcome, occurrence_revision)
+        values (p_display.home_id, p_display.id, p_occurrence_id, p_member, p_verification,
+                v_outcome,
+                (select o.revision from private.chore_occurrences o where o.id = p_occurrence_id))
+        returning id into v_action;
+      perform private.audit('chore_occurrence.display_completed', p_display.home_id,
+        'chore_occurrence', p_occurrence_id,
+        pg_catalog.jsonb_build_object('display_id', p_display.id, 'verification', p_verification,
+                                      'member', private.member_ref(p_display.home_id, p_member),
+                                      'outcome', v_outcome));
+    end if;
+    return query select v_outcome, v_action;
+  end
+  $$;
+
+revoke all on function private.display_complete(private.household_displays, uuid, uuid, text)
+  from public;
+
+-- Whether a new PIN check on this display or from this client would go over S42's limits.
+create function private.display_checks_throttled(p_display_id uuid, p_client_key text)
+returns boolean
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_limits record := private.child_sign_in_limits();
+  begin
+    delete from private.display_checks c where c.created_at < pg_catalog.now() - interval '1 day';
+    return (select count(*) from private.display_checks c
+            where c.display_id = p_display_id and c.used_at is null
+              and c.created_at > pg_catalog.now() - interval '1 hour')
+             >= v_limits.device_failures_per_hour
+       or (select count(*) from private.display_checks c
+           where c.client_key = p_client_key and c.used_at is null
+             and c.created_at > pg_catalog.now() - v_limits.client_window)
+             >= v_limits.client_failures_per_window;
+  end
+  $$;
+
+revoke all on function private.display_checks_throttled(uuid, text) from public;
+
+-- The member's PIN for this Home's shared devices (a child's Home PIN, an adult's own device PIN),
+-- locked for the check. Returns the hash and lock (both null: no PIN).
+create function private.display_member_pin(p_home_id uuid, p_member uuid,
+  out pin_hash text, out locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if private.is_child(p_member) then
+      select hp.pin_hash, hp.pin_locked_until into pin_hash, locked_until
+        from private.child_home_pins hp
+        where hp.home_id = p_home_id and hp.child_user_id = p_member for update;
+    else
+      select dp.pin_hash, dp.pin_locked_until into pin_hash, locked_until
+        from private.member_device_pins dp where dp.user_id = p_member for update;
+    end if;
+  end
+  $$;
+
+revoke all on function private.display_member_pin(uuid, uuid) from public;
+
+-- Clears a member's wrong-try count after a matched PIN (a guardian's lock stays).
+create function private.display_pin_matched(p_home_id uuid, p_member uuid) returns void
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if private.is_child(p_member) then
+      update private.child_home_pins hp
+        set pin_failures = 0, pin_locks = 0, pin_locks_since = null, pin_locked_until = null
+        where hp.home_id = p_home_id and hp.child_user_id = p_member
+          and hp.pin_locked_until is distinct from 'infinity'::timestamptz;
+    else
+      update private.member_device_pins dp
+        set pin_failures = 0, pin_locks = 0, pin_locks_since = null, pin_locked_until = null
+        where dp.user_id = p_member
+          and dp.pin_locked_until is distinct from 'infinity'::timestamptz;
+    end if;
+  end
+  $$;
+
+revoke all on function private.display_pin_matched(uuid, uuid) from public;
+
+-- Step 1 of completing a chore on a display, as S42's shared_device_attempt. Also refused while the
+-- display is locked ('display_locked') or its layout offers no actions ('actions_off').
+-- Outcomes: the completion's own ('completed', 'submitted', 'already_completed', ...), 'check',
+-- 'pin_required', 'pin_not_set', 'locked' (locked_until), 'rate_limited', 'not_eligible',
+-- 'display_locked', 'actions_off', 'display_not_active'.
+create function public.display_chore_attempt(
+  p_display_id uuid, p_occurrence_id uuid, p_membership_id uuid, p_pin boolean, p_client_key text
+) returns table (outcome text, action_id uuid, check_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays;
+    v_config private.display_configs;
+    v_member uuid;
+    v_pin record;
+    v_check uuid;
+    v_done record;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    v_display := private.active_display(p_display_id);
+    if v_display.id is null then
+      return query select 'display_not_active'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_config := private.display_config(v_display.id);
+    if v_config.locked then
+      return query select 'display_locked'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if not private.display_actions_enabled(v_config.layout) then
+      return query select 'actions_off'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_member := private.display_member(v_display.home_id, p_occurrence_id, p_membership_id);
+    if v_member is null then
+      return query select 'not_eligible'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if not coalesce(p_pin, false) then
+      if private.shared_device_pin_needed(v_display.home_id, v_member, p_occurrence_id) then
+        return query select 'pin_required'::text, null::uuid, null::uuid, null::text,
+          null::timestamptz;
+        return;
+      end if;
+      select * into v_done from private.display_complete(v_display, p_occurrence_id, v_member,
+                                                         'attributed');
+      return query select v_done.outcome, v_done.action_id, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if private.display_checks_throttled(v_display.id, p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_pin := private.display_member_pin(v_display.home_id, v_member);
+    if v_pin.pin_hash is null then
+      return query select 'pin_not_set'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if v_pin.locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::uuid, null::text, v_pin.locked_until;
+      return;
+    end if;
+    perform private.count_device_pin_failure(v_member, v_display.home_id);
+    insert into private.display_checks (display_id, home_id, purpose, occurrence_id, member_user_id,
+                                        client_key)
+      values (v_display.id, v_display.home_id, 'chore', p_occurrence_id, v_member, p_client_key)
+      returning id into v_check;
+    return query select 'check'::text, null::uuid, v_check, v_pin.pin_hash, null::timestamptz;
+  end
+  $$;
+
+revoke all on function public.display_chore_attempt(uuid, uuid, uuid, boolean, text)
+  from public, anon, authenticated;
+grant execute on function public.display_chore_attempt(uuid, uuid, uuid, boolean, text)
+  to service_role;
+
+-- The fresh (two minutes), unused check of this display for this purpose, locked and marked used.
+create function private.use_display_check(p_display_id uuid, p_check_id uuid, p_purpose text)
+returns private.display_checks
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_check private.display_checks;
+  begin
+    select * into v_check from private.display_checks c where c.id = p_check_id for update;
+    if v_check.id is null or v_check.display_id <> p_display_id or v_check.purpose <> p_purpose
+       or v_check.used_at is not null
+       or v_check.created_at <= pg_catalog.now() - interval '2 minutes' then
+      return null;
+    end if;
+    update private.display_checks c set used_at = pg_catalog.now() where c.id = v_check.id;
+    perform private.display_pin_matched(v_check.home_id, v_check.member_user_id);
+    return v_check;
+  end
+  $$;
+
+revoke all on function private.use_display_check(uuid, uuid, text) from public;
+
+-- Step 2, after the web server matched the PIN: completes the chore as 'pin'. The display must
+-- still be active, unlocked and offering actions, and the member still eligible.
+create function public.display_chore_verified(p_display_id uuid, p_check_id uuid)
+returns table (outcome text, action_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays := private.active_display(p_display_id);
+    v_config private.display_configs;
+    v_check private.display_checks;
+  begin
+    if v_display.id is null then
+      return query select 'invalid'::text, null::uuid;
+      return;
+    end if;
+    v_check := private.use_display_check(v_display.id, p_check_id, 'chore');
+    if v_check.id is null then
+      return query select 'invalid'::text, null::uuid;
+      return;
+    end if;
+    v_config := private.display_config(v_display.id);
+    if v_config.locked then
+      return query select 'display_locked'::text, null::uuid;
+      return;
+    end if;
+    if not private.display_actions_enabled(v_config.layout) then
+      return query select 'actions_off'::text, null::uuid;
+      return;
+    end if;
+    if private.display_member(v_display.home_id, v_check.occurrence_id,
+                              private.member_ref(v_display.home_id, v_check.member_user_id)) is null then
+      return query select 'not_eligible'::text, null::uuid;
+      return;
+    end if;
+    return query select * from private.display_complete(v_display, v_check.occurrence_id,
+                                                        v_check.member_user_id, 'pin');
+  end
+  $$;
+
+revoke all on function public.display_chore_verified(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.display_chore_verified(uuid, uuid) to service_role;
+
+-- Undo, from the same display within two minutes, as S42's shared_device_undo. Returns 'undone',
+-- 'expired' or 'invalid'.
+create function public.display_chore_undo(p_display_id uuid, p_action_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays := private.active_display(p_display_id);
+    v_action private.display_actions;
+    v_claims text;
+    v_outcome text;
+  begin
+    select * into v_action from private.display_actions a where a.id = p_action_id for update;
+    if v_display.id is null or v_action.id is null or v_action.display_id <> v_display.id
+       or v_action.undone_at is not null or v_action.member_user_id is null
+       or not private.is_home_member(v_display.home_id, v_action.member_user_id)
+       or (private.display_config(v_display.id)).locked then
+      return 'invalid';
+    end if;
+    if v_action.created_at <= pg_catalog.now() - interval '2 minutes' then
+      return 'expired';
+    end if;
+    if (select o.revision from private.chore_occurrences o where o.id = v_action.occurrence_id
+        for update) is distinct from v_action.occurrence_revision then
+      return 'invalid';
+    end if;
+    v_claims := private.begin_device_actor(v_action.member_user_id, v_display.home_id,
+                                           v_action.occurrence_id);
+    select r.outcome into v_outcome from public.reopen_chore_occurrence(v_action.occurrence_id) r;
+    perform private.end_device_actor(v_action.member_user_id, v_claims);
+    if v_outcome not in ('reopened', 'already_open') then
+      return 'invalid';
+    end if;
+    update private.display_actions a set undone_at = pg_catalog.now() where a.id = v_action.id;
+    perform private.audit('chore_occurrence.display_undone', v_display.home_id, 'chore_occurrence',
+      v_action.occurrence_id, pg_catalog.jsonb_build_object('display_id', v_display.id));
+    return 'undone';
+  end
+  $$;
+
+revoke all on function public.display_chore_undo(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.display_chore_undo(uuid, uuid) to service_role;
+
+-- Step 1 of locking the display on the display itself: a manager of the display's Home (Owner, or
+-- Administrator with manageHomeSettings) confirms with their own household-device PIN, always.
+-- Unlocking is never possible on the display (spec: privacy-mode unlock needs a manager's
+-- independently authorized session): only set_household_display_lock unlocks.
+-- Outcomes: 'check' (with the PIN hash for the web server), 'unchanged' (already locked),
+-- 'not_permitted' (not a manager here), 'pin_not_set', 'locked' (the PIN is locked, locked_until),
+-- 'rate_limited', 'display_not_active'.
+create function public.display_lock_attempt(
+  p_display_id uuid, p_membership_id uuid, p_client_key text
+) returns table (outcome text, check_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays;
+    v_member uuid;
+    v_pin record;
+    v_check uuid;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    v_display := private.active_display(p_display_id);
+    if v_display.id is null then
+      return query select 'display_not_active'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if (private.display_config(v_display.id)).locked then
+      return query select 'unchanged'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    select m.user_id into v_member from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = v_display.home_id;
+    if v_member is null or not private.display_lock_manager(v_display.home_id, v_member) then
+      return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if private.display_checks_throttled(v_display.id, p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    v_pin := private.display_member_pin(v_display.home_id, v_member);
+    if v_pin.pin_hash is null then
+      return query select 'pin_not_set'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if v_pin.locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::text, v_pin.locked_until;
+      return;
+    end if;
+    perform private.count_device_pin_failure(v_member, v_display.home_id);
+    insert into private.display_checks (display_id, home_id, purpose, member_user_id, client_key)
+      values (v_display.id, v_display.home_id, 'lock', v_member, p_client_key)
+      returning id into v_check;
+    return query select 'check'::text, v_check, v_pin.pin_hash, null::timestamptz;
+  end
+  $$;
+
+revoke all on function public.display_lock_attempt(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.display_lock_attempt(uuid, uuid, text) to service_role;
+
+-- Step 2, after the web server matched the PIN: locks the display (keeping its welcome message), if
+-- the member is still a manager there. Returns 'saved', 'unchanged', 'not_permitted' or 'invalid'.
+create function public.display_lock_verified(p_display_id uuid, p_check_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays := private.active_display(p_display_id);
+    v_check private.display_checks;
+  begin
+    if v_display.id is null then
+      return 'invalid';
+    end if;
+    v_check := private.use_display_check(v_display.id, p_check_id, 'lock');
+    if v_check.id is null then
+      return 'invalid';
+    end if;
+    if not private.display_lock_manager(v_display.home_id, v_check.member_user_id) then
+      return 'not_permitted';
+    end if;
+    return private.apply_display_lock(v_display.id, v_display.home_id, true,
+      (private.display_config(v_display.id)).lock_message, v_check.member_user_id, 'display_pin');
+  end
+  $$;
+
+revoke all on function public.display_lock_verified(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.display_lock_verified(uuid, uuid) to service_role;
+
+-- ============================================================================
+-- supabase/migrations/20261205090000_display_pin_no_lockout.sql
+-- ============================================================================
+-- S44 follow-up (owner decision, 13 Nov 2026): wrong PIN tries on a Household Display never count
+-- toward a member's PIN lock. A display is a shared screen visitors can reach, so a passer-by must
+-- not be able to lock a member's (or a child's) PIN from it. The display's own limits still apply
+-- to every check that is not completed: at most 20 per display per hour and 30 per client per 15
+-- minutes (S42's limits), and a PIN that is already locked elsewhere is still refused here.
+-- Only the two attempt functions change: each no longer counts the try as a failure up front.
+
+create or replace function public.display_chore_attempt(
+  p_display_id uuid, p_occurrence_id uuid, p_membership_id uuid, p_pin boolean, p_client_key text
+) returns table (outcome text, action_id uuid, check_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays;
+    v_config private.display_configs;
+    v_member uuid;
+    v_pin record;
+    v_check uuid;
+    v_done record;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    v_display := private.active_display(p_display_id);
+    if v_display.id is null then
+      return query select 'display_not_active'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_config := private.display_config(v_display.id);
+    if v_config.locked then
+      return query select 'display_locked'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if not private.display_actions_enabled(v_config.layout) then
+      return query select 'actions_off'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_member := private.display_member(v_display.home_id, p_occurrence_id, p_membership_id);
+    if v_member is null then
+      return query select 'not_eligible'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if not coalesce(p_pin, false) then
+      if private.shared_device_pin_needed(v_display.home_id, v_member, p_occurrence_id) then
+        return query select 'pin_required'::text, null::uuid, null::uuid, null::text,
+          null::timestamptz;
+        return;
+      end if;
+      select * into v_done from private.display_complete(v_display, p_occurrence_id, v_member,
+                                                         'attributed');
+      return query select v_done.outcome, v_done.action_id, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if private.display_checks_throttled(v_display.id, p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_pin := private.display_member_pin(v_display.home_id, v_member);
+    if v_pin.pin_hash is null then
+      return query select 'pin_not_set'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if v_pin.locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::uuid, null::text, v_pin.locked_until;
+      return;
+    end if;
+    insert into private.display_checks (display_id, home_id, purpose, occurrence_id, member_user_id,
+                                        client_key)
+      values (v_display.id, v_display.home_id, 'chore', p_occurrence_id, v_member, p_client_key)
+      returning id into v_check;
+    return query select 'check'::text, null::uuid, v_check, v_pin.pin_hash, null::timestamptz;
+  end
+  $$;
+
+create or replace function public.display_lock_attempt(
+  p_display_id uuid, p_membership_id uuid, p_client_key text
+) returns table (outcome text, check_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays;
+    v_member uuid;
+    v_pin record;
+    v_check uuid;
+  begin
+    perform private.check_child_client_key(p_client_key);
+    v_display := private.active_display(p_display_id);
+    if v_display.id is null then
+      return query select 'display_not_active'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if (private.display_config(v_display.id)).locked then
+      return query select 'unchanged'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    select m.user_id into v_member from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = v_display.home_id;
+    if v_member is null or not private.display_lock_manager(v_display.home_id, v_member) then
+      return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if private.display_checks_throttled(v_display.id, p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    v_pin := private.display_member_pin(v_display.home_id, v_member);
+    if v_pin.pin_hash is null then
+      return query select 'pin_not_set'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if v_pin.locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::text, v_pin.locked_until;
+      return;
+    end if;
+    insert into private.display_checks (display_id, home_id, purpose, member_user_id, client_key)
+      values (v_display.id, v_display.home_id, 'lock', v_member, p_client_key)
+      returning id into v_check;
+    return query select 'check'::text, v_check, v_pin.pin_hash, null::timestamptz;
+  end
+  $$;
+
+-- ============================================================================
+-- supabase/migrations/20261206090000_ora_settings.sql
+-- ============================================================================
+-- S45: Ora settings (brief S45; spec "Confirmed personal Ora hide and disable control", "Confirmed
+-- Ora lightweight first-use introduction"; Ora design handoff: nine palettes per person per Home,
+-- one personal motion mode).
+--
+-- Two small tables, both readable and writable only by the person they belong to:
+--   public.ora_preferences   one row per person: Ora on/off, motion mode, whether the first-use
+--                            introduction is finished, and the colour used in Personal space;
+--   public.ora_home_palettes the colour the person chose in one Home. It belongs to the membership
+--                            and goes with it (leaving, removal, Home deletion), so a colour never
+--                            survives a departure or reappears on a later re-join.
+-- Nobody, an Owner included, reads or sets another member's Ora settings. Rows are created on first
+-- save; a missing row means the defaults (enabled, gentle motion, introduction not seen, Heather).
+-- Disabling Ora changes nothing else: the settings stay and nothing is deleted.
+--
+-- The allowed palette keys mirror packages/design-tokens/src/ora.ts; the app validates first and
+-- these checks keep direct Data API writes well-formed.
+
+create table public.ora_preferences (
+  user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  enabled boolean not null default true,
+  motion text not null default 'gentle'
+    constraint ora_preferences_motion_check check (motion in ('gentle', 'reactions', 'none')),
+  -- NULL = the introduction has not been seen; once set it is never repeated for this person.
+  intro text
+    constraint ora_preferences_intro_check check (intro in ('completed', 'skipped')),
+  personal_palette text not null default 'heather'
+    constraint ora_preferences_personal_palette_check check (personal_palette in (
+      'muted-teal', 'denim', 'terracotta', 'olive', 'ochre', 'heather', 'brick', 'petrol', 'cocoa'
+    )),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.ora_preferences enable row level security;
+
+comment on table public.ora_preferences is
+  'A person''s own Ora settings: on/off, motion mode, introduction state, Personal colour (S45).';
+
+create trigger ora_preferences_set_updated_at
+  before update on public.ora_preferences
+  for each row execute function private.set_updated_at();
+
+revoke all on table public.ora_preferences from anon, authenticated;
+grant select on table public.ora_preferences to authenticated;
+grant insert (user_id, enabled, motion, intro, personal_palette)
+  on table public.ora_preferences to authenticated;
+grant update (user_id, enabled, motion, intro, personal_palette)
+  on table public.ora_preferences to authenticated;
+
+create policy ora_preferences_select_own on public.ora_preferences
+  for select to authenticated
+  using (user_id = (select auth.uid()));
+
+create policy ora_preferences_insert_own on public.ora_preferences
+  for insert to authenticated
+  with check (user_id = (select auth.uid()));
+
+create policy ora_preferences_update_own on public.ora_preferences
+  for update to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+-- Per-Home colour -----------------------------------------------------------------------------------
+
+create table public.ora_home_palettes (
+  home_id uuid not null,
+  user_id uuid not null default auth.uid(),
+  palette text not null
+    constraint ora_home_palettes_palette_check check (palette in (
+      'muted-teal', 'denim', 'terracotta', 'olive', 'ochre', 'heather', 'brick', 'petrol', 'cocoa'
+    )),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ora_home_palettes_pkey primary key (home_id, user_id),
+  constraint ora_home_palettes_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+alter table public.ora_home_palettes enable row level security;
+
+comment on table public.ora_home_palettes is
+  'The Ora colour one member chose in one Home; deleted with the membership (S45).';
+
+create trigger ora_home_palettes_set_updated_at
+  before update on public.ora_home_palettes
+  for each row execute function private.set_updated_at();
+
+-- A row stays with its membership: an update may not move it to another Home or person (the Data
+-- API's upsert names both keys in its update, so they keep their grant, unchanged).
+create function private.keep_ora_home_palette_owner() returns trigger
+  language plpgsql set search_path = '' as $$
+  begin
+    if new.home_id is distinct from old.home_id or new.user_id is distinct from old.user_id then
+      raise exception 'an Ora colour cannot move to another Home or person'
+        using errcode = '42501';
+    end if;
+    return new;
+  end
+  $$;
+
+create trigger ora_home_palettes_keep_owner
+  before update on public.ora_home_palettes
+  for each row execute function private.keep_ora_home_palette_owner();
+
+revoke all on table public.ora_home_palettes from anon, authenticated;
+grant select on table public.ora_home_palettes to authenticated;
+grant insert (home_id, user_id, palette) on table public.ora_home_palettes to authenticated;
+grant update (home_id, user_id, palette) on table public.ora_home_palettes to authenticated;
+
+-- Only your own row, and only while you are a current member of that Home (public.home_memberships
+-- leaves out Homes that are closed for the person).
+create policy ora_home_palettes_select_own on public.ora_home_palettes
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = ora_home_palettes.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+create policy ora_home_palettes_insert_own on public.ora_home_palettes
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = ora_home_palettes.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+create policy ora_home_palettes_update_own on public.ora_home_palettes
+  for update to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = ora_home_palettes.home_id and m.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = ora_home_palettes.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+-- ============================================================================
+-- supabase/migrations/20261207090000_ora_suggestions.sql
+-- ============================================================================
+-- S47: Ora suggestions, teasers and their suppression (brief S47; spec "Confirmed Ora smart
+-- suppression of dismissed suggestions"; Ora design handoff: at most one unsolicited teaser per
+-- person per day across all Homes and devices, and a personal mute that lasts until re-enabled).
+--
+--   public.ora_preferences.teasers_muted   the person's own mute, across every Home;
+--   public.ora_preferences.last_teaser_on  the local date a teaser was last shown. It is written only
+--                                          by public.claim_ora_teaser, never directly, so two devices
+--                                          cannot both claim the same day;
+--   public.ora_dismissed_suggestions       one row per person, place and suggestion kind: the
+--                                          situation (a record or day) that was dismissed. The same
+--                                          suggestion stays quiet until the situation changes.
+-- A dismissal belongs to the membership and goes with it (leaving, removal, Home deletion).
+-- Nobody, an Owner included, reads or sets another member's rows.
+
+alter table public.ora_preferences
+  add column teasers_muted boolean not null default false,
+  add column last_teaser_on date;
+
+grant insert (teasers_muted) on table public.ora_preferences to authenticated;
+grant update (teasers_muted) on table public.ora_preferences to authenticated;
+
+create table public.ora_dismissed_suggestions (
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  -- 'personal' or the Home's id as text; kept beside home_id so one key covers both places.
+  scope text not null
+    constraint ora_dismissed_scope_check check (scope = 'personal' or scope ~ '^[0-9a-f-]{36}$'),
+  home_id uuid,
+  kind text not null
+    constraint ora_dismissed_kind_check check (kind in ('today-overview')),
+  -- What was dismissed (for an overview: the day). A different situation may be offered again.
+  situation text not null
+    constraint ora_dismissed_situation_check check (situation ~ '^\d{4}-\d{2}-\d{2}$'),
+  dismissed_at timestamptz not null default now(),
+  constraint ora_dismissed_suggestions_pkey primary key (user_id, scope, kind),
+  constraint ora_dismissed_home_check check (
+    (scope = 'personal' and home_id is null) or (scope <> 'personal' and home_id::text = scope)
+  ),
+  constraint ora_dismissed_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+alter table public.ora_dismissed_suggestions enable row level security;
+
+comment on table public.ora_dismissed_suggestions is
+  'The Ora suggestion a person dismissed in one place, and the situation it was dismissed for (S47).';
+
+revoke all on table public.ora_dismissed_suggestions from anon, authenticated;
+grant select on table public.ora_dismissed_suggestions to authenticated;
+-- dismissed_at is granted too: the app's upsert names it, and the ON CONFLICT branch needs the same
+-- column privilege as the INSERT.
+grant insert (user_id, scope, home_id, kind, situation, dismissed_at)
+  on table public.ora_dismissed_suggestions to authenticated;
+grant update (user_id, scope, home_id, kind, situation, dismissed_at)
+  on table public.ora_dismissed_suggestions to authenticated;
+
+create policy ora_dismissed_select_own on public.ora_dismissed_suggestions
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_dismissed_suggestions.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+create policy ora_dismissed_insert_own on public.ora_dismissed_suggestions
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_dismissed_suggestions.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+create policy ora_dismissed_update_own on public.ora_dismissed_suggestions
+  for update to authenticated
+  using (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_dismissed_suggestions.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  )
+  with check (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_dismissed_suggestions.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+-- Claims today's teaser for the caller: true exactly once per person per local date, whichever Home
+-- or device asks first, and never while teasers are muted. `p_today` is the person's local date as
+-- the server worked it out; a date far from the real one is refused, so a forged date cannot buy
+-- extra teasers.
+create function public.claim_ora_teaser(p_today date) returns boolean
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user uuid := auth.uid();
+    v_claimed boolean;
+  begin
+    if v_user is null or p_today is null then
+      return false;
+    end if;
+    if abs(p_today - (now() at time zone 'utc')::date) > 1 then
+      return false;
+    end if;
+    insert into public.ora_preferences as p (user_id, last_teaser_on)
+      values (v_user, p_today)
+      on conflict (user_id) do update set last_teaser_on = excluded.last_teaser_on
+      where not p.teasers_muted and p.enabled
+        and (p.last_teaser_on is null or p.last_teaser_on < excluded.last_teaser_on)
+      returning true into v_claimed;
+    return coalesce(v_claimed, false);
+  end
+  $$;
+
+revoke all on function public.claim_ora_teaser(date) from public, anon;
+grant execute on function public.claim_ora_teaser(date) to authenticated;
+
+comment on function public.claim_ora_teaser(date) is
+  'S47: true once per person per local date (not while muted or Ora is off); the daily teaser limit.';
 ```
 
 ## Destructive reset: remove these migrations from the database
@@ -68408,6 +70741,8 @@ drop trigger if exists madeora_guard_mfa_challenge_insert on auth.mfa_challenges
 drop trigger if exists madeora_guard_mfa_challenge_verify on auth.mfa_challenges;
 drop trigger if exists madeora_guard_child_auth_user on auth.users;
 drop trigger if exists madeora_guard_child_identity on auth.identities;
+drop trigger if exists madeora_guard_display_auth_user on auth.users;
+drop trigger if exists madeora_guard_display_identity on auth.identities;
 
 -- Drop Madeora public RPCs by exact routine name, including all overloads.
 do $reset$
@@ -68520,7 +70855,8 @@ begin
         'update_personal_reward', 'update_pet', 'update_pet_care', 'update_pet_care_occurrence', 'update_pet_medical_entry', 'update_point_preferences',
         'update_point_settings', 'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence',
         'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template',
-        'use_trusted_device', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery'
+        'use_trusted_device', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery',
+        'approve_display_pairing', 'check_display_pairing_code', 'claim_ora_teaser', 'display_board', 'display_chore_attempt', 'display_chore_undo', 'display_chore_verified', 'display_lock_attempt', 'display_lock_verified', 'display_me', 'display_pairing_cancel', 'display_pairing_claim', 'display_pairing_complete', 'display_pairing_start', 'display_pairing_status', 'home_household_displays', 'household_display_config', 'rename_household_display', 'revoke_household_display', 'save_household_display_config', 'set_household_display_lock'
       ])
   loop
     execute format('drop function if exists %s cascade', routine.signature);
@@ -68533,6 +70869,10 @@ $reset$;
 drop view if exists public.home_memberships cascade;
 
 -- Drop the Madeora public tables; CASCADE removes their policies, indexes and table triggers.
+drop table if exists public.ora_dismissed_suggestions cascade;
+drop table if exists public.ora_home_palettes cascade;
+drop table if exists public.ora_preferences cascade;
+drop table if exists public.display_signals cascade;
 drop table if exists public.child_guardian_offers cascade;
 drop table if exists public.child_home_settings cascade;
 drop table if exists public.child_guardians cascade;
@@ -68556,7 +70896,7 @@ begin
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute
       'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000']::text[];
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000', '20261203090000', '20261204090000', '20261205090000', '20261206090000', '20261207090000']::text[];
   end if;
 end
 $reset$;
