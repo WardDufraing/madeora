@@ -19,6 +19,10 @@ export default defineConfig({
   testDir: ".",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
+  // The default 30 s limit is too tight on the shared CI runner (2 workers beside the production
+  // build and the local Supabase stack): different long specs timed out in each run, always on a
+  // 5 s assertion wait, never on a wrong value. Assertion waits keep their own limits.
+  timeout: 60_000,
   retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {

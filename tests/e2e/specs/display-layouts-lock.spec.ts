@@ -151,11 +151,15 @@ test("a paired display shows only shareable Home data, takes actions and locks",
   await expect(restarted.getByTestId("display-widget-chores")).toBeVisible();
   await tablet.close();
 
-  // No PIN in clear anywhere in the audit trail.
+  // No PIN in clear anywhere in the audit trail. A bare substring match on a 4-digit PIN also hits
+  // ids and timestamps by chance (a uuid segment can read 4826), so ids are removed first and the PIN
+  // must stand alone, not inside a longer number or word.
   expect(
     sql(
       `select count(*) from private.audit_events e
-       where e.home_id = :'home'::uuid and to_jsonb(e)::text like '%' || :'pin' || '%';`,
+       where e.home_id = :'home'::uuid and regexp_replace(to_jsonb(e)::text,
+              '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '', 'g')
+              ~ ('(^|[^0-9a-zA-Z])' || :'pin' || '($|[^0-9a-zA-Z])');`,
       { home: homeId, pin: PIN },
     ),
   ).toBe("0");

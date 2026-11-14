@@ -106,7 +106,9 @@ test("a child signs in with their PIN only on an approved household device", asy
   expect(
     sql(
       `select count(*) from private.audit_events e
-       where e.home_id = :'home'::uuid and to_jsonb(e)::text like '%' || :'pin' || '%';`,
+       where e.home_id = :'home'::uuid and regexp_replace(to_jsonb(e)::text,
+              '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '', 'g')
+              ~ ('(^|[^0-9a-zA-Z])' || :'pin' || '($|[^0-9a-zA-Z])');`,
       { home: homeId, pin: PIN },
     ),
   ).toBe("0");
