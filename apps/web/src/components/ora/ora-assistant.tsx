@@ -223,7 +223,11 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
           </div>
         </div>
       ) : null}
-      {settings.teasersMuted ? null : <OraTeaser homeId={homeId} hidden={open} />}
+      {settings.teasersMuted ||
+      settings.frequency === "quiet" ||
+      !settings.categories.suggestions ? null : (
+        <OraTeaser homeId={homeId} hidden={open} />
+      )}
       <button
         ref={launcher}
         type="button"

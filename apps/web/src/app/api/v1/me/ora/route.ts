@@ -37,6 +37,22 @@ export async function PATCH(request: Request): Promise<Response> {
     ...(patch.motion !== undefined ? { motion: patch.motion } : {}),
     ...(patch.intro !== undefined ? { intro: patch.intro } : {}),
     ...(patch.teasersMuted !== undefined ? { teasers_muted: patch.teasersMuted } : {}),
+    ...(patch.frequency !== undefined ? { frequency: patch.frequency } : {}),
+    ...(patch.categories?.reminders !== undefined
+      ? { cat_reminders: patch.categories.reminders }
+      : {}),
+    ...(patch.categories?.suggestions !== undefined
+      ? { cat_suggestions: patch.categories.suggestions }
+      : {}),
+    ...(patch.categories?.celebrations !== undefined
+      ? { cat_celebrations: patch.categories.celebrations }
+      : {}),
+    ...(patch.quietHours !== undefined
+      ? {
+          quiet_start: patch.quietHours?.start ?? null,
+          quiet_end: patch.quietHours?.end ?? null,
+        }
+      : {}),
     ...(patch.personalPalette !== undefined ? { personal_palette: patch.personalPalette } : {}),
   };
   if (Object.keys(personal).length > 0) {

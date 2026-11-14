@@ -8211,7 +8211,63 @@
       "dismissFailed": "I could not save that. Try again."
     }
   },
+  "OraHistory": {
+    "title": "Recent",
+    "kind": {
+      "task-added": "Added the task “{name}”.",
+      "task-undone": "Undid the task “{name}”.",
+      "shopping-item-added": "Added “{name}” to a shopping list.",
+      "shopping-item-undone": "Undid “{name}” on a shopping list."
+    },
+    "clear": "Clear recent interactions",
+    "note": "Ora keeps these lines for seven days. Clearing removes only these lines, in every Home and Personal; your tasks, shopping items and remembered lists stay.",
+    "cleared": "Recent interactions cleared. Your tasks, shopping items and remembered lists are untouched.",
+    "clearFailed": "I could not clear them. Try again."
+  },
+  "OraMemories": {
+    "title": "What Ora remembers",
+    "hint": "Only you see this. Ora uses a remembered list just to preselect it; you always confirm the change, and nothing is shared with a Home.",
+    "personal": "Personal",
+    "aHome": "a Home",
+    "empty": "Nothing yet. Tick “Remember this list” when Ora prepares a new task or shopping item.",
+    "unavailable": "I could not read what Ora remembers. Try again later.",
+    "key": {
+      "task-list": "New tasks in {place} go to “{list}”",
+      "shopping-list": "New shopping items in {place} go to “{list}”"
+    },
+    "forget": "Forget",
+    "forgetLabel": "Forget “{list}” in {place}",
+    "forgotten": "Forgotten. Ora will not use it again.",
+    "forgetFailed": "I could not forget that. Try again."
+  },
   "OraSettings": {
+    "frequencyTitle": "How often Ora speaks up",
+    "frequencyHint": "Your own choice for future prompts. It never changes your tasks or calendar, and nobody else can set it for you.",
+    "frequency": {
+      "quiet": "Quiet",
+      "balanced": "Balanced",
+      "active": "Active"
+    },
+    "frequencyHints": {
+      "quiet": "No small notes beside the button. Suggestions wait for you inside Ora.",
+      "balanced": "At most one small note a day, only when there is something useful to say.",
+      "active": "Like Balanced today: at most one small note a day. More kinds of prompts will follow the same limit."
+    },
+    "categoriesTitle": "What Ora may bring up",
+    "categoriesHint": "Turning a kind off hides those prompts everywhere. Your records and the module notifications you chose are not affected.",
+    "categories": {
+      "reminders": "Reminders",
+      "suggestions": "Suggestions",
+      "celebrations": "Celebrations"
+    },
+    "quietTitle": "Quiet hours",
+    "quietHint": "During quiet hours Ora holds back its small note. It does not save up a burst for afterwards, and you can still open Ora yourself.",
+    "quietOn": "Use quiet hours",
+    "quiet": {
+      "start": "From",
+      "end": "Until"
+    },
+    "quietZoneHint": "Times are in your own time zone. A window that ends before it starts runs past midnight.",
     "pageTitle": "Ora",
     "cardTitle": "Ora, your helper",
     "cardHint": "Hide Ora, choose its colour and how much it moves.",
@@ -8382,6 +8438,10 @@
     "overdue": "Overdue"
   },
   "OraAction": {
+    "rememberOption": "Remember “{list}” for next time",
+    "rememberedUsed": "Your remembered list is selected. You can still pick another.",
+    "rememberedSaved": "Remembered “{list}” for next time. You can forget it in Ora settings.",
+    "rememberedFailed": "I could not remember that list. Your change was saved.",
     "loading": "Getting things ready…",
     "unavailable": "I cannot prepare this right now. Nothing was changed.",
     "retry": "Try again",

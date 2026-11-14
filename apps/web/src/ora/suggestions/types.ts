@@ -36,4 +36,6 @@ export interface OraSuggestionsResponse {
 /** `POST /api/v1/ora/teaser`: the suggestion to show unprompted, or none (muted, already shown today, nothing to say). */
 export interface OraTeaserResponse {
   readonly teaser: OraSuggestion | null;
+  /** Held back for the person's quiet hours; ask again later (nothing was used up). */
+  readonly deferred?: true;
 }

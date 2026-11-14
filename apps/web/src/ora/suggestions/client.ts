@@ -50,7 +50,9 @@ export async function dismissSuggestion(input: DismissSuggestionInput): Promise<
 }
 
 /** Asks for today's teaser: the suggestion to show unprompted, or `null` (muted, shown, nothing to say). */
-export async function claimTeaser(homeId: string | null): Promise<OraSuggestion | null> {
+export async function claimTeaser(
+  homeId: string | null,
+): Promise<{ readonly teaser: OraSuggestion | null; readonly deferred: boolean }> {
   try {
     const response = await fetch("/api/v1/ora/teaser", {
       method: "POST",
@@ -59,10 +61,10 @@ export async function claimTeaser(homeId: string | null): Promise<OraSuggestion 
       credentials: "same-origin",
       cache: "no-store",
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { teaser: null, deferred: false };
     const body = (await response.json().catch(() => null)) as Partial<OraTeaserResponse> | null;
-    return body?.teaser ?? null;
+    return { teaser: body?.teaser ?? null, deferred: body?.deferred === true };
   } catch {
-    return null;
+    return { teaser: null, deferred: false };
   }
 }

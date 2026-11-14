@@ -30,6 +30,8 @@ export interface ActionDestination {
 export interface ActionPreview {
   readonly action: OraActionId;
   readonly destinations: readonly ActionDestination[];
+  /** The list the person asked Ora to remember for this change here (S47b), if still usable. */
+  readonly remembered: string | null;
 }
 
 export const actionInputSchema = z.discriminatedUnion("step", [

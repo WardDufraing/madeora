@@ -11,6 +11,7 @@ interface State {
   list: unknown;
   taskLists: unknown;
   shoppingLists: unknown;
+  remembered: string | null;
 }
 const state = vi.hoisted((): State => ({
   rpc: [],
@@ -19,6 +20,7 @@ const state = vi.hoisted((): State => ({
   list: { status: "not-found" },
   taskLists: { status: "ok", value: [] },
   shoppingLists: { status: "ok", value: [] },
+  remembered: null,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -30,6 +32,10 @@ vi.mock("@/auth/supabase-server", () => ({
         return Promise.resolve(state.rpcResult);
       },
     }),
+}));
+vi.mock("@/ora/memories/server", () => ({
+  loadRemembered: (_context: unknown, _action: unknown, destinations: { id: string }[]) =>
+    Promise.resolve(destinations.some((d) => d.id === state.remembered) ? state.remembered : null),
 }));
 vi.mock("@/tasks/data", () => ({
   getTask: () => Promise.resolve(state.task),
@@ -54,6 +60,7 @@ const undoInput = { step: "undo" as const, id: ID, listId: LIST, expectedRevisio
 const fresh = () => new Date().toISOString();
 
 beforeEach(() => {
+  state.remembered = null;
   state.rpc = [];
   state.rpcResult = { data: [{ outcome: "deleted", entry_id: "e" }], error: null };
   state.task = { status: "not-found" };
@@ -72,7 +79,11 @@ describe("prepareAction", () => {
     const result = await prepareAction(personal, "add-task");
     expect(result).toEqual({
       status: "ok",
-      preview: { action: "add-task", destinations: [{ id: "a", name: "Inbox" }] },
+      preview: {
+        action: "add-task",
+        destinations: [{ id: "a", name: "Inbox" }],
+        remembered: null,
+      },
     });
   });
 
@@ -92,6 +103,23 @@ describe("prepareAction", () => {
       "m",
       "e",
     ]);
+  });
+
+  it("preselects the remembered list only while it is still on offer", async () => {
+    state.taskLists = {
+      status: "ok",
+      value: [
+        { id: "a", name: "Inbox", archived: false },
+        { id: "b", name: "Work", archived: false },
+      ],
+    };
+    state.remembered = "b";
+    const found = await prepareAction(personal, "add-task");
+    expect(found.status === "ok" && found.preview.remembered).toBe("b");
+    // The remembered list was archived: it is not offered, so it is not preselected.
+    state.taskLists = { status: "ok", value: [{ id: "a", name: "Inbox", archived: false }] };
+    const stale = await prepareAction(personal, "add-task");
+    expect(stale.status === "ok" && stale.preview.remembered).toBeNull();
   });
 
   it("reports unavailable when the lists cannot be read", async () => {

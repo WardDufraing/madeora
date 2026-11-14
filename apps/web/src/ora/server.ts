@@ -6,7 +6,7 @@ import { cache } from "react";
 import { getVerifiedIdentity } from "@/auth/identity";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
-import { defaultOraSettings, type OraSettings } from "./settings";
+import { defaultOraSettings, isOraFrequency, type OraSettings } from "./settings";
 import { isOraMotionMode } from "./types";
 
 /**
@@ -21,7 +21,9 @@ export const getOraSettings = cache(async (): Promise<OraSettings | null> => {
   const [own, homes] = await Promise.all([
     supabase
       .from("ora_preferences")
-      .select("enabled, motion, intro, personal_palette, teasers_muted")
+      .select(
+        "enabled, motion, intro, personal_palette, teasers_muted, frequency, cat_reminders, cat_suggestions, cat_celebrations, quiet_start, quiet_end",
+      )
       .eq("user_id", identity.userId)
       .maybeSingle(),
     supabase.from("ora_home_palettes").select("home_id, palette").eq("user_id", identity.userId),
@@ -47,6 +49,16 @@ export const getOraSettings = cache(async (): Promise<OraSettings | null> => {
     enabled: row.enabled,
     motion: isOraMotionMode(row.motion) ? row.motion : defaultOraSettings.motion,
     teasersMuted: row.teasers_muted,
+    frequency: isOraFrequency(row.frequency) ? row.frequency : defaultOraSettings.frequency,
+    categories: {
+      reminders: row.cat_reminders,
+      suggestions: row.cat_suggestions,
+      celebrations: row.cat_celebrations,
+    },
+    quietHours:
+      row.quiet_start !== null && row.quiet_end !== null
+        ? { start: row.quiet_start, end: row.quiet_end }
+        : null,
     intro: row.intro === "completed" || row.intro === "skipped" ? row.intro : null,
     personalPalette: isOraPaletteKey(row.personal_palette)
       ? row.personal_palette

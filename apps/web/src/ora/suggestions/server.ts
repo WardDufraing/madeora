@@ -2,6 +2,9 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { loadOverview } from "@/ora/overview/server";
+import { getOraSettings } from "@/ora/server";
+import { inQuietHours } from "@/ora/settings";
+import { getEffectiveTimeZone } from "@/preferences/server";
 import type { OraToolContext } from "@/ora/tools/types";
 
 import type { OraSuggestion, SuggestionKind } from "./types";
@@ -43,9 +46,13 @@ export async function loadSuggestions(context: OraToolContext): Promise<Suggesti
   }
   const dismissed = new Set(data.map((row) => `${row.kind}:${row.situation}`));
 
+  // The person's own switch for suggestions; off means none, here or anywhere (S47b). In-app
+  // suggestions are shown only on request of the surface, but they are still Ora-originated prompts.
+  // Unknown settings (a failed read) fail closed: the person's choices are not guessed.
+  const settings = await getOraSettings();
   const suggestions: OraSuggestion[] = [];
   // Only a complete reading can say "you have things today"; a partial one says nothing.
-  if (!overview.incomplete) {
+  if (!overview.incomplete && settings?.categories.suggestions === true) {
     const day = overview.days.find((candidate) => candidate.date === overview.today);
     const count = day ? day.timed.length + day.untimed.length : 0;
     const candidate: OraSuggestion = { kind: "today-overview", situation: overview.today, count };
@@ -84,7 +91,12 @@ export async function dismissSuggestion(
 }
 
 export type TeaserResult =
-  | { readonly status: "ok"; readonly teaser: OraSuggestion | null }
+  | {
+      readonly status: "ok";
+      readonly teaser: OraSuggestion | null;
+      /** Held back for quiet hours: ask again later today, nothing was claimed. */
+      readonly deferred?: true;
+    }
   | { readonly status: "unavailable" };
 
 /**
@@ -93,6 +105,16 @@ export type TeaserResult =
  * use it up, and a mute or a second device cannot add another.
  */
 export async function claimTeaser(context: OraToolContext): Promise<TeaserResult> {
+  // Quiet (S47b) never interrupts: suggestions wait in the panel. Quiet hours hold the teaser back
+  // without using the day's one chance, so it can still appear once they end.
+  const settings = await getOraSettings();
+  // Unknown settings (a failed read): say nothing and claim nothing, so the day is not used up.
+  if (settings === null) return { status: "ok", teaser: null, deferred: true };
+  if (settings.frequency === "quiet") return { status: "ok", teaser: null };
+  const zone = await getEffectiveTimeZone();
+  if (inQuietHours(settings.quietHours, new Date(), zone.timeZone)) {
+    return { status: "ok", teaser: null, deferred: true };
+  }
   const loaded = await loadSuggestions(context);
   if (loaded.status !== "ok") return { status: "unavailable" };
   const first = loaded.suggestions[0];

@@ -8211,7 +8211,63 @@
       "dismissFailed": "Dat kon ik niet opslaan. Probeer het opnieuw."
     }
   },
+  "OraHistory": {
+    "title": "Recent",
+    "kind": {
+      "task-added": "De taak “{name}” toegevoegd.",
+      "task-undone": "De taak “{name}” ongedaan gemaakt.",
+      "shopping-item-added": "“{name}” aan een boodschappenlijst toegevoegd.",
+      "shopping-item-undone": "“{name}” op een boodschappenlijst ongedaan gemaakt."
+    },
+    "clear": "Recente gesprekken wissen",
+    "note": "Ora bewaart deze regels zeven dagen. Wissen verwijdert alleen deze regels, in elke Home en in Persoonlijk; je taken, boodschappen en onthouden lijsten blijven.",
+    "cleared": "Recente gesprekken gewist. Je taken, boodschappen en onthouden lijsten zijn niet aangeraakt.",
+    "clearFailed": "Wissen lukte niet. Probeer het opnieuw."
+  },
+  "OraMemories": {
+    "title": "Wat Ora onthoudt",
+    "hint": "Alleen jij ziet dit. Ora gebruikt een onthouden lijst alleen om die alvast te kiezen; jij bevestigt de wijziging altijd en er wordt niets met een Home gedeeld.",
+    "personal": "Persoonlijk",
+    "aHome": "een Home",
+    "empty": "Nog niets. Vink “Deze lijst onthouden” aan als Ora een nieuwe taak of boodschap voorbereidt.",
+    "unavailable": "Ik kon niet lezen wat Ora onthoudt. Probeer het later opnieuw.",
+    "key": {
+      "task-list": "Nieuwe taken in {place} gaan naar “{list}”",
+      "shopping-list": "Nieuwe boodschappen in {place} gaan naar “{list}”"
+    },
+    "forget": "Vergeten",
+    "forgetLabel": "“{list}” in {place} vergeten",
+    "forgotten": "Vergeten. Ora gebruikt het niet meer.",
+    "forgetFailed": "Vergeten lukte niet. Probeer het opnieuw."
+  },
   "OraSettings": {
+    "frequencyTitle": "Hoe vaak Ora zich meldt",
+    "frequencyHint": "Jouw eigen keuze voor toekomstige berichten. Het verandert nooit je taken of agenda en niemand anders kan het voor je instellen.",
+    "frequency": {
+      "quiet": "Rustig",
+      "balanced": "Gebalanceerd",
+      "active": "Actief"
+    },
+    "frequencyHints": {
+      "quiet": "Geen kleine berichten naast de knop. Suggesties wachten binnen Ora op je.",
+      "balanced": "Hooguit één klein bericht per dag, alleen als er iets nuttigs te melden is.",
+      "active": "Nu zoals Gebalanceerd: hooguit één klein bericht per dag. Meer soorten berichten volgen dezelfde grens."
+    },
+    "categoriesTitle": "Waar Ora mee mag komen",
+    "categoriesHint": "Zet je een soort uit, dan verdwijnen die berichten overal. Je gegevens en de modulemeldingen die je koos veranderen niet.",
+    "categories": {
+      "reminders": "Herinneringen",
+      "suggestions": "Suggesties",
+      "celebrations": "Vieringen"
+    },
+    "quietTitle": "Stille uren",
+    "quietHint": "In stille uren houdt Ora het kleine bericht tegen. Er wordt niets opgespaard voor daarna en je kunt Ora zelf altijd openen.",
+    "quietOn": "Stille uren gebruiken",
+    "quiet": {
+      "start": "Vanaf",
+      "end": "Tot"
+    },
+    "quietZoneHint": "Tijden gelden in je eigen tijdzone. Een venster dat eindigt voor het begint loopt door na middernacht.",
     "pageTitle": "Ora",
     "cardTitle": "Ora, je hulpje",
     "cardHint": "Verberg Ora, kies de kleur en hoeveel Ora beweegt.",
@@ -8382,6 +8438,10 @@
     "overdue": "Te laat"
   },
   "OraAction": {
+    "rememberOption": "Onthoud “{list}” voor de volgende keer",
+    "rememberedUsed": "Je onthouden lijst is gekozen. Je kunt nog steeds een andere kiezen.",
+    "rememberedSaved": "“{list}” onthouden voor de volgende keer. Je kunt het vergeten in de Ora-instellingen.",
+    "rememberedFailed": "Ik kon die lijst niet onthouden. Je wijziging is wel opgeslagen.",
     "loading": "Even voorbereiden…",
     "unavailable": "Ik kan dit nu niet voorbereiden. Er is niets gewijzigd.",
     "retry": "Opnieuw proberen",

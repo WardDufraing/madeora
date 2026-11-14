@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -20,6 +20,9 @@ import {
 } from "@/ora/actions/client";
 import { newDraft, type ActionDraft } from "@/ora/actions/draft";
 import { UNDO_WINDOW_MS, type OraActionId, type UndoResult } from "@/ora/actions/types";
+import { recordHistory } from "@/ora/history/client";
+import type { HistoryKind } from "@/ora/history/types";
+import { rememberList } from "@/ora/memories/client";
 import { OraToolError } from "@/ora/tools/client";
 import { itemNameSchema } from "@/shopping/schema";
 import { taskTitleSchema } from "@/tasks/schema";
@@ -55,6 +58,8 @@ type Phase =
       readonly listId: string;
       readonly label: string;
       readonly listName: string;
+      /** Whether Ora was asked to remember the list: saved, or the save did not go through. */
+      readonly remembered: "saved" | "failed" | null;
       readonly undo: "available" | "working" | UndoResult | "failed";
     };
 
@@ -98,6 +103,7 @@ function OraActionBody({
 }: BodyProps) {
   const t = useTranslations("OraAction");
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [initial] = useState(() => storedDraft ?? newDraft());
@@ -115,9 +121,12 @@ function OraActionBody({
     refetchOnWindowFocus: false,
   });
   const destinations = preview.data?.destinations ?? [];
+  const remembered = preview.data?.remembered ?? null;
+  // The person's own pick wins, then the list they asked Ora to remember (still usable, the server
+  // checked), then the first list. It is only a preselection: the preview shows it and they confirm.
   const listId = destinations.some((destination) => destination.id === draft.listId)
     ? draft.listId
-    : (destinations[0]?.id ?? "");
+    : (remembered ?? destinations[0]?.id ?? "");
   const listName = destinations.find((destination) => destination.id === listId)?.name ?? "";
 
   useEffect(() => {
@@ -141,6 +150,13 @@ function OraActionBody({
     // Editing after a failure keeps the preview; editing after a duplicate warning asks again.
     if (phase.kind === "failed") setPhase({ kind: "editing" });
     onDraft({ ...draft, ...patch });
+  }
+
+  // One line in Ora's seven-day history; a courtesy, so a failure is not shown.
+  function logHistory(kind: HistoryKind, label: string) {
+    void recordHistory({ homeId, kind, label })
+      .then(() => queryClient.invalidateQueries({ queryKey: ["ora", "history", userId] }))
+      .catch(() => undefined);
   }
 
   async function confirm() {
@@ -169,7 +185,25 @@ function OraActionBody({
             allowDuplicate: draft.allowDuplicate,
           });
       onDraft(undefined);
-      setPhase({ kind: "done", applied, listId, label, listName, undo: "available" });
+      logHistory(isTask ? "task-added" : "shopping-item-added", label);
+      let memory: "saved" | "failed" | null = null;
+      if (draft.remember && listId !== remembered) {
+        memory = await rememberList({ homeId, action, listId })
+          .then(() => "saved" as const)
+          .catch(() => "failed" as const);
+        if (memory === "saved") {
+          await queryClient.invalidateQueries({ queryKey: ["ora", "action", userId] });
+        }
+      }
+      setPhase({
+        kind: "done",
+        applied,
+        listId,
+        label,
+        listName,
+        remembered: memory,
+        undo: "available",
+      });
       if (!activeRef.current) announceWithUndo(applied, listId, label, listName);
     } catch (error) {
       if (error instanceof ApplyError) {
@@ -184,12 +218,20 @@ function OraActionBody({
     }
   }
 
-  async function runUndo(applied: Applied, forList: string): Promise<UndoResult | "failed"> {
+  async function runUndo(
+    applied: Applied,
+    forList: string,
+    label: string,
+  ): Promise<UndoResult | "failed"> {
     try {
-      return await undoAction(homeId, action, {
+      const result = await undoAction(homeId, action, {
         ...applied,
         ...(isTask ? {} : { listId: forList }),
       });
+      if (result === "undone") {
+        logHistory(isTask ? "task-undone" : "shopping-item-undone", label);
+      }
+      return result;
     } catch (error) {
       return error instanceof OraToolError && error.failure === "forbidden"
         ? "not-permitted"
@@ -205,7 +247,7 @@ function OraActionBody({
       action: {
         label: t("undo"),
         onAction: () => {
-          void runUndo(applied, forList).then((result) => {
+          void runUndo(applied, forList, label).then((result) => {
             toast.show({
               title: t(result === "undone" ? "undone" : undoMessageKey[result]),
               tone: result === "undone" ? "success" : "warning",
@@ -273,6 +315,13 @@ function OraActionBody({
           {undoNote ??
             t(isTask ? "doneTask" : "doneItem", { name: phase.label, list: phase.listName })}
         </p>
+        {phase.remembered ? (
+          <p role="status" className="text-helper text-fg-muted">
+            {t(phase.remembered === "saved" ? "rememberedSaved" : "rememberedFailed", {
+              list: phase.listName,
+            })}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {phase.undo === "available" || phase.undo === "working" ? (
             <Button
@@ -282,7 +331,7 @@ function OraActionBody({
               onClick={() => {
                 const done = phase;
                 setPhase({ ...done, undo: "working" });
-                void runUndo(done.applied, done.listId).then((result) => {
+                void runUndo(done.applied, done.listId, done.label).then((result) => {
                   setPhase({ ...done, undo: result });
                 });
               }}
@@ -384,6 +433,29 @@ function OraActionBody({
             label: destination.name,
           }))}
         />
+      ) : null}
+
+      {destinations.length > 1 ? (
+        <>
+          {remembered !== null && remembered === listId ? (
+            <p className="text-helper text-fg-muted" data-testid="ora-action-remembered">
+              {t("rememberedUsed")}
+            </p>
+          ) : null}
+          {listId !== remembered ? (
+            <label className="flex cursor-pointer items-center gap-3 text-helper">
+              <input
+                type="checkbox"
+                checked={draft.remember}
+                onChange={(event) => {
+                  update({ remember: event.target.checked });
+                }}
+                className="size-5 shrink-0 cursor-pointer accent-accent"
+              />
+              {t("rememberOption", { list: listName })}
+            </label>
+          ) : null}
+        </>
       ) : null}
 
       <p

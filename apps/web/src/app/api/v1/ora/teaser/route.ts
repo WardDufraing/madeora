@@ -34,5 +34,8 @@ export async function POST(request: Request): Promise<Response> {
 
   const result = await claimTeaser(resolved.context);
   if (result.status !== "ok") return json(200, none);
-  return json(200, { teaser: result.teaser } satisfies OraTeaserResponse);
+  return json(200, {
+    teaser: result.teaser,
+    ...(result.deferred ? { deferred: true } : {}),
+  } satisfies OraTeaserResponse);
 }

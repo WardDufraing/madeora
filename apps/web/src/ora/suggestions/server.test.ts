@@ -1,3 +1,5 @@
+import { defaultOraSettings, type OraSettings } from "@/ora/settings";
+
 import { claimTeaser, dismissSuggestion, loadSuggestions } from "./server";
 
 interface State {
@@ -9,6 +11,7 @@ interface State {
   filters: [string, string][];
   claim: { data: boolean | null; error: { code: string } | null };
   claims: unknown[];
+  settings: OraSettings | null;
 }
 const state = vi.hoisted((): State => ({
   overview: {
@@ -26,10 +29,15 @@ const state = vi.hoisted((): State => ({
   filters: [],
   claim: { data: true, error: null },
   claims: [],
+  settings: null,
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/ora/overview/server", () => ({ loadOverview: () => Promise.resolve(state.overview) }));
+vi.mock("@/ora/server", () => ({ getOraSettings: () => Promise.resolve(state.settings) }));
+vi.mock("@/preferences/server", () => ({
+  getEffectiveTimeZone: () => Promise.resolve({ timeZone: "UTC" }),
+}));
 vi.mock("@/auth/supabase-server", () => ({
   createSupabaseServerClient: () =>
     Promise.resolve({
@@ -69,6 +77,7 @@ beforeEach(() => {
   state.filters = [];
   state.claim = { data: true, error: null };
   state.claims = [];
+  state.settings = defaultOraSettings;
   state.overview = {
     status: "ok",
     overview: {
@@ -178,5 +187,47 @@ describe("claimTeaser", () => {
   it("is unavailable when the claim fails", async () => {
     state.claim = { data: null, error: { code: "XX000" } };
     expect(await claimTeaser(personal)).toEqual({ status: "unavailable" });
+  });
+
+  describe("proactive controls (S47b)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("says nothing when the person turned suggestions off", async () => {
+      state.settings = {
+        ...defaultOraSettings,
+        categories: { ...defaultOraSettings.categories, suggestions: false },
+      };
+      expect(await loadSuggestions(personal)).toMatchObject({ status: "ok", suggestions: [] });
+      expect(await claimTeaser(personal)).toEqual({ status: "ok", teaser: null });
+      expect(state.claims).toEqual([]);
+    });
+
+    it("fails closed when the settings cannot be read", async () => {
+      state.settings = null;
+      expect(await loadSuggestions(personal)).toMatchObject({ status: "ok", suggestions: [] });
+      expect(await claimTeaser(personal)).toEqual({ status: "ok", teaser: null, deferred: true });
+      expect(state.claims).toEqual([]);
+    });
+
+    it("never claims a teaser in Quiet mode", async () => {
+      state.settings = { ...defaultOraSettings, frequency: "quiet" };
+      expect(await claimTeaser(personal)).toEqual({ status: "ok", teaser: null });
+      expect(state.claims).toEqual([]);
+    });
+
+    it("holds the teaser back, without using the day, during quiet hours", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-16T23:30:00Z"));
+      state.settings = { ...defaultOraSettings, quietHours: { start: "22:00", end: "07:00" } };
+      expect(await claimTeaser(personal)).toEqual({ status: "ok", teaser: null, deferred: true });
+      expect(state.claims).toEqual([]);
+      vi.setSystemTime(new Date("2026-11-17T07:00:00Z"));
+      expect(await claimTeaser(personal)).toMatchObject({
+        status: "ok",
+        teaser: { kind: "today-overview" },
+      });
+    });
   });
 });

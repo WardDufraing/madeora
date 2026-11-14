@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
+import { loadRemembered } from "@/ora/memories/server";
 import { getShoppingList, listShoppingLists } from "@/shopping/data";
 import { getTask, listTaskLists } from "@/tasks/data";
 
@@ -31,25 +32,29 @@ export async function prepareAction(
   if (action === "add-task") {
     const lists = await listTaskLists(homeId, false);
     if (lists.status !== "ok") return { status: "unavailable" };
+    const destinations = lists.value
+      .filter((list) => !list.archived)
+      .map((list) => ({ id: list.id, name: list.name }));
     return {
       status: "ok",
       preview: {
         action,
-        destinations: lists.value
-          .filter((list) => !list.archived)
-          .map((list) => ({ id: list.id, name: list.name })),
+        destinations,
+        remembered: await loadRemembered(context, action, destinations),
       },
     };
   }
   const lists = await listShoppingLists(homeId, false);
   if (lists.status !== "ok") return { status: "unavailable" };
+  const destinations = lists.value
+    .filter((list) => !list.archived && (list.access === "manage" || list.access === "edit"))
+    .map((list) => ({ id: list.id, name: list.name }));
   return {
     status: "ok",
     preview: {
       action,
-      destinations: lists.value
-        .filter((list) => !list.archived && (list.access === "manage" || list.access === "edit"))
-        .map((list) => ({ id: list.id, name: list.name })),
+      destinations,
+      remembered: await loadRemembered(context, action, destinations),
     },
   };
 }

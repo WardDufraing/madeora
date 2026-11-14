@@ -38,9 +38,10 @@ export function OraTeaser({
     } catch {
       // Storage unavailable: ask anyway.
     }
-    void claimTeaser(homeId).then((suggestion) => {
+    void claimTeaser(homeId).then(({ teaser: suggestion, deferred }) => {
       try {
-        window.sessionStorage.setItem(key, suggestion ? "shown" : "none");
+        // Held back for quiet hours: not remembered, so a later page load may still get it.
+        if (!deferred) window.sessionStorage.setItem(key, suggestion ? "shown" : "none");
       } catch {
         // Not remembered; the server still limits it.
       }

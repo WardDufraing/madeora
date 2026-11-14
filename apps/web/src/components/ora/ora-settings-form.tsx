@@ -14,6 +14,7 @@ import { cx } from "@/components/ui/cx";
 import { saveOraSettings, type OraSaveError, type OraSaveFailure } from "@/ora/api";
 import type { OraPatch, OraSettings } from "@/ora/settings";
 import { defaultOraSettings } from "@/ora/settings";
+import { oraFrequencies } from "@/ora/settings";
 import { oraMotionModes, type OraMotionMode } from "@/ora/types";
 
 import { OraCharacter } from "./ora-character";
@@ -146,6 +147,111 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
               {t("teasersHint")}
             </p>
           </div>
+        </div>
+      </Card>
+
+      <Card title={t("frequencyTitle")} description={t("frequencyHint")}>
+        <fieldset className="flex flex-col gap-1">
+          <legend className="sr-only">{t("frequencyTitle")}</legend>
+          {oraFrequencies.map((mode) => (
+            <RadioOption
+              key={mode}
+              name="ora-frequency"
+              value={mode}
+              label={t(`frequency.${mode}`)}
+              description={t(`frequencyHints.${mode}`)}
+              checked={current.frequency === mode}
+              onChange={() => {
+                const previous = current.frequency;
+                change(
+                  { frequency: mode },
+                  (state) => ({ ...state, frequency: mode }),
+                  (state) => ({ ...state, frequency: previous }),
+                );
+              }}
+            />
+          ))}
+        </fieldset>
+      </Card>
+
+      <Card title={t("categoriesTitle")} description={t("categoriesHint")}>
+        <div className="flex flex-col gap-3">
+          {(["reminders", "suggestions", "celebrations"] as const).map((category) => (
+            <label key={category} className="flex cursor-pointer items-center gap-3 text-body">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={current.categories[category]}
+                onChange={(event) => {
+                  const value = event.target.checked;
+                  change(
+                    { categories: { [category]: value } },
+                    (state) => ({
+                      ...state,
+                      categories: { ...state.categories, [category]: value },
+                    }),
+                    (state) => ({
+                      ...state,
+                      categories: { ...state.categories, [category]: !value },
+                    }),
+                  );
+                }}
+                className="size-5 shrink-0 cursor-pointer accent-accent"
+              />
+              {t(`categories.${category}`)}
+            </label>
+          ))}
+        </div>
+      </Card>
+
+      <Card title={t("quietTitle")} description={t("quietHint")}>
+        <div className="flex flex-col gap-3">
+          <label className="flex cursor-pointer items-center gap-3 text-body">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={current.quietHours !== null}
+              onChange={(event) => {
+                const previous = current.quietHours;
+                const next = event.target.checked ? { start: "22:00", end: "07:00" } : null;
+                change(
+                  { quietHours: next },
+                  (state) => ({ ...state, quietHours: next }),
+                  (state) => ({ ...state, quietHours: previous }),
+                );
+              }}
+              className="size-5 shrink-0 cursor-pointer accent-accent"
+            />
+            {t("quietOn")}
+          </label>
+          {current.quietHours ? (
+            <div className="flex flex-wrap items-center gap-4">
+              {(["start", "end"] as const).map((edge) => (
+                <label key={edge} className="flex flex-col gap-1 text-helper text-fg-muted">
+                  {t(`quiet.${edge}`)}
+                  <input
+                    type="time"
+                    value={current.quietHours?.[edge] ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const window = current.quietHours;
+                      // A cleared or equal time is not a window; the control keeps the old one.
+                      if (!window || !/^\d{2}:\d{2}$/.test(value)) return;
+                      const next = { ...window, [edge]: value };
+                      if (next.start === next.end) return;
+                      change(
+                        { quietHours: next },
+                        (state) => ({ ...state, quietHours: next }),
+                        (state) => ({ ...state, quietHours: window }),
+                      );
+                    }}
+                    className="rounded-control border border-line bg-surface px-3 py-2 text-body text-fg"
+                  />
+                </label>
+              ))}
+            </div>
+          ) : null}
+          <p className="text-helper text-fg-muted">{t("quietZoneHint")}</p>
         </div>
       </Card>
 

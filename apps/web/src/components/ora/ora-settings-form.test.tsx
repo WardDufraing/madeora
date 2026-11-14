@@ -66,6 +66,34 @@ describe("Ora settings", () => {
     expect(screen.getByRole("radio", { name: "Reactions only" })).not.toBeChecked();
   });
 
+  it("saves the frequency, each category switch and quiet hours, and puts a refused change back (S47b)", async () => {
+    const user = userEvent.setup();
+    setup();
+    expect(screen.getByRole("radio", { name: "Balanced" })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: "Quiet" }));
+    await user.click(screen.getByRole("switch", { name: "Celebrations" }));
+    await user.click(screen.getByRole("switch", { name: "Use quiet hours" }));
+    await waitFor(() => {
+      expect(bodies).toEqual([
+        { frequency: "quiet" },
+        { categories: { celebrations: false } },
+        { quietHours: { start: "22:00", end: "07:00" } },
+      ]);
+    });
+    expect(screen.getByLabelText("From")).toHaveValue("22:00");
+    await user.click(screen.getByRole("switch", { name: "Use quiet hours" }));
+    await waitFor(() => {
+      expect(bodies.at(-1)).toEqual({ quietHours: null });
+    });
+    expect(screen.queryByLabelText("From")).toBeNull();
+
+    status = 500;
+    await user.click(screen.getByRole("switch", { name: "Suggestions" }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "Suggestions" })).toBeChecked();
+    });
+  });
+
   it("shows nine named colours for Personal and for each Home, Heather selected by default", () => {
     setup();
     const personal = screen.getByRole("group", { name: "Personal" });

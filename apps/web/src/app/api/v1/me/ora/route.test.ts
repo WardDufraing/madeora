@@ -74,6 +74,34 @@ describe("PATCH /api/v1/me/ora", () => {
     );
   });
 
+  it("maps frequency, category switches and quiet hours to the person's own columns (S47b)", async () => {
+    await patch({ frequency: "quiet", categories: { celebrations: false, reminders: true } });
+    expect(state.upsert).toHaveBeenLastCalledWith(
+      "ora_preferences",
+      { user_id: "user-a", frequency: "quiet", cat_celebrations: false, cat_reminders: true },
+      { onConflict: "user_id" },
+    );
+    await patch({ quietHours: { start: "22:00", end: "07:00" } });
+    expect(state.upsert).toHaveBeenLastCalledWith(
+      "ora_preferences",
+      { user_id: "user-a", quiet_start: "22:00", quiet_end: "07:00" },
+      { onConflict: "user_id" },
+    );
+    await patch({ quietHours: null });
+    expect(state.upsert).toHaveBeenLastCalledWith(
+      "ora_preferences",
+      { user_id: "user-a", quiet_start: null, quiet_end: null },
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("refuses a bad time or window without writing", async () => {
+    state.upsert.mockClear();
+    expect((await patch({ quietHours: { start: "25:00", end: "07:00" } })).status).toBe(400);
+    expect((await patch({ quietHours: { start: "08:00", end: "08:00" } })).status).toBe(400);
+    expect(state.upsert).not.toHaveBeenCalled();
+  });
+
   it("records the introduction and the Personal colour", async () => {
     await patch({ intro: "skipped", personalPalette: "denim" });
     expect(state.upsert).toHaveBeenCalledWith(

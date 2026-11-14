@@ -22,6 +22,7 @@ import type { OverviewTarget } from "@/ora/overview/types";
 import type { OraIntroState } from "@/ora/types";
 
 import { OraAction } from "./ora-action";
+import { OraHistory } from "./ora-history";
 import { OraOverview } from "./ora-overview";
 
 export type OraStatus = "idle" | "working" | "problem";
@@ -441,6 +442,8 @@ export function OraContent({
           </ul>
         </section>
       ) : null}
+
+      <OraHistory userId={userId} homeId={homeId} active={active} />
 
       {available.some((tool) => tool.kind === "navigate" || tool.kind === "action") ? (
         <div>
