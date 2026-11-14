@@ -24,6 +24,7 @@ import type { OraIntroState } from "@/ora/types";
 import { OraAction } from "./ora-action";
 import { OraHistory } from "./ora-history";
 import { OraOverview } from "./ora-overview";
+import { OraWhy } from "./ora-why";
 
 export type OraStatus = "idle" | "working" | "problem";
 
@@ -382,6 +383,7 @@ export function OraContent({
                 <span className="min-w-0 flex-1 text-helper">
                   {t(`suggestions.${suggestion.kind}`, { count: suggestion.count })}
                 </span>
+                <OraWhy />
                 <Button
                   size="sm"
                   variant="secondary"

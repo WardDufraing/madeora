@@ -14,6 +14,7 @@ import type { OraExpression } from "@/ora/types";
 
 import { OraCharacter } from "./ora-character";
 import { OraContent, type OraStatus } from "./ora-content";
+import { OraCelebrationNote } from "./ora-celebration";
 import { OraTeaser } from "./ora-teaser";
 
 export interface OraAssistantProps {
@@ -227,6 +228,16 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
       settings.frequency === "quiet" ||
       !settings.categories.suggestions ? null : (
         <OraTeaser homeId={homeId} hidden={open} />
+      )}
+      {homeId === null ||
+      settings.frequency === "quiet" ||
+      !settings.categories.celebrations ? null : (
+        <OraCelebrationNote
+          homeId={homeId}
+          hidden={open}
+          palette={palette}
+          motion={settings.motion}
+        />
       )}
       <button
         ref={launcher}

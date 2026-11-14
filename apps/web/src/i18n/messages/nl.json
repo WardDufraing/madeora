@@ -7990,7 +7990,14 @@
     "widget": {
       "clock": "Klok",
       "chores": "Taken",
-      "shopping": "Boodschappen"
+      "shopping": "Boodschappen",
+      "ora": "Ora"
+    },
+    "ora": {
+      "label": "Ora",
+      "chores": "{count, plural, one {# taak staat open.} other {# taken staan open.}}",
+      "shopping": "{count, plural, one {# boodschap is nog nodig.} other {# boodschappen zijn nog nodig.}}",
+      "calm": "Het is rustig voor nu."
     },
     "noChores": "Er zijn nu geen taken te doen.",
     "noLists": "Geen boodschappenlijsten om te tonen.",
@@ -8053,7 +8060,8 @@
     "widget": {
       "clock": "Klok",
       "chores": "Taken",
-      "shopping": "Boodschappen"
+      "shopping": "Boodschappen",
+      "ora": "Ora"
     },
     "widgetPosition": "{position}. {name}",
     "moveUp": "Omhoog",
@@ -8203,12 +8211,19 @@
       "title": "Ora kan hier niet helpen",
       "body": "Misschien heb je hier geen toegang meer. Kies een andere plek in het menu."
     },
+    "celebration": {
+      "chore": "{points, plural, one {# punt} other {# punten}} voor “{title}”. Mooi gedaan!",
+      "several": "{count, plural, one {# taak} other {# taken}} klaar en {points, plural, one {# punt} other {# punten}} verdiend. Mooi gedaan!",
+      "dismiss": "Bedankt"
+    },
     "suggestions": {
       "title": "Suggesties",
       "today-overview": "{count, plural, one {Je hebt vandaag # ding te doen.} other {Je hebt vandaag # dingen te doen.}}",
       "open": "Toon vandaag",
       "dismiss": "Nu niet",
-      "dismissFailed": "Dat kon ik niet opslaan. Probeer het opnieuw."
+      "dismissFailed": "Dat kon ik niet opslaan. Probeer het opnieuw.",
+      "why": "Waarom zie ik dit?",
+      "whyText": "Ora toonde dit omdat je hier vandaag nog dingen open hebt. Ora kijkt alleen naar wat je op deze plek mag zien. Je kunt suggesties uitzetten in de Ora-instellingen."
     }
   },
   "OraHistory": {

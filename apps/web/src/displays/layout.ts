@@ -20,7 +20,7 @@ export const MAX_DISPLAY_WIDGETS = 8;
 export const MAX_SHOPPING_LISTS = 5;
 export const LOCK_MESSAGE_MAX = 80;
 
-export const displayWidgetTypes = ["clock", "chores", "shopping"] as const;
+export const displayWidgetTypes = ["clock", "chores", "shopping", "ora"] as const;
 export type DisplayWidgetType = (typeof displayWidgetTypes)[number];
 
 export const displayWidgetSizes = ["small", "medium", "large"] as const;
@@ -38,6 +38,11 @@ export const displayWidgetConfigs = {
     listIds: z.array(z.uuid()).max(MAX_SHOPPING_LISTS).default([]),
     count,
   }),
+  /**
+   * Ora on the wall (S47c): display-only. It has no settings, no text entry, no history and no
+   * actions; what it says is worked out from what the display already shows.
+   */
+  ora: z.strictObject({}),
 } as const;
 
 export type DisplayWidgetConfig<T extends DisplayWidgetType> = z.output<
@@ -141,6 +146,12 @@ function parseWidget(raw: z.infer<typeof widgetShapeSchema>): DisplayWidget | nu
       }
       return { id: raw.id, type: "shopping", size: raw.size, config: config.data };
     }
+    case "ora": {
+      const config = displayWidgetConfigs.ora.safeParse(raw.config);
+      return config.success
+        ? { id: raw.id, type: "ora", size: raw.size, config: config.data }
+        : null;
+    }
   }
 }
 
@@ -198,6 +209,8 @@ export function newDisplayWidget(type: DisplayWidgetType, id: string): DisplayWi
       return { id, type, size: "large", config: displayWidgetConfigs.chores.parse({}) };
     case "shopping":
       return { id, type, size: "medium", config: displayWidgetConfigs.shopping.parse({}) };
+    case "ora":
+      return { id, type, size: "small", config: displayWidgetConfigs.ora.parse({}) };
   }
 }
 

@@ -8,6 +8,8 @@ import { requestOraOpen } from "@/ora/open-event";
 import { claimTeaser, dismissSuggestion } from "@/ora/suggestions/client";
 import type { OraSuggestion } from "@/ora/suggestions/types";
 
+import { OraWhy } from "./ora-why";
+
 /**
  * The one unsolicited note Ora may show per person per day (S47; Ora design handoff). The server
  * keeps the limit across Homes and devices (asking again anywhere answers "none") and never offers
@@ -64,7 +66,7 @@ export function OraTeaser({
       <p className="text-helper">
         {t(`suggestions.${suggestion.kind}`, { count: suggestion.count })}
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
           onClick={() => {
@@ -88,6 +90,7 @@ export function OraTeaser({
         >
           {t("suggestions.dismiss")}
         </Button>
+        <OraWhy />
       </div>
     </div>
   );

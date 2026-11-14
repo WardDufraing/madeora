@@ -7,6 +7,8 @@ import type { DisplayBoardChore, DisplayBoardList } from "@/displays/board";
 import type { DisplayPreferences } from "@/displays/layout";
 import { useShoppingTexts } from "@/components/shopping/use-shopping-texts";
 
+import { OraCharacter } from "@/components/ora/ora-character";
+
 function subscribeSeconds(onChange: () => void): () => void {
   const timer = setInterval(onChange, 1_000);
   return () => {
@@ -159,6 +161,34 @@ export function DisplayShopping({
           ) : null}
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Ora on the wall (S47c; spec "Confirmed display-only Ora on wall displays"). Display-only: no text
+ * entry, no microphone, no buttons, no history, no personal content and no way to act. It says one
+ * calm, privacy-safe line worked out from the counts the display already shows (the Home's open
+ * chores and unfinished shopping items), never anything about a person, a balance or a ranking. With
+ * nothing to say it simply keeps quiet company instead of inventing something.
+ */
+export function DisplayOra({
+  chores,
+  shoppingRemaining,
+}: {
+  readonly chores: number;
+  readonly shoppingRemaining: number;
+}) {
+  const t = useTranslations("DisplayBoard");
+  const parts: string[] = [];
+  if (chores > 0) parts.push(t("ora.chores", { count: chores }));
+  if (shoppingRemaining > 0) parts.push(t("ora.shopping", { count: shoppingRemaining }));
+  return (
+    <div className="flex flex-col items-center gap-3 text-center" data-testid="display-ora">
+      <OraCharacter expression="idle" motion="none" className="w-20" label={t("ora.label")} />
+      <p className="text-section-title text-fg">
+        {parts.length > 0 ? parts.join(" ") : t("ora.calm")}
+      </p>
     </div>
   );
 }
