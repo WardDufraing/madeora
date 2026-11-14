@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 
@@ -50,6 +50,8 @@ interface FetchState {
   saveStatus: number;
   suggestions: unknown[];
   teaser: unknown;
+  history: unknown[];
+  deferred: boolean;
   /** Calls to the suggestion and teaser routes, kept apart from the tool calls. */
   other: Calls[];
   runResponses: unknown[];
@@ -63,6 +65,8 @@ const fetchState = vi.hoisted((): FetchState => ({
   saveStatus: 200,
   suggestions: [],
   teaser: null,
+  history: [],
+  deferred: false,
   other: [],
   runResponses: [],
 }));
@@ -72,6 +76,8 @@ function installFetch() {
   fetchState.other = [];
   fetchState.suggestions = [];
   fetchState.teaser = null;
+  fetchState.history = [];
+  fetchState.deferred = false;
   fetchState.runResponses = [];
   fetchState.toolsStatus = 200;
   fetchState.runStatus = 200;
@@ -82,10 +88,29 @@ function installFetch() {
     vi.fn((input: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
       const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : null;
-      if (input.startsWith("/api/v1/ora/suggestions") || input.startsWith("/api/v1/ora/teaser")) {
+      if (
+        input.startsWith("/api/v1/ora/suggestions") ||
+        input.startsWith("/api/v1/ora/teaser") ||
+        input.startsWith("/api/v1/ora/history") ||
+        input.startsWith("/api/v1/ora/memories")
+      ) {
         fetchState.other.push({ url: input, method, body });
+        if (input.startsWith("/api/v1/ora/history")) {
+          return Promise.resolve(
+            method === "GET"
+              ? Response.json({ entries: fetchState.history })
+              : Response.json({ ok: true }),
+          );
+        }
+        if (input.startsWith("/api/v1/ora/memories"))
+          return Promise.resolve(Response.json({ ok: true }));
         if (input.startsWith("/api/v1/ora/teaser")) {
-          return Promise.resolve(Response.json({ teaser: fetchState.teaser }));
+          return Promise.resolve(
+            Response.json({
+              teaser: fetchState.teaser,
+              ...(fetchState.deferred ? { deferred: true } : {}),
+            }),
+          );
         }
         return Promise.resolve(
           method === "GET"
@@ -529,6 +554,31 @@ describe("Ora assistant", () => {
       expect(screen.queryByTestId("ora-teaser")).toBeNull();
     });
 
+    it("does not ask for a teaser in Quiet mode or with suggestions switched off (S47b)", async () => {
+      setup({ frequency: "quiet" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(fetchState.other.some((call) => call.url === "/api/v1/ora/teaser")).toBe(false);
+      cleanup();
+      setup({ categories: { reminders: true, suggestions: false, celebrations: true } });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(fetchState.other.some((call) => call.url === "/api/v1/ora/teaser")).toBe(false);
+    });
+
+    it("asks again later when the teaser was only held back for quiet hours (S47b)", async () => {
+      window.sessionStorage.clear();
+      fetchState.deferred = true;
+      setup();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(window.sessionStorage.length).toBe(0);
+      expect(fetchState.other.filter((call) => call.url === "/api/v1/ora/teaser")).toHaveLength(1);
+    });
+
     it("shows no teaser when the server grants none (already shown today)", async () => {
       fetchState.teaser = null;
       setup();
@@ -640,6 +690,72 @@ describe("Ora assistant", () => {
       expect(
         within(await screen.findByTestId("ora-action-form")).getByRole("textbox", { name: /Task/ }),
       ).toHaveValue("");
+    });
+
+    it("preselects the remembered list and can remember a new choice, which the person confirms first (S47b)", async () => {
+      const user = userEvent.setup();
+      fetchState.tools = actionTools;
+      setup({ teasersMuted: true });
+      await user.click(launcher());
+      const base = preview("add-task", ["Inbox", "Home"]);
+      const second = base.preview.destinations[1];
+      fetchState.runOutput = {
+        ...base,
+        preview: { ...base.preview, remembered: second?.id ?? null },
+      };
+      await user.click(await screen.findByRole("button", { name: "Add a task" }));
+      const form = await screen.findByTestId("ora-action-form");
+      // The remembered list is only a preselection, said out loud.
+      expect(within(form).getByTestId("ora-action-remembered")).toBeInTheDocument();
+      expect(within(form).getByRole("combobox")).toHaveValue(second?.id);
+
+      await user.selectOptions(
+        within(form).getByRole("combobox"),
+        base.preview.destinations[0]?.id ?? "",
+      );
+      await user.type(within(form).getByRole("textbox", { name: /Task/ }), "Water the plants");
+      await user.click(within(form).getByRole("checkbox", { name: /Remember “Inbox”/ }));
+      fetchState.runResponses = [{ id: "x", revision: 1 }];
+      await user.click(within(form).getByRole("button", { name: "Add task" }));
+      const done = await screen.findByTestId("ora-action-done");
+      expect(await within(done).findByText(/Remembered “Inbox”/)).toBeInTheDocument();
+      const saved = fetchState.other.find(
+        (call) => call.method === "POST" && call.url === "/api/v1/ora/memories",
+      );
+      expect(saved?.body).toMatchObject({ homeId: null, action: "add-task" });
+      // A line of history was kept too.
+      expect(
+        fetchState.other.find(
+          (call) => call.method === "POST" && call.url === "/api/v1/ora/history",
+        )?.body,
+      ).toMatchObject({ homeId: null, kind: "task-added", label: "Water the plants" });
+    });
+
+    it("shows the recent history and clears it on request, touching nothing else (S47b)", async () => {
+      const user = userEvent.setup();
+      fetchState.history = [
+        {
+          id: "h1",
+          kind: "task-added",
+          label: "Water the plants",
+          createdAt: "2026-11-16T09:00:00Z",
+        },
+      ];
+      setup({ teasersMuted: true });
+      await user.click(launcher());
+      const surface = screen.getByTestId("ora-surface");
+      expect(
+        await within(surface).findByText(/Added the task “Water the plants”/),
+      ).toBeInTheDocument();
+      fetchState.history = [];
+      await user.click(within(surface).getByRole("button", { name: "Clear recent interactions" }));
+      expect(await within(surface).findByText(/Recent interactions cleared/)).toBeInTheDocument();
+      expect(
+        fetchState.other.some(
+          (call) => call.method === "DELETE" && call.url === "/api/v1/ora/history",
+        ),
+      ).toBe(true);
+      expect(surface).toHaveFocus();
     });
 
     it("says there is nowhere to add to instead of offering a button that cannot work", async () => {

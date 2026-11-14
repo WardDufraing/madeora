@@ -14,10 +14,19 @@ export interface ActionDraft {
   readonly recordId: string;
   /** The person chose to add an item that is already on the list. */
   readonly allowDuplicate: boolean;
+  /** Ask Ora to remember the chosen list for next time (S47b); off unless the person ticks it. */
+  readonly remember: boolean;
 }
 
 export type ActionDrafts = Partial<Record<OraActionId, ActionDraft | undefined>>;
 
 export function newDraft(): ActionDraft {
-  return { text: "", due: "", listId: "", recordId: crypto.randomUUID(), allowDuplicate: false };
+  return {
+    text: "",
+    due: "",
+    listId: "",
+    recordId: crypto.randomUUID(),
+    allowDuplicate: false,
+    remember: false,
+  };
 }

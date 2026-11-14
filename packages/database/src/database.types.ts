@@ -486,36 +486,133 @@ export type Database = {
           },
         ];
       };
-      ora_preferences: {
+      ora_interactions: {
         Row: {
           created_at: string;
-          enabled: boolean;
-          intro: string | null;
-          last_teaser_on: string | null;
-          motion: string;
-          personal_palette: string;
-          teasers_muted: boolean;
+          home_id: string | null;
+          id: string;
+          kind: string;
+          label: string;
+          scope: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          home_id?: string | null;
+          id?: string;
+          kind: string;
+          label: string;
+          scope: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          home_id?: string | null;
+          id?: string;
+          kind?: string;
+          label?: string;
+          scope?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ora_interactions_membership_fkey";
+            columns: ["home_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
+      ora_memories: {
+        Row: {
+          created_at: string;
+          home_id: string | null;
+          key: string;
+          list_id: string;
+          list_name: string;
+          scope: string;
           updated_at: string;
           user_id: string;
         };
         Insert: {
           created_at?: string;
-          enabled?: boolean;
-          intro?: string | null;
-          last_teaser_on?: string | null;
-          motion?: string;
-          personal_palette?: string;
-          teasers_muted?: boolean;
+          home_id?: string | null;
+          key: string;
+          list_id: string;
+          list_name: string;
+          scope: string;
           updated_at?: string;
           user_id?: string;
         };
         Update: {
           created_at?: string;
+          home_id?: string | null;
+          key?: string;
+          list_id?: string;
+          list_name?: string;
+          scope?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ora_memories_membership_fkey";
+            columns: ["home_id", "user_id"];
+            isOneToOne: false;
+            referencedRelation: "home_memberships";
+            referencedColumns: ["home_id", "user_id"];
+          },
+        ];
+      };
+      ora_preferences: {
+        Row: {
+          cat_celebrations: boolean;
+          cat_reminders: boolean;
+          cat_suggestions: boolean;
+          created_at: string;
+          enabled: boolean;
+          frequency: string;
+          intro: string | null;
+          last_teaser_on: string | null;
+          motion: string;
+          personal_palette: string;
+          quiet_end: string | null;
+          quiet_start: string | null;
+          teasers_muted: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          cat_celebrations?: boolean;
+          cat_reminders?: boolean;
+          cat_suggestions?: boolean;
+          created_at?: string;
           enabled?: boolean;
+          frequency?: string;
           intro?: string | null;
           last_teaser_on?: string | null;
           motion?: string;
           personal_palette?: string;
+          quiet_end?: string | null;
+          quiet_start?: string | null;
+          teasers_muted?: boolean;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          cat_celebrations?: boolean;
+          cat_reminders?: boolean;
+          cat_suggestions?: boolean;
+          created_at?: string;
+          enabled?: boolean;
+          frequency?: string;
+          intro?: string | null;
+          last_teaser_on?: string | null;
+          motion?: string;
+          personal_palette?: string;
+          quiet_end?: string | null;
+          quiet_start?: string | null;
           teasers_muted?: boolean;
           updated_at?: string;
           user_id?: string;
