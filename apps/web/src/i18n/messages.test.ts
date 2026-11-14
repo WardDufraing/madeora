@@ -202,7 +202,20 @@ describe("message dictionaries", () => {
         ...withPrefix("palettes.", oraPaletteKeys),
         ...withPrefix("motion.", ["gentle", "reactions", "none"]),
         ...withPrefix("motionHints.", ["gentle", "reactions", "none"]),
+        // Ora controls (S47b).
+        ...withPrefix("frequency.", ["quiet", "balanced", "active"]),
+        ...withPrefix("frequencyHints.", ["quiet", "balanced", "active"]),
+        ...withPrefix("categories.", ["reminders", "suggestions", "celebrations"]),
+        ...withPrefix("quiet.", ["start", "end"]),
       ],
+      // Ora history and memories (S47b): looked up by entry kind and memory key.
+      OraHistory: withPrefix("kind.", [
+        "task-added",
+        "task-undone",
+        "shopping-item-added",
+        "shopping-item-undone",
+      ]),
+      OraMemories: withPrefix("key.", ["task-list", "shopping-list"]),
       // Household Displays (S44): widget types, presentation options and outcome codes.
       DisplayBoard: [
         ...withPrefix("widget.", displayWidgetTypes),
