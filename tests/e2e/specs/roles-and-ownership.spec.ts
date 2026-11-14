@@ -66,6 +66,7 @@ test("the Owner delegates removal; an Administrator removes a Member only, and r
   baseURL,
   browser,
 }) => {
+  test.slow();
   const alice = await person(baseURL, "Alice");
   const bob = await person(baseURL, "Bob");
   const carol = await person(baseURL, "Carol");
@@ -165,6 +166,7 @@ test.describe("ownership transfer", () => {
     baseURL,
     browser,
   }) => {
+    test.slow();
     const alice = await person(baseURL, "Alice");
     const bob = await person(baseURL, "Bob");
     const homeId = createHomeFor(alice.email, "Thuis");

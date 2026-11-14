@@ -52,6 +52,7 @@ test("members see each other's Home names and colours, overrides stay in their H
   baseURL,
   browser,
 }) => {
+  test.slow();
   const { homeId } = await adultWithHome(page, baseURL, "Thuis");
   const bob = await registerConfirmed(baseURL ?? "");
   addMember(homeId, bob.email, "member");

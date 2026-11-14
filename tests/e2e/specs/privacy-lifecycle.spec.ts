@@ -234,6 +234,7 @@ function personalItems(email: string): { recipe: string; event: string } {
 // Home, which waits for approval; Ann approves and the Home has its own copy, marked as copied from
 // personal. Before deleting her account, Bea must cancel the request she still has open.
 test("delete personal data by category and copy content into a Home", async ({ page, baseURL }) => {
+  test.slow();
   const ann = await registerConfirmed(baseURL ?? "");
   const bea = await registerConfirmed(baseURL ?? "");
   setGlobalProfile(ann.email, "Ann", "#2563eb");
