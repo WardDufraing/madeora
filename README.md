@@ -1,6 +1,6 @@
 # Madeora
 
-Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, adult account security and activity history, privacy reviews, exports and deletion, Home membership and invitations, child profiles and restricted household-device access, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, personal and Home goals, native and Google-connected personal and Home calendars, Home pets and pet care, personal and Home photo libraries, private personal points and rewards, notifications, private file storage, and recovery tools. The wider product plan also covers additional modules and the permission-aware assistant Ora; see the binding product documents for approved scope.
+Madeora is a modular personal-life and household coordination application. A person can use it alone or belong to several Homes, with personal and shared dashboards. The current codebase includes account preferences, adult account security and activity history, privacy reviews, exports and deletion, Home membership and invitations, child profiles and restricted household-device access, tasks, task calendars, chores, Home vacations and absences, Home points and rewards, recipes, meal planning, shopping lists, personal and Home habits, personal and Home goals, native and Google-connected personal and Home calendars, Home pets and pet care, personal and Home photo libraries, private personal points and rewards, notifications, private file storage, paired household displays, the permission-aware Ora assistant, and recovery tools. The wider product plan also covers additional modules; see the binding product documents for approved scope.
 
 ## Repository
 
@@ -44,6 +44,8 @@ The repository currently contains working code for the application shell and the
 - Home pet profiles, privacy-separated medical details and documents, per-member medical access, scheduled care with assignments and reminders, vacation-aware care counts, trash recovery and a pet-care widget.
 - Personal and Home photo libraries with processed private images and derivatives, multi-album membership, cross-Home album sharing and contribution, impact-reviewed deletion, trash recovery and configurable photo widgets.
 - Private personal points ledgers and self-defined rewards, with previewed adjustments, one-time reversals, redemption limits, fulfillment outcomes and a personal-only dashboard widget, kept separate from every Home ledger.
+- Paired household displays with manager-reviewed, single-use device pairing; independent clock, chore and shopping layouts; privacy/party locking; optional member chore actions; display-scoped sessions; offline-safe fallbacks; and rename, revoke and reset controls.
+- Ora as a persistent Personal/Home assistant surface with personal settings and per-Home colours, permission-filtered navigation and daily/weekly overviews, dismissible suggestions and muted teasers, and explicitly confirmed task/shopping-item creation with a five-minute safe undo window.
 - Notifications and notification preferences.
 - Private file storage, trash and recovery.
 
