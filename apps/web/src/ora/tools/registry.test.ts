@@ -182,3 +182,17 @@ describe("Ora tools: guided changes (S47)", () => {
     expect(runTool(home("member"), "add-shopping-item")).toEqual({ status: "forbidden" });
   });
 });
+
+describe("Ora tools: task edits (S47d)", () => {
+  it("offers completing a task and changing a due date in Personal space and where tasks may be seen", () => {
+    for (const context of [personal, home("member"), home("owner")]) {
+      expect(ids(context)).toEqual(expect.arrayContaining(["complete-task", "change-task-due"]));
+      expect(findInputTool(context, "complete-task")?.kind).toBe("action");
+    }
+  });
+
+  it("runs them only through the input path, never as a tool without input", () => {
+    expect(runTool(personal, "complete-task")).toEqual({ status: "forbidden" });
+    expect(runTool(home("member"), "change-task-due")).toEqual({ status: "forbidden" });
+  });
+});

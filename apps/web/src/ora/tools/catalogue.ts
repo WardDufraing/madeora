@@ -224,4 +224,35 @@ export const oraInputToolCatalogue: readonly OraInputToolDefinition[] = [
     quick: true,
     requires: { scope: "home", action: "home.shopping.create" },
   },
+  // Editing an existing task (S47d). A Home member needs the module's own edit right, which the
+  // database checks per task (creator, assignee or task manager); the registry only admits people who
+  // may see tasks here, and the picker lists only what the module reports they can act on.
+  {
+    id: "complete-task",
+    kind: "action",
+    group: "tasks",
+    quick: false,
+    requires: { scope: "personal" },
+  },
+  {
+    id: "complete-task",
+    kind: "action",
+    group: "tasks",
+    quick: false,
+    requires: { scope: "home", action: "home.tasks.view" },
+  },
+  {
+    id: "change-task-due",
+    kind: "action",
+    group: "tasks",
+    quick: false,
+    requires: { scope: "personal" },
+  },
+  {
+    id: "change-task-due",
+    kind: "action",
+    group: "tasks",
+    quick: false,
+    requires: { scope: "home", action: "home.tasks.view" },
+  },
 ];

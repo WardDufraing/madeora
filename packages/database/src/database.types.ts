@@ -3572,6 +3572,30 @@ export type Database = {
         Args: { p_home_id: string; p_reason: string };
         Returns: string;
       };
+      ora_undo_shopping_item: {
+        Args: { p_expected_revision: number; p_item_id: string };
+        Returns: {
+          outcome: string;
+        }[];
+      };
+      ora_undo_task_completion: {
+        Args: { p_expected_completed_at: string; p_task_id: string };
+        Returns: {
+          outcome: string;
+        }[];
+      };
+      ora_undo_task_create: {
+        Args: { p_expected_revision: number; p_task_id: string };
+        Returns: {
+          outcome: string;
+        }[];
+      };
+      ora_undo_task_due: {
+        Args: { p_expected_revision: number; p_previous_due?: string; p_task_id: string };
+        Returns: {
+          outcome: string;
+        }[];
+      };
       pause_habit: {
         Args: {
           p_dry_run?: boolean;

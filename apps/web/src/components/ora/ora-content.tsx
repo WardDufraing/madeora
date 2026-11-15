@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { contextHref, primaryNav } from "@/components/shell/nav-items";
 import type { ActionDraft, ActionDrafts } from "@/ora/actions/draft";
-import { isOraActionId, type OraActionId } from "@/ora/actions/types";
+import { isOraActionId, isTaskEditAction, type OraActionId } from "@/ora/actions/types";
 import { saveOraSettings } from "@/ora/api";
 import { dismissSuggestion, fetchSuggestions } from "@/ora/suggestions/client";
 import type { OraSuggestion } from "@/ora/suggestions/types";
@@ -22,6 +22,7 @@ import type { OverviewTarget } from "@/ora/overview/types";
 import type { OraIntroState } from "@/ora/types";
 
 import { OraAction } from "./ora-action";
+import { OraTaskAction } from "./ora-task-action";
 import { OraHistory } from "./ora-history";
 import { OraOverview } from "./ora-overview";
 import { OraWhy } from "./ora-why";
@@ -262,25 +263,25 @@ export function OraContent({
   }
 
   if (view === "action" && available.some((tool) => tool.id === actionId)) {
-    return (
-      <OraAction
-        key={actionId}
-        action={actionId}
-        userId={userId}
-        homeId={homeId}
-        contextName={contextName}
-        active={active}
-        draft={drafts[actionId]}
-        onDraft={(draft: ActionDraft | undefined) => {
-          setDrafts((previous) => ({ ...previous, [actionId]: draft }));
-        }}
-        onBack={() => {
-          setView("main");
-        }}
-        onNavigated={onNavigated}
-        onStatus={onStatus}
-      />
-    );
+    const common = {
+      userId,
+      homeId,
+      contextName,
+      active,
+      draft: drafts[actionId],
+      onDraft: (draft: ActionDraft | undefined) => {
+        setDrafts((previous) => ({ ...previous, [actionId]: draft }));
+      },
+      onBack: () => {
+        setView("main");
+      },
+      onNavigated,
+      onStatus,
+    };
+    if (isTaskEditAction(actionId)) {
+      return <OraTaskAction key={actionId} action={actionId} {...common} />;
+    }
+    return <OraAction key={actionId} action={actionId} {...common} />;
   }
 
   if (view === "help") {
