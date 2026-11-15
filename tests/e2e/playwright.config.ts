@@ -23,6 +23,11 @@ export default defineConfig({
   // build and the local Supabase stack): different long specs timed out in each run, always on a
   // 5 s assertion wait, never on a wrong value. Assertion waits keep their own limits.
   timeout: 60_000,
+  // The 5 s default assertion wait is as tight: on the loaded runner a save followed by a page
+  // change, an upload finishing or a mail arriving regularly took longer, and a different spec
+  // failed in each run, always on a "not found yet" wait and never on a wrong value. A passing
+  // assertion returns as soon as it holds, so this only lets slow-but-correct steps finish.
+  expect: { timeout: 15_000 },
   retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {

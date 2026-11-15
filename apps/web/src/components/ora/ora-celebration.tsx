@@ -13,6 +13,12 @@ import { OraCharacter } from "./ora-character";
 
 /** How often (while the page is visible and Ora is closed) Ora checks for a fresh award. */
 const CHECK_EVERY_MS = 90_000;
+/**
+ * A tab asks at most this often per Home. Full page loads and tab switches are frequent, and every
+ * ask verifies the session and reads settings and the ledger, so asking on each one would add load
+ * for no gain: an award stays claimable for 15 minutes.
+ */
+const MIN_ASK_GAP_MS = 60_000;
 /** A celebration is short-lived: it steps away by itself. */
 const SHOW_FOR_MS = 15_000;
 
@@ -47,8 +53,16 @@ export function OraCelebrationNote({
   useEffect(() => {
     if (homeId === null || hidden) return;
     let running = false;
+    const key = `ora-celebration-asked:${homeId}`;
     const ask = () => {
       if (running || document.visibilityState === "hidden") return;
+      try {
+        const last = Number(window.sessionStorage.getItem(key));
+        if (Number.isFinite(last) && Date.now() - last < MIN_ASK_GAP_MS) return;
+        window.sessionStorage.setItem(key, String(Date.now()));
+      } catch {
+        // Storage unavailable: ask anyway (the server still de-duplicates).
+      }
       running = true;
       void claimCelebration(homeId).then(({ celebration }) => {
         running = false;

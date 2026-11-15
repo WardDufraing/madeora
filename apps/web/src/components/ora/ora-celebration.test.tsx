@@ -13,6 +13,7 @@ const answers: unknown[] = [];
 const bodies: unknown[] = [];
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   answers.length = 0;
   bodies.length = 0;
   vi.stubGlobal(
@@ -119,6 +120,19 @@ describe("Ora celebration note", () => {
       vi.advanceTimersByTime(16_000);
     });
     expect(screen.queryByTestId("ora-celebration")).toBeNull();
+  });
+
+  it("does not ask again within a minute in the same tab, however often the page loads", async () => {
+    const first = renderWithIntl(note());
+    await act(() => Promise.resolve());
+    first.unmount();
+    renderWithIntl(note());
+    await act(() => Promise.resolve());
+    expect(bodies).toHaveLength(1);
+    window.sessionStorage.clear();
+    renderWithIntl(note());
+    await act(() => Promise.resolve());
+    expect(bodies).toHaveLength(2);
   });
 
   it("asks nothing in Personal space, and nothing while Ora is open", () => {
