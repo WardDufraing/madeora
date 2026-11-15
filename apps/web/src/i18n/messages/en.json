@@ -7990,7 +7990,14 @@
     "widget": {
       "clock": "Clock",
       "chores": "Chores",
-      "shopping": "Shopping"
+      "shopping": "Shopping",
+      "ora": "Ora"
+    },
+    "ora": {
+      "label": "Ora",
+      "chores": "{count, plural, one {# chore is open.} other {# chores are open.}}",
+      "shopping": "{count, plural, one {# shopping item is still needed.} other {# shopping items are still needed.}}",
+      "calm": "All quiet for now."
     },
     "noChores": "No chores are due right now.",
     "noLists": "No shopping lists to show.",
@@ -8053,7 +8060,8 @@
     "widget": {
       "clock": "Clock",
       "chores": "Chores",
-      "shopping": "Shopping"
+      "shopping": "Shopping",
+      "ora": "Ora"
     },
     "widgetPosition": "{position}. {name}",
     "moveUp": "Move up",
@@ -8203,12 +8211,19 @@
       "title": "Ora can't help in this place",
       "body": "You may no longer have access here. Choose another place from the menu."
     },
+    "celebration": {
+      "chore": "{points, plural, one {# point} other {# points}} for “{title}”. Nicely done!",
+      "several": "{count, plural, one {# chore} other {# chores}} done and {points, plural, one {# point} other {# points}} earned. Nicely done!",
+      "dismiss": "Thanks"
+    },
     "suggestions": {
       "title": "Suggestions",
       "today-overview": "{count, plural, one {You have # thing today.} other {You have # things today.}}",
       "open": "Show today",
       "dismiss": "Not now",
-      "dismissFailed": "I could not save that. Try again."
+      "dismissFailed": "I could not save that. Try again.",
+      "why": "Why am I seeing this?",
+      "whyText": "Ora showed this because you have open things today here. It only looks at what you can see in this place. You can switch suggestions off in Ora settings."
     }
   },
   "OraHistory": {

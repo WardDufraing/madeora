@@ -32,6 +32,24 @@ describe("checkDisplayLayout", () => {
     });
   });
 
+  it("accepts the display-only Ora widget, which takes no settings and offers no actions", () => {
+    const layout = checkDisplayLayout({
+      version: 1,
+      widgets: [{ id: ID_A, type: "ora", size: "small", config: {} }],
+    });
+    expect(layout).toEqual({
+      version: 1,
+      widgets: [{ id: ID_A, type: "ora", size: "small", config: {} }],
+    });
+    expect(layout && layoutOffersActions(layout)).toBe(false);
+    expect(
+      checkDisplayLayout({
+        version: 1,
+        widgets: [{ id: ID_A, type: "ora", size: "small", config: { text: "hi" } }],
+      }),
+    ).toBeNull();
+  });
+
   it.each([
     ["a widget outside the catalogue", { id: ID_A, type: "tasks", size: "small", config: {} }],
     ["an unknown setting", { id: ID_A, type: "clock", size: "small", config: { secret: 1 } }],

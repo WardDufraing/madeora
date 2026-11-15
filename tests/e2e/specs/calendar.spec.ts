@@ -16,6 +16,21 @@ test.use({
   viewport: { width: 1280, height: 900 },
 });
 
+/**
+ * Ticks a calendar overlay box and waits until the preference is saved. The box shows the choice at
+ * once, so reloading right after ticking can cancel the save in flight and bring the old value back.
+ */
+async function tickAndSave(page: Page, testId: string) {
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/v1/calendar/preferences") &&
+      response.request().method() === "PUT" &&
+      response.ok(),
+  );
+  await page.getByTestId(testId).check();
+  await saved;
+}
+
 function isoDaysAhead(days: number): string {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + days);
@@ -122,7 +137,7 @@ test("Calendar: sharing a personal event, privacy of unshared ones, and calendar
   await expect(page.getByTestId("task-row").filter({ hasText: "Pay rent" })).toHaveCount(1);
   await page.goto(`/calendar?view=agenda&date=${isoDaysAhead(0)}`);
   await expect(page.getByTestId("calendar-overlay")).toHaveCount(0);
-  await page.getByTestId("calendar-show-tasks").check();
+  await tickAndSave(page, "calendar-show-tasks");
   const overlay = page.getByTestId("calendar-overlay").filter({ hasText: "Pay rent" });
   await expect(overlay).toContainText("Task");
   await page.reload();
@@ -138,8 +153,8 @@ test("Calendar: sharing a personal event, privacy of unshared ones, and calendar
   await expect(agenda).not.toContainText("Surprise party");
   await expect(bea.page.getByTestId("calendar-event")).toHaveCount(1);
   // Her own overlays for this Home show none of Ward's personal tasks.
-  await bea.page.getByTestId("calendar-show-tasks").check();
-  await bea.page.getByTestId("calendar-show-chores").check();
+  await tickAndSave(bea.page, "calendar-show-tasks");
+  await tickAndSave(bea.page, "calendar-show-chores");
   await expect(bea.page.getByTestId("calendar-show-chores")).toBeChecked();
   await bea.page.reload();
   await expect(bea.page.getByTestId("calendar-show-tasks")).toBeChecked();

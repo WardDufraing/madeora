@@ -50,6 +50,7 @@ interface FetchState {
   saveStatus: number;
   suggestions: unknown[];
   teaser: unknown;
+  celebration: unknown;
   history: unknown[];
   deferred: boolean;
   /** Calls to the suggestion and teaser routes, kept apart from the tool calls. */
@@ -65,6 +66,7 @@ const fetchState = vi.hoisted((): FetchState => ({
   saveStatus: 200,
   suggestions: [],
   teaser: null,
+  celebration: null,
   history: [],
   deferred: false,
   other: [],
@@ -76,6 +78,7 @@ function installFetch() {
   fetchState.other = [];
   fetchState.suggestions = [];
   fetchState.teaser = null;
+  fetchState.celebration = null;
   fetchState.history = [];
   fetchState.deferred = false;
   fetchState.runResponses = [];
@@ -91,6 +94,7 @@ function installFetch() {
       if (
         input.startsWith("/api/v1/ora/suggestions") ||
         input.startsWith("/api/v1/ora/teaser") ||
+        input.startsWith("/api/v1/ora/celebrations") ||
         input.startsWith("/api/v1/ora/history") ||
         input.startsWith("/api/v1/ora/memories")
       ) {
@@ -104,6 +108,9 @@ function installFetch() {
         }
         if (input.startsWith("/api/v1/ora/memories"))
           return Promise.resolve(Response.json({ ok: true }));
+        if (input.startsWith("/api/v1/ora/celebrations")) {
+          return Promise.resolve(Response.json({ celebration: fetchState.celebration }));
+        }
         if (input.startsWith("/api/v1/ora/teaser")) {
           return Promise.resolve(
             Response.json({
@@ -543,6 +550,36 @@ describe("Ora assistant", () => {
           (call) => call.url === "/api/v1/ora/suggestions" && call.method === "POST",
         ),
       ).toBe(true);
+    });
+
+    it("celebrates chore points awarded in a Home beside the button, and never in Personal space (S47c)", async () => {
+      fetchState.celebration = { count: 1, points: 5, title: "Dishes" };
+      setup();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.queryByTestId("ora-celebration")).toBeNull();
+      expect(fetchState.other.some((call) => call.url === "/api/v1/ora/celebrations")).toBe(false);
+      cleanup();
+      navigation.pathname = `/homes/${HOME_ID}`;
+      setup();
+      expect(await screen.findByTestId("ora-celebration")).toHaveTextContent(
+        "5 points for “Dishes”. Nicely done!",
+      );
+    });
+
+    it("does not ask for celebrations in Quiet mode or with the switch off (S47c)", async () => {
+      navigation.pathname = `/homes/${HOME_ID}`;
+      setup({ frequency: "quiet" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      cleanup();
+      setup({ categories: { reminders: true, suggestions: true, celebrations: false } });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(fetchState.other.some((call) => call.url === "/api/v1/ora/celebrations")).toBe(false);
     });
 
     it("shows no teaser, and does not even ask, for a person who muted teasers", async () => {

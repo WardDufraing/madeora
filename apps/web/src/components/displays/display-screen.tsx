@@ -18,7 +18,7 @@ import type { DisplayBoard, DisplayBoardChore } from "@/displays/board";
 import { displayColumns, widgetSpan, type DisplayWidget } from "@/displays/layout";
 
 import { DisplayLockDialog } from "./display-lock-dialog";
-import { DisplayChoreList, DisplayClock, DisplayShopping } from "./display-widgets";
+import { DisplayChoreList, DisplayClock, DisplayOra, DisplayShopping } from "./display-widgets";
 
 /** How often the display reads its board without a signal (also its heartbeat). */
 const REFRESH_MS = 60_000;
@@ -286,6 +286,13 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
             lists={board.shopping}
             listIds={widget.config.listIds}
             count={widget.config.count}
+          />
+        );
+      case "ora":
+        return (
+          <DisplayOra
+            chores={board.chores.length}
+            shoppingRemaining={board.shopping.reduce((sum, list) => sum + list.remaining, 0)}
           />
         );
     }
