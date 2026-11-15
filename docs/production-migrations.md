@@ -73,6 +73,8 @@ Each link opens one standalone migration file. Apply each file once, oldest firs
 - [`supabase/migrations/20261205090000_display_pin_no_lockout.sql`](../supabase/migrations/20261205090000_display_pin_no_lockout.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261206090000_ora_settings.sql`](../supabase/migrations/20261206090000_ora_settings.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261207090000_ora_suggestions.sql`](../supabase/migrations/20261207090000_ora_suggestions.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261208090000_ora_controls_history_memories.sql`](../supabase/migrations/20261208090000_ora_controls_history_memories.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261209090000_ora_celebrations_display.sql`](../supabase/migrations/20261209090000_ora_celebrations_display.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 
 ## One copyable migration for an empty database
 
@@ -70705,6 +70707,404 @@ grant execute on function public.claim_ora_teaser(date) to authenticated;
 
 comment on function public.claim_ora_teaser(date) is
   'S47: true once per person per local date (not while muted or Ora is off); the daily teaser limit.';
+
+-- ============================================================================
+-- supabase/migrations/20261208090000_ora_controls_history_memories.sql
+-- ============================================================================
+-- S47b: Ora proactive controls, the seven-day interaction history and remembered list choices (brief
+-- S47b; spec "Confirmed Ora proactive frequency and category controls", "seven-day rolling
+-- interaction history", "controlled long-term Ora memory").
+--
+--   public.ora_preferences     gains the person's frequency (Quiet / Balanced / Active), the three
+--                              category switches and optional quiet hours (local time, may cross
+--                              midnight). All personal: nobody, an Owner included, sets another
+--                              member's;
+--   public.ora_interactions    one short line per guided change or Undo, kept seven days. A row
+--                              belongs to the membership of its place and goes with it; it is hidden
+--                              from the person the moment they lose access to that Home. Expired rows
+--                              are invisible to every read and purged when the person adds a row;
+--   public.ora_memories        a remembered list choice ("add tasks here by default"), personal to
+--                              the person and scoped to one place. Deleted with the membership.
+-- Nothing here changes any task, shopping item or other module record.
+
+alter table public.ora_preferences
+  add column frequency text not null default 'balanced'
+    constraint ora_preferences_frequency_check check (frequency in ('quiet', 'balanced', 'active')),
+  add column cat_reminders boolean not null default true,
+  add column cat_suggestions boolean not null default true,
+  add column cat_celebrations boolean not null default true,
+  -- 'HH:MM' local time; both set or both empty. start = end is not a window.
+  add column quiet_start text
+    constraint ora_preferences_quiet_start_check check (quiet_start ~ '^([01]\d|2[0-3]):[0-5]\d$'),
+  add column quiet_end text
+    constraint ora_preferences_quiet_end_check check (quiet_end ~ '^([01]\d|2[0-3]):[0-5]\d$'),
+  add constraint ora_preferences_quiet_pair_check check (
+    (quiet_start is null and quiet_end is null)
+    or (quiet_start is not null and quiet_end is not null and quiet_start <> quiet_end)
+  );
+
+grant insert (frequency, cat_reminders, cat_suggestions, cat_celebrations, quiet_start, quiet_end)
+  on table public.ora_preferences to authenticated;
+grant update (frequency, cat_reminders, cat_suggestions, cat_celebrations, quiet_start, quiet_end)
+  on table public.ora_preferences to authenticated;
+
+-- Interaction history ---------------------------------------------------------------------------------
+
+create table public.ora_interactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  -- 'personal' or the Home's id as text.
+  scope text not null
+    constraint ora_interactions_scope_check check (scope = 'personal' or scope ~ '^[0-9a-f-]{36}$'),
+  home_id uuid,
+  kind text not null
+    constraint ora_interactions_kind_check check (kind in (
+      'task-added', 'task-undone', 'shopping-item-added', 'shopping-item-undone'
+    )),
+  -- What the person typed (a title or a name), shown back to them only.
+  label text not null
+    constraint ora_interactions_label_check check (char_length(label) between 1 and 200),
+  created_at timestamptz not null default now(),
+  constraint ora_interactions_home_check check (
+    (scope = 'personal' and home_id is null) or (scope <> 'personal' and home_id is not null and home_id::text = scope)
+  ),
+  constraint ora_interactions_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+create index ora_interactions_user_idx on public.ora_interactions (user_id, created_at desc);
+
+alter table public.ora_interactions enable row level security;
+
+comment on table public.ora_interactions is
+  'A person''s own short Ora history, seven days, per place; never a transcript (S47b).';
+
+revoke all on table public.ora_interactions from anon, authenticated;
+grant select on table public.ora_interactions to authenticated;
+grant insert (user_id, scope, home_id, kind, label) on table public.ora_interactions to authenticated;
+grant delete on table public.ora_interactions to authenticated;
+
+create policy ora_interactions_select_own on public.ora_interactions
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and created_at > now() - interval '7 days'
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_interactions.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+create policy ora_interactions_insert_own on public.ora_interactions
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_interactions.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+-- Clear recent interactions, and the purge of this person's expired rows (see the trigger below).
+create policy ora_interactions_delete_own on public.ora_interactions
+  for delete to authenticated
+  using (user_id = (select auth.uid()));
+
+-- No cron is needed for the retention promise: every read already hides expired rows, and adding a
+-- row removes this person's expired ones, so they do not linger.
+create function private.purge_expired_ora_interactions() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from public.ora_interactions
+      where user_id = new.user_id and created_at <= now() - interval '7 days';
+    return null;
+  end
+  $$;
+
+create trigger ora_interactions_purge_expired
+  after insert on public.ora_interactions
+  for each row execute function private.purge_expired_ora_interactions();
+
+revoke all on function private.purge_expired_ora_interactions() from public, anon, authenticated;
+
+-- Memories --------------------------------------------------------------------------------------------
+
+create table public.ora_memories (
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  scope text not null
+    constraint ora_memories_scope_check check (scope = 'personal' or scope ~ '^[0-9a-f-]{36}$'),
+  home_id uuid,
+  -- The closed set of things Ora can remember: which list to preselect for a guided change.
+  key text not null
+    constraint ora_memories_key_check check (key in ('task-list', 'shopping-list')),
+  list_id uuid not null,
+  -- The list's name when it was saved, so the memory can be read and corrected without opening
+  -- the module; the name is the person's own (or the Home's) and is shown only to them.
+  list_name text not null
+    constraint ora_memories_list_name_check check (char_length(list_name) between 1 and 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ora_memories_pkey primary key (user_id, scope, key),
+  constraint ora_memories_home_check check (
+    (scope = 'personal' and home_id is null) or (scope <> 'personal' and home_id is not null and home_id::text = scope)
+  ),
+  constraint ora_memories_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+alter table public.ora_memories enable row level security;
+
+comment on table public.ora_memories is
+  'A remembered list choice for one person in one place; personal, never shared (S47b).';
+
+create trigger ora_memories_set_updated_at
+  before update on public.ora_memories
+  for each row execute function private.set_updated_at();
+
+revoke all on table public.ora_memories from anon, authenticated;
+grant select on table public.ora_memories to authenticated;
+grant insert (user_id, scope, home_id, key, list_id, list_name)
+  on table public.ora_memories to authenticated;
+grant update (user_id, scope, home_id, key, list_id, list_name)
+  on table public.ora_memories to authenticated;
+grant delete on table public.ora_memories to authenticated;
+
+create policy ora_memories_select_own on public.ora_memories
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_memories.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+create policy ora_memories_insert_own on public.ora_memories
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_memories.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+create policy ora_memories_update_own on public.ora_memories
+  for update to authenticated
+  using (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_memories.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  )
+  with check (
+    user_id = (select auth.uid())
+    and (
+      home_id is null
+      or exists (
+        select 1 from public.home_memberships m
+        where m.home_id = ora_memories.home_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+-- Deleting a memory needs no Home check: removing your own remembered choice is always allowed.
+create policy ora_memories_delete_own on public.ora_memories
+  for delete to authenticated
+  using (user_id = (select auth.uid()));
+
+-- A memory stays in its place: an update may not move it to another Home or person (the app's upsert
+-- names every column in its update, so they keep their grant, unchanged).
+create function private.keep_ora_memory_place() returns trigger
+  language plpgsql set search_path = '' as $$
+  begin
+    if new.scope is distinct from old.scope or new.home_id is distinct from old.home_id
+       or new.user_id is distinct from old.user_id or new.key is distinct from old.key then
+      raise exception 'an Ora memory cannot move to another place or person'
+        using errcode = '42501';
+    end if;
+    return new;
+  end
+  $$;
+
+create trigger ora_memories_keep_place
+  before update on public.ora_memories
+  for each row execute function private.keep_ora_memory_place();
+
+-- The same gap in S47's dismissals: a Home-looking scope with no Home skipped the membership checks.
+alter table public.ora_dismissed_suggestions drop constraint ora_dismissed_home_check;
+alter table public.ora_dismissed_suggestions add constraint ora_dismissed_home_check check (
+  (scope = 'personal' and home_id is null)
+  or (scope <> 'personal' and home_id is not null and home_id::text = scope)
+);
+
+-- ============================================================================
+-- supabase/migrations/20261209090000_ora_celebrations_display.sql
+-- ============================================================================
+-- S47c: Ora celebrations for chore points and the display-only Ora widget (brief S47c; spec
+-- "Confirmed Ora subtle animated achievement celebrations", "Confirmed subtle Ora chore-point
+-- celebration presentation", "Confirmed display-only Ora on wall displays").
+--
+--   public.ora_celebrations         one row per person and points-ledger entry already celebrated.
+--                                   It is the de-duplication: the same award never cheers twice,
+--                                   whatever the device, tab, refresh or retry. It belongs to the
+--                                   membership and goes with it;
+--   public.claim_ora_celebrations   security definer. Looks only at the caller's own chore awards in
+--                                   one Home that were posted in the last 15 minutes and have not
+--                                   been reversed, claims them, and answers one grouped line. It
+--                                   claims nothing while Ora is off, Quiet is chosen or the
+--                                   celebrations switch is off;
+--   private.valid_display_layout    now also allows the settings-free "ora" widget.
+-- Nobody, an Owner included, reads or writes another member's rows.
+
+create table public.ora_celebrations (
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  home_id uuid not null,
+  -- The ledger entry (private.point_entries.id). Not a foreign key: the ledger is append-only and
+  -- private, and a celebration must outlive nothing it depends on.
+  entry_id uuid not null,
+  celebrated_at timestamptz not null default now(),
+  constraint ora_celebrations_pkey primary key (user_id, entry_id),
+  constraint ora_celebrations_membership_fkey foreign key (home_id, user_id)
+    references private.home_memberships_all (home_id, user_id) on delete cascade
+);
+
+alter table public.ora_celebrations enable row level security;
+
+comment on table public.ora_celebrations is
+  'Ledger entries Ora has already celebrated with a person; prevents duplicate cheers (S47c).';
+
+-- Rows are written only by public.claim_ora_celebrations. The person may read their own.
+revoke all on table public.ora_celebrations from anon, authenticated;
+grant select on table public.ora_celebrations to authenticated;
+
+create policy ora_celebrations_select_own on public.ora_celebrations
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.home_memberships m
+      where m.home_id = ora_celebrations.home_id and m.user_id = (select auth.uid())
+    )
+  );
+
+create index ora_celebrations_home_idx on public.ora_celebrations (home_id, user_id);
+
+-- The 15-minute window of public.claim_ora_celebrations reads only recent chore awards, so a person's
+-- whole history is not walked on every check.
+create index point_entries_recent_awards_idx on private.point_entries (account_id, created_at desc)
+  where kind = 'chore_award';
+
+-- Claims the caller's new, unreversed chore awards in p_home_id and answers
+-- {"count": n, "points": total, "title": name or null} (title only when exactly one), or null when
+-- there is nothing to celebrate. An award counts for 15 minutes after it was posted; a later ask
+-- finds it already claimed. Membership is checked first (42501 otherwise).
+create function public.claim_ora_celebrations(p_home_id uuid) returns jsonb
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user uuid := auth.uid();
+    v_prefs public.ora_preferences;
+    v_result jsonb;
+  begin
+    if v_user is null then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    if p_home_id is null or not private.is_home_member(p_home_id, v_user) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
+    select * into v_prefs from public.ora_preferences p where p.user_id = v_user;
+    if found and (not v_prefs.enabled or not v_prefs.cat_celebrations or v_prefs.frequency = 'quiet') then
+      return null;
+    end if;
+    with eligible as (
+      select e.id, e.amount, e.occurrence_id
+      from private.point_entries e
+      join private.point_accounts a on a.id = e.account_id and a.home_id = e.home_id
+      where a.user_id = v_user and e.home_id = p_home_id and e.kind = 'chore_award'
+        and e.created_at > now() - interval '15 minutes'
+        and not exists (select 1 from private.point_entries r where r.reverses_id = e.id)
+      order by e.seq desc
+      limit 20
+    ), claimed as (
+      insert into public.ora_celebrations (user_id, home_id, entry_id)
+      select v_user, p_home_id, el.id from eligible el
+      on conflict (user_id, entry_id) do nothing
+      returning entry_id
+    )
+    select pg_catalog.jsonb_build_object(
+             'count', count(*),
+             'points', sum(el.amount),
+             'title', case when count(*) = 1 then (
+               select coalesce(o.closed_title, c.title)
+               from eligible x
+               join claimed cl2 on cl2.entry_id = x.id
+               join private.chore_occurrences o on o.id = x.occurrence_id
+               join private.chores c on c.id = o.chore_id
+               limit 1) end)
+      into v_result
+      from eligible el join claimed cl on cl.entry_id = el.id
+      having count(*) > 0;
+    return v_result;
+  end
+  $$;
+
+revoke all on function public.claim_ora_celebrations(uuid) from public, anon;
+grant execute on function public.claim_ora_celebrations(uuid) to authenticated;
+
+comment on function public.claim_ora_celebrations(uuid) is
+  'S47c: claims the caller''s new unreversed chore awards in a Home and returns one grouped line, or null.';
+
+-- The display-only Ora widget has no settings: its config must be empty. A layout that already
+-- exists stays valid.
+create or replace function private.valid_display_layout(p_layout jsonb) returns boolean
+  language plpgsql immutable set search_path = '' as $$
+  declare
+    v_widget jsonb;
+    v_ids text[] := '{}';
+  begin
+    if p_layout is null or pg_catalog.jsonb_typeof(p_layout) <> 'object'
+       or p_layout -> 'version' is distinct from '1'::jsonb
+       or pg_catalog.jsonb_typeof(p_layout -> 'widgets') is distinct from 'array'
+       or pg_catalog.jsonb_array_length(p_layout -> 'widgets') > 8
+       or pg_catalog.octet_length(p_layout::text) > 8192
+       or exists (select 1 from pg_catalog.jsonb_object_keys(p_layout) k
+                  where k not in ('version', 'widgets')) then
+      return false;
+    end if;
+    for v_widget in select w from pg_catalog.jsonb_array_elements(p_layout -> 'widgets') w loop
+      if pg_catalog.jsonb_typeof(v_widget) <> 'object'
+         or coalesce(v_widget ->> 'type', '') not in ('clock', 'chores', 'shopping', 'ora')
+         or coalesce(v_widget ->> 'size', '') not in ('small', 'medium', 'large')
+         or coalesce(v_widget ->> 'id', '')
+              !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+         or pg_catalog.jsonb_typeof(v_widget -> 'config') is distinct from 'object'
+         or (v_widget ->> 'type' = 'chores' and v_widget -> 'config' ? 'actions'
+             and pg_catalog.jsonb_typeof(v_widget -> 'config' -> 'actions') <> 'boolean')
+         or (v_widget ->> 'type' = 'ora' and v_widget -> 'config' <> '{}'::jsonb)
+         or (v_widget ->> 'id') = any (v_ids) then
+        return false;
+      end if;
+      v_ids := v_ids || (v_widget ->> 'id');
+    end loop;
+    return true;
+  end
+  $$;
 ```
 
 ## Destructive reset: remove these migrations from the database
@@ -70856,7 +71256,7 @@ begin
         'update_point_settings', 'update_recipe', 'update_reward', 'update_shopping_item', 'update_shopping_list', 'update_shopping_recurrence',
         'update_task', 'update_task_comment', 'update_task_label', 'update_task_list', 'update_task_series', 'update_task_template',
         'use_trusted_device', 'withdraw_chore_proposal', 'withdraw_join_request', 'withdraw_ownership_recovery',
-        'approve_display_pairing', 'check_display_pairing_code', 'claim_ora_teaser', 'display_board', 'display_chore_attempt', 'display_chore_undo', 'display_chore_verified', 'display_lock_attempt', 'display_lock_verified', 'display_me', 'display_pairing_cancel', 'display_pairing_claim', 'display_pairing_complete', 'display_pairing_start', 'display_pairing_status', 'home_household_displays', 'household_display_config', 'rename_household_display', 'revoke_household_display', 'save_household_display_config', 'set_household_display_lock'
+        'approve_display_pairing', 'check_display_pairing_code', 'claim_ora_teaser', 'display_board', 'display_chore_attempt', 'display_chore_undo', 'display_chore_verified', 'display_lock_attempt', 'display_lock_verified', 'display_me', 'display_pairing_cancel', 'display_pairing_claim', 'display_pairing_complete', 'display_pairing_start', 'display_pairing_status', 'home_household_displays', 'household_display_config', 'rename_household_display', 'revoke_household_display', 'save_household_display_config', 'set_household_display_lock', 'claim_ora_celebrations'
       ])
   loop
     execute format('drop function if exists %s cascade', routine.signature);
@@ -70869,6 +71269,9 @@ $reset$;
 drop view if exists public.home_memberships cascade;
 
 -- Drop the Madeora public tables; CASCADE removes their policies, indexes and table triggers.
+drop table if exists public.ora_celebrations cascade;
+drop table if exists public.ora_memories cascade;
+drop table if exists public.ora_interactions cascade;
 drop table if exists public.ora_dismissed_suggestions cascade;
 drop table if exists public.ora_home_palettes cascade;
 drop table if exists public.ora_preferences cascade;
@@ -70896,7 +71299,7 @@ begin
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute
       'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000', '20261203090000', '20261204090000', '20261205090000', '20261206090000', '20261207090000']::text[];
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000', '20261203090000', '20261204090000', '20261205090000', '20261206090000', '20261207090000', '20261208090000', '20261209090000']::text[];
   end if;
 end
 $reset$;
