@@ -9,11 +9,13 @@ Targeted run: `pnpm exec vitest run src/ora src/components/ora` gave 21 files, 2
 ### MEDIUM
 
 M1. A due-date change can be offered for a task the person cannot edit, and the refusal reads as "task gone".
+
 - Where: apps/web/src/ora/actions/server.ts `prepareTaskAction`; `loadTaskEdit` returns `task: null` when `!detail.can.edit`; apps/web/src/components/ora/ora-task-action.tsx `taskGone` shows `failGone`.
 - Impact: a Home member who can see a task but is neither creator, assignee nor manager picks it and is told it no longer exists. That is untrue and confusing. ADR 0055 accepts the picker over-listing, but not the wrong message.
 - Fix: have `loadTaskEdit` return a distinct reason (`not-editable` or `gone`), or filter the picker by the edit right. List rows may expose `canComplete` (same predicate as `can_edit_task`), so filter due-change picks with it too. Show `failNotPermitted` for that case.
 
 M2. The DB test does not cover several outcome branches or the cases that are specific to this change.
+
 - Where: tests/db/rls/ora_locking_undo.test.sql.
 - Missing cases:
   - `ora_undo_task_completion` returning `list_unavailable` (list archived) and `not_permitted` (a plain Member who did not create or get assigned the task).
@@ -27,6 +29,7 @@ M2. The DB test does not cover several outcome branches or the cases that are sp
 ### LOW
 
 L1. The completion Undo requires an exact microsecond match, while the module's own reopen truncates to milliseconds (`set_shopping_item_completed` does `date_trunc('milliseconds', ...)`).
+
 - Where: migration lines for `ora_undo_task_completion` (`completed_at is distinct from p_expected_completed_at`).
 - Impact: it works today because the string travels unchanged (route returns `nullable(row.completed_at)`; client sends it unchanged; zod `z.iso.datetime({offset:true})` accepts any precision). If anything on that path converts it through a JS `Date`, Undo would always answer `conflict`. This fails safe.
 - Fix: add a unit test that a six-digit-fraction string reaches `rpc` untouched, or compare at millisecond precision like the shopping module.
@@ -44,6 +47,7 @@ L5. Undo of an add (`ora_undo_task_create`) compares only the revision. Completi
 Requirements: met. Complete-task and change-due have a picker, an exact-effect summary, an action-named confirm button (`confirmComplete` / `confirmDue`) and Undo with a five-minute window. Add-task and add-shopping-item Undo now go through `ora_undo_task_create` and `ora_undo_shopping_item`. No LLM or free text. The change goes through the module's own API (PUT completion, PATCH task) and its own functions. The migration adds no table writes of its own; the `ora_interactions` kind check is widened, and `database.types.ts` is updated.
 
 SECURITY DEFINER functions:
+
 - All four use `set search_path = ''`, qualify every object, call `private.require_confirmed_caller()` first, validate nulls with 22023, and revoke from public and anon with a grant to authenticated only. Anonymous callers are tested as denied.
 - Each takes the module's lock (`lock_task` or `lock_shopping_item`, which locks the list first and then the item) and checks the module's right (`can_delete_task`, `can_edit_task`, `shopping_may(edit)`). They then compare the revision or `completed_at` and call the module function. The module functions re-take the same locks in the same transaction, which is re-entrant. Lock order matches the module, so there is no new deadlock path.
 - The caller identity is `auth.uid()`; the wrappers never accept a user id from the client.
