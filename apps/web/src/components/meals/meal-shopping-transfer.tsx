@@ -254,7 +254,7 @@ function TransferReview({
     return (
       <FormAlert tone="info">
         {t("transferNoList")}{" "}
-        <Link href={shoppingPath(homeId)} className="font-medium text-accent-fg underline">
+        <Link href={shoppingPath(homeId)} className="font-medium text-fg underline">
           {t("openShopping")}
         </Link>
       </FormAlert>

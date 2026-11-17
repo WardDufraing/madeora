@@ -8,6 +8,7 @@ import { AccentStyle } from "@/components/accent/accent-style";
 import { AppProviders } from "@/components/auth/app-providers";
 import { OraRoot } from "@/components/ora/ora-root";
 import { AppShell } from "@/components/shell/app-shell";
+import { AppToasts } from "@/components/shell/app-toasts";
 import { listMyHomes } from "@/homes/server";
 import { countUnreadNotifications } from "@/notifications/server";
 import { getStoredPreferences } from "@/preferences/account";
@@ -34,23 +35,25 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         name={stored.displayName ?? null}
         accent={stored.accentColor ?? null}
       />
-      <AppShell
-        sidebar={sidebar}
-        homes={myHomes.status === "ok" ? myHomes.homes : null}
-        unreadNotifications={unread}
-      >
-        {reviewDue ? <SecurityReviewBanner /> : null}
-        {children}
-      </AppShell>
-      {/* Ora (S45): its own settings decide whether it shows; the rest of the app never waits on it. */}
-      <Suspense fallback={null}>
-        <OraRoot
-          userId={identity.userId}
-          homes={
-            myHomes.status === "ok" ? myHomes.homes.map(({ id, name }) => ({ id, name })) : null
-          }
-        />
-      </Suspense>
+      <AppToasts>
+        <AppShell
+          sidebar={sidebar}
+          homes={myHomes.status === "ok" ? myHomes.homes : null}
+          unreadNotifications={unread}
+        >
+          {reviewDue ? <SecurityReviewBanner /> : null}
+          {children}
+        </AppShell>
+        {/* Ora (S45): its own settings decide whether it shows; the rest of the app never waits on it. */}
+        <Suspense fallback={null}>
+          <OraRoot
+            userId={identity.userId}
+            homes={
+              myHomes.status === "ok" ? myHomes.homes.map(({ id, name }) => ({ id, name })) : null
+            }
+          />
+        </Suspense>
+      </AppToasts>
     </AppProviders>
   );
 }
