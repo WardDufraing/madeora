@@ -206,6 +206,7 @@ create or replace function public.add_habit_contribution(
     v_converted numeric;
     v_before integer;
     v_sync jsonb;
+    v_same boolean;
   begin
     if p_id is null or p_habit_id is null or p_quantity is null or p_quantity <= 0 or p_quantity > 1000000
        or p_source is null or p_source not in ('app', 'widget')
@@ -221,10 +222,11 @@ create or replace function public.add_habit_contribution(
     select * into v_existing from private.habit_contributions c where c.id = p_id;
     if v_existing.id is not null then
       -- S29-M1: the same id with another amount is a different request, never a retry.
-      if v_existing.habit_id = v_habit.id and v_existing.contributed_by = v_user_id and v_existing.on_date = p_on
-         and case when v_existing.entered_quantity is not null
-           then v_existing.entered_quantity = p_quantity and v_existing.entered_unit is not distinct from p_entered_unit
-           else coalesce(v_existing.original_quantity, v_existing.quantity) = p_quantity end then
+      v_same := v_existing.habit_id = v_habit.id and v_existing.contributed_by = v_user_id and v_existing.on_date = p_on
+        and (select case when v_existing.entered_quantity is not null
+          then v_existing.entered_quantity = p_quantity and v_existing.entered_unit is not distinct from p_entered_unit
+          else coalesce(v_existing.original_quantity, v_existing.quantity) = p_quantity end);
+      if v_same then
         return pg_catalog.jsonb_build_object('outcome', 'exists',
           'progress', private.habit_progress_json(v_habit, p_on),
           'habit', private.habit_summary_json(v_habit, v_user_id));
