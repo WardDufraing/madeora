@@ -7,7 +7,10 @@ interface State {
   identity: { userId: string } | null;
   context: { status: "ok"; role: Role } | { status: "not-found" } | { status: "unavailable" };
   directory:
-    | { status: "ok"; members: { membershipId: string; role: Role; isSelf: boolean }[] }
+    | {
+        status: "ok";
+        members: { membershipId: string; role: Role; isSelf: boolean; isChild?: boolean }[];
+      }
     | { status: "not-found" }
     | { status: "unavailable" };
   rpc: Mock<(name: string, args: Record<string, unknown>) => { data: unknown; error: unknown }>;
@@ -99,6 +102,16 @@ describe("PATCH /api/v1/homes/{homeId}/members/{membershipId}", () => {
       p_role: "administrator",
       p_expected_role: "member",
     });
+  });
+
+  it("refuses a role change on a child before calling the database (S41 review M5)", async () => {
+    state.directory = {
+      status: "ok",
+      members: [{ membershipId: MEMBER, role: "member", isSelf: false, isChild: true }],
+    };
+    const response = await patch(promote);
+    expect(response.status).toBe(403);
+    expect(state.rpc).not.toHaveBeenCalled();
   });
 
   it("treats an unchanged role as success", async () => {

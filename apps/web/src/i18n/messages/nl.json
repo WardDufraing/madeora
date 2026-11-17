@@ -5230,6 +5230,7 @@
     "previewTodayKept": "Het totaal van vandaag is {total}. De status van vandaag blijft gelijk.",
     "previewStreak": "Huidige reeks: {streak}.",
     "previewReminders": "Herinneringen blijven aan en tonen de voortgang van de dag.",
+    "previewReplacesLater": "Dit vervangt de wijziging die al gepland is voor {date} ({tracking}).",
     "confirmUnitLabel": "Ik begrijp dat de oude en nieuwe eenheid niet worden omgerekend.",
     "confirmStatusLabel": "Ik begrijp dat het afvinken van vandaag verandert.",
     "nothingToChange": "Er zou niets veranderen.",

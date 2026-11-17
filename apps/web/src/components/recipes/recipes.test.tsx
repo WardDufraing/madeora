@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { RecipeDetail, RecipeIngredient } from "@/recipes/api";
+import type * as CoverUploadModule from "@/recipes/cover-upload";
 import { emptyRecipeForm } from "@/recipes/schema";
 import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
@@ -14,6 +15,11 @@ import { RecipeServings } from "./recipe-servings";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+const coverUpload = vi.hoisted(() => ({ uploadCover: vi.fn() }));
+vi.mock("@/recipes/cover-upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof CoverUploadModule>()),
+  uploadCover: coverUpload.uploadCover,
+}));
 
 const RECIPE = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0020";
 const HOME = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
@@ -270,6 +276,45 @@ describe("the editor", () => {
     await user.type(names()[1] as HTMLInputElement, "Second");
     await user.click(screen.getByRole("button", { name: "Move Ingredient 2 up" }));
     expect(names().map((input) => input.value)).toEqual(["Second", "First"]);
+  });
+});
+
+describe("a cover that can no longer be used", () => {
+  it("goes back to the saved cover and asks for the photo again (S24 review M4)", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:cover" }));
+    coverUpload.uploadCover.mockResolvedValue("6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0099");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(409, { error: "invalid-cover" }))
+      .mockResolvedValueOnce(jsonResponse(201, { id: RECIPE, revision: 1, status: "draft" }));
+    renderWithQuery(
+      <RecipeEditor
+        mode="new"
+        recipeId={RECIPE}
+        homeId={null}
+        homes={[]}
+        initial={emptyRecipeForm()}
+      />,
+    );
+    await user.type(screen.getByLabelText("Ingredient"), "Eggs");
+    await user.upload(
+      screen.getByTestId("cover-input"),
+      new File(["x"], "cover.png", { type: "image/png" }),
+    );
+    expect(await screen.findByText("The new photo is used once you save.")).toBeInTheDocument();
+    await user.click(screen.getByTestId("recipe-save-draft"));
+    expect(
+      await screen.findByText("The photo can no longer be used. Choose it again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("The new photo is used once you save.")).not.toBeInTheDocument();
+    expect((sent(0).body.content as { coverFileId: unknown }).coverFileId).toBe(
+      "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0099",
+    );
+    await user.click(screen.getByTestId("recipe-save-draft"));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect((sent(1).body.content as { coverFileId: unknown }).coverFileId).toBeNull();
   });
 });
 

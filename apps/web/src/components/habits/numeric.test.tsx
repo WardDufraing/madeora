@@ -546,6 +546,28 @@ describe("changing the target", () => {
     });
   });
 
+  it("names the later scheduled change that saving replaces (S29 review M3)", async () => {
+    const user = userEvent.setup();
+    const replacing = {
+      ...impact,
+      today: null,
+      replacesLater: [
+        { effectiveOn: "2026-11-20", mode: "numeric", target: 3, unit: "l", unitKind: "preset" },
+      ],
+    };
+    fetchMock.mockImplementation(() =>
+      reply(200, { outcome: "preview", impact: replacing, revision: 1 }),
+    );
+    withToasts(<TrackingChangeDialog habit={numericHabitDetail()} onClose={vi.fn()} />);
+    const target = screen.getByRole("textbox", { name: "Daily target" });
+    await user.clear(target);
+    await user.type(target, "500");
+    await user.click(screen.getByRole("button", { name: "Show preview" }));
+    expect(await screen.findByTestId("habit-tracking-replaces-later")).toHaveTextContent(
+      /It replaces the change already planned for .+ \(3 L\)\./,
+    );
+  });
+
   it("offers a start today only while the unit stays the same", async () => {
     const user = userEvent.setup();
     withToasts(<TrackingChangeDialog habit={numericHabitDetail()} onClose={vi.fn()} />);
