@@ -44,6 +44,11 @@ create function tests.last_sunday(p_month integer) returns date
   select d - extract(dow from d)::integer
   from (select make_date((extract(year from current_date)::integer + 1), p_month, 31) as d) x
 $$;
+-- Sorted, comma-joined top-level keys of a JSON object (shape checks of the read path)
+create function tests.keys_of(p_json jsonb) returns text
+  language sql immutable as $$
+  select coalesce(string_agg(k, ',' order by k), '') from jsonb_object_keys(p_json) as k; $$;
+grant execute on function tests.keys_of(jsonb) to authenticated, service_role;
 create function tests.today_a() returns date
   language sql stable as $$ select (now() at time zone 'Europe/Brussels')::date; $$;
 create function tests.rem(p_task uuid) returns private.task_reminders
@@ -571,11 +576,6 @@ select tests.assert_denied(
 
 -- The read path's shape, for every reminder status (the web's reminderViewSchema in
 -- apps/web/src/tasks/reminder-data.ts mirrors these key lists; reminder-data.test.ts parses the same shapes) -----
-
-create function tests.keys_of(p_json jsonb) returns text
-  language sql immutable as $$
-  select coalesce(string_agg(k, ',' order by k), '') from jsonb_object_keys(p_json) as k; $$;
-grant execute on function tests.keys_of(jsonb) to authenticated, service_role;
 
 select tests.act_as('carol');
 select tests.assert_true(
