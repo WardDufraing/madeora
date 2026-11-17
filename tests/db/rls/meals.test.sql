@@ -31,7 +31,7 @@ insert into ids select n, gen_random_uuid() from unnest(array[
   'e-pizza', 'e-bob', 'e-shared', 'e-lasagne', 'e-p', 'e-b', 'e-view', 'e-occ', 'e-move', 'e-x',
   'e-copy-1', 'e-copy-2', 'e-copy-3', 'e-copy-4', 'e-trash',
   'se-daily', 'se-lunch', 'se-late-1', 'se-late-2', 'se-b', 'se-bad',
-  'l-a', 'l-a2', 'l-personal', 'l-b', 't-1', 't-2', 'i-1', 'i-2', 'i-3'
+  'l-a', 'l-a2', 'l-personal', 'l-b', 't-1', 't-2', 't-2b', 'i-1', 'i-2', 'i-3'
 ]) as n;
 
 create function tests.i(p_name text) returns uuid
@@ -686,13 +686,33 @@ select tests.assert_true(
       jsonb_build_array(jsonb_build_object('key', 'e:' || tests.i('e-copy-2'), 'id', tests.i('t-2'))),
       tests.i('home-a'))),
   'A retry with the original preview never copies twice');
+create temporary table replace_token on commit drop as
+  select preview ->> 'token' as token from public.preview_meal_copy(tests.d(28), tests.d(35), tests.i('home-a'));
+grant all on replace_token to authenticated;
+-- A mixed batch: one row replaces the taken dinner, the other (the lunch again, under a new id)
+-- finds its slot taken by the earlier copy and is not replaced.
+create temporary table replace_rows on commit drop as
+  select jsonb_build_array(
+    jsonb_build_object('key', 'e:' || tests.i('e-copy-1'), 'id', tests.i('t-1'), 'replace', true),
+    jsonb_build_object('key', 'e:' || tests.i('e-copy-2'), 'id', tests.i('t-2b'), 'replace', false)) as rows;
+grant all on replace_rows to authenticated;
 select tests.assert_true(
   (select (select r ->> 'outcome' from jsonb_array_elements(results) r where (r ->> 'id')::uuid = tests.i('t-1')) = 'created'
-    from public.copy_meal_week(tests.d(28), tests.d(35),
-      (select preview ->> 'token' from public.preview_meal_copy(tests.d(28), tests.d(35), tests.i('home-a'))),
-      jsonb_build_array(jsonb_build_object('key', 'e:' || tests.i('e-copy-1'), 'id', tests.i('t-1'), 'replace', true)),
-      tests.i('home-a'))),
-  'Replacing explicitly copies over the taken slot');
+    and (select r ->> 'outcome' from jsonb_array_elements(results) r where (r ->> 'id')::uuid = tests.i('t-2b')) = 'occupied'
+    from public.copy_meal_week(tests.d(28), tests.d(35), (select token from replace_token),
+      (select rows from replace_rows), tests.i('home-a'))),
+  'Replacing explicitly copies over the taken slot; the other row stays occupied');
+select tests.assert_true(
+  (select outcome = 'done'
+    and (select r ->> 'outcome' from jsonb_array_elements(results) r where (r ->> 'id')::uuid = tests.i('t-1')) = 'exists'
+    and (select r ->> 'outcome' from jsonb_array_elements(results) r where (r ->> 'id')::uuid = tests.i('t-2b')) = 'occupied'
+    from public.copy_meal_week(tests.d(28), tests.d(35), (select token from replace_token),
+      (select rows from replace_rows), tests.i('home-a'))),
+  'A retry of that mixed batch answers exists and occupied, not stale (S27-M2)');
+select tests.assert_true(
+  (select jsonb_array_length(m) = 1 and (m -> 0 ->> 'id')::uuid = tests.i('t-2')
+    from tests.at(tests.plan('home-a', 36, 36), tests.d(36), tests.slot(tests.i('home-a'), 'lunch')) m),
+  'The retry wrote nothing');
 select tests.assert_true(
   (select (m -> 0 ->> 'title') = 'Wok' and (m -> 0 ->> 'notes') = 'Pittig'
     from tests.at(tests.plan('home-a', 35, 35), tests.d(35), tests.slot(tests.i('home-a'), 'dinner')) m),

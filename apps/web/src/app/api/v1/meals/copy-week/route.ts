@@ -30,8 +30,8 @@ export async function GET(request: Request): Promise<Response> {
 
 /**
  * Copies the chosen meals of a week preview as standalone meals, each under its client id (a retry
- * answers `exists`). A preview that changed meanwhile answers `409 stale` and copies nothing; a
- * taken slot is replaced only when its row says so.
+ * answers `exists` for what it copied and writes nothing else). A preview that changed meanwhile
+ * answers `409 stale` and copies nothing; a taken slot is replaced only when its row says so.
  */
 export async function POST(request: Request): Promise<Response> {
   const input = await readMealMutation(request, copySchema, LARGE_BODY_BYTES);

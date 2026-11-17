@@ -665,6 +665,39 @@ select tests.assert_true(
   tests.flagged(tests.occ('c-rota', tests.today_a())),
   'A new occurrence on her turn is created unassigned and flagged');
 
+-- Started open-ended pauses take no advance slot (S20-M3) ----------------------------------------------
+
+-- As many chores paused indefinitely as one advance looks at (parts_per_advance, 50). With no
+-- occurrence left they sort first, before a chore that is days behind.
+select tests.act_as('alice');
+do $$
+begin
+  for i in 1..50 loop
+    insert into ids values ('c-paused-' || i, gen_random_uuid());
+    perform public.create_chore(tests.i('c-paused-' || i), tests.i('home-a'), 'Paused ' || i,
+      '{"mode": "none", "members": []}', p_frequency => 'daily', p_interval => 1, p_starts_on => tests.today_a());
+    perform public.set_chore_paused(tests.i('c-paused-' || i), tests.srev('c-paused-' || i), true);
+  end loop;
+end
+$$;
+insert into ids values ('c-starve', gen_random_uuid());
+select tests.assert_true(
+  (select outcome = 'created' from public.create_chore(tests.i('c-starve'), tests.i('home-a'), 'Mail',
+    '{"mode": "none", "members": []}', p_frequency => 'daily', p_interval => 1, p_starts_on => tests.today_a())),
+  'A daily chore behind 50 paused ones');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select count(*) = 50 from private.chore_schedules s
+   where s.chore_id in (select id from ids where name like 'c-paused-%') and s.superseded_at is null
+     and s.paused_from is not null and s.paused_until is null and s.next_date is not null
+     and s.last_date is null),
+  'The paused chores are open-ended, started, and would sort first');
+select tests.chore_shift_back('c-starve', 3);
+select tests.act_as('alice');
+select public.advance_chores(tests.i('home-a'));
+select tests.assert_true(tests.today_a() = any (tests.dates('c-starve')),
+  'The chore behind them still gets today''s occurrence');
+
 -- Audit ----------------------------------------------------------------------------------------------------
 
 select tests.act_as_owner();

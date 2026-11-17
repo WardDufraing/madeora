@@ -191,7 +191,13 @@ describe("security report files", () => {
     expect(csvCell("-1")).toBe("'-1");
     expect(csvCell('a "b", c')).toBe('"a ""b"", c"');
     const csv = buildCsv(rows, meta, labels);
-    expect(csv.startsWith("\u{FEFF}Time,Event,Result,Device,Home\r\n")).toBe(true);
+    expect(
+      csv.startsWith(
+        "\u{FEFF}Times are in Europe/Brussels.\r\n" +
+          "2026-10-01 - 2026-11-07 (Europe/Brussels); 2026-11-07 10:00:00 +01:00\r\n" +
+          "\r\nTime,Event,Result,Device,Home\r\n",
+      ),
+    ).toBe(true);
     expect(csv).toContain("2026-07-01 10:30:00 +02:00,Signed in,Completed,Safari on iPhone,\r\n");
     expect(csv).toContain(`"'=HYPERLINK(""x""), ""Home"""`);
   });

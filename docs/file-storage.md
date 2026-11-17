@@ -4,7 +4,7 @@ How Madeora stores files (S15, ADR 0019), how to change storage allowances, and 
 
 ## How it works
 
-1. The browser asks `POST /api/v1/files/upload-intents` for an upload. The database checks the type and size, the rate limit and the pool's free space under a lock, reserves the space and generates an opaque key.
+1. The browser asks `POST /api/v1/files/upload-intents` for an upload. The database checks the type and size, the rate limit (30 intents an hour and 5 pending per person; photo-library uploads have their own 120 and 25, counted apart) and the pool's free space under a lock, reserves the space and generates an opaque key.
 2. The browser puts the file straight to storage through a 5-minute signed link. Madeora never relays the bytes.
 3. `POST /api/v1/files/{id}/finalize` reads the file back, checks its real size, type and signature, re-encodes it (pictures: a 512×512 WebP without metadata) and records it with `finalize_upload`, the web app's only privileged call.
 4. Pictures are shown through `GET /api/v1/files/{id}/content`, which asks the database on every view whether this viewer may see the file, then redirects to a 60-second link.

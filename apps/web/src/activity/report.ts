@@ -90,7 +90,17 @@ export function buildCsv(
     labels.columns.device,
     labels.columns.home,
   ];
-  const lines = [header.map(csvCell).join(",")];
+  // What the file covers comes first, so it is never mistaken for a complete history: the
+  // explanation, then the range, timezone and snapshot instant (all language-neutral), then a blank
+  // line before the table.
+  const lines = [
+    ...labels.notes.map((note) => csvCell(note)),
+    csvCell(
+      `${meta.from} - ${meta.to} (${meta.timeZone}); ${zonedTimestamp(meta.snapshotAt, meta.timeZone)}`,
+    ),
+    "",
+    header.map(csvCell).join(","),
+  ];
   for (const row of rows) {
     lines.push(
       [

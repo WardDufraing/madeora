@@ -256,6 +256,7 @@ const outcomeKey = {
   unavailable: "copyOutcomeUnavailable",
   slot_unavailable: "copyOutcomeSlotUnavailable",
   missing: "copyOutcomeMissing",
+  stale: "copyOutcomeFailed",
 } as const satisfies Record<MealCopyResult["outcome"], string>;
 
 function CopyResults({

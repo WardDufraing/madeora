@@ -212,6 +212,8 @@ export const mealCopyOutcomes = [
   "unavailable",
   "slot_unavailable",
   "missing",
+  // A retry's row the first call did not copy and that changed since the preview (never written).
+  "stale",
 ] as const;
 export type MealCopyOutcome = (typeof mealCopyOutcomes)[number];
 

@@ -26,6 +26,9 @@ import { getStorage, type Storage } from "@/storage/server";
 
 const MAX_BODY_BYTES = 64;
 
+/** Seconds a finalize may run: decoding a large HEIC photo can outlast the platform default. */
+export const maxDuration = 60;
+
 type SupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 interface FileRouteContext {
