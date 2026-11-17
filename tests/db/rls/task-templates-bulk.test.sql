@@ -406,6 +406,7 @@ drop trigger refuse_low_b2 on private.tasks;
 drop function tests.refuse_low_b2();
 
 -- Labels: add, remove, replace
+select tests.act_as('carol');
 select tests.assert_true(
   (select bool_and(r.outcome = case when r.task_id = tests.i('b2') then 'changed' else 'unchanged' end)
    from public.bulk_update_tasks(array[tests.i('b1'), tests.i('b2')], 'labels', tests.revs('b1', 'b2'),

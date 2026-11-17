@@ -69,7 +69,7 @@ create function tests.reminded_user(p_task uuid, p_user text) returns bigint
   language sql stable security definer as $$
   select count(*) from public.notifications
   where kind = 'task.reminder' and params ->> 'taskId' = p_task::text and user_id = tests.user_id(p_user); $$;
-grant execute on function tests.i(text), tests.today_a(), tests.rem(uuid), tests.rrev(uuid), tests.trev(text),
+grant execute on function tests.i(text), tests.last_sunday(integer), tests.today_a(), tests.rem(uuid), tests.rrev(uuid), tests.trev(text),
   tests.occ(text, date), tests.reminded(uuid), tests.reminded_user(uuid, text) to authenticated, service_role;
 
 -- Nothing reachable --------------------------------------------------------------------------------
