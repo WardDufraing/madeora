@@ -505,6 +505,19 @@ select tests.assert_true(
 select tests.assert_true(
   (select count(*) = 3 from jsonb_array_elements(tests.habit('n-ml') -> 'trackings')),
   'The history lists every version');
+-- S29 review M3: a change says which later scheduled versions it replaces.
+select tests.assert_true(
+  (select outcome = 'preview' and jsonb_array_length(impact -> 'replacesLater') = 1
+     and impact -> 'replacesLater' -> 0 ->> 'unit' = 'cups'
+     and (impact -> 'replacesLater' -> 0 ->> 'effectiveOn')::date = tests.d(3)
+   from public.change_habit_tracking(tests.i('n-ml'), tests.rev('n-ml'), 'numeric', 3, 'l', 'preset', null,
+     'next', null, null, false, false, true)),
+  'A new target from the next day names the cups version it would replace');
+select tests.assert_true(
+  (select outcome = 'preview' and impact -> 'replacesLater' = '[]'::jsonb
+   from public.change_habit_tracking(tests.i('n-ml'), tests.rev('n-ml'), 'numeric', 6, 'cups', 'custom', null,
+     'date', tests.d(4), null, false, false, true)),
+  'A change after the last version replaces nothing');
 
 -- Presets -------------------------------------------------------------------------------------------------------------
 

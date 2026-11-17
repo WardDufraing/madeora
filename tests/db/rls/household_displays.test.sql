@@ -277,6 +277,10 @@ select tests.assert_true(
   and (select outcome from public.display_pairing_claim(tests.hd_key('s1'))) = 'invalid'
   and (select status from public.display_pairing_status(tests.hd_key('s1'))) = 'unknown',
   'A claimed request cannot be replayed');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select last_seen_at is null from private.household_displays where id = tests.hd('disp-1')),
+  'A claim alone is not the display being seen (S43 review M3): only display_me marks it');
 select tests.act_as('alice');
 select tests.assert_true(
   (select outcome from public.approve_display_pairing(tests.hd('home-a'), tests.hd('req-1'),

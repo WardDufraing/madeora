@@ -34,7 +34,7 @@ insert into ids select 'm-carol-a', id from public.home_memberships
 
 insert into ids select n, gen_random_uuid() from unnest(array[
   'l-a', 'l-a2', 'l-b', 'l-c', 'lbl-a', 's-daily', 's-weekly', 's-past', 's-carol', 's-b', 's-cap',
-  's-pause', 's-del', 's-list', 's-later'
+  's-pause', 's-del', 's-list', 's-later', 's-gone'
 ]) as n;
 
 create function tests.i(p_name text) returns uuid
@@ -483,12 +483,36 @@ select tests.assert_true(
   'Without the comment, the untouched upcoming occurrence is removed');
 select tests.assert_true(tests.dates('s-list') = array[tests.today_a(), tests.today_a() + 3],
   'Today stays, the next one is in three days');
+-- Ending a series through the schedule edit (S19 review M2): an end date before the next date ends
+-- it; only a change that would leave nothing of the chain is refused.
 select tests.assert_true(
-  (select outcome = 'ended' from public.update_task_series(tests.occ('s-list', tests.today_a()), 'series',
-    tests.rev(tests.occ('s-list', tests.today_a())), tests.srev('s-list'), false,
+  (select outcome = 'saved' and (impact ->> 'removed')::integer = 1
+     and jsonb_array_length(impact -> 'nextDates') = 0
+    from public.update_task_series(tests.occ('s-list', tests.today_a()), 'series',
+      tests.rev(tests.occ('s-list', tests.today_a())), tests.srev('s-list'), false,
+      p_set_schedule => true, p_frequency => 'daily', p_interval => 1, p_starts_on => tests.today_a() - 9,
+      p_ends_on => tests.today_a() - 1)),
+  'An end date before the next scheduled date ends the series');
+select tests.assert_true(tests.dates('s-list') = array[tests.today_a()],
+  'Ended: today stays as history, the untouched upcoming occurrence is removed');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select next_date is null from private.task_series
+    where root_id = tests.i('s-list') and superseded_at is null),
+  'The ended series creates nothing more');
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'created' from public.create_task_series(tests.i('s-gone'), tests.i('l-a'), 'Later',
+    'daily', 1, tests.today_a() + 1, p_home_id => tests.i('home-a'))),
+  'A series that starts tomorrow');
+select tests.assert_true(
+  (select outcome = 'ended' from public.update_task_series(tests.occ('s-gone', tests.today_a() + 1), 'series',
+    tests.rev(tests.occ('s-gone', tests.today_a() + 1)), tests.srev('s-gone'), false,
     p_set_schedule => true, p_frequency => 'daily', p_interval => 1, p_starts_on => tests.today_a() - 9,
     p_ends_on => tests.today_a() - 1)),
-  'A schedule that ended already is refused');
+  'A schedule change that would leave the chain without any occurrence is refused');
+select tests.assert_true(tests.dates('s-gone') = array[tests.today_a() + 1],
+  'The refused change left the chain as it was');
 select tests.assert_denied(
   $$select * from public.update_task_series(tests.occ('s-list', tests.today_a()), 'series',
     tests.rev(tests.occ('s-list', tests.today_a())), tests.srev('s-list'), false,

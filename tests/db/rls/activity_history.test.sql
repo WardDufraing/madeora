@@ -187,6 +187,30 @@ select tests.act_as_user((select id from ids where name = 'ann'));
 select tests.assert_denied($q$select public.process_sign_in_events(10)$q$, 'only the job runs the sweep');
 select tests.act_as_owner();
 
+-- S38 review M2: "first sign-in" does not depend on the purgeable history. After the purge removed
+-- every visible sign-in, a sign-in from a new device still alerts.
+select tests.assert_true(
+  exists (select 1 from private.account_sign_in_markers m where m.user_id = (select id from ids where name = 'ann')),
+  'an account that signed in is marked as such');
+create temporary table ann_sign_ins on commit drop as
+  select * from private.account_activity_events
+  where user_id = (select id from ids where name = 'ann') and kind = 'signed_in';
+delete from private.account_activity_events
+  where user_id = (select id from ids where name = 'ann') and kind = 'signed_in';
+insert into ids values ('ann_edge', tests.ah_sign_in((select id from ids where name = 'ann'),
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 Edg/126.0',
+  interval '3 minutes'));
+select tests.act_as_service_role();
+select public.process_sign_in_events(100);
+select tests.act_as_owner();
+select tests.assert_true(
+  (select a.alerted from private.account_activity_events a
+   where a.session_id = (select id from ids where name = 'ann_edge')),
+  'a sign-in after the history was purged is not taken for the first one');
+insert into private.account_activity_events select * from ann_sign_ins;
+delete from private.account_activity_events
+  where session_id = (select id from ids where name = 'ann_edge');
+
 -- Unfinished sign-ins: two-factor accounts ----------------------------------------------------------
 
 insert into ids values ('cleo', tests.ah_account('cleo-activity@madeora.test'));
