@@ -38,3 +38,7 @@ Privacy notice page, `/api/health` endpoint, retention jobs, staging environment
 - [x] Ward's decisions
 - [ ] Independent review (one round)
 - [ ] PR opened, CI green
+
+## CI note
+
+A new picomatch advisory (GHSA-fc5q-39xc-vjpf, high, no patch) failed the dependency audit on this PR although the diff is docs only. A dev-tooling-only exception, expiring 2027-01-15, is added in `tools/repo-checks/audit-exceptions.json` for Ward to review.
