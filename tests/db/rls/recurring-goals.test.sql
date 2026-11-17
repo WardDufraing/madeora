@@ -545,6 +545,7 @@ select tests.assert_true(tests.state('s-upd', 'pause') = 'not_permitted', 'A con
 -- Early purge deletes the series with its periods
 select tests.act_as('alice');
 select tests.assert_true(tests.mko('s-purge', 'home-a', 'completion', 'monthly') = 'created', 'A series to purge');
+select tests.assert_true(tests.periods('s-purge') >= 1, 'It has at least one period before the purge');
 select tests.assert_true(
   (select outcome = 'deleted' from public.delete_goal_series(tests.i('s-purge'), tests.srev('s-purge'))),
   'It moves to the trash');

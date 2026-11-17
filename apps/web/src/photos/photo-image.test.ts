@@ -86,23 +86,60 @@ describe("processPhoto", () => {
     expect(result.variants[0]).toMatchObject({ width: 600, height: 800 });
   });
 
-  it.each([2, 3, 4, 5, 7, 8])(
+  // Where a white marker stored in the top-left corner must land once the picture is upright.
+  it.each([
+    [2, "top-right"],
+    [3, "bottom-right"],
+    [4, "bottom-left"],
+    [5, "top-left"],
+    [6, "top-right"],
+    [7, "bottom-right"],
+    [8, "bottom-left"],
+  ] as const)(
     "turns a picture upright for every EXIF orientation, mirrored ones included (%i)",
-    async (orientation) => {
+    async (orientation, corner) => {
       // Orientations 5 to 8 swap width and height; 1 to 4 keep them.
       const swaps = orientation >= 5;
-      const result = await processPhoto(
-        await image("jpeg", { width: 300, height: 200, orientation }),
-        "image/jpeg",
+      const marker = await sharp({
+        create: { width: 90, height: 60, channels: 3, background: "#ffffff" },
+      })
+        .png()
+        .toBuffer();
+      const input = new Uint8Array(
+        await sharp({
+          create: { width: 300, height: 200, channels: 3, background: "#000000" },
+        })
+          .composite([{ input: marker, left: 0, top: 0 }])
+          .jpeg({ quality: 95 })
+          .withMetadata({ orientation })
+          .toBuffer(),
       );
+      const result = await processPhoto(input, "image/jpeg");
       if (!result.ok) throw new Error("expected a photo");
-      expect(result.variants[0]).toMatchObject(
+      const master = result.variants[0];
+      expect(master).toMatchObject(
         swaps ? { width: 200, height: 300 } : { width: 300, height: 200 },
       );
-      const meta = await sharp(
-        Buffer.from(result.variants[0]?.bytes ?? new Uint8Array()),
-      ).metadata();
-      expect(meta.orientation === undefined || meta.orientation === 1).toBe(true);
+      const bytes = Buffer.from(master?.bytes ?? new Uint8Array());
+      expect((await sharp(bytes).metadata()).orientation ?? 1).toBe(1);
+      const { data, info } = await sharp(bytes)
+        .greyscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const brightness = (x0: number, y0: number) => {
+        let sum = 0;
+        for (let y = y0; y < y0 + info.height / 2; y += 1)
+          for (let x = x0; x < x0 + info.width / 2; x += 1) sum += data[y * info.width + x] ?? 0;
+        return sum;
+      };
+      const quadrants = {
+        "top-left": brightness(0, 0),
+        "top-right": brightness(info.width / 2, 0),
+        "bottom-left": brightness(0, info.height / 2),
+        "bottom-right": brightness(info.width / 2, info.height / 2),
+      };
+      const brightest = Object.entries(quadrants).sort((x, y) => y[1] - x[1])[0]?.[0];
+      expect(brightest).toBe(corner);
     },
   );
 

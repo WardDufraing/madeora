@@ -388,7 +388,7 @@ create function tests.refuse_low_b2() returns trigger language plpgsql as $$
     end if;
     return new;
   end $$;
-create trigger refuse_low_b2 before update on private.tasks
+create trigger refuse_low_b2 after update on private.tasks
   for each row execute function tests.refuse_low_b2();
 select tests.act_as('carol');
 select tests.assert_true(

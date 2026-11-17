@@ -133,7 +133,7 @@ describe("ActivityList", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 
-  it("shows the same entries in Dutch, with the Dutch labels and date format", async () => {
+  it("shows the same entries in Dutch, with the Dutch labels", async () => {
     const { container } = await list(
       { entries: [entry()], next: { createdAt: "2026-11-07T09:00:00+00:00", id: ID_B } },
       {},

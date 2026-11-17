@@ -7,20 +7,8 @@ import { reminderViewSchema } from "./reminder-data";
 
 const TASK = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0f01";
 
-const reminderKeys = [
-  "daysBefore",
-  "dst",
-  "fireAt",
-  "localAt",
-  "mode",
-  "own",
-  "reviewDst",
-  "reviewFireAt",
-  "revision",
-  "status",
-  "time",
-  "timeZone",
-];
+// Derived from the schema, so the schema and the SQL key list in the database test visibly agree.
+const reminderKeys = Object.keys(reminderViewSchema.shape.reminder.unwrap().shape).sort();
 
 function view(reminder: Record<string, unknown> | null, extra: Record<string, unknown> = {}) {
   return {

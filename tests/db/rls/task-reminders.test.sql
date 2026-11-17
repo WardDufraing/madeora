@@ -372,6 +372,13 @@ select tests.assert_true(
        = ((tests.today_a() + 5) + time '09:00') at time zone 'Europe/Brussels'
    from public.get_task_reminder(tests.i('t-due')) r),
   'The editor shows when it would come with the new due date');
+-- Shape of an on-hold reminder, read while t-due is still on hold (it is removed further down).
+select tests.assert_true(
+  (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
+     and (r -> 'reminder' ->> 'status') = 'needs_review' and jsonb_typeof(r -> 'reminder' -> 'fireAt') = 'null'
+     and (r -> 'reminder' ->> 'reviewFireAt') is not null
+   from public.get_task_reminder(tests.i('t-due')) r),
+  'An on-hold reminder: the same keys, a null fire time and a proposed one');
 select tests.act_as_owner();
 update private.task_reminders set fire_at = now() - interval '1 minute' where task_id = tests.i('t-due');
 select tests.act_as_service_role();
@@ -585,12 +592,6 @@ select tests.assert_true(
      and (r -> 'reminder' ->> 'status') = 'not_sent'
    from public.get_task_reminder(tests.i('t-done')) r),
   'A not-sent reminder: the same keys');
-select tests.assert_true(
-  (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
-     and (r -> 'reminder' ->> 'status') = 'needs_review' and jsonb_typeof(r -> 'reminder' -> 'fireAt') = 'null'
-     and (r -> 'reminder' ->> 'reviewFireAt') is not null
-   from public.get_task_reminder(tests.i('t-due')) r),
-  'An on-hold reminder: the same keys, a null fire time and a proposed one');
 select tests.assert_true(
   (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
      and (r -> 'reminder' ->> 'status') = 'off' and jsonb_typeof(r -> 'reminder' -> 'fireAt') = 'null'

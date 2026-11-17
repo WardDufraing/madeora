@@ -131,6 +131,15 @@ select pg_sleep(0.3);`,
     await psql(
       `update private.recipe_edit_locks set expires_at = now() - interval '1 second' where recipe_id = '${RECIPE}';`,
     );
+    // Sequentially first: with nobody else involved, only the expiry check can refuse this save.
+    const [expired] = await as(
+      "alice",
+      `select outcome from public.update_recipe('${RECIPE}', 1, ${content}, '${stale}');`,
+    );
+    expect(expired).toBe("lock_lost");
+    const [unchanged] = await psql(`select revision from private.recipes where id = '${RECIPE}';`);
+    expect(unchanged).toBe("1");
+    // Then the race, for the single-holder property.
     const [[saved], [acquired]] = await Promise.all([
       as(
         "alice",
