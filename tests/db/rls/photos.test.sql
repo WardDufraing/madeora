@@ -333,3 +333,54 @@ select tests.act_as_owner();
 select tests.assert_true(tests.private_count($$select count(*) from private.audit_events
   where subject_type in ('photo', 'photo_album') and details::text ~* '(zomer|winter|gezin|familie)'$$) = 0,
   'The audit trail names no album');
+
+-- Photo uploads have their own limits (S35-M1): 120 intents an hour and 25 pending, counted apart
+-- from every other upload, which keeps the shared 30 an hour and 5 pending. Erin has no Home.
+
+insert into auth.users (instance_id, id, aud, role, email, email_confirmed_at, created_at, updated_at)
+values ('00000000-0000-0000-0000-000000000000', '35000000-0000-4000-8000-000000000002',
+  'authenticated', 'authenticated', 'erin@madeora.test', now(), now(), now());
+create function tests.photo_intent() returns text
+  language sql as $$
+  select outcome from public.create_photo_intent(null, 'image/jpeg', 1000, gen_random_uuid()); $$;
+create function tests.avatar_intent() returns text
+  language sql as $$
+  select outcome from public.create_upload_intent('avatar', 'image/png', 1000, gen_random_uuid()); $$;
+-- Ends Erin's pending uploads of one group, as if their intents had run out (owner only).
+create function tests.expire_pending(p_photos boolean) returns void
+  language sql security definer as $$
+  update private.stored_files set expires_at = now() - interval '1 second'
+  where created_by = tests.user_id('erin') and status = 'pending' and (purpose = 'photo') = p_photos; $$;
+-- Opens p_count photo uploads as Erin, each after the earlier ones ran out; returns how many opened.
+create function tests.photo_intents(p_count integer) returns integer
+  language plpgsql as $$
+  declare
+    v_ok integer := 0;
+  begin
+    for i in 1..p_count loop
+      perform tests.expire_pending(true);
+      if tests.photo_intent() = 'ok' then
+        v_ok := v_ok + 1;
+      end if;
+    end loop;
+    return v_ok;
+  end $$;
+grant execute on function tests.photo_intent(), tests.avatar_intent(), tests.expire_pending(boolean),
+  tests.photo_intents(integer) to authenticated;
+
+select tests.act_as('erin');
+select tests.assert_true((select count(*) filter (where tests.photo_intent() = 'ok') = 25 from generate_series(1, 25)),
+  'A batch of photos opens past the shared 5 pending, up to 25');
+select tests.assert_true(tests.photo_intent() = 'rate_limited', 'The 26th pending photo waits');
+select tests.assert_true(tests.avatar_intent() = 'ok', 'Other uploads still open: photos do not use up their room');
+select tests.assert_true((select count(*) filter (where tests.avatar_intent() = 'ok') = 4 from generate_series(1, 4)),
+  'Other uploads open up to their own 5 pending');
+select tests.assert_true(tests.avatar_intent() = 'rate_limited', 'And the sixth waits');
+select tests.assert_true(tests.photo_intents(1) = 1,
+  'Once the pending photos ran out a photo opens again, whatever the other uploads hold');
+-- 26 photo intents this hour so far; 94 more reach 120.
+select tests.assert_true(tests.photo_intents(94) = 94, 'Up to 120 photo intents an hour');
+select tests.assert_true(tests.photo_intents(1) = 0, 'The 121st waits for the hour');
+select tests.expire_pending(false);
+select tests.assert_true(tests.avatar_intent() = 'ok',
+  'Other uploads have their own hourly count (5 of 30), untouched by 120 photos');

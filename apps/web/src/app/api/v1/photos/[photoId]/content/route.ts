@@ -27,8 +27,9 @@ function status(code: number): Response {
  * Shows one picture of a photo (`?variant=thumb|display|full|master`) to someone allowed to see it
  * now (S35, architecture.md §10 "Download lifecycle"). Every request asks the database again
  * (`authorize_photo_read`, with the viewer's own session), so leaving a Home or deleting the photo
- * takes effect at once (a thumbnail may be reused by the browser for 30 seconds); then it redirects to a 60-second GET-only link. Every refusal is the same
- * 404, whether the photo does not exist or is not the viewer's to see.
+ * takes effect at once (a thumbnail may be reused by the browser for 30 seconds); then it
+ * redirects to a 60-second GET-only link. Every refusal is the same 404, whether the photo does not
+ * exist or is not the viewer's to see.
  */
 export async function GET(request: Request, { params }: PhotoRouteContext): Promise<Response> {
   const photoId = pathId((await params).photoId);

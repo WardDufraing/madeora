@@ -1,9 +1,11 @@
 -- Review backlog Part 2 (api, jobs, perf): S35-M1, S27-M2, S29-M1, S20-M3, S38-M3.
 -- Rollback: re-apply the replaced function bodies from their original migrations; the added column
--- and function are unused by older bodies and may stay.
+-- and functions are unused by older bodies and may stay.
 
 -- S35-M1: a batch import of pictures needs more room than the shared S15 limits (30 intents an hour,
--- 5 pending) give; photo uploads get their own. Storage capacity is still checked per pool.
+-- 5 pending) give. Photo uploads get their own limits and their own count: photos never use up the
+-- room of other uploads (a task attachment after a large import), nor other uploads the photos'.
+-- Storage capacity is still checked per pool.
 create function private.photo_upload_limit(p_name text) returns integer
   language sql immutable set search_path = '' as $$
   select case p_name
@@ -13,6 +15,24 @@ create function private.photo_upload_limit(p_name text) returns integer
   $$;
 
 revoke all on function private.photo_upload_limit(text) from public, anon, authenticated;
+
+-- Whether p_user_id has reached the upload limits of p_purpose's group: photos, or every other
+-- purpose together. Callers hold the pool lock, which serialises one person's intents.
+create function private.upload_rate_limited(p_user_id uuid, p_purpose text) returns boolean
+  language sql stable set search_path = '' as $$
+  select (select pg_catalog.count(*) from private.stored_files f
+      where f.created_by = p_user_id and (f.purpose = 'photo') = (p_purpose = 'photo')
+        and f.created_at > pg_catalog.now() - interval '1 hour')
+      >= case when p_purpose = 'photo' then private.photo_upload_limit('intents_per_hour')
+           else private.storage_limit('intents_per_hour') end
+    or (select pg_catalog.count(*) from private.stored_files f
+      where f.created_by = p_user_id and (f.purpose = 'photo') = (p_purpose = 'photo')
+        and f.status = 'pending' and f.expires_at > pg_catalog.now())
+      >= case when p_purpose = 'photo' then private.photo_upload_limit('pending_per_account')
+           else private.storage_limit('pending_per_account') end
+  $$;
+
+revoke all on function private.upload_rate_limited(uuid, text) from public, anon, authenticated;
 
 
 create or replace function private.open_photo_upload(
@@ -42,12 +62,7 @@ create or replace function private.open_photo_upload(
       return;
     end if;
 
-    if (select count(*) from private.stored_files f
-        where f.created_by = p_user_id and f.created_at > pg_catalog.now() - interval '1 hour')
-         >= private.photo_upload_limit('intents_per_hour')
-       or (select count(*) from private.stored_files f
-        where f.created_by = p_user_id and f.status = 'pending' and f.expires_at > pg_catalog.now())
-         >= private.photo_upload_limit('pending_per_account') then
+    if private.upload_rate_limited(p_user_id, 'photo') then
       return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
       return;
     end if;
@@ -87,6 +102,333 @@ create or replace function private.open_photo_upload(
   $$;
 
 
+-- The shared S15 openers count every upload except photos (S35-M1).
+create or replace function public.create_upload_intent(
+  p_purpose text, p_content_type text, p_size bigint, p_request_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+  begin
+    if p_request_id is null or p_size is null or p_size <= 0
+       or private.upload_max_bytes(p_purpose) is null
+       or p_size > private.upload_max_bytes(p_purpose)
+       or not private.upload_type_allowed(p_purpose, p_content_type) then
+      raise exception 'invalid upload' using errcode = '22023';
+    end if;
+
+    -- The pool lock also serialises one person's concurrent intents, so the checks below hold.
+    v_pool := private.lock_storage_pool(v_user_id, null);
+
+    select * into v_existing from private.stored_files f
+      where f.created_by = v_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = p_purpose and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.expires_at > pg_catalog.now() then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if private.upload_rate_limited(v_user_id, p_purpose) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, p_purpose, v_user_id, p_request_id, private.new_object_key('u'),
+      private.new_object_key('u'), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+
+    -- Cleans up after the intent ends, whatever happened to it.
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', p_purpose, 'size', p_size)
+    );
+
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+
+create or replace function public.create_task_attachment_intent(
+  p_task_id uuid, p_content_type text, p_size bigint, p_name text, p_request_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_task private.tasks;
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+    v_prefix text;
+  begin
+    if p_task_id is null or p_request_id is null or p_size is null or p_size <= 0
+       or p_size > private.upload_max_bytes('task_attachment')
+       or not private.upload_type_allowed('task_attachment', p_content_type)
+       or p_name is null or not private.is_visible_name(p_name, private.task_limit('attachment_name')) then
+      raise exception 'invalid upload' using errcode = '22023';
+    end if;
+    -- Task first, then the pool: the same order as deleting a task (which then moves files).
+    v_task := private.lock_task(p_task_id, v_user_id);
+    if v_task.id is null then
+      return query select 'not_found'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    if not private.can_edit_task(v_task, v_user_id) then
+      return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+    v_pool := private.lock_storage_pool(v_task.owner_user_id, v_task.owner_home_id);
+
+    select * into v_existing from private.stored_files f
+      where f.created_by = v_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = 'task_attachment' and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.expires_at > pg_catalog.now() and exists (
+           select 1 from private.task_attachment_uploads u
+           where u.file_id = v_existing.id and u.task_id = v_task.id) then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if private.task_attachment_count(v_task.id) + (
+         select count(*)::integer from private.task_attachment_uploads u
+         join private.stored_files f on f.id = u.file_id
+         where u.task_id = v_task.id
+           and (f.status = 'ready' or (f.status = 'pending' and f.expires_at > pg_catalog.now()))
+       ) >= private.task_limit('attachments') then
+      return query select 'limit_reached'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    if private.upload_rate_limited(v_user_id, 'task_attachment') then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    v_prefix := case when v_task.owner_home_id is not null then 'h' else 'u' end;
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, 'task_attachment', v_user_id, p_request_id, private.new_object_key(v_prefix),
+      private.new_object_key(v_prefix), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+    insert into private.task_attachment_uploads (file_id, task_id, display_name)
+      values (v_file.id, v_task.id, p_name);
+
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', 'task_attachment', 'size', p_size)
+    );
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+
+create or replace function public.create_recipe_cover_intent(
+  p_content_type text, p_size bigint, p_request_id uuid, p_recipe_id uuid default null,
+  p_lock_token uuid default null
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_recipe private.recipes;
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+    v_prefix text;
+  begin
+    if p_request_id is null or p_size is null or p_size <= 0
+       or p_size > private.upload_max_bytes('recipe_cover')
+       or not private.upload_type_allowed('recipe_cover', p_content_type) then
+      raise exception 'invalid upload' using errcode = '22023';
+    end if;
+    if p_recipe_id is not null then
+      -- Recipe first, then the pool: the same order as saving and deleting.
+      v_recipe := private.lock_recipe(p_recipe_id, v_user_id);
+      if v_recipe.id is null then
+        return query select 'not_found'::text, null::uuid, null::text, null::timestamptz;
+        return;
+      end if;
+      if not private.can_edit_recipe(v_recipe, v_user_id) then
+        return query select 'not_permitted'::text, null::uuid, null::text, null::timestamptz;
+        return;
+      end if;
+      if v_recipe.status = 'published'
+         and (p_lock_token is null or not private.holds_recipe_lock(v_recipe.id, v_user_id, p_lock_token)) then
+        return query select 'lock_lost'::text, null::uuid, null::text, null::timestamptz;
+        return;
+      end if;
+      v_pool := private.recipe_pool(v_recipe);
+    else
+      v_pool := private.lock_storage_pool(v_user_id, null);
+    end if;
+
+    select * into v_existing from private.stored_files f
+      where f.created_by = v_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = 'recipe_cover' and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.expires_at > pg_catalog.now() and exists (
+           select 1 from private.recipe_cover_uploads u
+           where u.file_id = v_existing.id and u.recipe_id is not distinct from v_recipe.id) then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if private.upload_rate_limited(v_user_id, 'recipe_cover') then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    v_prefix := case when v_pool.owner_home_id is not null then 'h' else 'u' end;
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, 'recipe_cover', v_user_id, p_request_id, private.new_object_key(v_prefix),
+      private.new_object_key(v_prefix), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+    insert into private.recipe_cover_uploads (file_id, user_id, recipe_id)
+      values (v_file.id, v_user_id, v_recipe.id);
+
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      v_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', 'recipe_cover', 'size', p_size)
+    );
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+
+create or replace function private.open_pet_upload(
+  p_user_id uuid, p_home_id uuid, p_purpose text, p_content_type text, p_size bigint, p_request_id uuid,
+  p_pet_id uuid, p_entry_id uuid
+) returns table (outcome text, file_id uuid, upload_key text, expires_at timestamptz)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_existing private.stored_files;
+    v_pool private.storage_pools;
+    v_usage record;
+    v_file private.stored_files;
+  begin
+    v_pool := private.lock_storage_pool(null, p_home_id);
+    select * into v_existing from private.stored_files f
+      where f.created_by = p_user_id and f.request_id = p_request_id;
+    if found then
+      if v_existing.purpose = p_purpose and v_existing.declared_type = p_content_type
+         and v_existing.declared_size = p_size and v_existing.status = 'pending'
+         and v_existing.expires_at > pg_catalog.now()
+         and (exists (select 1 from private.pet_photo_uploads u
+                where u.file_id = v_existing.id and u.pet_id = p_pet_id and p_entry_id is null)
+           or exists (select 1 from private.pet_medical_attachment_uploads u
+                where u.file_id = v_existing.id and u.entry_id = p_entry_id)) then
+        return query select 'ok'::text, v_existing.id, v_existing.upload_key, v_existing.expires_at;
+      else
+        return query select 'conflict'::text, null::uuid, null::text, null::timestamptz;
+      end if;
+      return;
+    end if;
+
+    if private.upload_rate_limited(p_user_id, p_purpose) then
+      return query select 'rate_limited'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    select * into v_usage from private.storage_usage(v_pool.id);
+    if v_usage.ready_bytes + v_usage.deleted_bytes + v_usage.reserved_bytes + p_size
+       > private.storage_allowance(v_pool) then
+      return query select 'storage_full'::text, null::uuid, null::text, null::timestamptz;
+      return;
+    end if;
+
+    insert into private.stored_files (
+      pool_id, purpose, created_by, request_id, upload_key, object_key, declared_type,
+      declared_size, expires_at
+    ) values (
+      v_pool.id, p_purpose, p_user_id, p_request_id, private.new_object_key('h'),
+      private.new_object_key('h'), p_content_type, p_size,
+      pg_catalog.now() + pg_catalog.make_interval(mins => private.storage_limit('intent_minutes'))
+    ) returning * into v_file;
+
+    perform private.enqueue_job(
+      'storage-upload-expire', 1, 'storage-file:' || v_file.id::text || ':expire',
+      pg_catalog.jsonb_build_object('fileId', v_file.id),
+      private.request_correlation_id(),
+      v_file.expires_at + interval '5 minutes'
+    );
+    perform private.audit_stored_file(
+      p_user_id, v_file.id, 'stored_file.upload_intent',
+      pg_catalog.jsonb_build_object('purpose', p_purpose, 'size', p_size)
+    );
+    return query select 'ok'::text, v_file.id, v_file.upload_key, v_file.expires_at;
+  end
+  $$;
+
+
 create or replace function public.copy_meal_week(
   p_source date, p_destination date, p_token text, p_rows jsonb, p_home_id uuid default null
 ) returns table (outcome text, results jsonb)
@@ -102,6 +444,8 @@ create or replace function public.copy_meal_week(
     v_results jsonb := '[]'::jsonb;
     v_result text;
     v_occupants jsonb;
+    v_retry boolean;
+    v_created integer;
   begin
     perform private.require_meal_context(p_home_id, v_user_id);
     if not private.is_meal_date(p_source) or not private.is_meal_date(p_destination)
@@ -123,13 +467,14 @@ create or replace function public.copy_meal_week(
     select array_agg((x ->> 'id')::uuid) into v_ids from pg_catalog.jsonb_array_elements(p_rows) x;
     v_rows := private.meal_copy_rows(p_home_id, v_user_id, p_source, p_destination, v_ids);
     -- S27-M2: a retry of a copy that replaced something no longer sees what it replaced, so its
-    -- token cannot match; when every chosen id is already this person's own copy in this context
-    -- (the first call is one transaction, so it finished), the rows answer 'exists' instead.
-    if p_token is distinct from private.meal_copy_token(v_rows) and not (
-        select coalesce(pg_catalog.bool_and(e.id is not null), false)
-        from pg_catalog.unnest(v_ids) u(id)
-        left join private.meal_entries e on e.id = u.id and e.created_by = v_user_id
-          and e.deleted_at is null
+    -- token cannot match. When at least one chosen id is already this person's own copy in this
+    -- context (the first call is one transaction, so it finished), the call is a retry: those rows
+    -- answer 'exists' and the others are reported again but never written with an out-of-date
+    -- preview. Without such a copy a changed preview is stale and copies nothing.
+    v_retry := p_token is distinct from private.meal_copy_token(v_rows);
+    if v_retry and not exists (
+        select 1 from private.meal_entries e
+        where e.id = any (v_ids) and e.created_by = v_user_id and e.deleted_at is null
           and private.in_meal_context(e.owner_user_id, e.owner_home_id, p_home_id, v_user_id)) then
       return query select 'stale', null::jsonb;
       return;
@@ -152,7 +497,13 @@ create or replace function public.copy_meal_week(
         -- a meal this copy just made is never replaced; anything else only when the row says so.
         v_occupants := private.meal_occupants(p_home_id, v_user_id, (v_row ->> 'date')::date,
           (v_row ->> 'slotId')::uuid);
-        if pg_catalog.jsonb_array_length(v_occupants) > 0 then
+        if v_retry then
+          -- A row the first call did not copy: still taken, or changed since the preview.
+          v_result := 'stale';
+          if pg_catalog.jsonb_array_length(v_occupants) > 0 then
+            v_result := 'occupied';
+          end if;
+        elsif pg_catalog.jsonb_array_length(v_occupants) > 0 then
           if not coalesce((v_choice ->> 'replace')::boolean, false) or exists (
               select 1 from pg_catalog.jsonb_array_elements(v_occupants) o
               where o ->> 'kind' = 'entry' and (o ->> 'id')::uuid = any (v_ids)) then
@@ -177,9 +528,13 @@ create or replace function public.copy_meal_week(
       v_row := null;
       v_existing := null;
     end loop;
-    perform private.audit_meals('meal_plan.week_copied', p_home_id, p_home_id, pg_catalog.jsonb_build_object(
-      'source', p_source, 'destination', p_destination,
-      'created', (select count(*) from pg_catalog.jsonb_array_elements(v_results) x where x ->> 'outcome' = 'created')));
+    -- A retry that creates nothing is not another copy (review L5).
+    select count(*)::integer into v_created
+      from pg_catalog.jsonb_array_elements(v_results) x where x ->> 'outcome' = 'created';
+    if v_created > 0 then
+      perform private.audit_meals('meal_plan.week_copied', p_home_id, p_home_id, pg_catalog.jsonb_build_object(
+        'source', p_source, 'destination', p_destination, 'created', v_created));
+    end if;
     return query select 'done', v_results;
   end
   $$;
@@ -221,11 +576,16 @@ create or replace function public.add_habit_contribution(
     p_on := coalesce(p_on, v_today);
     select * into v_existing from private.habit_contributions c where c.id = p_id;
     if v_existing.id is not null then
-      -- S29-M1: the same id with another amount is a different request, never a retry.
+      -- S29-M1: the same id with another amount is a different request, never a retry. A row kept
+      -- without an entered unit was entered in the tracking unit (or none), so a retry names no unit
+      -- or that one (review L4).
       v_same := v_existing.habit_id = v_habit.id and v_existing.contributed_by = v_user_id and v_existing.on_date = p_on
         and (select case when v_existing.entered_quantity is not null
           then v_existing.entered_quantity = p_quantity and v_existing.entered_unit is not distinct from p_entered_unit
-          else coalesce(v_existing.original_quantity, v_existing.quantity) = p_quantity end);
+          else coalesce(v_existing.original_quantity, v_existing.quantity) = p_quantity
+            and (p_entered_unit is null or exists (
+              select 1 from private.habit_tracking_on(v_habit.id, p_on) t
+              where t.unit_kind = 'preset' and t.unit = p_entered_unit)) end);
       if v_same then
         return pg_catalog.jsonb_build_object('outcome', 'exists',
           'progress', private.habit_progress_json(v_habit, p_on),
@@ -324,8 +684,18 @@ create or replace function private.advance_chores_before_pool(p_home_id uuid) re
 
 
 -- S38-M3: the report's rows are frozen when it is requested, so rows written later (a history
--- sweep may backfill earlier times) never change a report that was already offered.
+-- sweep may backfill earlier times) never change a report that was already offered. The copy keeps
+-- to the history's retention: rows past it are left out at download, and the copy is cleared when
+-- the report is discarded or expires (the hourly purge).
 alter table private.security_reports add column rows jsonb;
+
+comment on table private.security_reports is
+  'S38: requested security reports. The security events in range are frozen into rows at the request, '
+  'left out at download once past the history retention, and cleared when the report is discarded or '
+  'expires; the file is built at download, never stored.';
+comment on column private.security_reports.rows is
+  'The security events of the report, frozen at the request; null once discarded or expired, and for '
+  'reports made before it existed (those read the history at download).';
 
 
 create or replace function public.request_security_report(p_from date, p_to date, p_timezone text)
@@ -415,14 +785,15 @@ returns table (
     -- clock_timestamp: always after the snapshot, even inside the request's own transaction.
     insert into private.account_security_events (user_id, kind, session_id, created_at)
       values (v_user_id, 'security_report_downloaded', v_session_id, pg_catalog.clock_timestamp());
-    -- The rows frozen at the request; a report made before they were kept falls back to the history.
+    -- The rows frozen at the request, in their order and within retention; a report made before
+    -- they were kept falls back to the history.
     if v_report.rows is not null then
       return query
-        select x.kind, x.outcome, x.home_name, x.actor, x.device_kind, x.browser, x.platform, x.created_at
-        from pg_catalog.jsonb_to_recordset(v_report.rows) as x(
-          kind text, outcome text, home_name text, actor text, device_kind text, browser text,
-          platform text, created_at timestamptz)
-        order by x.created_at;
+        select e.r ->> 'kind', e.r ->> 'outcome', e.r ->> 'home_name', e.r ->> 'actor',
+          e.r ->> 'device_kind', e.r ->> 'browser', e.r ->> 'platform', (e.r ->> 'created_at')::timestamptz
+        from pg_catalog.jsonb_array_elements(v_report.rows) with ordinality as e(r, n)
+        where (e.r ->> 'created_at')::timestamptz > pg_catalog.now() - private.activity_retention()
+        order by e.n;
       return;
     end if;
     return query
@@ -434,5 +805,48 @@ returns table (
         and a.created_at < v_report.snapshot_at
         and a.created_at > pg_catalog.now() - private.activity_retention()
       order by a.created_at, a.id;
+  end
+  $$;
+
+
+-- S38-M3: discarding a report also drops its frozen rows.
+create or replace function public.discard_security_report(p_report_id uuid) returns boolean
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := auth.uid();
+    v_found boolean;
+  begin
+    if v_user_id is null or not private.session_is_live(v_user_id, private.jwt_session_id()) then
+      raise exception 'not signed in' using errcode = '42501';
+    end if;
+    update private.security_reports r set discarded_at = pg_catalog.now(), rows = null
+      where r.id = p_report_id and r.user_id = v_user_id and r.discarded_at is null
+        and r.expires_at > pg_catalog.now()
+      returning true into v_found;
+    if coalesce(v_found, false) then
+      perform private.record_security_event(v_user_id, 'security_report_discarded', private.jwt_session_id());
+    end if;
+    return coalesce(v_found, false);
+  end
+  $$;
+
+
+-- S38-M3: the hourly purge also drops the frozen rows of reports that expired or were discarded
+-- (the report record itself still goes a week after it expired).
+create or replace function public.purge_account_activity() returns integer
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_count integer;
+  begin
+    delete from private.account_activity_events a
+      where a.created_at < pg_catalog.now() - private.activity_retention();
+    get diagnostics v_count = row_count;
+    delete from private.account_security_events e
+      where e.created_at < pg_catalog.now() - private.activity_retention();
+    update private.security_reports r set rows = null
+      where r.rows is not null and (r.expires_at <= pg_catalog.now() or r.discarded_at is not null);
+    delete from private.security_reports r
+      where r.expires_at < pg_catalog.now() - interval '7 days';
+    return v_count;
   end
   $$;

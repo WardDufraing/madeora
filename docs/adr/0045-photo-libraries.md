@@ -28,3 +28,9 @@ Modules.md §4.7 adds a lightweight Photos module: personal and Home libraries, 
 - Decoding a 50 MP HEIC takes roughly 200 MB of memory for the pixels; the Vercel function memory and duration limits apply (provider-cost register unchanged, €0).
 - Photo trash labels are the fixed word "Photo"; an album's is its name.
 - Rollback: the migration only adds tables and functions and widens four constraints; to undo, drop the S35 objects (the tables hold only photo data) and restore the previous constraints. Database rollbacks are not automatic.
+
+## Addendum: own upload limits (review backlog, 2026-11-17)
+
+A batch import of pictures did not fit the shared S15 limits (30 upload intents an hour, 5 pending per person). Photo-library uploads now have their own limits, **120 intents an hour and 25 pending per person** (`private.photo_upload_limit`), and are counted apart from every other upload purpose (`private.upload_rate_limited`, used by every opener): a large import never blocks a task attachment, recipe cover or pet photo, and those never use up the photo allowance. Storage capacity is still checked per pool under its lock. The numbers are an implementation default proposed with the S35-M1 review fix and **still need the owner's confirmation** (CLAUDE.md: do not invent upload limits); until then they can be changed in one function.
+
+The thumbnail redirect (`variant=thumb`, not a download) may be cached by the viewer's browser for 30 seconds (`Cache-Control: private, max-age=30`); other variants and downloads stay `private, no-store`. Within those 30 seconds a revoked viewer, or another account on the same browser, may still get the cached redirect for a photo id they request; the owner may confirm this relaxation of architecture.md §10 or ask for it to be reverted.

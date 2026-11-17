@@ -506,6 +506,40 @@ select tests.assert_true(
               where r.kind like 'home_membership.%' or r.kind like 'profile.%'),
   'only security events');
 
+-- The rows are frozen at the request (S38-M3): an event written later with an earlier time (a
+-- history sweep backfilling) is not in the report, and frozen rows past retention are left out.
+select tests.act_as_owner();
+insert into private.account_activity_events (user_id, category, kind, outcome, created_at)
+  values ((select id from ids where name = 'ann'), 'security', 'backfilled_event', 'completed',
+          now() - interval '1 minute');
+update private.security_reports
+  set rows = rows || jsonb_build_array(jsonb_build_object('kind', 'expired_event', 'outcome', 'completed',
+    'actor', 'self', 'created_at', now() - interval '13 months'))
+  where id = (select id from report);
+select tests.act_as_user((select id from ids where name = 'ann'));
+select tests.assert_true(
+  not exists (select 1 from public.security_report_rows((select id from report)) r
+              where r.kind in ('backfilled_event', 'expired_event')),
+  'a row written after the request, or past retention, is not in the report');
+select tests.assert_true(
+  (select bool_and(r.created_at < (select snapshot_at from public.list_my_security_reports() l
+                                   where l.id = (select id from report)))
+     from public.security_report_rows((select id from report)) r),
+  'every frozen row is from before the snapshot');
+-- A report made before the rows were kept reads the history at download.
+select tests.act_as_owner();
+create temporary table frozen_rows on commit drop as
+  select rows from private.security_reports where id = (select id from report);
+update private.security_reports set rows = null where id = (select id from report);
+select tests.act_as_user((select id from ids where name = 'ann'));
+select tests.assert_true(
+  exists (select 1 from public.security_report_rows((select id from report)) r where r.kind = 'backfilled_event'),
+  'a report without frozen rows falls back to the history');
+select tests.act_as_owner();
+update private.security_reports set rows = (select rows from frozen_rows) where id = (select id from report);
+delete from private.account_activity_events where kind = 'backfilled_event';
+select tests.act_as_user((select id from ids where name = 'ann'));
+
 select tests.act_as_user((select id from ids where name = 'ben'));
 select tests.act_as_owner();
 select tests.ah_grant((select id from ids where name = 'ben'), 'security_report');
@@ -524,6 +558,10 @@ select tests.assert_denied(
   $q$select * from public.security_report_rows((select id from report))$q$,
   'downloading needs recent re-authentication too');
 select tests.assert_true(public.discard_security_report((select id from report)), 'discard early');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select rows is null from private.security_reports where id = (select id from report)),
+  'discarding drops the frozen rows');
 select tests.act_as_owner();
 select tests.ah_grant((select id from ids where name = 'ann'), 'security_report');
 select tests.act_as_user((select id from ids where name = 'ann'));
@@ -564,6 +602,11 @@ select tests.assert_true(
   not exists (select 1 from private.account_activity_events a
               where a.user_id = (select id from ids where name = 'ann') and a.kind = 'password_changed'),
   'gone after the purge');
+select tests.assert_true(
+  exists (select 1 from private.security_reports r where r.user_id = (select id from ids where name = 'ann'))
+    and not exists (select 1 from private.security_reports r
+                    where r.user_id = (select id from ids where name = 'ann') and r.rows is not null),
+  'expired reports are kept a week, but their frozen rows go at once (S38-M3)');
 select tests.act_as_user((select id from ids where name = 'ann'));
 select tests.assert_denied($q$select public.purge_account_activity()$q$, 'only the job purges');
 select tests.act_as_owner();
