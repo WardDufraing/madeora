@@ -268,11 +268,24 @@ describe("content", () => {
     );
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toContain("https://storage.example/get/");
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=30");
     expect(state.rpc).toHaveBeenCalledWith("authorize_photo_read", {
       p_photo_id: ID,
       p_variant: "thumb",
     });
+  });
+
+  it("lets only plain thumbnails be reused; larger pictures and downloads are always re-checked", async () => {
+    answers({
+      authorize_photo_read: [{ object_key: "u/" + "b".repeat(64), content_type: "image/webp" }],
+    });
+    for (const url of [
+      `/photos/${ID}/content?variant=display`,
+      `/photos/${ID}/content?variant=thumb&download=1`,
+    ]) {
+      const response = await content(request(url, "GET"), photoParams);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+    }
   });
 
   it("answers 404 for a photo the viewer may not see, like one that does not exist", async () => {

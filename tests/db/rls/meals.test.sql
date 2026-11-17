@@ -686,13 +686,22 @@ select tests.assert_true(
       jsonb_build_array(jsonb_build_object('key', 'e:' || tests.i('e-copy-2'), 'id', tests.i('t-2'))),
       tests.i('home-a'))),
   'A retry with the original preview never copies twice');
+create temporary table replace_token on commit drop as
+  select preview ->> 'token' as token from public.preview_meal_copy(tests.d(28), tests.d(35), tests.i('home-a'));
+grant all on replace_token to authenticated;
 select tests.assert_true(
   (select (select r ->> 'outcome' from jsonb_array_elements(results) r where (r ->> 'id')::uuid = tests.i('t-1')) = 'created'
-    from public.copy_meal_week(tests.d(28), tests.d(35),
-      (select preview ->> 'token' from public.preview_meal_copy(tests.d(28), tests.d(35), tests.i('home-a'))),
+    from public.copy_meal_week(tests.d(28), tests.d(35), (select token from replace_token),
       jsonb_build_array(jsonb_build_object('key', 'e:' || tests.i('e-copy-1'), 'id', tests.i('t-1'), 'replace', true)),
       tests.i('home-a'))),
   'Replacing explicitly copies over the taken slot');
+select tests.assert_true(
+  (select outcome = 'done'
+    and (select r ->> 'outcome' from jsonb_array_elements(results) r where (r ->> 'id')::uuid = tests.i('t-1')) = 'exists'
+    from public.copy_meal_week(tests.d(28), tests.d(35), (select token from replace_token),
+      jsonb_build_array(jsonb_build_object('key', 'e:' || tests.i('e-copy-1'), 'id', tests.i('t-1'), 'replace', true)),
+      tests.i('home-a'))),
+  'A retry of a copy that replaced a meal answers exists, not stale (S27-M2)');
 select tests.assert_true(
   (select (m -> 0 ->> 'title') = 'Wok' and (m -> 0 ->> 'notes') = 'Pittig'
     from tests.at(tests.plan('home-a', 35, 35), tests.d(35), tests.slot(tests.i('home-a'), 'dinner')) m),

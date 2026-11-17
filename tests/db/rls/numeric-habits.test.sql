@@ -190,6 +190,8 @@ select tests.assert_true(
 select tests.act_as('carol');
 select tests.assert_true(tests.addo('k1', 'n-water', 3) = 'added', 'Carol adds 3 glasses');
 select tests.assert_true(tests.addo('k1', 'n-water', 3) = 'exists', 'A retry answers exists and adds nothing');
+select tests.assert_true(tests.addo('k1', 'n-water', 5) = 'id_taken',
+  'The same id with another amount is not a retry (S29-M1)');
 select tests.assert_true(tests.total('n-water', tests.d(0)) = 3, 'The total is 3');
 select tests.assert_true(
   (tests.habit('n-water') ->> 'todayState') = 'pending' and tests.active_checkins('n-water', tests.d(0)) = 0,

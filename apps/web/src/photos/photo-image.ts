@@ -2,7 +2,6 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import decodeHeic from "heic-decode";
 import sharp from "sharp";
 
 import { PHOTO_LIMITS, type PhotoUploadType } from "./schema";
@@ -129,6 +128,8 @@ export async function processPhoto(
       if (!claimed || tooBig(claimed.width, claimed.height)) {
         return { ok: false, reason: "invalid-image" };
       }
+      // Loaded only when a HEIC arrives, so the WebAssembly decoder is not in memory for other types.
+      const { default: decodeHeic } = await import("heic-decode");
       const decoded = await decodeHeic({ buffer: bytes });
       if (tooBig(decoded.width, decoded.height)) return { ok: false, reason: "invalid-image" };
       // libheif applies the file's own rotation and mirroring while decoding; raw pixels carry no
