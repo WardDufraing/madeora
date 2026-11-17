@@ -163,6 +163,13 @@ describe("TrashView", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 
+  it("names an item that has no label by its kind, so its checkbox has an accessible name", async () => {
+    view([entry(A, "", { module: "recipes", itemType: "recipe" })]);
+    expect(
+      await screen.findByRole("checkbox", { name: "Recipe without a name" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows an explained empty state, and a different one when filters hide everything", async () => {
     const { unmount } = view([]);
     expect(await screen.findByText("The trash is empty")).toBeInTheDocument();

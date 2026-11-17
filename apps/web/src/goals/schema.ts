@@ -8,6 +8,7 @@ import {
   goalLinkStarts,
   goalViews,
   goalWeekStarts,
+  goalSeriesLeadDaysMax,
   isGoalFrequencyAllowed,
   isValidGoalReminder,
   isValidGoalThousandths,
@@ -275,7 +276,12 @@ export const createSeriesSchema = z
   .refine((body) => body.endsOn === null || body.endsOn >= body.firstPeriod, {
     error: "invalid",
     path: ["endsOn"],
-  });
+  })
+  .refine(
+    (body) =>
+      body.reminder === null || body.reminder.leadDays <= goalSeriesLeadDaysMax(body.frequency),
+    { error: "invalid", path: ["reminder", "leadDays"] },
+  );
 export type CreateSeriesInput = z.input<typeof createSeriesSchema>;
 
 /** Edits apply to the periods created afterwards. */

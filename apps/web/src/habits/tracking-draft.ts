@@ -1,4 +1,6 @@
 import {
+  areUnitsConvertible,
+  convertThousandths,
   decimalSeparator,
   habitUnitInfo,
   HABIT_QUANTITY,
@@ -76,7 +78,26 @@ export function draftUnit(draft: Pick<TrackingDraft, "unit" | "custom">): HabitU
   return habitUnitInfo(unit) === null ? null : unit;
 }
 
-/** A draft's unit changed: presets restart from the new unit's suggestions (never converted). */
+/** One typed amount in another unit, as typed text; null unless it converts exactly. */
+function convertedText(
+  text: string,
+  from: HabitUnit,
+  to: HabitUnit,
+  locale: string,
+): string | null {
+  const parsed = parseQuantity(text, locale, from);
+  if (!parsed.ok) return null;
+  const converted = convertThousandths(parsed.thousandths, from, to);
+  if (converted === null || !converted.exact || converted.thousandths < 1) return null;
+  return localizedDecimal(converted.thousandths, locale);
+}
+
+/**
+ * A draft's unit changed. Within one dimension (litres to millilitres) the target and the presets
+ * are converted exactly, as the spec asks, so the person does not save "2 mL" by typing over
+ * "2 L". Anything else (another dimension, a custom label, an amount that would round) leaves the
+ * target as typed and restarts the presets from the new unit's suggestions.
+ */
 export function withUnit(
   draft: TrackingDraft,
   unit: string,
@@ -85,7 +106,19 @@ export function withUnit(
 ): TrackingDraft {
   const next = { ...draft, unit, custom };
   const named = draftUnit(next);
-  return { ...next, quickAdds: named ? presetsFor(named, locale) : [] };
+  const before = draftUnit(draft);
+  if (named === null) return { ...next, quickAdds: [] };
+  if (before === null || !areUnitsConvertible(before, named)) {
+    return { ...next, quickAdds: presetsFor(named, locale) };
+  }
+  const target = convertedText(draft.target, before, named, locale);
+  const presets = draft.quickAdds.map((text) => convertedText(text, before, named, locale));
+  const allConverted = presets.every((text): text is string => text !== null);
+  return {
+    ...next,
+    target: target ?? draft.target,
+    quickAdds: allConverted && presets.length > 0 ? presets : presetsFor(named, locale),
+  };
 }
 
 export function draftFromTracking(tracking: HabitTracking, locale: string): TrackingDraft {

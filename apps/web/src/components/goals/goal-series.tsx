@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import {
   GOAL_LIMITS,
   goalPeriodStart,
+  goalSeriesLeadDaysMax,
   parseGoalQuantity,
   type GoalSeriesState,
 } from "@madeora/domain/goals";
@@ -272,6 +273,18 @@ function CurrentPeriod({ series }: { readonly series: GoalSeriesDetail }) {
           {noCurrentText(series.state, t)}
         </p>
       )}
+      {series.state === "active" && series.nextPeriod ? (
+        <p className="text-body text-fg-muted" data-testid="goal-series-next">
+          {t("seriesNextPeriod", {
+            period: texts.period(series.nextPeriod.start, series.nextPeriod.end),
+          })}
+        </p>
+      ) : null}
+      <p className="text-helper text-fg-muted" data-testid="goal-series-zone">
+        {series.homeId === null
+          ? t("seriesTimeZonePersonal", { zone: series.timeZone })
+          : t("seriesTimeZoneHome", { zone: series.timeZone })}
+      </p>
     </section>
   );
 }
@@ -715,6 +728,7 @@ function SeriesEditDialog({
   const t = useTranslations("Goals");
   const texts = useGoalTexts();
   const personal = series.homeId === null;
+  const leadMax = goalSeriesLeadDaysMax(series.frequency);
   const form = useForm<EditValues>({
     defaultValues: {
       title: series.title,
@@ -736,10 +750,7 @@ function SeriesEditDialog({
     const lead = values.leadDays.trim();
     const leadDays = lead === "" ? null : Number(lead);
     let first: EditField | null = null;
-    if (
-      leadDays !== null &&
-      (!Number.isInteger(leadDays) || leadDays < 1 || leadDays > GOAL_LIMITS.leadDays)
-    ) {
+    if (leadDays !== null && (!Number.isInteger(leadDays) || leadDays < 1 || leadDays > leadMax)) {
       form.setError("leadDays", { message: "invalid" });
       first = "leadDays";
     }
@@ -815,10 +826,10 @@ function SeriesEditDialog({
         ) : null}
         <TextField
           label={t("fieldSeriesLead")}
-          description={t("fieldSeriesLeadHint", { max: GOAL_LIMITS.leadDays })}
+          description={t("fieldSeriesLeadHint", { max: leadMax })}
           type="number"
           min={1}
-          max={GOAL_LIMITS.leadDays}
+          max={leadMax}
           error={fieldError("leadDays")}
           {...form.register("leadDays")}
         />

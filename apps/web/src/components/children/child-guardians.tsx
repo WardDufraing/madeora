@@ -8,6 +8,7 @@ import { useState } from "react";
 import { FormAlert } from "@/components/auth/form-alert";
 import { MemberFailureAlert } from "@/components/members/manage/member-failure-alert";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import {
@@ -15,6 +16,7 @@ import {
   assignChildGuardian,
   removeChildSecondaryGuardian,
 } from "@/children/api";
+import { isolate } from "@/invitations/format";
 import type { MemberActionError } from "@/members/manage-api";
 
 import type { GuardianOption } from "./add-child-form";
@@ -34,6 +36,7 @@ type GuardianChange =
 export function ChildGuardians({
   homeId,
   membershipId,
+  childName,
   primaryName,
   secondaryName,
   hasSecondary,
@@ -50,6 +53,7 @@ export function ChildGuardians({
 }: {
   readonly homeId: string;
   readonly membershipId: string;
+  readonly childName: string;
   readonly primaryName: string | null;
   readonly secondaryName: string | null;
   readonly hasSecondary: boolean;
@@ -71,6 +75,8 @@ export function ChildGuardians({
   const hydrated = useHydrated();
   const [selected, setSelected] = useState(candidates[0]?.membershipId ?? "");
   const [done, setDone] = useState<"offered" | "withdrawn" | "saved" | null>(null);
+  // A primary role is asked for only after the person has read what it changes.
+  const [confirmingPrimary, setConfirmingPrimary] = useState(false);
 
   const mutation = useMutation<undefined, MemberActionError, GuardianChange>({
     mutationFn: async (change) => {
@@ -87,12 +93,14 @@ export function ChildGuardians({
       return undefined;
     },
     onSuccess: (_, change) => {
+      setConfirmingPrimary(false);
       setDone(
         change.kind === "assign" ? "offered" : change.kind === "withdraw" ? "withdrawn" : "saved",
       );
       router.refresh();
     },
   });
+  const guardianName = candidates.find((option) => option.membershipId === selected)?.name ?? "";
   const run = (change: GuardianChange) => {
     setDone(null);
     if (!mutation.isPending) mutation.mutate(change);
@@ -184,7 +192,8 @@ export function ChildGuardians({
                 disabled={!hydrated || selected === ""}
                 loading={mutation.isPending}
                 onClick={() => {
-                  run({ kind: "assign", role: "primary", id: selected });
+                  setDone(null);
+                  setConfirmingPrimary(true);
                 }}
               >
                 {canAppointPrimary ? t("appointPrimary") : t("handOverPrimary")}
@@ -212,6 +221,43 @@ export function ChildGuardians({
         </div>
       ) : null}
       <MemberFailureAlert failure={mutation.error?.failure ?? null} />
+      <Dialog
+        open={confirmingPrimary}
+        onClose={() => {
+          if (!mutation.isPending) setConfirmingPrimary(false);
+        }}
+        closeLabel={t("close")}
+        title={t("confirmPrimaryTitle", { name: isolate(guardianName), child: isolate(childName) })}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => {
+                setConfirmingPrimary(false);
+              }}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              loading={mutation.isPending}
+              onClick={() => {
+                run({ kind: "assign", role: "primary", id: selected });
+              }}
+            >
+              {t("confirmPrimary")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-body text-fg">
+          {canAppointPrimary
+            ? t("confirmAppointBody", { child: isolate(childName) })
+            : t("confirmHandOverBody", { child: isolate(childName) })}
+        </p>
+      </Dialog>
       {done !== null && !mutation.isPending ? (
         <FormAlert tone="success" announce>
           {done === "offered"

@@ -98,6 +98,17 @@ export function ChildAccessForm({
   const dirty = change.added.length > 0 || change.removed.length > 0 || preset !== savedPreset;
   const afterSet = new Set(after);
   const beforeSet = new Set(before);
+  const presetSet = new Set<ChildCapability>(childPresetCapabilities[preset]);
+  /** Where a switch comes from: the preset's own choice, or an explicit override of it. */
+  const sourceOf = (capability: ChildCapability) =>
+    afterSet.has(capability) === presetSet.has(capability)
+      ? "sourcePreset"
+      : afterSet.has(capability)
+        ? "sourceOverrideOn"
+        : "sourceOverrideOff";
+  // Explicit choices stay when the preset changes; the person reviews them before saving.
+  const keptOverrides =
+    preset !== savedPreset ? childCapabilities.filter((capability) => capability in overrides) : [];
 
   const mutation = useMutation<AccessResponse, MemberActionError, boolean>({
     mutationFn: (confirmExpansion) =>
@@ -180,6 +191,7 @@ export function ChildAccessForm({
           <Checkbox
             key={capability}
             label={t(capabilityKey[capability])}
+            description={t(sourceOf(capability))}
             checked={afterSet.has(capability)}
             // A secondary guardian may only switch off what is on now.
             disabled={!hydrated || (!primary && !beforeSet.has(capability))}
@@ -202,6 +214,20 @@ export function ChildAccessForm({
           >
             {t("restoreDefaults")}
           </Button>
+        </div>
+      ) : null}
+      {keptOverrides.length > 0 ? (
+        <div className="flex flex-col gap-2" data-testid="kept-overrides">
+          <p className="text-body font-medium text-fg">{t("keptOverridesTitle")}</p>
+          <ul className="flex list-disc flex-col gap-1 ps-5 text-body text-fg">
+            {keptOverrides.map((capability) => (
+              <li key={capability}>
+                {t(overrides[capability] ? "keptOverrideOn" : "keptOverrideOff", {
+                  item: t(capabilityKey[capability]),
+                })}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
       {dirty ? (

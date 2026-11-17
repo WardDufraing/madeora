@@ -8,6 +8,7 @@ import { useForm, useWatch } from "react-hook-form";
 import {
   GOAL_LIMITS,
   goalFrequencies,
+  goalSeriesLeadDaysMax,
   goalWeekStarts,
   isGoalFrequencyAllowed,
   parseGoalQuantity,
@@ -165,6 +166,7 @@ export function GoalFormDialog({
     name: ["kind", "unit", "custom", "context", "repeat"],
   });
   const recurring = mode.kind === "create" && repeat !== "none";
+  const leadMax = repeat === "none" ? GOAL_LIMITS.leadDays : goalSeriesLeadDaysMax(repeat);
   const period = editing?.period ?? null;
   // A preview belongs to the values it was made for: any change asks for a new one before the
   // series is created.
@@ -178,6 +180,15 @@ export function GoalFormDialog({
   const homeId = editing ? editing.homeId : context === PERSONAL ? null : context;
   const personal = homeId === null;
   const unit = draftUnit({ unit: unitCode, custom });
+  // The target the series will start with, as the preview names it (a preview matches the form).
+  const previewTargetRead =
+    kind === "measurable" && unit
+      ? parseGoalQuantity(target, texts.locale, unit, { zero: false })
+      : null;
+  const previewTarget =
+    unit && previewTargetRead?.ok
+      ? texts.amount(previewTargetRead.thousandths / 1000, unit.unit, unit.kind)
+      : null;
   const save = useGoalMutation(
     `goal:${editing?.id ?? id}`,
     (body: object) =>
@@ -251,7 +262,9 @@ export function GoalFormDialog({
       const leadDays = lead === "" ? null : Number(lead);
       if (
         leadDays !== null &&
-        (!Number.isInteger(leadDays) || leadDays < 1 || leadDays > GOAL_LIMITS.leadDays)
+        (!Number.isInteger(leadDays) ||
+          leadDays < 1 ||
+          leadDays > goalSeriesLeadDaysMax(values.repeat))
       ) {
         form.setError("leadDays", { message: "invalid" });
         first = "leadDays";
@@ -484,10 +497,10 @@ export function GoalFormDialog({
             />
             <TextField
               label={t("fieldSeriesLead")}
-              description={t("fieldSeriesLeadHint", { max: GOAL_LIMITS.leadDays })}
+              description={t("fieldSeriesLeadHint", { max: leadMax })}
               type="number"
               min={1}
-              max={GOAL_LIMITS.leadDays}
+              max={leadMax}
               error={errors.leadDays ? t("fieldSeriesLeadInvalid") : undefined}
               data-testid="goal-series-lead"
               {...form.register("leadDays")}
@@ -553,7 +566,16 @@ export function GoalFormDialog({
             ) : (
               <p>{t("seriesPreviewOnlyOne")}</p>
             )}
+            {previewTarget !== null ? (
+              <p>{t("seriesPreviewTarget", { amount: previewTarget })}</p>
+            ) : null}
+            <p>
+              {personal
+                ? t("seriesPreviewZonePersonal", { zone: form.getValues("timeZone") })
+                : t("seriesPreviewZoneHome")}
+            </p>
             <p className="text-helper text-fg-muted">{t("seriesPreviewRules")}</p>
+            <p className="text-helper text-fg-muted">{t("seriesPreviewControls")}</p>
           </div>
         ) : null}
         {formError ? (

@@ -179,6 +179,7 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
           <ChildGuardians
             homeId={home.id}
             membershipId={child.membershipId}
+            childName={name}
             primaryName={nameOf(child.primaryGuardianMembershipId)}
             secondaryName={nameOf(child.secondaryGuardianMembershipId)}
             hasSecondary={child.secondaryGuardianMembershipId !== null}
