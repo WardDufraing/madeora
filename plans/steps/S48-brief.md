@@ -32,5 +32,5 @@ Task and other forms built on TanStack mutations hold a request made offline unt
 
 - [x] Scoping and brief
 - [x] New specs green locally (fallback stack: Ora change, screens light and dark, states); full suite runs on CI
-- [ ] Independent review (`reviews/steps/S48-review.md`)
+- [x] Independent review (`reviews/steps/S48-review.md`): CHANGES_REQUIRED, 0 BLOCKER, 2 HIGH. Fixed: screen list now covers every id-free page with a drift guard (two pages excluded on purpose), dark theme asserted, duplicate check after reload, matrix path and claims corrected, offline scope stated as Tasks only. Not changed: the offline held-request behaviour (a product decision, see above).
 - [ ] PR
