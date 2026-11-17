@@ -5232,6 +5232,7 @@
     "previewTodayKept": "Today's total is {total}. Today's status stays the same.",
     "previewStreak": "Current streak: {streak}.",
     "previewReminders": "Reminders stay on and show the day's progress.",
+    "previewReplacesLater": "It replaces the change already planned for {date} ({tracking}).",
     "confirmUnitLabel": "I understand the old and new units are not converted.",
     "confirmStatusLabel": "I understand today's completion changes.",
     "nothingToChange": "Nothing would change.",

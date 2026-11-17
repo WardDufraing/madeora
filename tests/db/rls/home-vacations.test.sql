@@ -38,8 +38,10 @@ insert into ids select 'm-bob-b', m.id from public.home_memberships m
   where m.home_id = (select id from ids where name = 'home-b') and m.user_id = tests.user_id('bob');
 insert into ids select n, gen_random_uuid() from unnest(array[
   'c-rot', 'c-daily', 'c-one', 'c-one2', 'c-one3', 'c-pool', 'v-carol', 'v-gus', 'v-dave', 'v-all', 'v-all2',
-  'v-trip', 'v-solo', 'v-b', 'a-carol', 'a-gus', 'c-orph1', 'c-orph2', 'c-orph3', 'v-orph'
+  'v-trip', 'v-solo', 'v-b', 'a-carol', 'a-gus', 'c-orph1', 'c-orph2', 'c-orph3', 'v-orph', 'v-over'
 ]) as n;
+create temporary table seen_revisions (name text primary key, revision integer not null) on commit drop;
+grant all on seen_revisions to authenticated;
 
 create function tests.i(p_name text) returns uuid
   language sql stable security definer as $$ select id from ids where name = p_name; $$;
@@ -498,6 +500,25 @@ select tests.assert_true(
 select tests.assert_true(
   tests.state(tests.one('c-one')) = 'open:-:false:true' and tests.state(tests.one('c-pool')) = 'open:-:false:true',
   'One-off chores due on a paused date wait for a vacation review');
+-- S22 review M5: waiting for a vacation review is never overdue, even once its date has passed.
+select tests.act_as_owner();
+create temporary table c_one_due on commit drop as
+  select due_date from private.chore_occurrences where id = tests.one('c-one');
+update private.chore_occurrences set due_date = tests.today_a() - 1 where id = tests.one('c-one');
+select tests.act_as('alice');
+select tests.assert_true(
+  not exists (select 1 from jsonb_array_elements(public.get_chore_summary(tests.i('home-a')) -> 'items') i
+    where (i ->> 'id')::uuid = tests.one('c-one')),
+  'The manager summary does not list it as overdue');
+select tests.assert_true(
+  (select bool_and(not (i ->> 'overdue')::boolean)
+   from jsonb_array_elements(public.list_chore_schedule(tests.i('home-a'), tests.today_a() - 1,
+     tests.today_a() - 1) -> 'items') i
+   where (i ->> 'id')::uuid = tests.one('c-one')),
+  'Nor does the overview');
+select tests.act_as_owner();
+update private.chore_occurrences set due_date = (select due_date from c_one_due) where id = tests.one('c-one');
+select tests.act_as('alice');
 select tests.assert_true(
   (select count(*) = 0 from public.list_chore_pool(tests.i('home-a')) p where p.id = tests.one('c-pool')),
   'An unassigned one-off chore waiting for review is not in the pool');
@@ -527,6 +548,7 @@ select tests.assert_true(tests.state(tests.occ('c-daily', 10)) = 'paused:paused:
   'Day 10 is paused by the second');
 
 -- Every participant extends to day 11: the pause does not grow without a new confirmation.
+insert into seen_revisions values ('v-all2', tests.vrev('v-all2'));
 select tests.assert_true(
   (select bool_and(x.outcome = 'saved') from (
     select (public.change_vacation_participation(p.id, p.revision, 'change_dates', false,
@@ -534,6 +556,13 @@ select tests.assert_true(
     from (select (tests.prow(tests.part('v-all2', u))).* from unnest(array['alice', 'carol', 'gus', 'dave']) u) p
     order by p.id) x),
   'Alice extends every stay to day 11');
+-- S22 review M3: who is away when decides the pause, so it is a change of the vacation.
+select tests.assert_true(tests.vrev('v-all2') > (select revision from seen_revisions where name = 'v-all2'),
+  'Changing the stays changes the vacation''s revision');
+select tests.assert_true(
+  (select outcome = 'conflict' from public.update_home_vacation(tests.i('v-all2'),
+    (select revision from seen_revisions where name = 'v-all2'), 'pause', false)),
+  'A pause reviewed before the stays changed is not confirmed for more dates');
 select tests.assert_true(tests.state(tests.occ('c-daily', 11)) = 'open:-:false:false',
   'Day 11 is not paused without a confirmation');
 select tests.assert_true(
@@ -798,6 +827,37 @@ delete from public.home_memberships where home_id = tests.i('home-a') and user_i
 select tests.assert_true(tests.pstatus(tests.part('v-trip', 'carol')) = 'withdrawn'
     and (tests.prow(tests.part('v-trip', 'carol'))).ended_reason = 'departure',
   'A departing member''s participation ends, kept in the history');
+
+-- An Ended vacation takes no participation changes (S22 review M4) ---------------------------------------------
+
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'created' from public.create_home_vacation(tests.i('v-over'), tests.i('home-a'), 'Over',
+    jsonb_build_array(tests.stay('gus', 1, 2)))),
+  'A vacation for Gus');
+select tests.act_as_owner();
+update private.home_vacations set starts_on = tests.today_a() - 3, ends_on = tests.today_a() - 2
+  where id = tests.i('v-over');
+update private.home_vacation_participants set starts_on = tests.today_a() - 3, ends_on = tests.today_a() - 2
+  where vacation_id = tests.i('v-over');
+select tests.act_as('gus');
+select tests.assert_true(
+  (select outcome = 'ended' from public.change_vacation_participation(tests.part('v-over', 'gus'),
+    tests.prev(tests.part('v-over', 'gus')), 'change_dates', false, tests.today_a() - 3, tests.today_a() + 5)),
+  'Gus cannot extend a vacation that has ended into a new one');
+select tests.assert_true(
+  (select outcome = 'ended' from public.change_vacation_participation(tests.part('v-over', 'gus'),
+    tests.prev(tests.part('v-over', 'gus')), 'withdraw', false)),
+  'Nor withdraw from it');
+select tests.assert_true(
+  (select (p.starts_on, p.ends_on, p.status) = (tests.today_a() - 3, tests.today_a() - 2, 'accepted')
+    from tests.prow(tests.part('v-over', 'gus')) p),
+  'His stay is unchanged');
+select tests.act_as('dave');
+select tests.assert_true(
+  (select outcome = 'not_permitted' from public.change_vacation_participation(tests.part('v-over', 'gus'),
+    tests.prev(tests.part('v-over', 'gus')), 'remove', false)),
+  'Someone who may not act is still told so, not that it ended');
 
 -- Cross-Home isolation ----------------------------------------------------------------------------------------------
 

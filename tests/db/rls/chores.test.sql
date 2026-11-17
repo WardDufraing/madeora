@@ -32,7 +32,7 @@ insert into ids select 'm-bob-b', m.id from public.home_memberships m
   where m.home_id = (select id from ids where name = 'home-b') and m.user_id = tests.user_id('bob');
 insert into ids select n, gen_random_uuid() from unnest(array[
   'cat-kitchen', 'cat-garden', 'cat-b', 'c-dishes', 'c-rota', 'c-b', 'c-weekly', 'c-pause', 'c-del',
-  'c-empty', 'c-fixed'
+  'c-empty', 'c-fixed', 'c-end'
 ]) as n;
 
 create function tests.i(p_name text) returns uuid
@@ -581,10 +581,32 @@ select tests.assert_true(
   'Only the occurrences come back');
 select tests.assert_true(cardinality(tests.dates('c-del')) = 4, 'All four dates are there again');
 select tests.assert_true(
+  (select outcome = 'deleted' from public.delete_chore_occurrences(tests.occ('c-del', tests.today_a() + 1),
+    'occurrence', tests.orev(tests.occ('c-del', tests.today_a() + 1)), false)),
+  'Tomorrow''s occurrence goes to the trash on its own');
+select tests.assert_true(
   (select outcome = 'deleted' and impact ->> 'scope' = 'series' and (impact ->> 'kept')::integer = 1
    from public.delete_chore_occurrences(tests.occ('c-del', tests.today_a()), 'series',
      tests.orev(tests.occ('c-del', tests.today_a())), false)),
   'Deleting the entire series keeps its history');
+-- S20 review M1: an ended chore takes no occurrence back, and its occurrences are not edited.
+select tests.assert_true(
+  (select outcome = 'needs_resolution' and conflict = 'chore_unavailable'
+   from public.restore_trash_entries(array[tests.entry('chore_occurrence')])),
+  'An occurrence of an ended chore cannot be restored');
+select tests.act_as_owner();
+update private.chore_occurrences set deleted_at = null
+  where id = (select subject_id from private.trash_entries where id = tests.entry('chore_occurrence'));
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'scope_unavailable' from public.update_chore_series(tests.occ('c-del', tests.today_a() + 1),
+    'series', tests.orev(tests.occ('c-del', tests.today_a() + 1)), tests.srev('c-del'), false,
+    p_set_minutes => true, p_minutes => 5)),
+  'An open occurrence left on an ended chore takes no series change');
+select tests.act_as_owner();
+update private.chore_occurrences set deleted_at = now()
+  where id = (select subject_id from private.trash_entries where id = tests.entry('chore_occurrence'));
+select tests.act_as('alice');
 select tests.assert_true(
   (select count(*) = 1 from public.list_chores(tests.i('home-a'), true) where id = tests.i('c-del')),
   'The chore is listed as ended');
@@ -598,8 +620,49 @@ select tests.assert_true(
   (select outcome = 'purged' from public.purge_trash_entries(array[tests.entry('chore_removal')])),
   'Purging the removal');
 select tests.assert_true(
+  (select outcome = 'purged' from public.purge_trash_entries(array[tests.entry('chore_occurrence')])),
+  'And the single occurrence');
+select tests.assert_true(
   tests.rows('c-del') = 1,
   'Leaves only the history');
+-- The same for the occurrences of a removal: once the chore has ended, they stay in the trash.
+select tests.assert_true(
+  (select outcome = 'created' from public.create_chore(tests.i('c-end'), tests.i('home-a'), 'Gutters',
+    '{"mode": "none", "members": []}', p_frequency => 'daily', p_interval => 1, p_starts_on => tests.today_a())),
+  'A daily chore that will end');
+select tests.act_as_owner();
+select tests.chore_shift_back('c-end', 2);
+select tests.act_as('alice');
+select public.advance_chores(tests.i('home-a'));
+select public.complete_chore_occurrence(tests.occ('c-end', tests.today_a() - 2), tests.i('m-alice-a'));
+select tests.assert_true(
+  (select outcome = 'deleted' from public.delete_chore_occurrences(tests.occ('c-end', tests.today_a()), 'following',
+     tests.orev(tests.occ('c-end', tests.today_a())), false)),
+  'This and following go to the trash');
+select tests.assert_true(
+  (select outcome = 'deleted' and impact ->> 'scope' = 'series'
+   from public.delete_chore_occurrences(tests.occ('c-end', tests.today_a() - 1), 'series',
+     tests.orev(tests.occ('c-end', tests.today_a() - 1)), false)),
+  'Then the entire series: the chore ends');
+select tests.act_as_owner();
+insert into ids select 'e-end-following', t.id from private.trash_entries t
+  join private.chore_removals r on r.id = t.subject_id
+  where t.item_type = 'chore_removal' and t.status = 'trashed' and r.chore_id = tests.i('c-end')
+    and r.mode = 'following';
+insert into ids select 'e-end-series', t.id from private.trash_entries t
+  join private.chore_removals r on r.id = t.subject_id
+  where t.item_type = 'chore_removal' and t.status = 'trashed' and r.chore_id = tests.i('c-end')
+    and r.mode = 'series';
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'needs_resolution' and conflict = 'chore_unavailable'
+   from public.restore_trash_entries(array[tests.i('e-end-following')],
+     jsonb_build_object(tests.i('e-end-following')::text, 'restore_occurrences_only'))),
+  'The earlier removal''s occurrences do not come back onto the ended chore');
+select tests.assert_true(
+  (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('e-end-series')])),
+  'The removal that ended it still brings the chore back');
+
 -- A recurring chore without any history goes to the trash whole.
 select tests.assert_true(
   (select outcome = 'created' from public.create_chore(tests.i('c-empty'), tests.i('home-a'), 'Mistake',

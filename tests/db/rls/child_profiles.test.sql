@@ -266,6 +266,38 @@ select tests.assert_denied(
   'Nobody writes child identity rows directly'
 );
 
+-- Home-level per-member grants refuse children (S41 review M5) --------------------------------------
+
+select tests.act_as('alice');
+select tests.assert_true(
+  public.set_home_export_access(tests.ch('home-a'), tests.ch('m-mia'), true) = 'not_permitted',
+  'The Owner cannot give a child the Home export');
+select tests.assert_true(
+  public.set_pet_medical_access(tests.ch('home-a'), tests.ch('m-mia'), 'manage') = 'not_permitted',
+  'Nor pet medical access');
+select tests.assert_true(
+  public.set_home_calendar_access(tests.ch('home-a'), tests.ch('m-mia'), 'edit_delete') = 'not_permitted',
+  'Nor a calendar level');
+select tests.act_as_owner();
+select tests.assert_true(
+  not exists (select 1 from private.home_export_grants g where g.user_id = tests.ch('mia'))
+    and not exists (select 1 from private.pet_medical_access a where a.user_id = tests.ch('mia'))
+    and not exists (select 1 from private.home_calendar_access a where a.user_id = tests.ch('mia')),
+  'Nothing was granted');
+select tests.act_as('alice');
+select tests.assert_true(
+  public.set_home_export_access(tests.ch('home-a'), tests.ch_mid(tests.ch('home-a'), tests.ch('bob')), true) = 'ok'
+    and public.set_home_export_access(tests.ch('home-a'), tests.ch_mid(tests.ch('home-a'), tests.ch('bob')), false) = 'ok',
+  'An adult Member can still be given and lose it');
+select tests.act_as('bob');
+select tests.assert_true(
+  public.set_home_export_access(tests.ch('home-a'), tests.ch('m-mia'), true) = 'not_permitted',
+  'A Member is refused as before');
+select tests.act_as_user(tests.ch('erin'));
+select tests.assert_denied(
+  format($q$select public.set_home_export_access(%L, %L, true)$q$, tests.ch('home-a'), tests.ch('m-mia')),
+  'Someone outside the Home gets the original answer', '42501');
+
 -- Guardian assignments -----------------------------------------------------------------------------
 
 select tests.act_as_user(tests.ch('dave'));

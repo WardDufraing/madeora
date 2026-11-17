@@ -205,7 +205,9 @@ export async function requireMemberAction(
   const decision = decideMemberAction(
     home.id,
     membership,
-    { homeId: home.id, role: target.role, isSelf: target.isSelf },
+    // A child's access comes only from its guardians' preset (S41 review M5): member actions on a
+    // child are refused here too, not only hidden in the interface.
+    { homeId: home.id, role: target.role, isSelf: target.isSelf, isChild: target.isChild === true },
     action,
   );
   if (!decision.allowed) return { ok: false, response: failure(403, "not-permitted") };

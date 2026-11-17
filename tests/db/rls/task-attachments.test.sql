@@ -563,6 +563,27 @@ select tests.assert_true(
 select tests.assert_true(
   (select outcome = 'attached' from public.attach_task_file(tests.i('f-s2-cap'), 'this')),
   'The same file can still be added to this occurrence alone');
+-- S19c review M-A: restoring a series attachment into a chain that is full again is a conflict.
+select tests.act_as_owner();
+insert into ids select 'sa-s2-trashed', id from private.task_series_attachments
+  where root_id = tests.i('s2') and removed_at is null order by added_at, id limit 1;
+update private.task_series_attachments set removed_at = now(), removed_by = tests.user_id('alice')
+  where id = tests.i('sa-s2-trashed');
+insert into ids select 'e-s2-trashed', private.trash_move(tests.user_id('alice'), 'tasks',
+  'task_series_attachment', tests.i('sa-s2-trashed'), null, tests.i('home-a'), 'Filler.pdf');
+insert into private.task_series_attachments (root_id, owner_user_id, owner_home_id, file_id, display_name, added_by)
+  select tests.i('s2'), null, tests.i('home-a'), file_id, 'Filler 2.pdf', tests.user_id('alice')
+  from private.task_series_attachments where id = tests.i('sa-s2-trashed');
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'needs_resolution' and conflict = 'attachment_limit'
+   from public.restore_trash_entries(array[tests.i('e-s2-trashed')])),
+  'A series attachment does not come back into a chain that holds 10 again');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select count(*) = 10 from private.task_series_attachments where root_id = tests.i('s2') and removed_at is null),
+  'The chain still holds 10');
+select tests.act_as('alice');
 
 -- Departure ------------------------------------------------------------------------------------------------
 

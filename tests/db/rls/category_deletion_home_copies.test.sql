@@ -507,6 +507,29 @@ insert into answers select 'album', public.request_home_copies('photo_album',
 select tests.assert_true(
   tests.cd_outcome((select value from answers where name = 'album'), (select id from ids where name = 'oak')) = 'copying',
   'every member may add albums: the copy starts directly');
+-- S40 part 2 review M2: copied files never count against the requester's own upload limits.
+select tests.act_as_owner();
+select tests.assert_true(
+  (select count(*) = 2 and bool_and(f.home_copy) from private.stored_files f
+   join private.home_copy_files c on c.dest_file_id = f.id
+   where c.request_id = tests.cd_request((select value from answers where name = 'album'), (select id from ids where name = 'oak'))),
+  'the copy''s files are marked as copies');
+insert into private.stored_files (pool_id, purpose, created_by, request_id, upload_key, object_key,
+    declared_type, declared_size, status, expires_at, home_copy)
+  select f.pool_id, f.purpose, f.created_by, gen_random_uuid(), private.new_object_key('h'),
+    private.new_object_key('h'), f.declared_type, f.declared_size, 'pending', f.expires_at, true
+  from private.stored_files f join private.home_copy_files c on c.dest_file_id = f.id
+  cross join generate_series(1, 30)
+  where c.request_id = tests.cd_request((select value from answers where name = 'album'), (select id from ids where name = 'oak'))
+  limit 30;
+select tests.act_as_user((select id from ids where name = 'ana'));
+select tests.assert_true(
+  (select outcome = 'ok' from public.create_upload_intent('avatar', 'image/png', 100, gen_random_uuid())),
+  'with more than 30 copied files pending, she can still upload');
+select tests.act_as_owner();
+delete from private.stored_files f where f.home_copy and f.status = 'pending'
+  and not exists (select 1 from private.home_copy_files c where c.dest_file_id = f.id);
+select tests.act_as_user((select id from ids where name = 'ana'));
 select tests.act_as_service_role();
 select tests.assert_true(
   (select jsonb_array_length(b -> 'objects') = 8

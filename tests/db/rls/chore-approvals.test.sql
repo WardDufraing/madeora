@@ -152,6 +152,11 @@ select tests.assert_true(
   (select outcome = 'occurrence_closed' from public.update_chore_occurrence(tests.occ('c-bins'),
     tests.orev('c-bins'), p_due_date => tests.today_a() + 1, p_dry_run => true)),
   'Nor changed');
+select tests.assert_true(
+  (select outcome = 'pending_approval' from public.delete_chore_occurrences(tests.occ('c-bins'), 'occurrence',
+    tests.orev('c-bins'), false)),
+  'Nor deleted (S20 review M2): it is decided or withdrawn first');
+select tests.assert_true(tests.ostate('c-bins') = 'pending_approval', 'It still waits for review');
 select tests.act_as('alice');
 select tests.assert_true(
   (select count(*) = 1 and bool_and(attempt = 1 and contributor_member = tests.i('m-carol-a')

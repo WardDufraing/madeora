@@ -215,6 +215,12 @@ export function RecipeEditor(props: RecipeEditorProps) {
       if (refused.failure === "lockLost") props.onLockLost();
       if (refused.failure === "conflict") props.onConflict();
     }
+    // A new cover that can no longer be used (an upload left unsaved for too long is retired) goes
+    // back to the saved one, so the next save keeps everything else and the person picks the photo
+    // again (S24 review M4).
+    if (refused.failure === "invalidCover") {
+      form.setValue("coverFileId", savedCover, { shouldDirty: true });
+    }
     setFailure(refused.failure);
     window.setTimeout(() => alertRef.current?.focus(), 0);
   }

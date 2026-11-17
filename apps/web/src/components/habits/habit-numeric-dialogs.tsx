@@ -71,6 +71,8 @@ const trackingImpact = z.object({
   nextDates: z.array(date).optional(),
   currentStreak: z.object({ current: z.int(), unit: z.enum(["occurrences", "weeks"]).nullable() }),
   reminders: z.boolean().optional(),
+  // Versions already scheduled after this one's start, which saving it removes (S29 review M3).
+  replacesLater: z.array(trackingJson.extend({ effectiveOn: date })).optional(),
 });
 
 type When = "today" | "next" | "date";
@@ -267,6 +269,18 @@ export function TrackingChangeDialog({
             {shown.data.reminders ? (
               <p className="text-body text-fg">{t("previewReminders")}</p>
             ) : null}
+            {(shown.data.replacesLater ?? []).map((later) => (
+              <p
+                key={later.effectiveOn}
+                className="text-body text-fg"
+                data-testid="habit-tracking-replaces-later"
+              >
+                {t("previewReplacesLater", {
+                  date: texts.date(later.effectiveOn, "short"),
+                  tracking: trackingText(later, numeric, t("trackingOnce")),
+                })}
+              </p>
+            ))}
           </Preview>
         ) : null}
         {previewed && unitChoice ? (
