@@ -11,6 +11,10 @@ export const historyKinds = [
   "task-undone",
   "shopping-item-added",
   "shopping-item-undone",
+  "task-completed",
+  "task-completion-undone",
+  "task-due-changed",
+  "task-due-restored",
 ] as const;
 export type HistoryKind = (typeof historyKinds)[number];
 

@@ -1,5 +1,12 @@
 import { callOraTool } from "../tools/client";
-import type { ActionPreview, OraActionId, UndoResult } from "./types";
+import type {
+  ActionPreview,
+  OraAddActionId,
+  OraTaskEditActionId,
+  TaskChoice,
+  TaskEdit,
+  UndoResult,
+} from "./types";
 
 /**
  * The browser's side of a guided change (S47): fetch the preview, make the confirmed change through
@@ -13,6 +20,8 @@ export type ApplyFailure =
   | "duplicate"
   | "list-unavailable"
   | "invalid"
+  /** Someone changed the record after it was shown (a task edit saves only the version shown). */
+  | "conflict"
   | "network"
   | "failed";
 
@@ -31,7 +40,7 @@ export interface Applied {
 
 export async function prepareAction(
   homeId: string | null,
-  action: OraActionId,
+  action: OraAddActionId,
 ): Promise<ActionPreview> {
   const output = await callOraTool(homeId, action, { step: "prepare" });
   if (output.kind !== "action-preview") throw new Error("unexpected Ora answer");
@@ -40,7 +49,7 @@ export async function prepareAction(
 
 export async function undoAction(
   homeId: string | null,
-  action: OraActionId,
+  action: OraAddActionId,
   applied: Applied & { readonly listId?: string },
 ): Promise<UndoResult> {
   const output = await callOraTool(homeId, action, {
@@ -53,11 +62,15 @@ export async function undoAction(
   return output.result;
 }
 
-async function send(url: string, body: unknown): Promise<unknown> {
+async function send(
+  url: string,
+  body: unknown,
+  method: "POST" | "PUT" | "PATCH" = "POST",
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, {
-      method: "POST",
+      method,
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
       credentials: "same-origin",
@@ -70,6 +83,7 @@ async function send(url: string, body: unknown): Promise<unknown> {
   const error = ((await response.json().catch(() => null)) as { error?: string } | null)?.error;
   if (response.status === 401) throw new ApplyError("signedOut");
   if (error === "duplicate") throw new ApplyError("duplicate");
+  if (response.status === 409 && error === "conflict") throw new ApplyError("conflict");
   if (error === "not-found" || error === "list-unavailable")
     throw new ApplyError("list-unavailable");
   if (response.status === 403 || error === "not-permitted") throw new ApplyError("not-permitted");
@@ -121,4 +135,90 @@ export async function applyAddShoppingItem(item: NewShoppingItem): Promise<Appli
   if (outcome !== "created" && outcome !== "exists") throw new ApplyError("failed");
   // A new item starts at revision 1; a retried add that already exists is the same item.
   return { id: item.id, revision: 1 };
+}
+
+/** The person's open tasks here for "complete a task" and "change a due date". */
+export async function fetchTaskChoices(
+  homeId: string | null,
+  action: OraTaskEditActionId,
+): Promise<readonly TaskChoice[]> {
+  const output = await callOraTool(homeId, action, { step: "prepare" });
+  if (output.kind !== "action-tasks") throw new Error("unexpected Ora answer");
+  return output.preview.tasks;
+}
+
+/** The picked task as it is now (null: gone, done, repeating, or not theirs to edit). */
+export async function fetchTaskEdit(homeId: string | null, id: string): Promise<TaskEdit | null> {
+  const output = await callOraTool(homeId, "change-task-due", { step: "task", id });
+  if (output.kind !== "action-task") throw new Error("unexpected Ora answer");
+  return output.task;
+}
+
+export interface Completed {
+  readonly id: string;
+  /** Null: it was already completed by someone else, so there is nothing of Ora's to undo. */
+  readonly completedAt: string | null;
+}
+
+export async function applyCompleteTask(id: string): Promise<Completed> {
+  const body = (await send(
+    `/api/v1/tasks/${encodeURIComponent(id)}/completion`,
+    { completed: true },
+    "PUT",
+  )) as { outcome?: string; completedAt?: unknown };
+  if (body.outcome === "already_completed") return { id, completedAt: null };
+  if (body.outcome !== "completed" || typeof body.completedAt !== "string") {
+    throw new ApplyError("failed");
+  }
+  return { id, completedAt: body.completedAt };
+}
+
+export async function undoCompletion(
+  homeId: string | null,
+  completed: { readonly id: string; readonly completedAt: string },
+): Promise<UndoResult> {
+  const output = await callOraTool(homeId, "complete-task", {
+    step: "undo-completion",
+    id: completed.id,
+    completedAt: completed.completedAt,
+  });
+  if (output.kind !== "action-undo") throw new Error("unexpected Ora answer");
+  return output.result;
+}
+
+export interface DueChanged {
+  readonly id: string;
+  readonly previousDue: string | null;
+  /** The revision the change left the task at; Undo is refused once anyone edits it. */
+  readonly revision: number;
+}
+
+/** Saves the task exactly as shown but for its due date (null removes it). */
+export async function applyChangeDue(task: TaskEdit, dueDate: string | null): Promise<DueChanged> {
+  const body = (await send(
+    `/api/v1/tasks/${encodeURIComponent(task.id)}`,
+    {
+      expectedRevision: task.revision,
+      title: task.title,
+      description: task.description,
+      startDate: task.startDate,
+      dueDate,
+      priority: task.priority,
+      labelIds: task.labelIds,
+    },
+    "PATCH",
+  )) as { revision?: unknown };
+  if (typeof body.revision !== "number") throw new ApplyError("failed");
+  return { id: task.id, previousDue: task.dueDate, revision: body.revision };
+}
+
+export async function undoDue(homeId: string | null, changed: DueChanged): Promise<UndoResult> {
+  const output = await callOraTool(homeId, "change-task-due", {
+    step: "undo-due",
+    id: changed.id,
+    expectedRevision: changed.revision,
+    previousDue: changed.previousDue,
+  });
+  if (output.kind !== "action-undo") throw new Error("unexpected Ora answer");
+  return output.result;
 }

@@ -19,7 +19,7 @@ import {
   type ApplyFailure,
 } from "@/ora/actions/client";
 import { newDraft, type ActionDraft } from "@/ora/actions/draft";
-import { UNDO_WINDOW_MS, type OraActionId, type UndoResult } from "@/ora/actions/types";
+import { UNDO_WINDOW_MS, type OraAddActionId, type UndoResult } from "@/ora/actions/types";
 import { recordHistory } from "@/ora/history/client";
 import type { HistoryKind } from "@/ora/history/types";
 import { rememberList } from "@/ora/memories/client";
@@ -30,7 +30,7 @@ import { taskTitleSchema } from "@/tasks/schema";
 import type { OraStatus } from "./ora-content";
 
 export interface OraActionProps {
-  readonly action: OraActionId;
+  readonly action: OraAddActionId;
   readonly userId: string;
   readonly homeId: string | null;
   readonly contextName: string;
@@ -69,6 +69,7 @@ const failureKey = {
   duplicate: "failDuplicate",
   "list-unavailable": "failListUnavailable",
   invalid: "failInvalid",
+  conflict: "failGeneric",
   network: "failNetwork",
   failed: "failGeneric",
 } as const satisfies Record<ApplyFailure, string>;

@@ -6,7 +6,7 @@ import { sql } from "../support/database";
 import { e2eEnv } from "../support/env";
 import { emailLink, waitForEmail } from "../support/mail";
 import { readSession } from "../support/session";
-import { totp } from "../support/totp";
+import { freshTotp } from "../support/totp";
 
 // S37: adult account security. Every test makes its own synthetic account and starts signed out.
 // A wrong code or a refused request is a 4xx that Chromium logs as a console error.
@@ -41,7 +41,7 @@ async function reauthenticate(page: Page, account: Account, secret?: string) {
   await page.getByLabel(/^Your current password/).fill(account.password);
   if (secret) {
     ageVerifications(account.email);
-    await page.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
+    await page.getByLabel(/^Code from your authenticator app/).fill(await freshTotp(secret));
   }
 }
 
@@ -59,7 +59,7 @@ async function turnOnTwoFactor(
   await expect(
     page.getByRole("img", { name: /QR code for setting up two-factor sign-in/ }),
   ).toBeVisible();
-  await page.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
+  await page.getByLabel(/^Code from your authenticator app/).fill(await freshTotp(secret));
   await page.getByRole("button", { name: "Turn on", exact: true }).click();
   await expect(page.getByTestId("recovery-codes")).toBeVisible();
   const codes = await page.getByTestId("recovery-code").allTextContents();
@@ -121,7 +121,7 @@ test.describe("two-factor sign-in", () => {
     await expect(other.getByLabel(/^Code from your authenticator app/)).toHaveValue("");
 
     ageVerifications(account.email);
-    await other.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
+    await other.getByLabel(/^Code from your authenticator app/).fill(await freshTotp(secret));
     await other.getByRole("button", { name: "Continue" }).click();
     await expect(other).toHaveURL(/\/settings$/);
     await other.context().close();
@@ -167,7 +167,7 @@ test.describe("two-factor sign-in", () => {
     await signInWithPassword(other, account, "/sign-in?next=%2Fsettings");
     await expect(other).toHaveURL(/\/sign-in\/two-factor/);
     ageVerifications(account.email);
-    await other.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
+    await other.getByLabel(/^Code from your authenticator app/).fill(await freshTotp(secret, true));
     await other.getByRole("checkbox", { name: /Trust this browser for 30 days/ }).check();
     await other.getByRole("button", { name: "Continue" }).click();
     await expect(other).toHaveURL(/\/settings$/);
@@ -196,6 +196,7 @@ test.describe("two-factor sign-in", () => {
     browser,
     baseURL,
   }) => {
+    test.slow(); // a second code can mean waiting for the next 30-second step
     const account = await registerConfirmed(baseURL ?? "");
     await signIn(page, account);
     const { secret, codes } = await turnOnTwoFactor(page, account);
@@ -203,7 +204,7 @@ test.describe("two-factor sign-in", () => {
     const other = await freshPage(browser);
     await signInWithPassword(other, account, "/sign-in?next=%2Fsettings");
     ageVerifications(account.email);
-    await other.getByLabel(/^Code from your authenticator app/).fill(totp(secret));
+    await other.getByLabel(/^Code from your authenticator app/).fill(await freshTotp(secret, true));
     await other.getByRole("checkbox", { name: /Trust this browser for 30 days/ }).check();
     await other.getByRole("button", { name: "Continue" }).click();
     await expect(other).toHaveURL(/\/settings$/);

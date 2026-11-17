@@ -214,6 +214,10 @@ describe("message dictionaries", () => {
         "task-undone",
         "shopping-item-added",
         "shopping-item-undone",
+        "task-completed",
+        "task-completion-undone",
+        "task-due-changed",
+        "task-due-restored",
       ]),
       OraMemories: withPrefix("key.", ["task-list", "shopping-list"]),
       // Household Displays (S44): widget types, presentation options and outcome codes.

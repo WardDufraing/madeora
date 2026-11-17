@@ -1,7 +1,13 @@
 import "server-only";
 
-import { prepareAction, undoAction } from "../actions/server";
-import { actionInputSchema, isOraActionId } from "../actions/types";
+import {
+  loadTaskEdit,
+  prepareAction,
+  prepareTaskAction,
+  undoAction,
+  undoTaskEdit,
+} from "../actions/server";
+import { actionInputSchema, isOraActionId, isTaskEditAction } from "../actions/types";
 import { loadOverview } from "../overview/server";
 import { prepareShare } from "../overview/share-server";
 import { overviewRequestSchema, shareRequestSchema } from "../overview/types";
@@ -42,14 +48,37 @@ export async function runInputTool(
   if (isOraActionId(tool.id)) {
     const parsed = actionInputSchema.safeParse(input);
     if (!parsed.success) return { status: "invalid" };
-    if (parsed.data.step === "prepare") {
+    const request = parsed.data;
+    if (isTaskEditAction(tool.id)) {
+      if (request.step === "prepare") {
+        const prepared = await prepareTaskAction(context, tool.id);
+        if (prepared.status !== "ok") return { status: "unavailable" };
+        return { status: "ok", output: { kind: "action-tasks", preview: prepared.preview } };
+      }
+      if (request.step === "task") {
+        if (tool.id !== "change-task-due") return { status: "invalid" };
+        const loaded = await loadTaskEdit(context, request.id);
+        if (loaded.status !== "ok") return { status: "unavailable" };
+        return { status: "ok", output: { kind: "action-task", task: loaded.task } };
+      }
+      if (request.step === "undo-completion" || request.step === "undo-due") {
+        const result = await undoTaskEdit(context, tool.id, request);
+        if (result === "unavailable") return { status: "unavailable" };
+        return { status: "ok", output: { kind: "action-undo", result } };
+      }
+      return { status: "invalid" };
+    }
+    if (request.step === "prepare") {
       const prepared = await prepareAction(context, tool.id);
       if (prepared.status !== "ok") return { status: "unavailable" };
       return { status: "ok", output: { kind: "action-preview", preview: prepared.preview } };
     }
-    const result = await undoAction(context, tool.id, parsed.data);
-    if (result === "unavailable") return { status: "unavailable" };
-    return { status: "ok", output: { kind: "action-undo", result } };
+    if (request.step === "undo") {
+      const result = await undoAction(context, tool.id, request);
+      if (result === "unavailable") return { status: "unavailable" };
+      return { status: "ok", output: { kind: "action-undo", result } };
+    }
+    return { status: "invalid" };
   }
 
   return { status: "forbidden" };

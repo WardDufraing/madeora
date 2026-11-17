@@ -1,6 +1,6 @@
 import type { HomeAction, HomeMembershipFacts } from "@madeora/domain/permissions";
 
-import type { ActionPreview, UndoResult } from "../actions/types";
+import type { ActionPreview, TaskEdit, TaskPickPreview, UndoResult } from "../actions/types";
 import type { Overview, OverviewShare } from "../overview/types";
 import type { OraToolId } from "./ids";
 
@@ -64,6 +64,8 @@ export type OraToolOutput =
   | { readonly kind: "overview"; readonly overview: Overview }
   | { readonly kind: "share"; readonly share: OverviewShare }
   | { readonly kind: "action-preview"; readonly preview: ActionPreview }
+  | { readonly kind: "action-tasks"; readonly preview: TaskPickPreview }
+  | { readonly kind: "action-task"; readonly task: TaskEdit | null }
   | { readonly kind: "action-undo"; readonly result: UndoResult };
 
 export interface OraToolDefinition extends OraToolSummary {

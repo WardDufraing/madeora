@@ -25,3 +25,28 @@ export function totp(secret: string, at = Date.now()): string {
   const code = (hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
   return code.toString().padStart(6, "0");
 }
+
+const lastCode = new Map<string, string>();
+
+/**
+ * A code that is safe to submit now: it stays valid long enough (when fewer than eight seconds
+ * remain in the 30-second step, wait for the next one, because a slow runner can spend the rest of
+ * the step between filling the code and the server checking it). With `distinct`, it is also never
+ * the code this secret was last answered with: authenticators may refuse a code they have already
+ * accepted, and two sign-ins within one step would otherwise present the same one.
+ */
+export async function freshTotp(secret: string, distinct = false): Promise<string> {
+  for (;;) {
+    const remaining = 30_000 - (Date.now() % 30_000);
+    if (remaining < 8_000) {
+      await new Promise((resolve) => setTimeout(resolve, remaining + 250));
+      continue;
+    }
+    const code = totp(secret);
+    if (!distinct || code !== lastCode.get(secret)) {
+      lastCode.set(secret, code);
+      return code;
+    }
+    await new Promise((resolve) => setTimeout(resolve, remaining + 250));
+  }
+}

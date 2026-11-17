@@ -16,6 +16,9 @@ export interface ActionDraft {
   readonly allowDuplicate: boolean;
   /** Ask Ora to remember the chosen list for next time (S47b); off unless the person ticks it. */
   readonly remember: boolean;
+  /** Task edits (S47d): the task picked, and whether the due date is to be removed. */
+  readonly taskId: string;
+  readonly clearDue: boolean;
 }
 
 export type ActionDrafts = Partial<Record<OraActionId, ActionDraft | undefined>>;
@@ -28,5 +31,7 @@ export function newDraft(): ActionDraft {
     recordId: crypto.randomUUID(),
     allowDuplicate: false,
     remember: false,
+    taskId: "",
+    clearDue: false,
   };
 }
