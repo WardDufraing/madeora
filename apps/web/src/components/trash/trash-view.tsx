@@ -330,7 +330,10 @@ export function TrashView({
                     data-testid="trash-entry"
                   >
                     <Checkbox
-                      label={entry.label}
+                      label={
+                        entry.label.trim() ||
+                        t("unnamedItem", { type: t(itemTypeKey[entry.itemType]) })
+                      }
                       description={[
                         t(itemTypeKey[entry.itemType]),
                         t("deletedOn", { date: formatDateTime(entry.deletedAt, formats) }),

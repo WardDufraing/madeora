@@ -163,6 +163,16 @@ describe("the recurring series contracts (S30b)", () => {
     });
   });
 
+  it("refuses a reminder lead that a period is always too short for", () => {
+    const lead = (frequency: string, leadDays: number) =>
+      createSeriesSchema.safeParse({ ...series, frequency, reminder: { leadDays } }).success;
+    expect(lead("weekly", 6)).toBe(true);
+    expect(lead("weekly", 7)).toBe(false);
+    expect(lead("monthly", 27)).toBe(true);
+    expect(lead("monthly", 28)).toBe(false);
+    expect(lead("yearly", 90)).toBe(true);
+  });
+
   it("refuses weekly completion series, a missing measure and an end before the first period", () => {
     const completion = { id: SERIES, homeId: null, kind: "completion", title: "Paint" };
     expect(

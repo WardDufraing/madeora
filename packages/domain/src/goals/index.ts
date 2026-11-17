@@ -76,6 +76,14 @@ export function isGoalFrequencyAllowed(kind: GoalKind, frequency: GoalFrequency)
 }
 
 /**
+ * The longest advance reminder a series of this frequency can use: a period is created when it
+ * starts, so a lead of a whole period or more is already in the past and would never fire.
+ */
+export function goalSeriesLeadDaysMax(frequency: GoalFrequency): number {
+  return frequency === "weekly" ? 6 : frequency === "monthly" ? 27 : GOAL_LIMITS.leadDays;
+}
+
+/**
  * Reads an amount typed in the person's locale for a goal: a target or a contribution (strictly
  * positive) or, with `zero`, an initial value or a total. Whole numbers only for a discrete unit.
  */

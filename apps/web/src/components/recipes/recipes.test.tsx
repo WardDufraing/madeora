@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { RecipeDetail, RecipeIngredient } from "@/recipes/api";
@@ -251,6 +251,63 @@ describe("the editor", () => {
       expect(router.push).toHaveBeenCalledWith(`/homes/${HOME}/recipes/${RECIPE}`);
     });
     expect(sent(0).body).toMatchObject({ publish: true, homeId: HOME });
+  });
+
+  it("publishes an unchanged draft without saving it again (a retry after a lost answer)", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { id: RECIPE, revision: 3, status: "published" }),
+    );
+    renderWithQuery(
+      <RecipeEditor
+        mode="draft"
+        recipeId={RECIPE}
+        revision={3}
+        destination={HOME}
+        homes={[{ id: HOME, name: "Our home" }]}
+        initial={{ ...emptyRecipeForm(), name: "Soup", steps: [{ text: "Boil." }] }}
+      />,
+    );
+    await user.click(screen.getByTestId("recipe-publish"));
+    await user.click(within(screen.getByRole("dialog")).getByTestId("recipe-publish-confirm"));
+    await waitFor(() => {
+      expect(router.push).toHaveBeenCalledWith(`/homes/${HOME}/recipes/${RECIPE}`);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent(0)).toMatchObject({ url: `/api/v1/recipes/${RECIPE}/publish`, method: "POST" });
+  });
+
+  it("asks before a link inside the app drops unsaved changes", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderWithQuery(
+      <>
+        <a href="https://elsewhere.example/away">Away</a>
+        <a href="#main">Skip</a>
+        <RecipeEditor
+          mode="new"
+          recipeId={RECIPE}
+          homeId={null}
+          homes={[]}
+          initial={emptyRecipeForm()}
+        />
+      </>,
+    );
+    await user.click(screen.getByText("Away"));
+    expect(confirm).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText("Name"), "Soup");
+    // A link within this page (the skip link) does not leave it, so it does not ask.
+    await user.click(screen.getByText("Skip"));
+    expect(confirm).not.toHaveBeenCalled();
+    // Neither does a modified click (a new tab) or a download.
+    await user.keyboard("{Control>}");
+    await user.click(screen.getByText("Away"));
+    await user.keyboard("{/Control}");
+    expect(confirm).not.toHaveBeenCalled();
+    // Declining the question keeps the person on the page.
+    expect(fireEvent.click(screen.getByText("Away"))).toBe(false);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
   });
 
   it("moves ingredient rows with buttons, not only by dragging", async () => {

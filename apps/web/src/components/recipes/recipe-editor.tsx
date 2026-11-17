@@ -149,17 +149,41 @@ export function RecipeEditor(props: RecipeEditorProps) {
       writeBackup(backupKey, backupRevision, form.getValues());
     }
   }, [backupKey, backupRevision, dirty, form, watched]);
-  // Leaving with unsaved changes asks first (the browser's own prompt).
+  // Leaving with unsaved changes asks first. Closing or reloading shows the browser's own prompt;
+  // links inside the app do not unload the page, so they are asked about here.
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
+    const click = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(anchor instanceof HTMLAnchorElement) || anchor.target === "_blank") return;
+      // Not leaving this page: a new tab or window, a download, or a link within the same page
+      // (the skip link).
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (anchor.hasAttribute("download")) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (
+        url.origin === window.location.origin &&
+        url.pathname === window.location.pathname &&
+        url.search === window.location.search
+      ) {
+        return;
+      }
+      if (!window.confirm(t("leaveConfirm"))) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
     window.addEventListener("beforeunload", warn);
+    document.addEventListener("click", click, true);
     return () => {
       window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", click, true);
     };
-  }, [dirty]);
+  }, [dirty, t]);
 
   const message = (error: { readonly message?: string | undefined } | undefined) => {
     const key = error?.message as RecipeFieldError | undefined;
@@ -268,8 +292,10 @@ export function RecipeEditor(props: RecipeEditorProps) {
           content: withSource(body),
         });
       } else {
-        // A draft: save what is on screen, then publish that revision.
-        const current = await saveDraft(body);
+        // A draft: save what is on screen, then publish that revision. Nothing changed since the
+        // last save means no save: a retry after a lost publish answer must reach the publish
+        // call (which answers "already published"), not a save that the published recipe refuses.
+        const current = !dirty && revision !== null ? revision : await saveDraft(body);
         setRevision(current);
         form.reset(form.getValues());
         await sendRecipeRequest<SavedRecipe>("POST", recipeEndpoint(props.recipeId, "publish"), {

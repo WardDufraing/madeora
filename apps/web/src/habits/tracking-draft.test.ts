@@ -91,11 +91,27 @@ describe("reading a tracking draft", () => {
 });
 
 describe("a draft and its units", () => {
-  it("restarts the presets for another unit and never converts them", () => {
-    const water = withUnit(numeric(), "l", "", "nl");
-    expect(water.quickAdds).toEqual(["0,25", "0,5"]);
-    expect(withUnit(numeric(), "glasses", "", "en").quickAdds).toEqual(["1", "2"]);
+  it("converts the target and presets exactly within one dimension", () => {
+    const litres = withUnit(numeric({ target: "2000", quickAdds: ["250", "500"] }), "l", "", "nl");
+    expect(litres).toMatchObject({ target: "2", quickAdds: ["0,25", "0,5"] });
+    const millilitres = withUnit(
+      numeric({ unit: "l", target: "1.5", quickAdds: ["0.25"] }),
+      "ml",
+      "",
+      "en",
+    );
+    expect(millilitres).toMatchObject({ target: "1500", quickAdds: ["250"] });
+  });
+
+  it("restarts the presets for a unit that does not convert and keeps the typed target", () => {
+    const glasses = withUnit(numeric(), "glasses", "", "en");
+    expect(glasses).toMatchObject({ target: "2000", quickAdds: ["1", "2"] });
     expect(withUnit(numeric(), CUSTOM_UNIT, "cups", "en").quickAdds).toEqual([]);
+  });
+
+  it("leaves what would round to the new unit's suggestions and the typed target", () => {
+    const rounded = withUnit(numeric({ target: "1500.5", quickAdds: ["250"] }), "l", "", "en");
+    expect(rounded.target).toBe("1500.5");
   });
 
   it("writes and reads a tracking in the person's locale", () => {

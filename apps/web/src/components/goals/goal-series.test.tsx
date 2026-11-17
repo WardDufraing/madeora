@@ -309,6 +309,104 @@ describe("creating a recurring goal", () => {
   });
 });
 
+describe("the reminder lead cap per repeat", () => {
+  it("shows the weekly maximum and refuses a longer lead when creating", async () => {
+    const user = userEvent.setup();
+    routeFetch([]);
+    withToasts(
+      <GoalFormDialog
+        mode={{ kind: "create", homeId: null }}
+        contexts={[]}
+        today="2026-11-10"
+        timeZone="Europe/Brussels"
+        timeZones={["Europe/Brussels"]}
+        weekStart="sunday"
+        onClose={() => {}}
+      />,
+    );
+    await user.type(screen.getByLabelText(/Title/), "Read");
+    await user.type(screen.getByLabelText(/^Target/), "100");
+    await user.selectOptions(screen.getByLabelText(/Repeat/), "weekly");
+    const lead = screen.getByLabelText(/Reminder before each period ends/);
+    expect(lead).toHaveAccessibleDescription(
+      "Between 1 and 6 days before the last day of each period.",
+    );
+    await user.type(lead, "7");
+    await user.click(screen.getByRole("button", { name: "Preview periods" }));
+    expect(
+      await screen.findByText("Enter a whole number of days in the allowed range."),
+    ).toBeVisible();
+    expect(sent("/goal-series", "POST")).toHaveLength(0);
+  });
+
+  it("shows the target and timezone in the preview", async () => {
+    const user = userEvent.setup();
+    routeFetch([
+      {
+        when: (url, method) => method === "POST" && url.endsWith("/goal-series"),
+        answer: () =>
+          reply(200, {
+            id: SERIES,
+            outcome: "preview",
+            startsNow: false,
+            periods: { first: { start: "2026-12-01", end: "2026-12-31" }, next: null },
+          }),
+      },
+    ]);
+    withToasts(
+      <GoalFormDialog
+        mode={{ kind: "create", homeId: null }}
+        contexts={[]}
+        today="2026-11-10"
+        timeZone="Europe/Brussels"
+        timeZones={["Europe/Brussels"]}
+        weekStart="sunday"
+        onClose={() => {}}
+      />,
+    );
+    await user.type(screen.getByLabelText(/Title/), "Run");
+    await user.selectOptions(screen.getByLabelText("Unit"), "km");
+    await user.type(screen.getByLabelText(/^Target/), "40");
+    await user.selectOptions(screen.getByLabelText(/Repeat/), "monthly");
+    await user.click(screen.getByRole("button", { name: "Preview periods" }));
+    const preview = await screen.findByTestId("goal-series-preview");
+    expect(preview).toHaveTextContent(/Target for each period: .*40/);
+    expect(preview).toHaveTextContent(
+      "Periods start and end at midnight in the timezone Europe/Brussels.",
+    );
+    expect(preview).toHaveTextContent("You can pause the series later");
+  });
+
+  it("uses the series repeat when editing, and sends nothing for a lead above it", async () => {
+    const user = userEvent.setup();
+    routeFetch([periods]);
+    withToasts(
+      <GoalSeriesView
+        initialSeries={goalSeriesDetail({
+          frequency: "weekly",
+          reminder: { leadDays: 30, atTime: "09:00" },
+        })}
+        members={[]}
+        timeZones={["Europe/Brussels"]}
+      />,
+    );
+    await user.click(screen.getByTestId("goal-series-edit"));
+    const lead = screen.getByLabelText(/Reminder before each period ends/);
+    expect(lead).toHaveAccessibleDescription(
+      "Between 1 and 6 days before the last day of each period.",
+    );
+    // A stored lead above the cap is shown clamped, so a title edit can be saved.
+    expect(lead).toHaveValue(6);
+    await user.clear(lead);
+    await user.type(lead, "7");
+    await user.click(screen.getByTestId("goal-series-edit-save"));
+    expect(
+      await screen.findByText("Enter a whole number of days in the allowed range."),
+    ).toBeVisible();
+    expect(sent("/goal-series/", "PATCH")).toHaveLength(0);
+  });
+});
+
 describe("the series page", () => {
   function page(series = goalSeriesDetail(), locale: "en" | "nl" = "en") {
     return withToasts(
@@ -328,6 +426,15 @@ describe("the series page", () => {
     expect(rows[0]).toHaveTextContent("running");
     expect(rows[1]).toHaveTextContent("Target not reached · corrected · Achieved · needs review");
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("shows the next period and the timezone the periods follow", () => {
+    routeFetch([periods]);
+    page();
+    expect(screen.getByTestId("goal-series-next")).toHaveTextContent("Next period:");
+    expect(screen.getByTestId("goal-series-zone")).toHaveTextContent(
+      "Periods follow the Home's timezone, Europe/Brussels.",
+    );
   });
 
   it("pauses with the revision as read, and hides the manager actions from viewers", async () => {

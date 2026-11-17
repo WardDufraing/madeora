@@ -157,6 +157,20 @@ describe("ChildAccessForm", () => {
     });
   });
 
+  it("marks each switch as from the preset or an override and lists kept overrides", async () => {
+    const user = userEvent.setup();
+    renderAccess("primary");
+    const leaderboard = () => screen.getByRole("checkbox", { name: "See the points leaderboard" });
+    expect(leaderboard()).toHaveAccessibleDescription("From the preset");
+    await user.click(leaderboard());
+    expect(leaderboard()).toHaveAccessibleDescription("Switched off by an override");
+    expect(screen.queryByTestId("kept-overrides")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /^Teen/ }));
+    expect(screen.getByTestId("kept-overrides")).toHaveTextContent(
+      "See the points leaderboard: stays off",
+    );
+  });
+
   it("lets a secondary guardian only switch things off", () => {
     renderAccess("secondary");
     for (const radio of screen.getAllByRole("radio")) expect(radio).toBeDisabled();
@@ -176,6 +190,7 @@ describe("ChildGuardians", () => {
       <ChildGuardians
         homeId={HOME_ID}
         membershipId={CHILD_ID}
+        childName="Kim"
         primaryName={null}
         secondaryName={null}
         hasSecondary={false}
@@ -194,6 +209,13 @@ describe("ChildGuardians", () => {
     expect(screen.getByTestId("primary-guardian")).toHaveTextContent("None (on hold)");
     expect(await axeViolations(container)).toEqual([]);
     await user.click(screen.getByRole("button", { name: "Ask to be primary guardian" }));
+    // Nothing is sent until the person has read what the role means and confirmed.
+    expect(fetchMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(
+      /Ask \u2068Bob\u2069 to be primary guardian of \u2068Kim\u2069\?/,
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Send request" }));
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
@@ -203,11 +225,44 @@ describe("ChildGuardians", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("It applies once they accept.");
   });
 
+  it("closes the confirmation and shows the failure when the request is refused", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockReturnValue(answer(409, { error: "invalid-guardian" }));
+    renderWithQuery(
+      <ChildGuardians
+        homeId={HOME_ID}
+        membershipId={CHILD_ID}
+        childName="Kim"
+        primaryName={null}
+        secondaryName={null}
+        hasSecondary={false}
+        pendingPrimaryName={null}
+        pendingSecondaryName={null}
+        pendingPrimaryOfferId={null}
+        pendingSecondaryOfferId={null}
+        candidates={[{ membershipId: OTHER_ID, name: "Bob" }]}
+        canAssignSecondary={false}
+        canHandOverPrimary={false}
+        canAppointPrimary
+        canRemoveSecondary={false}
+        isSecondary={false}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Ask to be primary guardian" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Send request" }),
+    );
+    // The alert sits outside the modal, so the dialog must be gone for it to be reachable.
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("offers nothing to change to a member who is not a guardian", () => {
     renderWithQuery(
       <ChildGuardians
         homeId={HOME_ID}
         membershipId={CHILD_ID}
+        childName="Kim"
         primaryName="Bob"
         secondaryName="Dave"
         hasSecondary

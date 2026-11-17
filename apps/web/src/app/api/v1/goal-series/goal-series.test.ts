@@ -313,6 +313,25 @@ describe("changing a series", () => {
     ).toBe(400);
   });
 
+  it("refuses a reminder lead above the cap of the series' repeat", async () => {
+    answers({
+      sync_goal_periods: 0,
+      get_goal_series: goalSeriesDetail({ frequency: "weekly" }),
+      update_goal_series: [{ outcome: "saved", revision: 2 }],
+    });
+    const body = (leadDays: number) => ({
+      revision: 1,
+      title: "Run more",
+      reminder: { leadDays, atTime: "09:00" },
+    });
+    const refused = await update(request(`/goal-series/${SERIES}`, "PATCH", body(7)), seriesParams);
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ error: "invalid" });
+    expect(state.rpc.mock.calls.some(([name]) => name === "update_goal_series")).toBe(false);
+    const saved = await update(request(`/goal-series/${SERIES}`, "PATCH", body(6)), seriesParams);
+    expect(saved.status).toBe(200);
+  });
+
   it("edits for later periods and deletes with the revision as read", async () => {
     answers({ update_goal_series: [{ outcome: "saved", revision: 2 }] });
     const edited = await update(
