@@ -11,7 +11,11 @@
 - No staging, no health endpoint, no public privacy notice page, no uptime alerting, no backup (Supabase Free has none you can rely on; CLAUDE.md forbids claiming otherwise).
 - Release process exists (`docs/github-setup.md` D, `Release source` check).
 
-## Decisions only Ward can take (recommended defaults first)
+## Decisions (Ward, 2026-11-17)
+
+1. Stay on Hobby (non-commercial beta). 2. No budget; free plans only. 3. No backups yet. 4. EU hosting only. 5. No staging.
+
+## Options that were offered (recommended defaults first)
 
 1. **Is Madeora commercial?** Vercel Hobby is non-commercial only. Default: yes if real households use it or any charging is planned, then Vercel Pro is needed before real users.
 2. **Hosting budget.** Default: approve a small monthly budget when real household data starts: Vercel Pro, Supabase Pro (daily backups, no pause), keep staging as a local/CI stack. Exact prices to be re-verified on the vendor pages before purchase.
@@ -31,6 +35,6 @@ Privacy notice page, `/api/health` endpoint, retention jobs, staging environment
 
 - [x] State check, brief written
 - [x] `docs/release-readiness.md` drafted
-- [ ] Ward's decisions
+- [x] Ward's decisions
 - [ ] Independent review (one round)
 - [ ] PR opened, CI green

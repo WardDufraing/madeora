@@ -1,6 +1,14 @@
 # Release readiness
 
-Draft for S49. Items marked **(needs decision)** wait for Ward. Nothing here changes the product specification.
+S49. Nothing here changes the product specification.
+
+## 0. Decisions (Ward, 2026-11-17)
+
+1. **Plan:** stay on Vercel Hobby for now. Hobby is non-commercial only, so the first beta phase must stay non-commercial (no charging, no ads). Re-decide before any commercial use.
+2. **Budget:** none yet. The first beta phase runs on free plans only (€0 rule stays).
+3. **Backups:** not yet. Free Supabase has no usable backup, so production keeps demo or beta-tester data only, with the written warning that data may be lost. Section 4 is the plan for later.
+4. **GDPR:** EU hosting only (section 5).
+5. **Staging:** none. Vercel preview plus local rehearsal (section 2).
 
 ## 1. Release PR checklist (`main` → `production`)
 
@@ -19,9 +27,9 @@ After merge: Vercel deployment Ready and Current; run the smoke checks in `docs/
 
 Rollback: Vercel Instant Rollback for the app; a migration is never rolled back, fix forward with a new migration.
 
-## 2. Staging (needs decision)
+## 2. Staging (decided: none)
 
-Both free Supabase slots are used. Options: (a) default, no hosted staging: Vercel preview plus local rehearsal with migrations and seed; (b) a paid Supabase project for staging. Revisit when real users exist.
+Both free Supabase slots are used and there is no budget. Rehearse each release with migrations and seed on a local Supabase stack and the Vercel preview. Revisit when a budget exists.
 
 ## 3. Monitoring and alerting plan
 
@@ -38,7 +46,7 @@ Uses native tools only (architecture §41; no Sentry).
 
 Logs must stay privacy-safe: no tokens, signed URLs, email bodies or child data.
 
-## 4. Backup and restore drill (needs decision)
+## 4. Backup and restore drill (decided: not yet; plan for later)
 
 Facts: Supabase Free has no usable backup and pauses after a week idle; Supabase Pro has daily backups for a limited number of days and PITR is an extra paid add-on (verify on the vendor page). Migrations rebuild structure, never user content. R2 objects are not covered by database backups.
 
@@ -49,9 +57,9 @@ Proposed routine once real data exists:
 3. R2: decide versioning or a second bucket with the first real photo upload (file-storage strategy B); drill = restore one deleted test object.
 4. Targets to agree: maximum acceptable data loss (proposed 24 h) and restore time (proposed one working day).
 
-## 5. GDPR position (needs decision)
+## 5. GDPR position (EU hosting only decided; the rest proposed)
 
-Proposed, to be confirmed by Ward and, before real users, checked by a lawyer:
+EU hosting only is decided. The rest is proposed and should be checked by a lawyer before real users:
 
 - EU hosting: Supabase Frankfurt (done), R2 with EU jurisdiction, Vercel functions in an EU region, Resend EU region.
 - Accept each vendor's DPA; list them as processors: Supabase, Vercel, Resend, Cloudflare (R2, Turnstile), Trigger.dev, Google (sign-in, calendar).
