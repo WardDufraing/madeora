@@ -1,3 +1,11 @@
 {
-  "exceptions": []
+  "exceptions": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "ReDoS on single-branch repeated extglob patterns; no patched version exists yet. Reached only through build and lint tooling (@next/eslint-plugin-next > fast-glob > micromatch, and @vitejs/plugin-react > vite), whose glob patterns are fixed in the repository, never user input; no runtime path in the deployed app.",
+      "added": "2026-11-17",
+      "expires": "2027-01-15"
+    }
+  ]
 }
