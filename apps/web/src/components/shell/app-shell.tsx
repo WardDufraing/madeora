@@ -3,7 +3,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { ToastProvider } from "@/components/ui/toast";
 import type { MyHome } from "@/homes/types";
 import type { SidebarState } from "@/preferences/preferences";
 
@@ -28,19 +27,9 @@ export interface AppShellProps {
 export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: AppShellProps) {
   const t = useTranslations("Shell");
   const tAccounts = useTranslations("Accounts");
-  const tComponents = useTranslations("Components");
 
   return (
-    <ToastProvider
-      regionLabel={tComponents("notifications")}
-      dismissLabel={tComponents("dismiss")}
-      toneLabels={{
-        info: tComponents("toneInfo"),
-        success: tComponents("toneSuccess"),
-        warning: tComponents("toneWarning"),
-        error: tComponents("toneError"),
-      }}
-    >
+    <>
       <a
         href="#main"
         className="fixed start-3 top-3 z-50 -translate-y-24 rounded-control bg-surface-elevated px-4 py-2 text-body font-semibold text-fg shadow-overlay focus-visible:translate-y-0"
@@ -72,6 +61,6 @@ export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: 
           </main>
         </div>
       </div>
-    </ToastProvider>
+    </>
   );
 }
