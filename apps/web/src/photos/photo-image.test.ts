@@ -86,6 +86,26 @@ describe("processPhoto", () => {
     expect(result.variants[0]).toMatchObject({ width: 600, height: 800 });
   });
 
+  it.each([2, 3, 4, 5, 7, 8])(
+    "turns a picture upright for every EXIF orientation, mirrored ones included (%i)",
+    async (orientation) => {
+      // Orientations 5 to 8 swap width and height; 1 to 4 keep them.
+      const swaps = orientation >= 5;
+      const result = await processPhoto(
+        await image("jpeg", { width: 300, height: 200, orientation }),
+        "image/jpeg",
+      );
+      if (!result.ok) throw new Error("expected a photo");
+      expect(result.variants[0]).toMatchObject(
+        swaps ? { width: 200, height: 300 } : { width: 300, height: 200 },
+      );
+      const meta = await sharp(
+        Buffer.from(result.variants[0]?.bytes ?? new Uint8Array()),
+      ).metadata();
+      expect(meta.orientation === undefined || meta.orientation === 1).toBe(true);
+    },
+  );
+
   it("drops every piece of metadata (camera, GPS, time)", async () => {
     const withExif = new Uint8Array(
       await sharp({ create: { width: 64, height: 64, channels: 3, background: "#123456" } })
@@ -129,6 +149,33 @@ describe("processPhoto", () => {
     const result = await processPhoto(await image("gif", { width: 90, height: 60 }), "image/gif");
     if (!result.ok) throw new Error("expected a photo");
     expect(result.variants[0]).toMatchObject({ width: 90, height: 60 });
+  });
+
+  it("keeps only the first frame of an animated GIF, as a still picture", async () => {
+    const width = 60;
+    const height = 40;
+    const frame = (r: number, g: number, b: number) =>
+      Buffer.alloc(width * height * 3, Buffer.from([r, g, b]));
+    const animated = await sharp(Buffer.concat([frame(250, 10, 10), frame(10, 10, 250)]), {
+      raw: { width, height: height * 2, channels: 3, pageHeight: height },
+    })
+      .gif({ loop: 0, delay: [100, 100] })
+      .toBuffer();
+    // The fixture really is animated, so the test proves something.
+    expect((await sharp(animated, { pages: -1 }).metadata()).pages).toBe(2);
+    const result = await processPhoto(new Uint8Array(animated), "image/gif");
+    if (!result.ok) throw new Error("expected a photo");
+    for (const variant of result.variants) {
+      const meta = await sharp(Buffer.from(variant.bytes), { pages: -1 }).metadata();
+      expect(meta.pages ?? 1).toBe(1);
+    }
+    expect(result.variants[0]).toMatchObject({ width, height });
+    const { data } = await sharp(Buffer.from(result.variants[0]?.bytes ?? new Uint8Array()))
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    // The first frame is red, not the blue second one.
+    expect(data[0]).toBeGreaterThan(data[2] ?? 255);
   });
 
   it("refuses a file that is not what it says it is", async () => {

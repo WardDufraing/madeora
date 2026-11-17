@@ -474,3 +474,35 @@ select tests.act_as('bob');
 select tests.assert_true(tests.upd('p-rex', '{"name": "Rex"}') = 'not_permitted'
   and (tests.medical('p-rex') ->> 'level') = 'manage',
   'Without manageHomePets Bob no longer edits profiles; his medical access is its own grant');
+
+-- Limits: 50 pets per Home and 1000 medical entries per pet, in a Home of their own ----------------------------
+
+select tests.act_as('alice');
+insert into ids select 'home-lim', public.create_home('Dierenasiel', 'Europe/Brussels', gen_random_uuid());
+insert into ids select n, gen_random_uuid() from unnest(array['p-lim', 'p-lim-over', 'e-lim-over']) as n;
+select tests.assert_true(
+  (select public.create_pet(tests.i('p-lim'), tests.i('home-lim'), 'Eerste') ->> 'outcome') = 'created',
+  'The first pet of the full Home');
+select tests.act_as_owner();
+insert into private.pets (id, home_id, name, created_by, updated_by)
+  select gen_random_uuid(), tests.i('home-lim'), 'Pet ' || g, tests.user_id('alice'), tests.user_id('alice')
+  from generate_series(1, 49) g;
+select tests.act_as('alice');
+select tests.assert_true(
+  (select public.create_pet(tests.i('p-lim-over'), tests.i('home-lim'), 'Te veel') ->> 'outcome') = 'limit_reached',
+  'The 51st pet is refused');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select count(*) = 50 from private.pets where home_id = tests.i('home-lim'))
+  and not exists (select 1 from private.pets where id = tests.i('p-lim-over')),
+  'Nothing was saved for it');
+insert into private.pet_medical_entries (id, pet_id, event_type, event_date, created_by, updated_by)
+  select gen_random_uuid(), tests.i('p-lim'), 'other', date '2026-01-01', tests.user_id('alice'), tests.user_id('alice')
+  from generate_series(1, 1000);
+select tests.act_as('alice');
+select tests.assert_true(
+  tests.entry('e-lim-over', 'p-lim', jsonb_build_object('type', 'vet_visit', 'date', tests.d(0))) = 'limit_reached',
+  'The 1001st medical entry of a pet is refused');
+select tests.act_as_owner();
+select tests.assert_true(not exists (select 1 from private.pet_medical_entries where id = tests.i('e-lim-over')),
+  'and not saved');

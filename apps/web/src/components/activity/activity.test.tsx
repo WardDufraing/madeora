@@ -10,13 +10,19 @@ import { ActivityList } from "./activity-list";
 import { SecurityAlertsSetting } from "./security-alerts-setting";
 import { SecurityReportSetting } from "./security-report-setting";
 
+const language = vi.hoisted((): { current: "en" | "nl" } => ({ current: "en" }));
 vi.mock("next-intl/server", async () => {
   const { createTranslator } = await import("next-intl");
   const { default: en } = await import("@/i18n/messages/en.json");
+  const { default: nl } = await import("@/i18n/messages/nl.json");
   return {
     getTranslations: (namespace: string) =>
       Promise.resolve(
-        createTranslator({ locale: "en", messages: en, namespace: namespace as "Activity" }),
+        createTranslator({
+          locale: language.current,
+          messages: language.current === "nl" ? nl : en,
+          namespace: namespace as "Activity",
+        }),
       ),
   };
 });
@@ -64,19 +70,26 @@ function entry(overrides: Partial<ActivityEntryView> = {}): ActivityEntryView {
   };
 }
 
-async function list(page: ActivityPage | null, params: Record<string, string> = {}, paged = false) {
+async function list(
+  page: ActivityPage | null,
+  params: Record<string, string> = {},
+  paged = false,
+  locale: "en" | "nl" = "en",
+) {
+  language.current = locale;
   const element = await ActivityList({
     path: "/settings/activity",
     page,
     filters: parseActivityFilters(params),
     paged,
-    formats,
+    formats: { ...formats, locale },
   });
-  return renderWithIntl(element);
+  return renderWithIntl(element, locale);
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
+  language.current = "en";
   reauthenticate.mockResolvedValue(null);
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -117,6 +130,22 @@ describe("ActivityList", () => {
       "href",
       `/settings/activity?before=2026-11-07T09%3A00%3A00%2B00%3A00&beforeId=${ID_B}`,
     );
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("shows the same entries in Dutch, with the Dutch labels and date format", async () => {
+    const { container } = await list(
+      { entries: [entry()], next: { createdAt: "2026-11-07T09:00:00+00:00", id: ID_B } },
+      {},
+      false,
+      "nl",
+    );
+    const items = within(
+      screen.getByRole("list", { name: "Activiteit, nieuwste eerst" }),
+    ).getAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(within(nth(items, 0)).getByText("Ingelogd")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Oudere items" })).toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
   });
 
