@@ -160,6 +160,18 @@ export function RecipeEditor(props: RecipeEditorProps) {
       if (event.defaultPrevented || event.button !== 0) return;
       const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
       if (!(anchor instanceof HTMLAnchorElement) || anchor.target === "_blank") return;
+      // Not leaving this page: a new tab or window, a download, or a link within the same page
+      // (the skip link).
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (anchor.hasAttribute("download")) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (
+        url.origin === window.location.origin &&
+        url.pathname === window.location.pathname &&
+        url.search === window.location.search
+      ) {
+        return;
+      }
       if (!window.confirm(t("leaveConfirm"))) {
         event.preventDefault();
         event.stopPropagation();

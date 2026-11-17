@@ -92,6 +92,11 @@ export function ChildGuardians({
       }
       return undefined;
     },
+    // The failure alert sits outside the modal dialog, which makes it inert: close the dialog so
+    // the alert can be seen and reached.
+    onError: () => {
+      setConfirmingPrimary(false);
+    },
     onSuccess: (_, change) => {
       setConfirmingPrimary(false);
       setDone(

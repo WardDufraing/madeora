@@ -1,3 +1,5 @@
+import { goalSeriesLeadDaysMax } from "@madeora/domain/goals";
+
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { readGoalSeries } from "@/goals/data";
 import {
@@ -35,6 +37,14 @@ export async function PATCH(request: Request, { params }: SeriesRouteContext): P
   const seriesId = pathId((await params).seriesId);
   if (!seriesId) return failure(404, "not-found");
   const body = input.data;
+  if (body.reminder !== null) {
+    // The cap depends on the series' repeat, so it is checked against the stored frequency.
+    const series = await readGoalSeries(seriesId);
+    if (series.status !== "ok") return readAnswer(series, "series");
+    if (body.reminder.leadDays > goalSeriesLeadDaysMax(series.value.frequency)) {
+      return failure(400, "invalid");
+    }
+  }
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("update_goal_series", {
     p_id: seriesId,

@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { RecipeDetail, RecipeIngredient } from "@/recipes/api";
@@ -282,7 +282,8 @@ describe("the editor", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     renderWithQuery(
       <>
-        <a href="#away">Away</a>
+        <a href="https://elsewhere.example/away">Away</a>
+        <a href="#main">Skip</a>
         <RecipeEditor
           mode="new"
           recipeId={RECIPE}
@@ -295,7 +296,16 @@ describe("the editor", () => {
     await user.click(screen.getByText("Away"));
     expect(confirm).not.toHaveBeenCalled();
     await user.type(screen.getByLabelText("Name"), "Soup");
+    // A link within this page (the skip link) does not leave it, so it does not ask.
+    await user.click(screen.getByText("Skip"));
+    expect(confirm).not.toHaveBeenCalled();
+    // Neither does a modified click (a new tab) or a download.
+    await user.keyboard("{Control>}");
     await user.click(screen.getByText("Away"));
+    await user.keyboard("{/Control}");
+    expect(confirm).not.toHaveBeenCalled();
+    // Declining the question keeps the person on the page.
+    expect(fireEvent.click(screen.getByText("Away"))).toBe(false);
     expect(confirm).toHaveBeenCalledTimes(1);
     confirm.mockRestore();
   });

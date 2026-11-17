@@ -735,7 +735,9 @@ function SeriesEditDialog({
       description: series.description ?? "",
       endsOn: series.endsOn ?? "",
       timeZone: series.timeZone,
-      leadDays: series.reminder?.leadDays.toString() ?? "",
+      // A series saved before the cap existed may hold more: show the most the repeat allows.
+      leadDays:
+        series.reminder === null ? "" : Math.min(series.reminder.leadDays, leadMax).toString(),
       leadTime: series.reminder?.atTime ?? "09:00",
     },
   });

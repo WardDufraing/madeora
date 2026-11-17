@@ -225,6 +225,38 @@ describe("ChildGuardians", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("It applies once they accept.");
   });
 
+  it("closes the confirmation and shows the failure when the request is refused", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockReturnValue(answer(409, { error: "invalid-guardian" }));
+    renderWithQuery(
+      <ChildGuardians
+        homeId={HOME_ID}
+        membershipId={CHILD_ID}
+        childName="Kim"
+        primaryName={null}
+        secondaryName={null}
+        hasSecondary={false}
+        pendingPrimaryName={null}
+        pendingSecondaryName={null}
+        pendingPrimaryOfferId={null}
+        pendingSecondaryOfferId={null}
+        candidates={[{ membershipId: OTHER_ID, name: "Bob" }]}
+        canAssignSecondary={false}
+        canHandOverPrimary={false}
+        canAppointPrimary
+        canRemoveSecondary={false}
+        isSecondary={false}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Ask to be primary guardian" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Send request" }),
+    );
+    // The alert sits outside the modal, so the dialog must be gone for it to be reachable.
+    expect(await screen.findByRole("alert")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("offers nothing to change to a member who is not a guardian", () => {
     renderWithQuery(
       <ChildGuardians
