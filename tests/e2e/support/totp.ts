@@ -25,3 +25,14 @@ export function totp(secret: string, at = Date.now()): string {
   const code = (hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
   return code.toString().padStart(6, "0");
 }
+
+/**
+ * A code that stays valid long enough to be submitted: when fewer than eight seconds remain in the
+ * current 30-second step, wait for the next step first. A slow runner can otherwise spend the rest
+ * of the step between filling the code and the server checking it, and the code is refused.
+ */
+export async function freshTotp(secret: string): Promise<string> {
+  const remaining = 30_000 - (Date.now() % 30_000);
+  if (remaining < 8_000) await new Promise((resolve) => setTimeout(resolve, remaining + 250));
+  return totp(secret);
+}

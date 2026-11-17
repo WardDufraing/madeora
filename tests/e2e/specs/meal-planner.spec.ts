@@ -159,15 +159,19 @@ test("custom and repeating meals, one occurrence edited, copy week and print", a
   await expect(dialog).toBeHidden();
   await expect(today(page).getByRole("button", { name: /Pancakes/ })).toBeVisible();
   await expect(today(page).getByRole("button", { name: /Porridge/ })).toHaveCount(0);
-  expect(await page.getByRole("button", { name: /Porridge.*Repeating/ }).count()).toBeGreaterThan(
-    0,
-  );
+  // The rest of the series is still porridge. On the last day of the shown week (the series runs
+  // seven days from today) the remaining days are in the next week, so look there instead.
+  const porridge = page.getByRole("button", { name: /Porridge.*Repeating/ });
+  const nextWeek = (await porridge.count()) === 0;
+  if (nextWeek) await page.getByTestId("meal-next").click();
+  await expect(porridge.first()).toBeVisible();
   // The row's hover wash must keep the helper text readable. Leave the pointer on it.
-  await page
-    .getByRole("button", { name: /Porridge.*Repeating/ })
-    .first()
-    .hover();
+  await porridge.first().hover();
   expect(await axeViolations(page, { pointer: "leave" })).toEqual([]);
+  if (nextWeek) {
+    await page.getByTestId("meal-previous").click();
+    await expect(today(page)).toBeVisible();
+  }
 
   // Copy this week to the next one.
   await page.getByTestId("meal-copy-link").click();
