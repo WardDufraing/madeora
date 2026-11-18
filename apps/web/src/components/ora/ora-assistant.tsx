@@ -125,14 +125,23 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
     };
   }, [open, close]);
 
+  // The handle and the header both start a swipe (S45-L5), but not a press on a header button,
+  // which must stay a plain click. Only the pointer that started it can finish it.
   const onHandleDown = (event: PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.target instanceof Element && event.target.closest("button")) return;
+    if (typeof event.currentTarget.setPointerCapture === "function") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     swipe.current = { startY: event.clientY, pointerId: event.pointerId };
   };
   const onHandleUp = (event: PointerEvent<HTMLDivElement>) => {
     const start = swipe.current;
+    if (!start || start.pointerId !== event.pointerId) return;
     swipe.current = null;
-    if (start && event.clientY - start.startY > SWIPE_CLOSE_DISTANCE) close(true);
+    if (event.clientY - start.startY > SWIPE_CLOSE_DISTANCE) close(true);
+  };
+  const onHandleCancel = () => {
+    swipe.current = null;
   };
 
   const expression: OraExpression =
@@ -169,14 +178,18 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
             className="flex h-6 shrink-0 touch-none items-center justify-center md:hidden"
             onPointerDown={onHandleDown}
             onPointerUp={onHandleUp}
-            onPointerCancel={() => {
-              swipe.current = null;
-            }}
+            onPointerCancel={onHandleCancel}
             data-testid="ora-sheet-handle"
           >
             <span aria-hidden="true" className="h-1 w-10 rounded-full bg-line-control" />
           </div>
-          <div className="flex items-center gap-3 px-4 pb-2 pt-1 md:pt-4">
+          <div
+            className="flex items-center gap-3 px-4 pb-2 pt-1 max-md:touch-none md:pt-4"
+            onPointerDown={onHandleDown}
+            onPointerUp={onHandleUp}
+            onPointerCancel={onHandleCancel}
+            data-testid="ora-sheet-header"
+          >
             <OraCharacter
               palette={palette}
               expression={expression}

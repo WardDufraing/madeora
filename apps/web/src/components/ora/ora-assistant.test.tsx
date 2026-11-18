@@ -362,8 +362,28 @@ describe("Ora assistant", () => {
     fireEvent.pointerDown(handle, { clientY: 100, pointerId: 1 });
     fireEvent.pointerUp(handle, { clientY: 130, pointerId: 1 });
     expect(screen.getByTestId("ora-surface")).toBeVisible();
+    // Another pointer cannot finish someone else's swipe.
+    fireEvent.pointerDown(handle, { clientY: 100, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientY: 220, pointerId: 2 });
+    expect(screen.getByTestId("ora-surface")).toBeVisible();
     fireEvent.pointerDown(handle, { clientY: 100, pointerId: 1 });
     fireEvent.pointerUp(handle, { clientY: 220, pointerId: 1 });
+    expect(screen.getByTestId("ora-surface")).not.toBeVisible();
+  });
+
+  it("also closes with a swipe down on the header, but not from its buttons (S45-L5)", () => {
+    setup();
+    fireEvent.click(launcher());
+    const header = screen.getByTestId("ora-sheet-header");
+    header.setPointerCapture = vi.fn();
+    const close = within(screen.getByTestId("ora-surface")).getByRole("button", {
+      name: "Close Ora",
+    });
+    fireEvent.pointerDown(close, { clientY: 100, pointerId: 1 });
+    fireEvent.pointerUp(close, { clientY: 220, pointerId: 1 });
+    expect(screen.getByTestId("ora-surface")).toBeVisible();
+    fireEvent.pointerDown(header, { clientY: 100, pointerId: 3 });
+    fireEvent.pointerUp(header, { clientY: 220, pointerId: 3 });
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
   });
 
