@@ -2175,6 +2175,7 @@
     "failureRateLimited": "Te veel uploads in korte tijd. Wacht even en probeer het opnieuw.",
     "failureInvalidFile": "Het bestand is beschadigd of is niet het type dat de naam aangeeft.",
     "failureExpired": "De upload duurde te lang. Probeer het opnieuw.",
+    "failureBusy": "Het bestand wordt nog gecontroleerd van je vorige poging. Wacht even en probeer het dan opnieuw.",
     "failureNotPermitted": "Je kunt geen bestanden meer aan deze taak toevoegen.",
     "failureNotFound": "Deze taak is niet meer beschikbaar.",
     "failureScopeUnavailable": "Deze wijziging is niet meer mogelijk voor de reeks.",

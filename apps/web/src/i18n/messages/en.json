@@ -2175,6 +2175,7 @@
     "failureRateLimited": "Too many uploads in a short time. Wait a little, then try again.",
     "failureInvalidFile": "The file is damaged or is not the type its name says.",
     "failureExpired": "The upload took too long. Try again.",
+    "failureBusy": "The file is still being checked from your last try. Wait a moment, then try again.",
     "failureNotPermitted": "You can no longer add files to this task.",
     "failureNotFound": "This task is no longer available.",
     "failureScopeUnavailable": "This change is no longer possible for the series.",

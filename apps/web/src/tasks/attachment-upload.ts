@@ -32,6 +32,8 @@ export type AttachmentFailure =
   | "rateLimited"
   | "invalidFile"
   | "expired"
+  /** The file is still being checked from an earlier try: retry the same upload later (S19c-LA). */
+  | "busy"
   | "notPermitted"
   | "notFound"
   | "scopeUnavailable"
@@ -83,7 +85,13 @@ function failureFor(code: unknown): AttachmentFailure {
   }
 }
 
-async function call(url: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
+async function call(
+  url: string,
+  body: unknown,
+  signal?: AbortSignal,
+  /** At finalize, a 409 means a check of the same file still runs, not an expired upload. */
+  conflictIsBusy = false,
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -100,7 +108,9 @@ async function call(url: string, body: unknown, signal?: AbortSignal): Promise<u
   if (!response.ok) {
     const code =
       payload && typeof payload === "object" && "error" in payload ? payload.error : undefined;
-    throw new AttachmentUploadError(failureFor(code));
+    throw new AttachmentUploadError(
+      conflictIsBusy && code === "conflict" ? "busy" : failureFor(code),
+    );
   }
   return payload;
 }
@@ -184,6 +194,7 @@ export async function uploadAttachment(
     finalizeEndpoint(attempt.fileId),
     { scope },
     options.signal,
+    true,
   )) as FinalizeResponse | null;
   if (!finalized?.attachment) throw new AttachmentUploadError("failed");
   return finalized.attachment;
