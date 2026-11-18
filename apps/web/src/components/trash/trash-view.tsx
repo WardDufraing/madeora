@@ -114,10 +114,14 @@ function conflictMessage(kind: string) {
       return "conflictShoppingListLimit";
     case "shopping_list_unavailable":
       return "conflictShoppingListUnavailable";
+    case "shopping_list_archived":
+      return "conflictShoppingListArchived";
     case "shopping_item_limit":
       return "conflictShoppingItemLimit";
     case "meal_slot_occupied":
       return "conflictMealSlotOccupied";
+    case "meal_slot_disabled_series":
+      return "conflictMealSlotDisabledSeries";
     case "pet_limit":
       return "conflictPetLimit";
     case "pet_in_trash":

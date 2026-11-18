@@ -519,6 +519,10 @@ select tests.assert_denied(
 select tests.assert_denied(
   $$select * from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Renamed', null, null, null, 3::smallint)$$,
   'A reminder needs both a lead time and a time', '22023');
+select tests.assert_denied(
+  $$select * from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Renamed', null, null, null,
+    28::smallint, '09:00'::time)$$,
+  'A monthly series refuses a 28-day advance reminder on edit too (S30b-M1)', '22023');
 select tests.assert_true(
   (select outcome = 'invalid_dates' from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Renamed',
      null, date '2020-01-01')),

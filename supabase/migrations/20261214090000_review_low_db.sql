@@ -1,7 +1,6 @@
 -- Review backlog Part 5: the open LOW database findings (plans/steps/fix-review-backlog-brief.md,
 -- "Open LOW", area db) and the database follow-ups the earlier parts left (the reminder-lead cap of
--- S30b-M1, S20-M4's estimate and timezone in the chore widget and approval queue, vacation-review chores
--- shown overdue, reopening an achieved goal above the limit, an old primary guardian's return).
+-- S30b-M1, vacation-review chores shown overdue, reopening an achieved goal above the limit).
 -- Every function here already exists and is replaced in place with the same signature (privileges are
 -- kept); only new helpers are created. No table or column is dropped and no data is rewritten; two
 -- indexes are added (S24-L7).
@@ -832,10 +831,10 @@ create or replace function public.list_chore_widget(
 --   S19-L7  a removed entire task series comes back as an active series: 'series_limit' at 200;
 --   S20-L4  an entire chore-series removal un-ends its chore: 'chore_limit' at the Home's chore limit;
 --   S28-L1  a habit that was not archived comes back active: 'habit_limit' at the 100 of its context;
---   S27-L3  a meal in a slot that is disabled now: 'meal_slot_occupied' when a meal series of that slot
---           would also fall on its date once the slot is enabled again;
---   S26-L5  a shopping item (or cleared items) into a list that is archived now:
---           'shopping_list_unavailable', as for a deleted list.
+--   S27-L3  a meal in a slot that is disabled now: 'meal_slot_disabled_series' when a repeating meal of
+--           that slot would also fall on its date once the slot is enabled again;
+--   S26-L5  a shopping item (or cleared items) into a list that is archived now: 'shopping_list_archived'
+--           (the person unarchives the list first).
 create function private.trash_restore_limit_conflict(p_entry private.trash_entries) returns text
   language plpgsql stable security definer set search_path = '' as $$
   declare
@@ -885,7 +884,7 @@ create function private.trash_restore_limit_conflict(p_entry private.trash_entri
             and private.meal_occurs(r, v_meal.on_date)
             and not exists (select 1 from private.meal_occurrence_exceptions x
               where x.recurrence_id = r.id and x.on_date = v_meal.on_date)) then
-        return 'meal_slot_occupied';
+        return 'meal_slot_disabled_series';
       end if;
     elsif p_entry.module = 'shopping' and p_entry.item_type in ('shopping_item', 'shopping_clear') then
       select l.archived_at is not null into v_list_archived
@@ -894,7 +893,7 @@ create function private.trash_restore_limit_conflict(p_entry private.trash_entri
           when 'shopping_item' then (select i.list_id from private.shopping_items i where i.id = p_entry.subject_id)
           else (select c.list_id from private.shopping_clears c where c.id = p_entry.subject_id) end;
       if coalesce(v_list_archived, false) then
-        return 'shopping_list_unavailable';
+        return 'shopping_list_archived';
       end if;
     end if;
     return null;
@@ -993,8 +992,8 @@ create or replace function private.trash_item_restore(p_entry private.trash_entr
 -- Shopping -------------------------------------------------------------------------------------------------
 
 -- As 20261108090000_shopping_lists.sql, plus:
---   S26-L2  an item of an archived list is neither moved nor copied ('conflict': transfers are between
---           two active lists);
+--   S26-L2  an item of an archived list is neither moved nor copied ('conflict': the item is no longer
+--           where it was read, in an active list; transfers are between two active lists);
 --   S26-L1  two identical copy requests at the same moment answer 'exists' (or 'id_taken') instead of a
 --           primary-key error.
 create or replace function public.transfer_shopping_item(
@@ -2116,8 +2115,9 @@ create or replace function public.list_home_pet_care(
 -- Account activity -----------------------------------------------------------------------------------------
 
 -- S38-L1: as 20261124090000_activity_history.sql, except that a response is final once reported: a
--- repeated report (or a later "This was me") answers 'reported' and records nothing again, and a
--- repeated "This was me" answers 'confirmed' without a change. A confirmed sign-in can still be reported.
+-- repeated report (or a later "This was me") records nothing again, but still signs the reported session
+-- out when it is live and not the current one ('signed_out'; otherwise 'reported'). A repeated "This was
+-- me" answers 'confirmed' without a change. A confirmed sign-in can still be reported.
 create or replace function public.respond_to_sign_in(p_event_id uuid, p_response text) returns text
   language plpgsql security definer set search_path = '' as $$
   declare
@@ -2140,6 +2140,11 @@ create or replace function public.respond_to_sign_in(p_event_id uuid, p_response
       raise exception 'unknown sign-in' using errcode = 'P0002';
     end if;
     if v_event.response = 'reported' then
+      if v_event.session_id is not null and v_event.session_id <> v_current
+         and private.session_is_live(v_user_id, v_event.session_id)
+         and public.revoke_my_session(v_event.session_id, true) then
+        return 'signed_out';
+      end if;
       return 'reported';
     end if;
     if v_event.response = 'confirmed' and p_response = 'confirmed' then
@@ -2167,9 +2172,9 @@ create or replace function public.respond_to_sign_in(p_event_id uuid, p_response
 
 -- Copies to a Home ------------------------------------------------------------------------------------------
 
--- S40P2-L2: as 20261128090000_category_deletion_home_copies.sql, plus: the destination pool is locked
--- before its reserved files are removed and its usage reassessed (pool first, then files, as every other
--- writer does).
+-- S40P2-L2: as 20261128090000_category_deletion_home_copies.sql, plus: the request row and then the
+-- destination pool are locked before its reserved files are removed and its usage reassessed (request,
+-- pool, files: the order commit_home_copy takes them in).
 create or replace function private.end_home_copy(p_request_id uuid, p_status text, p_code text default null)
 returns boolean
   language plpgsql volatile security definer set search_path = '' as $$
@@ -2182,6 +2187,7 @@ returns boolean
     select f.pool_id into v_pool from private.home_copy_files c
       join private.stored_files f on f.id = c.dest_file_id
       where c.request_id = p_request_id limit 1;
+    perform 1 from private.home_copy_requests r where r.id = p_request_id for update;
     if v_pool is not null then
       perform 1 from private.storage_pools p where p.id = v_pool for update;
     end if;
