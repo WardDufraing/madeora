@@ -1,7 +1,7 @@
 // S30b: recurring goals in the interface. The database decides every right, period and outcome
 // (tests/db/rls/recurring-goals.test.sql); these tests check what people read and type in en and nl,
 // what is sent, and that the views pass automated accessibility checks.
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { ToastProvider } from "@/components/ui/toast";
@@ -541,7 +541,7 @@ describe("the series page", () => {
       reachedAfter: true,
       achieved: false,
       reopens: false,
-      reminders: false,
+      reminders: true,
     };
     routeFetch([
       periods,
@@ -559,10 +559,24 @@ describe("the series page", () => {
     await user.type(target, "7");
     await user.click(screen.getByRole("button", { name: "Preview" }));
     expect(await screen.findByTestId("goal-series-target-impact")).toHaveTextContent("7.5 / 10 km");
+    // The running period's reminders are part of the preview (S30b-L6).
+    expect(screen.getByTestId("goal-series-target-impact")).toHaveTextContent(
+      "Reminders for this period stay on and use the new target.",
+    );
     expect(sent("/target", "POST")[0]).toMatchObject({ effectiveFrom: "2026-11-01" });
     expect(screen.getByTestId("goal-series-target-save")).toBeDisabled();
     await user.click(screen.getByTestId("goal-series-confirm-status"));
     expect(screen.getByTestId("goal-series-target-save")).toBeEnabled();
+  });
+
+  it("starts on a period it offers when there is neither a next nor a running goal (S30b-L5)", async () => {
+    const user = userEvent.setup();
+    routeFetch([periods]);
+    page(goalSeriesDetail({ nextPeriod: null, current: null }));
+    await user.click(screen.getByRole("button", { name: "Change target" }));
+    const when = screen.getByLabelText("Applies from");
+    expect(when).toHaveValue("later");
+    expect(within(when).queryByRole("option", { name: "The current period" })).toBeNull();
   });
 
   it("explains a stopped series without a running period, in Dutch", () => {

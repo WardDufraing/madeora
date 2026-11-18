@@ -183,7 +183,7 @@ describe("DeactivateAccount", () => {
 describe("ReactivateAccount", () => {
   it("reactivates, then signs in afresh and shows what changed in the person's Homes", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ since: "2026-09-01T10:00:00+00:00" }));
-    renderWithIntl(<ReactivateAccount />);
+    renderWithIntl(<ReactivateAccount timeZone="Europe/Brussels" />);
     await userEvent.click(screen.getByRole("button", { name: "Reactivate my account" }));
     await waitFor(() => {
       expect(assign).toHaveBeenCalled();
@@ -200,8 +200,33 @@ describe("ReactivateAccount", () => {
 
   it("says when reactivation failed", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ error: "failed" }, { status: 500 }));
-    renderWithIntl(<ReactivateAccount />);
+    renderWithIntl(<ReactivateAccount timeZone="Europe/Brussels" />);
     await userEvent.click(screen.getByRole("button", { name: "Reactivate my account" }));
     expect(await screen.findByText(/couldn't be reactivated/)).toBeInTheDocument();
+  });
+
+  it("starts the history on the person's own day, not the UTC day (S38P2-L5)", async () => {
+    // 23:30 UTC on 31 August is already 1 September in Brussels.
+    fetchMock.mockResolvedValueOnce(Response.json({ since: "2026-08-31T23:30:00+00:00" }));
+    renderWithIntl(<ReactivateAccount timeZone="Europe/Brussels" />);
+    await userEvent.click(screen.getByRole("button", { name: "Reactivate my account" }));
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalled();
+    });
+    const target = new URL(String(assign.mock.calls[0]?.[0]));
+    const next = new URL(target.searchParams.get("next") ?? "", target.origin);
+    expect(next.searchParams.get("from")).toBe("2026-09-01");
+  });
+
+  it("leaves the start date out when the server's date cannot be read", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ since: "not a date" }));
+    renderWithIntl(<ReactivateAccount timeZone="Europe/Brussels" />);
+    await userEvent.click(screen.getByRole("button", { name: "Reactivate my account" }));
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalled();
+    });
+    const target = new URL(String(assign.mock.calls[0]?.[0]));
+    const next = new URL(target.searchParams.get("next") ?? "", target.origin);
+    expect(next.searchParams.get("from")).toBeNull();
   });
 });

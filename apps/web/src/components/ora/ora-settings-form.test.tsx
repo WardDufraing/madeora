@@ -43,10 +43,14 @@ describe("Ora settings", () => {
   it("hides and disables Ora with one switch, saved at once, and says it was saved", async () => {
     const user = userEvent.setup();
     setup();
-    const toggle = screen.getByRole("switch", { name: "Ora is shown" });
+    // The name stays the same; the state is the switch's own and its description (S45-L2).
+    const toggle = screen.getByRole("switch", { name: "Show Ora on my screens" });
     expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/^Ora is shown/);
     await user.click(toggle);
-    expect(screen.getByRole("switch", { name: "Ora is hidden and disabled" })).not.toBeChecked();
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toHaveAccessibleName("Show Ora on my screens");
+    expect(toggle).toHaveAccessibleDescription(/^Ora is hidden and disabled/);
     await waitFor(() => {
       expect(bodies).toEqual([{ enabled: false }]);
     });
@@ -135,9 +139,9 @@ describe("Ora settings", () => {
     const user = userEvent.setup();
     status = 500;
     setup();
-    await user.click(screen.getByRole("switch", { name: "Ora is shown" }));
+    await user.click(screen.getByRole("switch", { name: "Show Ora on my screens" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("couldn't be saved");
-    expect(screen.getByRole("switch", { name: "Ora is shown" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "Show Ora on my screens" })).toBeChecked();
     expect(screen.queryByText("Saved.")).toBeNull();
   });
 

@@ -441,7 +441,13 @@ function SeriesTargetDialog({
 }) {
   const t = useTranslations("Goals");
   const texts = useGoalTexts();
-  const [when, setWhen] = useState<TargetWhen>(series.nextPeriod ? "next" : "current");
+  // The running period is offered only when the series has a goal for it.
+  const currentOffered = series.current?.start === series.currentPeriod.start;
+  // The first choice is always one of the options shown, so the dialog never submits a period other
+  // than the one it displays (S30b-L5).
+  const [when, setWhen] = useState<TargetWhen>(
+    series.nextPeriod ? "next" : currentOffered ? "current" : "later",
+  );
   const [laterDate, setLaterDate] = useState(series.nextPeriod?.start ?? series.today);
   const [target, setTarget] = useState(
     series.target === null ? "" : localizedDecimal(toThousandths(series.target), texts.locale),
@@ -516,9 +522,7 @@ function SeriesTargetDialog({
     { value: CUSTOM_UNIT, label: t("unitOptionCustom") },
   ];
   const whenOptions = [
-    ...(series.current && series.current.start === series.currentPeriod.start
-      ? [{ value: "current", label: t("seriesTargetWhenCurrent") }]
-      : []),
+    ...(currentOffered ? [{ value: "current", label: t("seriesTargetWhenCurrent") }] : []),
     ...(series.nextPeriod ? [{ value: "next", label: t("seriesTargetWhenNext") }] : []),
     { value: "later", label: t("seriesTargetWhenLater") },
   ];
@@ -695,6 +699,7 @@ function SeriesImpactSummary({ impact }: { readonly impact: GoalSeriesTargetImpa
       {impact.unitChanged && impact.current ? <p>{t("impactUnit")}</p> : null}
       {impact.reopens ? <p>{t("impactReopens")}</p> : null}
       {impact.achieved && !impact.reopens ? <p>{t("impactStaysAchieved")}</p> : null}
+      {impact.current && impact.reminders ? <p>{t("seriesImpactReminders")}</p> : null}
     </div>
   );
 }

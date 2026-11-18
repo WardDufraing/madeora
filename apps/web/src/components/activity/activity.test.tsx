@@ -83,6 +83,7 @@ async function list(
     filters: parseActivityFilters(params),
     paged,
     formats: { ...formats, locale },
+    now: new Date("2026-11-07T10:00:00Z"),
   });
   return renderWithIntl(element, locale);
 }
@@ -177,6 +178,35 @@ describe("ActivityList", () => {
     second.unmount();
     await list(null);
     expect(screen.getByText("Your activity couldn't be loaded")).toBeInTheDocument();
+  });
+
+  it("says when the chosen dates are older than Madeora keeps (S38-L2)", async () => {
+    const { unmount } = await list(
+      { entries: [], next: null },
+      { from: "2025-01-01", to: "2025-03-01" },
+    );
+    expect(screen.getByText("These dates are older than Madeora keeps")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing matches these filters")).not.toBeInTheDocument();
+    unmount();
+    // A range that starts before the 12 months but reaches into them: a note, and the entries.
+    const partial = await list(
+      { entries: [entry()], next: null },
+      { from: "2025-06-01", to: "2026-11-07" },
+    );
+    expect(screen.getByTestId("activity-retention-partial")).toHaveTextContent(
+      /older than 12 months/,
+    );
+    expect(screen.getByRole("list", { name: "Activity, newest first" })).toBeInTheDocument();
+    partial.unmount();
+    // Inside the 12 months: no retention notice.
+    await list({ entries: [], next: null }, { from: "2026-01-01", to: "2026-02-01" });
+    expect(screen.getByText("Nothing matches these filters")).toBeInTheDocument();
+    expect(screen.queryByTestId("activity-retention-partial")).not.toBeInTheDocument();
+  });
+
+  it("says in Dutch when the dates are older than Madeora keeps", async () => {
+    await list({ entries: [], next: null }, { from: "2024-01-01", to: "2024-02-01" }, false, "nl");
+    expect(screen.getByText("Deze datums zijn ouder dan wat Madeora bewaart")).toBeInTheDocument();
   });
 
   it("answers a sign-in with This was me", async () => {
@@ -309,8 +339,9 @@ describe("SecurityReportSetting", () => {
     );
     expect(screen.getByText("Expired")).toBeInTheDocument();
     await userEvent.click(
+      // The name starts with the visible words (WCAG 2.5.3, S38-L4).
       screen.getByRole("button", {
-        name: "Download the report for 08/10/2026 to 07/11/2026 as CSV",
+        name: "Download CSV of the report for 08/10/2026 to 07/11/2026",
       }),
     );
     await waitFor(() => {
@@ -324,5 +355,33 @@ describe("SecurityReportSetting", () => {
     fetchMock.mockResolvedValueOnce(Response.json({ error: "rate-limited" }, { status: 429 }));
     await userEvent.click(screen.getByRole("button", { name: "Prepare report" }));
     expect(await screen.findByText(/You can prepare 3 reports a day/)).toBeInTheDocument();
+  });
+
+  it("names the confirm button after the chosen format in the Google path (S38-L5)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ error: "reauthentication-required" }, { status: 403 }),
+    );
+    renderWithIntl(
+      <SecurityReportSetting
+        {...props}
+        hasPassword={false}
+        reports={[
+          {
+            id: REPORT,
+            range: "08/10/2026 to 07/11/2026",
+            status: "ready",
+            expires: "08/11/2026 10:00",
+            downloaded: null,
+          },
+        ]}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Download JSON of the report for 08/10/2026 to 07/11/2026",
+      }),
+    );
+    expect(await screen.findByRole("button", { name: "Download JSON" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Download CSV" })).not.toBeInTheDocument();
   });
 });

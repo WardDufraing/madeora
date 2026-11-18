@@ -276,6 +276,39 @@ describe("linking a habit", () => {
     });
   });
 
+  it("drops a refused preview when the person changes the start (S30c-L4)", async () => {
+    const user = userEvent.setup();
+    routeFetch([
+      links([]),
+      candidates,
+      {
+        when: (url, method) => method === "POST" && url === "/api/v1/goal-links",
+        answer: (body) =>
+          body.preview === true
+            ? reply(200, { outcome: "preview", revision: 3, impact: goalLinkImpact() })
+            : reply(409, {
+                error: "stale",
+                revision: 4,
+                impact: goalLinkImpact({ amountAfter: 7.5 }),
+              }),
+      },
+    ]);
+    renderWithQuery(<GoalLinksSection target={{ goalId: GOAL }} homeId={HOME} unit={km} canLink />);
+    await user.click(await screen.findByTestId("goal-link-habit-open"));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByTestId("goal-link-habit");
+    await user.click(within(dialog).getByRole("button", { name: "Preview" }));
+    await user.click(await within(dialog).findByTestId("goal-link-save"));
+    expect(
+      await within(dialog).findByText(/Something changed since the preview/),
+    ).toBeInTheDocument();
+    // Another start: the old numbers and their Confirm button go, so they cannot be sent.
+    await user.selectOptions(within(dialog).getByTestId("goal-link-start"), "date");
+    expect(within(dialog).queryByText(/Something changed since the preview/)).toBeNull();
+    expect(within(dialog).queryByTestId("goal-link-impact-amount")).toBeNull();
+    expect(within(dialog).queryByTestId("goal-link-save")).toBeNull();
+  });
+
   it("explains when no habit can be linked, in Dutch", async () => {
     const user = userEvent.setup();
     routeFetch([

@@ -51,10 +51,11 @@ export default async function ReactivatePage() {
           <p className="text-fg-muted">{tDeletion("recoverKept")}</p>
           <p className="text-fg-muted">{tDeletion("recoverNotRestored")}</p>
         </div>
-        <ReactivateAccount deletion />
+        <ReactivateAccount deletion timeZone={formats.timeZone} />
       </>
     );
   }
+  const formats = await getDateTimeFormats();
   return (
     <>
       <AuthPageTitle title={t("reactivateTitle")} />
@@ -63,7 +64,7 @@ export default async function ReactivatePage() {
         <p className="text-fg-muted">{t("reactivateKept")}</p>
         <p className="text-fg-muted">{t("reactivateNotRestored")}</p>
       </div>
-      <ReactivateAccount />
+      <ReactivateAccount timeZone={formats.timeZone} />
     </>
   );
 }

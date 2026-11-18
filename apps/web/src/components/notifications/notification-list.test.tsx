@@ -76,14 +76,17 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
   };
 }
 
+/** "Now" for the lists: the day of the habit reminders below. */
+const NOW = new Date("2026-11-10T12:00:00Z");
+
 async function show(items: readonly NotificationView[]) {
-  const element = await NotificationList({ items, formats });
+  const element = await NotificationList({ items, formats, now: NOW });
   return renderWithQuery(<>{element}</>);
 }
 
 /** Inside the app shell's toast region (S28: a habit reminder's Complete confirms with a toast). */
-async function showWithToasts(items: readonly NotificationView[]) {
-  const element = await NotificationList({ items, formats });
+async function showWithToasts(items: readonly NotificationView[], now: Date = NOW) {
+  const element = await NotificationList({ items, formats, now });
   return renderWithQuery(
     <ToastProvider regionLabel="Notifications" dismissLabel="Dismiss">
       {element}
@@ -230,6 +233,43 @@ describe("NotificationList", () => {
     expect(resumed).toHaveTextContent("The pause of a habit in \u2068Thuis\u2069 has ended.");
     expect(within(resumed as HTMLElement).queryByRole("button", { name: /Complete/ })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("keeps Open but drops Complete and Snooze on an old habit reminder (S28-L5)", async () => {
+    const habitId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00d1";
+    await showWithToasts(
+      [
+        // Yesterday's daily reminder, and a weekly one from more than a week ago.
+        item({ kind: "habit.reminder", habitId, habitName: "Walk", onDate: "2026-11-09" }),
+        item({
+          id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00b1",
+          kind: "habit.reminder",
+          habitId,
+          habitName: "Swim",
+          weekly: true,
+          createdAt: "2026-11-02T08:00:00Z",
+        }),
+        // This week's weekly reminder still offers them.
+        item({
+          id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00b2",
+          kind: "habit.reminder",
+          habitId,
+          habitName: "Yoga",
+          weekly: true,
+          createdAt: "2026-11-08T08:00:00Z",
+        }),
+      ],
+      NOW,
+    );
+    const [walk, swim, yoga] = screen.getAllByTestId("notification");
+    for (const old of [walk, swim]) {
+      expect(within(old as HTMLElement).queryByRole("button", { name: /Complete/ })).toBeNull();
+      expect(within(old as HTMLElement).queryByRole("button", { name: /Snooze/ })).toBeNull();
+      expect(within(old as HTMLElement).getByRole("link", { name: "Open" })).toBeInTheDocument();
+    }
+    expect(
+      within(yoga as HTMLElement).getByRole("button", { name: "Complete Yoga" }),
+    ).toBeInTheDocument();
   });
 
   it("shows a numeric habit's progress when the reminder was sent and opens the habit instead of Complete", async () => {

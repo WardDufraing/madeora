@@ -12,6 +12,18 @@ import { formatTaskDate } from "@/tasks/format";
 
 import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** YYYY-MM-DD of `instant` in `timeZone`. */
+function localDay(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}
+
 /**
  * The message for a notification: its kind names the event for one kind of reader, the words
  * come from the reader's language. A kind this build does not know still reads as a sentence.
@@ -225,10 +237,23 @@ export function messageKeyFor(
 export async function NotificationList({
   items,
   formats,
+  now = new Date(),
 }: {
   readonly items: readonly NotificationView[];
   readonly formats: DateTimeFormats;
+  /** The current instant; tests pass a fixed one. */
+  readonly now?: Date;
 }) {
+  const today = localDay(now, formats.timeZone);
+  /**
+   * An old habit reminder keeps its Open link but loses Complete and Snooze (S28-L5): a daily one
+   * for a day before today would backdate a check-in, and a weekly one from an earlier week would
+   * complete this week instead.
+   */
+  const reminderCurrent = (item: NotificationView) =>
+    item.weekly
+      ? now.getTime() - Date.parse(item.createdAt) < WEEK_MS
+      : item.onDate === null || item.onDate >= today;
   const [t, tn, tp, locale] = await Promise.all([
     getTranslations("Notifications"),
     getTranslations("HabitsNumeric"),
@@ -334,7 +359,10 @@ export async function NotificationList({
                 <time dateTime={item.createdAt}>{formatDateTime(item.createdAt, formats)}</time>
                 {item.duringQuietHours ? ` · ${t("quietMarker")}` : ""}
               </p>
-              {item.kind === "habit.reminder" && item.habitId && item.habitName ? (
+              {item.kind === "habit.reminder" &&
+              item.habitId &&
+              item.habitName &&
+              reminderCurrent(item) ? (
                 <HabitReminderActions
                   notificationId={item.id}
                   habitId={item.habitId}

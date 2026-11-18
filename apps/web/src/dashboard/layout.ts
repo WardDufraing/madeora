@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { compact, hasOverlap, placeNew, type Placement } from "./geometry";
+import { compact, fitsRows, hasOverlap, MAX_ROWS, placeNew, type Placement } from "./geometry";
 import {
   breakpointColumns,
   breakpoints,
@@ -24,7 +24,7 @@ import {
 export const LAYOUT_VERSION = 1;
 /** Same limits as the brief: widgets per dashboard, rows per breakpoint. */
 export const MAX_WIDGETS = 40;
-export const MAX_ROWS = 200;
+export { MAX_ROWS };
 
 export interface DashboardWidget {
   readonly id: string;
@@ -229,6 +229,13 @@ export function addWidget(layout: DashboardLayout, widget: DashboardWidget): Das
       sm: placeNew(layout.placements.sm, widget.id, widget.type, "sm"),
     },
   };
+}
+
+/** Whether a widget of `type` still fits below every breakpoint's last row (S17-L1). */
+export function canAddWidget(layout: DashboardLayout, type: WidgetType): boolean {
+  return breakpoints.every((breakpoint) =>
+    fitsRows(placeNew(layout.placements[breakpoint], "new", type, breakpoint)),
+  );
 }
 
 /** Removes a widget everywhere and closes the gap it leaves. */

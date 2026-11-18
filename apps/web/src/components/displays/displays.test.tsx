@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { axeViolations } from "@/test/axe";
@@ -35,6 +35,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   router.refresh.mockClear();
@@ -102,6 +103,7 @@ const active: HouseholdDisplayView = {
 describe("HouseholdDisplaysManager", () => {
   it("checks the code, shows the device for review, then approves it under a name", async () => {
     const user = userEvent.setup();
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-12T20:07:30Z"));
     fetchMock
       .mockReturnValueOnce(
         answer(200, {
@@ -117,7 +119,12 @@ describe("HouseholdDisplaysManager", () => {
       )
       .mockReturnValueOnce(answer(201, { display: { id: DISPLAY_ID } }));
     const { container } = renderWithQuery(
-      <HouseholdDisplaysManager homeId={HOME_ID} displays={[]} words={words} />,
+      <HouseholdDisplaysManager
+        homeId={HOME_ID}
+        displays={[]}
+        words={words}
+        displayAddress="localhost:3000/display"
+      />,
     );
     expect(await axeViolations(container)).toEqual([]);
 
@@ -131,6 +138,8 @@ describe("HouseholdDisplaysManager", () => {
     await user.click(screen.getByRole("button", { name: "Check code" }));
     expect(await screen.findByText("Tablet: Safari on iPad")).toBeInTheDocument();
     expect(screen.getByText("Code ABCD-EFGH")).toBeInTheDocument();
+    // How long ago the tablet asked (S43-L2): 20:00 asked, checked at 20:07.
+    expect(screen.getByTestId("display-review-age")).toHaveTextContent("Asked 7 minutes ago");
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`/api/v1/homes/${HOME_ID}/displays/check`);
     expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ code: "ABCDEFGH" });
     expect(await axeViolations(container)).toEqual([]);
@@ -151,6 +160,38 @@ describe("HouseholdDisplaysManager", () => {
     expect(router.refresh).toHaveBeenCalled();
   });
 
+  it("names this deployment's address in the first step (S43-L5)", () => {
+    renderWithQuery(
+      <HouseholdDisplaysManager
+        homeId={HOME_ID}
+        displays={[]}
+        words={words}
+        displayAddress="preview.example.app/display"
+      />,
+    );
+    expect(
+      screen.getByText("On the tablet, open preview.example.app/display. It shows a pairing code."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the dialog open and says so when revoking fails", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockReturnValueOnce(answer(500, { error: "failed" }));
+    renderWithQuery(
+      <HouseholdDisplaysManager
+        homeId={HOME_ID}
+        displays={[active]}
+        words={words}
+        displayAddress="localhost:3000/display"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Revoke Keuken" }));
+    const confirm = await screen.findByRole("dialog", { name: "Revoke Keuken?" });
+    await user.click(within(confirm).getByRole("button", { name: "Revoke display" }));
+    expect(await within(confirm).findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText(/The display is revoked/)).not.toBeInTheDocument();
+  });
+
   it.each([
     [404, "invalid-code", "This code is not right. Check the code on the tablet and try again."],
     [409, "expired", "This code has expired. Ask the tablet for a new code and enter that one."],
@@ -159,7 +200,14 @@ describe("HouseholdDisplaysManager", () => {
   ])("explains a refused code (%s %s)", async (status, error, message) => {
     const user = userEvent.setup();
     fetchMock.mockReturnValueOnce(answer(status, { error }));
-    renderWithQuery(<HouseholdDisplaysManager homeId={HOME_ID} displays={[]} words={words} />);
+    renderWithQuery(
+      <HouseholdDisplaysManager
+        homeId={HOME_ID}
+        displays={[]}
+        words={words}
+        displayAddress="localhost:3000/display"
+      />,
+    );
     await user.type(screen.getByRole("textbox", { name: /Pairing code/ }), "ABCD-EFGH");
     await user.click(screen.getByRole("button", { name: "Check code" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
@@ -176,6 +224,7 @@ describe("HouseholdDisplaysManager", () => {
           { ...active, id: REQUEST_ID, name: "Oud", active: false, revokedAt: "1 Nov 2026" },
         ]}
         words={words}
+        displayAddress="localhost:3000/display"
       />,
     );
     expect(
@@ -194,7 +243,17 @@ describe("HouseholdDisplaysManager", () => {
     );
     expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ name: "Hal" });
 
+    // Revoking asks first (S43-L3); keeping it sends nothing.
     await user.click(screen.getByRole("button", { name: "Revoke Keuken" }));
+    let confirm = await screen.findByRole("dialog", { name: "Revoke Keuken?" });
+    expect(confirm).toHaveAccessibleDescription(/pair it with a new code/);
+    await user.click(within(confirm).getByRole("button", { name: "Keep it paired" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Revoke Keuken" }));
+    confirm = await screen.findByRole("dialog", { name: "Revoke Keuken?" });
+    await user.click(within(confirm).getByRole("button", { name: "Revoke display" }));
     expect(
       await screen.findByText("The display is revoked. It goes back to its pairing screen."),
     ).toBeInTheDocument();

@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
+import { getVerifiedUser } from "@/auth/identity";
 import { ErrorState } from "@/components/ui/states";
 import type { WidgetConfigs } from "@/dashboard/widgets";
 import { readRecipeWidget } from "@/recipes/data";
@@ -23,16 +24,18 @@ export async function RecipesWidget({
   readonly config: WidgetConfigs["recipes"];
 }) {
   const count = config.mode === "random" ? 1 : config.count;
-  const [t, data] = await Promise.all([
+  const [t, user, data] = await Promise.all([
     getTranslations("RecipeWidgets"),
+    getVerifiedUser(),
     readRecipeWidget(homeId, config.mode, count, config.mode === "random" ? widgetId : null),
   ]);
-  if (data.status !== "ok") {
+  if (data.status !== "ok" || !user) {
     return <ErrorState title={t("failedTitle")} description={t("failed")} />;
   }
   return (
     <div className="flex flex-col gap-3" data-testid="recipe-widget">
       <RecipeWidgetCards
+        userId={user.id}
         homeId={homeId}
         mode={config.mode}
         count={count}

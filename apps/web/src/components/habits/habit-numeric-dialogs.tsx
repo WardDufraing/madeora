@@ -108,6 +108,8 @@ export function TrackingChangeDialog({
   const [impact, setImpact] = useState<unknown>(null);
   const [confirmStatus, setConfirmStatus] = useState(false);
   const [confirmUnit, setConfirmUnit] = useState(false);
+  // A request the form could not build: said out loud instead of doing nothing (S29-L4).
+  const [unsendable, setUnsendable] = useState(false);
   const weekly = habit.schedule?.kind === "weekly" || habit.nextSchedule?.kind === "weekly";
   const reading = trackingFromDraft(draft, locale);
   // Only a target change within the unit in force may start today.
@@ -126,6 +128,7 @@ export function TrackingChangeDialog({
   };
   const send = (preview: boolean) => {
     setErrors(undefined);
+    setUnsendable(false);
     if (!reading.ok) {
       setErrors(reading.errors);
       return null;
@@ -143,6 +146,7 @@ export function TrackingChangeDialog({
       preview,
     };
     const parsed = changeTrackingSchema.safeParse(body);
+    if (!parsed.success) setUnsendable(true);
     return parsed.success ? parsed.data : null;
   };
   const previewing = useHabitMutation(
@@ -306,6 +310,10 @@ export function TrackingChangeDialog({
         {error?.failure === "unchanged" ? (
           <FormAlert tone="info" announce>
             {t("nothingToChange")}
+          </FormAlert>
+        ) : unsendable ? (
+          <FormAlert tone="error" announce>
+            {texts.failure("invalid")}
           </FormAlert>
         ) : (
           <Failure error={error} />

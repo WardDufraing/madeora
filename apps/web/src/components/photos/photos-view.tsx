@@ -347,20 +347,29 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled, homes }: P
           {error}
         </p>
       ) : null}
-      {uploads.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-helper" data-testid="upload-list">
-          {uploads.map((row) => (
-            <li key={row.key}>
-              <bdi>{row.name}</bdi>:{" "}
-              {row.state === "working"
-                ? t("uploadWorking")
-                : row.state === "done"
-                  ? t("uploadDone")
-                  : row.state.failed}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {/* A log that stays mounted, so each file's result (above all a failure) is announced as it
+          happens, not only the summary (S35-L7). */}
+      <div
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-label={t("uploadListLabel")}
+      >
+        {uploads.length > 0 ? (
+          <ul className="flex flex-col gap-1 text-helper" data-testid="upload-list">
+            {uploads.map((row) => (
+              <li key={row.key}>
+                <bdi>{row.name}</bdi>:{" "}
+                {row.state === "working"
+                  ? t("uploadWorking")
+                  : row.state === "done"
+                    ? t("uploadDone")
+                    : row.state.failed}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
 
       {album ? (
         <section aria-labelledby={`${statusId}-album`} className="flex flex-col gap-3">

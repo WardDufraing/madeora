@@ -10,6 +10,24 @@ import { Button } from "@/components/ui/button";
 export interface ReactivateAccountProps {
   /** S40: the account is pending deletion; this cancels the deletion. */
   readonly deletion?: boolean;
+  /** The person's timezone: the day they left is their local day, not the UTC one (S38P2-L5). */
+  readonly timeZone: string;
+}
+
+/** YYYY-MM-DD of `instant` in `timeZone`; null for an unreadable instant or zone. */
+export function localDay(instant: string, timeZone: string): string | null {
+  const date = new Date(instant);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  } catch {
+    return instant.slice(0, 10);
+  }
 }
 
 /**
@@ -17,7 +35,7 @@ export interface ReactivateAccountProps {
  * Afterwards the person lands on their Home membership history from the day they left, so they see
  * what changed while they were away.
  */
-export function ReactivateAccount({ deletion = false }: ReactivateAccountProps) {
+export function ReactivateAccount({ deletion = false, timeZone }: ReactivateAccountProps) {
   const t = useTranslations("Lifecycle");
   const tDeletion = useTranslations("Deletion");
   const [busy, setBusy] = useState(false);
@@ -31,7 +49,8 @@ export function ReactivateAccount({ deletion = false }: ReactivateAccountProps) 
       // Reactivation ended this session: signing in again opens a fresh one, then shows what
       // changed in the person's Homes while they were away.
       const changes = new URLSearchParams({ category: "home_memberships" });
-      if (since) changes.set("from", since.slice(0, 10));
+      const from = since ? localDay(since, timeZone) : null;
+      if (from) changes.set("from", from);
       changes.set("welcome", "back");
       const target = new URL("/sign-in", window.location.origin);
       target.searchParams.set("status", deletion ? "deletion_canceled" : "reactivated");

@@ -215,6 +215,11 @@ export interface RepeatFieldsProps {
   readonly dateFormat: DateFormat;
   /** Offers "Does not repeat" (creating); a series' schedule always repeats. */
   readonly allowNone: boolean;
+  /**
+   * Today in the schedule's timezone: "Next dates" never lists days before it (S19-L1), since a
+   * first date in the past creates nothing for those days.
+   */
+  readonly today?: string | null;
 }
 
 /**
@@ -228,6 +233,7 @@ export function RepeatFields({
   errors,
   dateFormat,
   allowNone,
+  today = null,
 }: RepeatFieldsProps) {
   const t = useTranslations("Tasks");
   const text = useRecurrenceText(dateFormat);
@@ -238,8 +244,15 @@ export function RepeatFields({
     onChange({ ...value, ...patch });
   };
   const rule = draftRule(value, startsOn);
-  const next = rule ? upcomingDates(rule, rule.startsOn, 3) : [];
+  const next = rule
+    ? upcomingDates(rule, today && today > rule.startsOn ? today : rule.startsOn, 3)
+    : [];
   const choices = allowNone ? repeatChoices : recurrenceFrequencies;
+  // A weekly rule whose days leave out the first date's weekday starts on a later day (S19-L9).
+  const firstMoves =
+    rule?.frequency === "weekly" && !(rule.weekdays ?? []).includes(isoWeekday(rule.startsOn))
+      ? (upcomingDates(rule, rule.startsOn, 1)[0] ?? null)
+      : null;
 
   return (
     <fieldset className="flex flex-col gap-4" data-testid="repeat-fields">
@@ -375,6 +388,14 @@ export function RepeatFields({
                 <p className="text-fg-muted">
                   {t("repeatNextDates", { dates: text.list(next.map(text.date)) })}
                 </p>
+                {firstMoves ? (
+                  <p className="text-fg" data-testid="repeat-first-moves">
+                    {t("repeatFirstMoves", {
+                      start: text.date(rule.startsOn),
+                      first: text.date(firstMoves),
+                    })}
+                  </p>
+                ) : null}
               </>
             ) : (
               <p className="text-fg-muted">

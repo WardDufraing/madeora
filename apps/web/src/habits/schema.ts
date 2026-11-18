@@ -279,13 +279,11 @@ export const changeTrackingSchema = z
     tracking: habitTrackingInputSchema.nullable(),
     when: z.enum(trackingWhen),
     effectiveOn: habitDateSchema.nullable().default(null),
-    /** Today's total as the preview showed it; a moved total is refused (`stale`). */
-    expectedTotal: z
-      .number()
-      .min(0)
-      .max(HABIT_QUANTITY.max * 2)
-      .nullable()
-      .default(null),
+    /**
+     * Today's total as the preview showed it; a moved total is refused (`stale`). A day's total has
+     * no upper bound (many contributions add up), so neither has this (S29-L4).
+     */
+    expectedTotal: z.number().min(0).nullable().default(null),
     confirmStatus: z.boolean().default(false),
     confirmUnit: z.boolean().default(false),
     preview,

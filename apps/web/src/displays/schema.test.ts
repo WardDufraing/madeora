@@ -1,6 +1,7 @@
 import {
   approveDisplaySchema,
   displayNameSchema,
+  displayPairingAddress,
   formatPairingCode,
   normalizePairingCode,
   PAIRING_CODE_ALPHABET,
@@ -48,5 +49,19 @@ describe("approval body", () => {
     expect(approveDisplaySchema.parse(valid)).toEqual({ ...valid, code: "ABCDEFGH" });
     expect(approveDisplaySchema.safeParse({ ...valid, homeId: "x" }).success).toBe(false);
     expect(approveDisplaySchema.safeParse({ ...valid, requestId: "nope" }).success).toBe(false);
+  });
+});
+
+describe("display pairing address (S43-L5)", () => {
+  it("uses this deployment's host and port, without the scheme", () => {
+    expect(displayPairingAddress("https://madeora.studio", "/display")).toBe(
+      "madeora.studio/display",
+    );
+    expect(displayPairingAddress("http://localhost:3000/", "/display")).toBe(
+      "localhost:3000/display",
+    );
+    expect(displayPairingAddress("https://madeora-git-x.vercel.app/app", "/display")).toBe(
+      "madeora-git-x.vercel.app/display",
+    );
   });
 });

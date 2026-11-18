@@ -12,6 +12,7 @@ import { z } from "zod";
 import { FormAlert } from "@/components/auth/form-alert";
 import { MemberFailureAlert } from "@/components/members/manage/member-failure-alert";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import {
@@ -66,6 +67,13 @@ const pairingMessage: Partial<Record<MemberFailure, string>> = {
   limitReached: "failLimitReached",
 };
 
+/** Whole minutes from `isoTime` to `now`, or null when the time cannot be read. */
+export function minutesSince(isoTime: string, now: number): number | null {
+  const then = Date.parse(isoTime);
+  if (Number.isNaN(then)) return null;
+  return Math.max(0, Math.floor((now - then) / 60_000));
+}
+
 function PairingFailure({ failure }: { readonly failure: MemberFailure | null }) {
   const t = useTranslations("Displays");
   if (!failure) return null;
@@ -95,7 +103,12 @@ function PairDisplayForm({
 }) {
   const t = useTranslations("Displays");
   const hydrated = useHydrated();
-  const [review, setReview] = useState<{ code: string; request: PairingReview } | null>(null);
+  const [review, setReview] = useState<{
+    code: string;
+    request: PairingReview;
+    /** Whole minutes between the tablet's request and this check (S43-L2). */
+    minutesAgo: number | null;
+  } | null>(null);
   const codeForm = useForm<CodeInput, unknown, CodeOutput>({
     resolver: zodResolver(codeFormSchema),
     defaultValues: { code: "" },
@@ -111,7 +124,7 @@ function PairDisplayForm({
   >({
     mutationFn: async ({ code }) => ({ code, request: await checkPairingCode(homeId, { code }) }),
     onSuccess: (found) => {
-      setReview(found);
+      setReview({ ...found, minutesAgo: minutesSince(found.request.requestedAt, Date.now()) });
     },
   });
   const approve = useMutation<string, MemberActionError, NameOutput>({
@@ -188,6 +201,11 @@ function PairDisplayForm({
         <p className="text-helper text-fg-muted">
           {t("reviewCode", { code: formatPairingCode(review.code) })}
         </p>
+        {review.minutesAgo !== null ? (
+          <p className="text-helper text-fg-muted" data-testid="display-review-age">
+            {t("reviewAge", { minutes: review.minutesAgo })}
+          </p>
+        ) : null}
         <p className="mt-2 text-helper text-fg-muted">{t("reviewCheck")}</p>
       </div>
       <TextField
@@ -294,10 +312,13 @@ export function HouseholdDisplaysManager({
   homeId,
   displays,
   words,
+  displayAddress,
 }: {
   readonly homeId: string;
   readonly displays: readonly HouseholdDisplayView[];
   readonly words: DeviceWords;
+  /** Where the tablet opens the pairing screen, from this deployment's address (S43-L5). */
+  readonly displayAddress: string;
 }) {
   const t = useTranslations("Displays");
   const router = useRouter();
@@ -306,12 +327,15 @@ export function HouseholdDisplaysManager({
     { kind: "paired"; name: string } | { kind: "renamed" | "revoked" } | null
   >(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  // The display a manager asked to revoke; revoking happens only after they confirm (S43-L3).
+  const [confirming, setConfirming] = useState<HouseholdDisplayView | null>(null);
   const revoke = useMutation<undefined, MemberActionError, string>({
     mutationFn: async (displayId) => {
       await revokeDisplay(homeId, displayId);
       return undefined;
     },
     onSuccess: () => {
+      setConfirming(null);
       setNotice({ kind: "revoked" });
       router.refresh();
     },
@@ -326,7 +350,7 @@ export function HouseholdDisplaysManager({
           {t("pairTitle")}
         </h2>
         <ol className="list-decimal ps-5 text-body text-fg-muted">
-          <li>{t("pairStep1")}</li>
+          <li>{t("pairStep1", { address: displayAddress })}</li>
           <li>{t("pairStep2")}</li>
           <li>{t("pairStep3")}</li>
         </ol>
@@ -349,8 +373,6 @@ export function HouseholdDisplaysManager({
               : t("revokedNotice")}
         </FormAlert>
       ) : null}
-      <MemberFailureAlert failure={revoke.error?.failure ?? null} />
-
       <section aria-labelledby="displays-list-title" className="flex flex-col gap-3">
         <h2 id="displays-list-title" className="text-section-title font-semibold text-fg">
           {t("listTitle")}
@@ -410,7 +432,8 @@ export function HouseholdDisplaysManager({
                     aria-label={t("revokeNamed", { name: display.name })}
                     onClick={() => {
                       setNotice(null);
-                      revoke.mutate(display.id);
+                      revoke.reset();
+                      setConfirming(display);
                     }}
                   >
                     {t("revoke")}
@@ -433,6 +456,41 @@ export function HouseholdDisplaysManager({
             ))}
           </ul>
         )}
+        <Dialog
+          open={confirming !== null}
+          onClose={() => {
+            if (!revoke.isPending) setConfirming(null);
+          }}
+          title={t("revokeConfirmTitle", { name: confirming?.name ?? "" })}
+          description={t("revokeConfirmBody")}
+          closeLabel={t("revokeConfirmClose")}
+          footer={
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={revoke.isPending}
+                onClick={() => {
+                  setConfirming(null);
+                }}
+              >
+                {t("revokeConfirmKeep")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                loading={revoke.isPending}
+                onClick={() => {
+                  if (confirming && !revoke.isPending) revoke.mutate(confirming.id);
+                }}
+              >
+                {t("revokeConfirmAction")}
+              </Button>
+            </>
+          }
+        >
+          <MemberFailureAlert failure={revoke.error?.failure ?? null} />
+        </Dialog>
         {revoked.length > 0 ? (
           <>
             <h3 className="mt-2 text-body font-semibold text-fg">{t("revokedTitle")}</h3>

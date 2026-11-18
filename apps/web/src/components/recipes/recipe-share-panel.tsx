@@ -103,6 +103,12 @@ export function RecipeSharePanel({ recipeId, recipeName, shares }: RecipeSharePa
                         ? t("shareCanEdit")
                         : t("shareViewOnly")}
                   </p>
+                  {share.state === "paused" ? (
+                    // Turning it back on is view only; an earlier edit choice is not restored (S25-L2).
+                    <p className="text-helper text-fg-muted" data-testid="share-reinstate-hint">
+                      {share.canEdit ? t("reinstateHintWasEdit") : t("reinstateHint")}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {share.state === "paused" ? (

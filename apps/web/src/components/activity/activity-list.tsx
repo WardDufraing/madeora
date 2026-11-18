@@ -5,6 +5,7 @@ import { kindKey } from "@/activity/catalogue";
 import {
   hasActivityFilters,
   newestPageHref,
+  retentionState,
   olderPageHref,
   type ActivityCursor,
   type ActivityFilters,
@@ -25,6 +26,18 @@ export interface ActivityListProps {
   readonly formats: DateTimeFormats;
   /** Hide the category label (the Security activity page shows only one category). */
   readonly securityOnly?: boolean;
+  /** The current instant; tests pass a fixed one. */
+  readonly now?: Date;
+}
+
+/** YYYY-MM-DD of `instant` in `timeZone`. */
+function localDate(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
 }
 
 const outcomeTone: Record<string, string> = {
@@ -50,6 +63,7 @@ export async function ActivityList({
   paged,
   formats,
   securityOnly = false,
+  now = new Date(),
 }: ActivityListProps) {
   const [t, tSecurity] = await Promise.all([
     getTranslations("Activity"),
@@ -74,10 +88,28 @@ export async function ActivityList({
   }
 
   const filtered = hasActivityFilters(filters);
+  const retention = retentionState(filters, localDate(now, formats.timeZone));
+  const retentionPartial =
+    retention === "partial" ? (
+      <p className="mb-3 text-helper text-fg" data-testid="activity-retention-partial">
+        {t("retentionPartial")}
+      </p>
+    ) : null;
   if (page.entries.length === 0) {
     return (
       <>
-        {filtered ? (
+        {retentionPartial}
+        {retention === "beyond" ? (
+          <EmptyState
+            title={t("beyondRetentionTitle")}
+            description={t("beyondRetentionHint")}
+            action={
+              <Link href={path} className="font-medium text-accent-fg underline">
+                {t("filterClear")}
+              </Link>
+            }
+          />
+        ) : filtered ? (
           <EmptyState
             title={t("noMatchTitle")}
             description={filters.category === "privacy" ? t("privacyEmptyHint") : t("noMatchHint")}
@@ -106,6 +138,7 @@ export async function ActivityList({
 
   return (
     <>
+      {retentionPartial}
       <ol
         aria-label={t("listLabel")}
         className="flex flex-col divide-y divide-line"

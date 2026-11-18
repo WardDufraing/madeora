@@ -268,10 +268,18 @@ describe("PhotosView", () => {
     renderWithQuery(
       <PhotosView homeId={null} library={library()} offset={0} uploadsEnabled homes={HOMES} />,
     );
+    // The disclosure says what is lost and that downloads are the optimized copy (S35-L5).
+    expect(screen.getByText(/location and time are removed/)).toHaveTextContent(
+      "Downloads are this optimized copy.",
+    );
     const input = screen.getByTestId("photo-file-input");
     await user.upload(input, new File(["%PDF"], "doc.pdf", { type: "application/pdf" }));
     expect(await screen.findByTestId("upload-list")).toBeTruthy();
     expect(screen.getByTestId("upload-list").textContent).toMatch(/not supported/i);
+    // Each file's result is inside a polite log, so a failure is announced at once (S35-L7).
+    const log = screen.getByRole("log", { name: "Upload progress" });
+    expect(log).toHaveAttribute("aria-live", "polite");
+    expect(log).toContainElement(screen.getByTestId("upload-list"));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

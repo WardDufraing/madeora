@@ -8,6 +8,9 @@ import { breakpointColumns, widgetRegistry, type Breakpoint, type WidgetType } f
  * layout arranged with the keyboard ends up exactly where the same drag would put it.
  */
 
+/** Rows per breakpoint (the brief's limit; the server validator refuses a layout past it). */
+export const MAX_ROWS = 200;
+
 export interface Placement {
   readonly id: string;
   readonly x: number;
@@ -65,6 +68,11 @@ export function clampSize(
     w: Math.min(Math.max(w, bounds.minW), bounds.maxW, cols),
     h: Math.min(Math.max(h, bounds.minH), bounds.maxH),
   };
+}
+
+/** Whether every placement ends within `MAX_ROWS` (S17-L1). */
+export function fitsRows(placements: readonly Placement[]): boolean {
+  return placements.every((p) => p.y + p.h <= MAX_ROWS);
 }
 
 /** Where a new widget of `type` goes: below everything, at the start of the row. */
@@ -160,8 +168,9 @@ export function canMove(
   breakpoint: Breakpoint,
 ): boolean {
   const before = placements.find((p) => p.id === id);
-  const after = moveWidget(placements, id, direction, breakpoint).find((p) => p.id === id);
-  return !!before && !!after && (before.x !== after.x || before.y !== after.y);
+  const next = moveWidget(placements, id, direction, breakpoint);
+  const after = next.find((p) => p.id === id);
+  return !!before && !!after && (before.x !== after.x || before.y !== after.y) && fitsRows(next);
 }
 
 export function canResize(
@@ -176,5 +185,7 @@ export function canResize(
   const dw = direction === "wider" ? 1 : direction === "narrower" ? -1 : 0;
   const dh = direction === "taller" ? 1 : direction === "shorter" ? -1 : 0;
   const size = clampSize(type, breakpoint, target.w + dw, target.h + dh);
-  return size.w !== target.w || size.h !== target.h;
+  if (size.w === target.w && size.h === target.h) return false;
+  // A step that would push something past the last row is refused, like the server does.
+  return fitsRows(resizeWidget(placements, id, type, direction, breakpoint));
 }

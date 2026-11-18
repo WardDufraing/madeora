@@ -333,6 +333,7 @@ const failureKey = {
   rateLimited: "failureRateLimited",
   invalidFile: "failureInvalidFile",
   expired: "failureExpired",
+  busy: "failureBusy",
   notPermitted: "failureNotPermitted",
   notFound: "failureNotFound",
   scopeUnavailable: "failureScopeUnavailable",
@@ -343,7 +344,7 @@ const failureKey = {
 } as const satisfies Record<AttachmentFailure, string>;
 
 function retryable(failure: AttachmentFailure): boolean {
-  return ["network", "expired", "rateLimited", "failed", "storageOff"].includes(failure);
+  return ["network", "expired", "busy", "rateLimited", "failed", "storageOff"].includes(failure);
 }
 
 type TypeLabelKey = "typeFile" | "typeImage" | "typePdf" | "typeCsv" | "typeText" | "typeDocument";

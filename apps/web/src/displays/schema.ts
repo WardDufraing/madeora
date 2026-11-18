@@ -93,3 +93,12 @@ export const displayLockStateSchema = z.strictObject({
   message: lockMessageSchema,
 });
 export type DisplayLockStateInput = z.input<typeof displayLockStateSchema>;
+
+/**
+ * The address a tablet opens to reach its pairing screen, as people type it: this deployment's host
+ * (and port) plus the display path, without the scheme (S43-L5: previews and local runs differ).
+ */
+export function displayPairingAddress(appUrl: string, path: string): string {
+  const url = new URL(path, appUrl);
+  return `${url.host}${url.pathname}`;
+}

@@ -37,6 +37,7 @@ const cached = (queryClient: QueryClient) => queryClient.getQueryCache().getAll(
 beforeEach(() => {
   listeners.length = 0;
   refresh.mockClear();
+  window.sessionStorage.clear();
 });
 
 describe("AuthSync", () => {
@@ -47,6 +48,28 @@ describe("AuthSync", () => {
     });
     expect(cached(queryClient)).toBe(0);
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("drops the account's recipe drafts from this tab on sign-out, and nothing else (S24-L2)", () => {
+    window.sessionStorage.setItem("madeora:recipe-edit:r1", "{}");
+    window.sessionStorage.setItem("madeora:recipe-cook:r1:3", "{}");
+    window.sessionStorage.setItem("other", "kept");
+    setup();
+    act(() => {
+      for (const listener of listeners) listener("SIGNED_OUT", null);
+    });
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:r1")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-cook:r1:3")).toBeNull();
+    expect(window.sessionStorage.getItem("other")).toBe("kept");
+  });
+
+  it("drops the recipe drafts when the server confirms another account for the page", () => {
+    const { view } = setup();
+    window.sessionStorage.setItem("madeora:recipe-edit:r1", "{}");
+    view.rerender(<AuthSync userId="user-a" />);
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:r1")).toBe("{}");
+    view.rerender(<AuthSync userId="user-b" />);
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:r1")).toBeNull();
   });
 
   it("empties the cache when a different account appears", () => {

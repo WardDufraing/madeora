@@ -61,6 +61,8 @@ export interface TaskRepeatsProps {
   readonly loadedAt: string;
   readonly members: readonly MemberOption[];
   readonly formats: DateTimeFormats;
+  /** Today in the task's timezone, for the schedule preview. */
+  readonly today?: string | null;
 }
 
 /**
@@ -76,6 +78,7 @@ export function TaskRepeats({
   loadedAt,
   members,
   formats,
+  today = null,
 }: TaskRepeatsProps) {
   const t = useTranslations("Tasks");
   const names = useMemo(() => memberNames(members), [members]);
@@ -209,6 +212,7 @@ export function TaskRepeats({
         {editing ? (
           <ScheduleForm
             series={series}
+            today={today}
             dateFormat={formats.dateFormat}
             busy={schedule.busy}
             onCancel={() => {
@@ -262,12 +266,14 @@ const scheduleSchema = z
 
 function ScheduleForm({
   series,
+  today,
   dateFormat,
   busy,
   onCancel,
   onSubmit,
 }: {
   readonly series: TaskSeries;
+  readonly today: string | null;
   readonly dateFormat: DateTimeFormats["dateFormat"];
   readonly busy: boolean;
   readonly onCancel: () => void;
@@ -315,6 +321,7 @@ function ScheduleForm({
             }}
             dateFormat={dateFormat}
             allowNone={false}
+            today={today}
           />
         )}
       />

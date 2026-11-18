@@ -48,7 +48,7 @@ export function MyHomeCopies({ rows }: { readonly rows: readonly MyCopyRow[] }) 
             className="flex flex-col gap-1 py-3"
             data-testid={`my-copy-${row.status}`}
           >
-            <p className="text-body">
+            <p className="text-body" id={`my-copy-${row.id}`}>
               <span className="font-semibold">{row.label ?? t(`itemGone.${row.itemType}`)}</span>
               {" → "}
               <bdi>{row.homeName}</bdi>
@@ -87,6 +87,7 @@ export function MyHomeCopies({ rows }: { readonly rows: readonly MyCopyRow[] }) 
                       setBusy(null);
                     });
                 }}
+                aria-describedby={`my-copy-${row.id}`}
                 data-testid="my-copy-cancel"
               >
                 {t("cancel")}

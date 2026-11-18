@@ -99,7 +99,17 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close(true);
+      // A page dialog or control that handled Escape itself keeps it; Ora stays open.
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        !surface.current?.contains(target) &&
+        target.closest("dialog[open], [role='dialog'][aria-modal='true'], [role='alertdialog']")
+      ) {
+        return;
+      }
+      close(true);
     };
     const onPointer = (event: globalThis.PointerEvent) => {
       const target = event.target;
@@ -115,14 +125,23 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
     };
   }, [open, close]);
 
+  // The handle and the header both start a swipe (S45-L5), but not a press on a header button,
+  // which must stay a plain click. Only the pointer that started it can finish it.
   const onHandleDown = (event: PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.target instanceof Element && event.target.closest("button")) return;
+    if (typeof event.currentTarget.setPointerCapture === "function") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     swipe.current = { startY: event.clientY, pointerId: event.pointerId };
   };
   const onHandleUp = (event: PointerEvent<HTMLDivElement>) => {
     const start = swipe.current;
+    if (!start || start.pointerId !== event.pointerId) return;
     swipe.current = null;
-    if (start && event.clientY - start.startY > SWIPE_CLOSE_DISTANCE) close(true);
+    if (event.clientY - start.startY > SWIPE_CLOSE_DISTANCE) close(true);
+  };
+  const onHandleCancel = () => {
+    swipe.current = null;
   };
 
   const expression: OraExpression =
@@ -159,14 +178,18 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
             className="flex h-6 shrink-0 touch-none items-center justify-center md:hidden"
             onPointerDown={onHandleDown}
             onPointerUp={onHandleUp}
-            onPointerCancel={() => {
-              swipe.current = null;
-            }}
+            onPointerCancel={onHandleCancel}
             data-testid="ora-sheet-handle"
           >
             <span aria-hidden="true" className="h-1 w-10 rounded-full bg-line-control" />
           </div>
-          <div className="flex items-center gap-3 px-4 pb-2 pt-1 md:pt-4">
+          <div
+            className="flex items-center gap-3 px-4 pb-2 pt-1 max-md:touch-none md:pt-4"
+            onPointerDown={onHandleDown}
+            onPointerUp={onHandleUp}
+            onPointerCancel={onHandleCancel}
+            data-testid="ora-sheet-header"
+          >
             <OraCharacter
               palette={palette}
               expression={expression}
@@ -217,6 +240,10 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
               }}
               onNavigated={() => {
                 close(false);
+                // The surface is hidden now; focus goes to the page instead of falling to body.
+                requestAnimationFrame(() => {
+                  document.getElementById("main")?.focus();
+                });
               }}
               onStatus={setStatus}
               requested={requested}
@@ -245,7 +272,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
         onClick={toggle}
         aria-expanded={open}
         aria-controls={everOpened ? "ora-surface" : undefined}
-        aria-label={open ? t("close") : t("open")}
+        aria-label={t("launcher")}
         data-testid="ora-launcher"
         className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] end-4 z-40 inline-flex size-14 items-center justify-center rounded-full border border-line bg-surface-elevated shadow-overlay hover:bg-accent-subtle"
       >

@@ -160,6 +160,8 @@ describe("NewTask with repeat fields", () => {
     const summary = screen.getByTestId("repeat-summary");
     expect(summary).toHaveTextContent("Every 2 weeks on Monday and Thursday, for 5 occurrences");
     expect(summary).toHaveTextContent("Next dates: 2026-10-15, 2026-10-26, and 2026-10-29");
+    // Thursday (the due date's day) is chosen, so the first date does not move.
+    expect(screen.queryByTestId("repeat-first-moves")).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
 
     fetchMock.mockResolvedValueOnce(
@@ -528,7 +530,7 @@ describe("TaskRepeats", () => {
     ],
   };
 
-  function repeats(task = occurrence()) {
+  function repeats(task = occurrence(), today: string | null = null) {
     return renderWithQuery(
       <TaskRepeats
         userId="user-a"
@@ -537,9 +539,31 @@ describe("TaskRepeats", () => {
         loadedAt="2026-10-15T10:00:00.000Z"
         members={members}
         formats={formats}
+        today={today}
       />,
     );
   }
+
+  it("says when a weekly rule moves the first date off the due date (S19-L9)", async () => {
+    const user = userEvent.setup();
+    repeats();
+    await user.click(screen.getByTestId("series-edit-schedule"));
+    // Starts Monday 12 October; leave only Thursday.
+    await user.click(screen.getByRole("checkbox", { name: "Monday" }));
+    expect(screen.getByTestId("repeat-first-moves")).toHaveTextContent(
+      "2026-10-12 is not on one of the chosen days, so the first date is 2026-10-15.",
+    );
+  });
+
+  it("lists the next dates from today, not from a first date in the past (S19-L1)", async () => {
+    const user = userEvent.setup();
+    // The series started on Monday 12 October; today is Thursday 22 October.
+    repeats(occurrence(), "2026-10-22");
+    await user.click(screen.getByTestId("series-edit-schedule"));
+    expect(screen.getByTestId("repeat-summary")).toHaveTextContent(
+      "Next dates: 2026-10-22, 2026-10-26, and 2026-10-29",
+    );
+  });
 
   it("shows the schedule, the next date and the history with the actual completer", async () => {
     const { container } = repeats();
@@ -553,7 +577,7 @@ describe("TaskRepeats", () => {
     expect(
       within(rows[1] as HTMLElement).getByRole("link", { name: "2026-10-12" }),
     ).toHaveAttribute("href", `/homes/${HOME}/tasks/${EARLIER}`);
-    expect(rows[2]).toHaveTextContent("Missed");
+    expect(rows[2]).toHaveTextContent("Missed, still open");
     expect(await axeViolations(container)).toEqual([]);
   });
 

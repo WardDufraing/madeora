@@ -300,6 +300,46 @@ describe("TaskAttachments", () => {
     expect(urls.filter((url) => url.endsWith("/finalize"))).toHaveLength(2);
   });
 
+  it("keeps the attempt when the file is still being checked, so a retry never uploads twice (S19c-LA)", async () => {
+    const user = userEvent.setup();
+    let finalizeCalls = 0;
+    fetchMock.mockImplementation((url) => {
+      if (url.endsWith("/upload-intents"))
+        return Promise.resolve(
+          jsonResponse(201, {
+            fileId: NEW_FILE,
+            uploadUrl: "https://store.example/put",
+            headers: { "content-type": "application/pdf" },
+            expiresAt: "2026-10-20T10:15:00Z",
+          }),
+        );
+      finalizeCalls += 1;
+      // An earlier finalize of the same file is still running: the server answers busy.
+      return finalizeCalls === 1
+        ? Promise.resolve(jsonResponse(409, { error: "conflict" }))
+        : Promise.resolve(
+            jsonResponse(200, {
+              file: { id: NEW_FILE },
+              attachment: { id: "a-new", impact: null },
+            }),
+          );
+    });
+    show();
+    await user.upload(
+      screen.getByLabelText("Add file"),
+      new File(["%PDF-1.7"], "Offer.pdf", { type: "application/pdf" }),
+    );
+    expect(await screen.findByText(/still being checked from your last try/)).toBeInTheDocument();
+    expect(screen.queryByText(/took too long/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalled();
+    });
+    const urls = fetchMock.mock.calls.map(([url]) => url);
+    expect(urls.filter((url) => url.endsWith("/upload-intents"))).toHaveLength(1);
+    expect(urls.filter((url) => url.endsWith("/finalize"))).toHaveLength(2);
+  });
+
   it("retries an upload that failed before storage with the same request id", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(jsonResponse(500, { error: "failed" }));

@@ -592,7 +592,8 @@ describe("the claim policy editor", () => {
       dryRun: true,
       confirm: false,
     });
-    expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toMatchObject({ dryRun: false, confirm: true });
+    // Nothing happens at once, so the save does not confirm anything on the manager's behalf (S21-L6).
+    expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toMatchObject({ dryRun: false, confirm: false });
   });
 
   it("shows what a change would close or release at once and waits for confirmation", async () => {
@@ -615,6 +616,40 @@ describe("the claim policy editor", () => {
     expect(impact).toHaveTextContent("2 unclaimed occurrences whose week has ended close now.");
     expect(impact).toHaveTextContent("1 existing claim stays");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("chore-policy-confirm")).toBeVisible();
+    fetchMock.mockResolvedValueOnce(Response.json({ outcome: "saved", revision: 5 }));
+    await user.click(screen.getByTestId("chore-policy-confirm"));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toMatchObject({ dryRun: false, confirm: true });
+  });
+
+  it("shows the new effects when a claim changed them between preview and save (S21-L6)", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json({
+          outcome: "preview",
+          impact: { expireNow: 0, releaseNow: 0, claimedIneligible: 0 },
+          revision: 4,
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ error: "needs-confirmation" }, { status: 409 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          outcome: "preview",
+          impact: { expireNow: 0, releaseNow: 1, claimedIneligible: 0 },
+          revision: 4,
+        }),
+      );
+    withToasts(<ChoreClaimPolicyEditor choreId={CHORE} policy={storedPolicy} members={members} />);
+    await user.click(screen.getByTestId("chore-policy-edit"));
+    await user.click(screen.getByTestId("chore-policy-save"));
+    expect(await screen.findByTestId("chore-policy-impact")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(bodyOf(fetchMock.mock.calls[1]?.[1])).toMatchObject({ confirm: false });
+    expect(screen.getByTestId("chore-policy-form").querySelector("[role='alert']")).toBeNull();
     expect(screen.getByTestId("chore-policy-confirm")).toBeVisible();
   });
 });

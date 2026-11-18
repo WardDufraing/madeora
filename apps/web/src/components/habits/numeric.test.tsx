@@ -162,6 +162,8 @@ describe("entering progress in the viewer's locale", () => {
     await user.type(screen.getByRole("textbox", { name: "Add progress" }), "1,5");
     expect(await screen.findByText("Write decimals with a point, for example 1.5.")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Add progress" }));
+    // Focus goes back to the field that says what is wrong (S29-L6).
+    expect(screen.getByRole("textbox", { name: "Add progress" })).toHaveFocus();
     expect(await axeViolations(en.container)).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -544,6 +546,21 @@ describe("changing the target", () => {
       confirmStatus: true,
       when: "today",
     });
+  });
+
+  it("previews a start today on a day whose total passed 2,000,000 (S29-L4)", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(() => reply(200, { outcome: "preview", impact, revision: 1 }));
+    const base = numericHabitDetail();
+    const progress = base.progress ? { ...base.progress, total: 5_000_000 } : null;
+    withToasts(<TrackingChangeDialog habit={numericHabitDetail({ progress })} onClose={vi.fn()} />);
+    const target = screen.getByRole("textbox", { name: "Daily target" });
+    await user.clear(target);
+    await user.type(target, "500");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Applies from" }), "today");
+    await user.click(screen.getByRole("button", { name: "Show preview" }));
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toMatchObject({ expectedTotal: 5_000_000 });
+    expect(await screen.findByTestId("habit-tracking-preview")).toBeInTheDocument();
   });
 
   it("names the later scheduled change that saving replaces (S29 review M3)", async () => {
@@ -988,7 +1005,7 @@ describe("the progress card", () => {
     );
     expect(screen.queryByTestId("habit-progress-form")).not.toBeInTheDocument();
     expect(screen.getByTestId("habit-today-state")).toHaveTextContent(
-      "The habit is not scheduled today.",
+      "The habit is not scheduled on this day.",
     );
   });
 });
