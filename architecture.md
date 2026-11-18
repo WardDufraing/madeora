@@ -83,7 +83,7 @@ Proposed foundational concepts (validate against the current product specificati
 - `homes`: isolated collaboration contexts.
 - `home_memberships`: association between a user and a Home, role/status, joined/left timestamps.
 - `home_member_preferences`: optional per-Home display name, avatar and accent overrides, subject to product permissions.
-- `child_profiles`: decided by the spec — a guardian creates a child with **no email**; one child identity across Homes; one or two guardians (primary/secondary); dashboard access and independent sign-in are separate guardian-controlled switches, both off by default. When sign-in is enabled the child gets a Supabase Auth user (§34). Age thresholds remain open.
+- `child_profiles`: decided by the spec — a guardian creates a child with **no email**; one child identity across Homes; one or two guardians (primary/secondary); dashboard access and independent sign-in are separate guardian-controlled switches, both off by default. The child gets a Supabase Auth user when the profile is created, usable once sign-in is enabled (§34, owner decision S41-M1, 2026-11-17). Age thresholds remain open.
 - `audit_events`: who did what, in which Home, to which resource, and when; identity stored by stable IDs, not color or display name.
 - Module-specific tables should reference `home_id` and stable actor/subject IDs as applicable.
 
@@ -542,7 +542,8 @@ Production deployment happens only from the protected `production` branch, after
 **Product source:** `Project-specification.md` child and guardian decisions (13 October 2026).
 
 - Child profile is one identity across Homes, created by a guardian without email. Guardian authority (primary/secondary) is modeled explicitly and enforced in RLS and the permission engine.
-- When a guardian enables sign-in, create a Supabase Auth user with an internal alias. **Username + password** works anywhere independent access is enabled; **PIN** works only on Home-approved devices. The server verifies the PIN/password (hashed, rate-limited, lockout) then issues the session. Credentials never appear in settings, logs or audit.
+- **Owner-approved deviation (Ward, 2026-11-17, decision S41-M1):** the child's Supabase Auth user, with an internal non-deliverable email alias, is created when the child profile is created, not when sign-in is first enabled. Sign-in stays off until a guardian enables it. Applies to §7 and §33 as well.
+- When a guardian enables sign-in, the child's Supabase Auth user (internal alias, created with the profile) becomes usable. **Username + password** works anywhere independent access is enabled; **PIN** works only on Home-approved devices. The server verifies the PIN/password (hashed, rate-limited, lockout) then issues the session. Credentials never appear in settings, logs or audit.
 - Support the spec's age-aware transition to an independent adult account without losing history. Age thresholds remain open.
 
 ## 35. Adult account security features
