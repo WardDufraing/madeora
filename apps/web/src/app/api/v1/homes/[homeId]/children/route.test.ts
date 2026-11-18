@@ -2,6 +2,8 @@
 // Owner or someone who may manage invitations for another adult). The database decides again.
 import type { Mock } from "vitest";
 
+import { DEFAULT_ACCENT } from "@/accent/accent";
+
 import { POST } from "./route";
 
 type Role = "owner" | "administrator" | "member";
@@ -62,7 +64,7 @@ function setCaller(role: Role, granted: string[] = [], self: Partial<Member> = {
   ];
 }
 
-function post(guardian: string): Promise<Response> {
+function post(guardian: string, accentColor: string | null = "#3366cc"): Promise<Response> {
   return POST(
     new Request(`https://madeora.example/api/v1/homes/${HOME_ID}/children`, {
       method: "POST",
@@ -75,7 +77,7 @@ function post(guardian: string): Promise<Response> {
         name: "Mila",
         primaryGuardianMembershipId: guardian,
         ageBand: null,
-        accentColor: "#3366cc",
+        ...(accentColor === null ? {} : { accentColor }),
         requestId: REQUEST,
       }),
     }),
@@ -96,6 +98,20 @@ describe("POST /api/v1/homes/{homeId}/children", () => {
     expect(state.rpc).toHaveBeenCalledWith(
       "create_child",
       expect.objectContaining({ p_home_id: HOME_ID, p_primary_guardian_membership_id: SELF }),
+    );
+  });
+
+  it("needs only a name and a guardian: the accent colour falls back to the default (S41-L2)", async () => {
+    expect((await post(SELF, null)).status).toBe(201);
+    expect(state.rpc).toHaveBeenCalledWith(
+      "create_child",
+      expect.objectContaining({ p_accent_color: DEFAULT_ACCENT }),
+    );
+    state.rpc.mockClear();
+    expect((await post(SELF)).status).toBe(201);
+    expect(state.rpc).toHaveBeenCalledWith(
+      "create_child",
+      expect.objectContaining({ p_accent_color: "#3366cc" }),
     );
   });
 

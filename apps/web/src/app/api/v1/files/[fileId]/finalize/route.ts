@@ -411,6 +411,9 @@ async function finalizePhotoUpload(
       return failure(410, "expired");
     case "not_found":
       return failure(404, "not-found");
+    case "not_permitted":
+      // The uploader lost the right to add to the Home's library meanwhile (S35-L3).
+      return failure(403, "not-permitted");
     default:
       return failure(500, "failed");
   }

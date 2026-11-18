@@ -107,6 +107,10 @@ select tests.assert_true(
   (select outcome = 'exists' and entry_id = tests.i('c-1')
     from public.adjust_personal_points(tests.i('c-1'), 'credit', 50, 'Finished my course')),
   'A retry with the same id posts nothing');
+select tests.assert_true(
+  (select outcome = 'id_taken' and entry_id is null
+    from public.adjust_personal_points(tests.i('c-1'), 'credit', 60, 'Finished my course')),
+  'The same id for a different amount answers id_taken, not exists (S28b-L6)');
 select tests.assert_true(tests.bal('alice') = 50 and tests.entries('alice') = 1, 'Once: 50 points, one entry');
 select tests.assert_true(
   tests.sd($q$select e.reason = 'Finished my course' and e.actor_id = tests.user_id('alice')

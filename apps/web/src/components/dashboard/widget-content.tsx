@@ -435,18 +435,22 @@ const choreStateKey = {
  */
 async function ChoresBody({
   homeId,
+  homeTimeZone,
   kind,
   config,
   formats,
 }: {
   readonly homeId: string;
+  /** The Home's timezone: the date range, "today" and overdue follow it (spec L2043). */
+  readonly homeTimeZone: string;
   readonly kind: ChoreWidgetKind;
   readonly config: ChoreListConfig;
   readonly formats: DateTimeFormats;
 }) {
-  const [tChoreWidget, tChores, data] = await Promise.all([
+  const [tChoreWidget, tChores, tDashboard, data] = await Promise.all([
     getTranslations("ChoreWidgets"),
     getTranslations("Chores"),
+    getTranslations("Dashboard"),
     loadChoreWidget(homeId, kind, config),
   ]);
   if (data.status === "unavailable") {
@@ -496,7 +500,7 @@ async function ChoresBody({
   return (
     <div className="flex flex-col gap-3" data-testid="chore-widget">
       <p className="text-helper text-fg-muted" data-testid="chore-widget-scope">
-        {scope.join(" · ")} · {sort}
+        {scope.join(" · ")} · {sort} {tDashboard("todayHomeZone", { zone: homeTimeZone })}
       </p>
       {data.missingMember ? (
         <p className="text-helper text-warning">{tChoreWidget("memberMissing")}</p>
@@ -544,6 +548,9 @@ async function ChoresBody({
                           : tChores("dueOn", { date: formatTaskDate(row.dueDate, formats) })}
                       </span>
                     )}
+                    {row.minutes !== null ? (
+                      <span>{tChores("minutes", { count: row.minutes })}</span>
+                    ) : null}
                     {kind === "home-chores" ? (
                       <span>
                         {row.assigneeIds.length === 0
@@ -656,6 +663,7 @@ async function ChoreApprovalsBody({
                     date: reported,
                   })}
                   {item.late ? ` ${tChores("reportedLate")}` : ""}
+                  {item.minutes !== null ? ` · ${tChores("minutes", { count: item.minutes })}` : ""}
                 </p>
                 <ChoreReview
                   occurrenceId={item.occurrenceId}
@@ -1310,6 +1318,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
         ) : (
           <ChoresBody
             homeId={homeId}
+            homeTimeZone={scope.kind === "home" ? scope.home.timeZone : (home?.timeZone ?? "UTC")}
             kind={widget.type}
             config={choreConfig(widget.type, widget)}
             formats={scope.formats}

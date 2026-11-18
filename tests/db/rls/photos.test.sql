@@ -182,6 +182,32 @@ begin
     'Someone else cannot finalize it');
 end $$;
 
+-- S35-L3: an uploader who left the Home before finalize gets 'not_permitted', not 'invalid'. The
+-- departure runs in a sub-block that is rolled back, so Bob stays a member for the rest of this file.
+do $$
+declare
+  v record;
+  v_outcome text;
+  v_status text;
+begin
+  perform tests.act_as('bob');
+  select * into v from public.create_photo_intent(tests.i('home-a'), 'image/heic', 100, gen_random_uuid());
+  begin
+    perform tests.act_as_owner();
+    delete from public.home_memberships where home_id = tests.i('home-a') and user_id = tests.user_id('bob');
+    perform tests.act_as_service_role();
+    v_outcome := public.finalize_photo(tests.user_id('bob'), v.file_id, tests.variants());
+    v_status := case when tests.private_count(format(
+      'select count(*) from private.stored_files where id = %L and status = ''failed''', v.file_id)) = 1
+      then 'failed' end;
+    raise exception 'undo the departure' using errcode = 'P0001';
+  exception when raise_exception then
+    null;
+  end;
+  perform tests.assert_true(v_outcome = 'not_permitted' and v_status = 'failed',
+    'Finalize after the uploader left the Home answers not_permitted and fails the upload (S35-L3)');
+end $$;
+
 -- A full pool refuses an upload and a finalize.
 select tests.act_as_owner();
 select private.lock_storage_pool(tests.user_id('carol'), null);

@@ -25,7 +25,8 @@ export const createChildSchema = z.strictObject({
   primaryGuardianMembershipId: z.uuid(),
   /** Optional, only to suggest a preset; never used for access (Ward, 2026-11-11). */
   ageBand: z.enum(childAgeBands).nullable(),
-  accentColor: accentColorSchema,
+  /** Optional (the spec requires only the name and the guardian); the server uses the default. */
+  accentColor: accentColorSchema.optional(),
   /** Generated once per form, so a retry returns the same child. */
   requestId: z.uuid(),
 });

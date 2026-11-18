@@ -33,6 +33,8 @@ export interface ChoreWidgetRow {
   readonly assigneeIds: readonly string[];
   readonly assignedToMe: boolean;
   readonly mandatoryOpen: number;
+  /** The occurrence's estimate, in minutes (null: none). */
+  readonly minutes: number | null;
   readonly completedAt: string | null;
   readonly contributor: { readonly me: boolean; readonly member: string | null } | null;
 }
@@ -154,6 +156,7 @@ export async function loadChoreWidget(
         assigneeIds: row.assignee_member_ids,
         assignedToMe: row.assigned_to_me,
         mandatoryOpen: row.mandatory_open,
+        minutes: nullable(row.estimated_minutes),
         completedAt,
         contributor: completedAt === null ? null : { me: row.contributor_me, member: contributor },
       };

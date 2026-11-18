@@ -558,6 +558,16 @@ describe("a photo (S35)", () => {
     expect(state.objects.delete).toHaveBeenCalledWith(UPLOAD_KEY);
   });
 
+  it("answers 403 when the uploader can no longer add to the Home library", async () => {
+    photo();
+    state.finalizePhoto.mockResolvedValue("not_permitted");
+    const response = await finalize();
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "not-permitted" });
+    for (const entry of PHOTO_KEYS)
+      expect(state.objects.delete).toHaveBeenCalledWith(entry.object_key);
+  });
+
   it("is idempotent for a photo that is already ready", async () => {
     withUpload(upload({ purpose: "photo", status: "ready", declared_type: "image/heic" }));
     expect((await finalize()).status).toBe(200);

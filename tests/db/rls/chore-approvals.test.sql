@@ -71,7 +71,7 @@ select tests.assert_true(
 select tests.assert_true(
   (select outcome = 'created' from public.create_chore(tests.i('c-bins'), tests.i('home-a'), 'Bins',
     jsonb_build_object('mode', 'fixed', 'members', jsonb_build_array(tests.i('m-carol-a'))),
-    '[{"label": "Sort", "mandatory": true}]', p_due_date => tests.today_a())),
+    '[{"label": "Sort", "mandatory": true}]', p_minutes => 20, p_due_date => tests.today_a())),
   'A one-off chore for Carol with a required step');
 select tests.assert_true(
   (select not (o -> 'chore' ->> 'requiresApproval')::boolean from public.get_chore_occurrence(tests.occ('c-bins')) o),
@@ -161,9 +161,9 @@ select tests.act_as('alice');
 select tests.assert_true(
   (select count(*) = 1 and bool_and(attempt = 1 and contributor_member = tests.i('m-carol-a')
      and submitted_by_member = tests.i('m-carol-a') and contributor_current and note = 'All sorted'
-     and steps_done = 1 and steps_total = 1 and not late)
+     and steps_done = 1 and steps_total = 1 and not late and estimated_minutes = 20)
    from public.list_chore_approvals(tests.i('home-a'))),
-  'The Owner''s queue shows the attempt with its people, note and checklist');
+  'The Owner''s queue shows the attempt with its people, note, checklist and estimate (S20-M4)');
 select tests.assert_true(
   (select can_review and pending_count = 1 from public.get_chore_context(tests.i('home-a'))),
   'And counts it');

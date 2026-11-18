@@ -145,6 +145,17 @@ select tests.assert_true(public.claim_child_transition('wrong', 'mia@example.org
   'A wrong link is refused');
 select tests.assert_true(public.claim_child_transition(tests.ci_token('claim'), ' Mia@Example.org ')
   = 'sent', 'Her own address gets a verification link');
+-- S42P-L2: an address already in use counts against the 5 attempts, and the limit is checked first, so
+-- the link cannot test addresses without limit. So far: one taken address and one send.
+select tests.assert_true(
+  public.claim_child_transition(tests.ci_token('claim'), 'alice@madeora.test') = 'email_taken'
+  and public.claim_child_transition(tests.ci_token('claim'), 'alice@madeora.test') = 'email_taken'
+  and public.claim_child_transition(tests.ci_token('claim'), 'alice@madeora.test') = 'email_taken',
+  'Three more taken addresses are refused (5 attempts)');
+select tests.assert_true(
+  public.claim_child_transition(tests.ci_token('claim'), 'alice@madeora.test') = 'rate_limited'
+  and public.claim_child_transition(tests.ci_token('claim'), 'someone@example.org') = 'rate_limited',
+  'After 5 attempts every address answers rate_limited, taken or not');
 
 select tests.act_as_owner();
 insert into tokens select 'email', e.token from private.security_emails e

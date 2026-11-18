@@ -174,7 +174,7 @@ select tests.assert_true(
 select tests.assert_true(
   (select outcome = 'created' from public.create_chore(tests.i('c-late'), tests.i('home-a'), 'Windows',
     jsonb_build_object('mode', 'fixed', 'members', jsonb_build_array(tests.i('m-carol-a'))),
-    p_due_date => tests.today_a() - 1, p_requires_approval => true)),
+    p_minutes => 15, p_due_date => tests.today_a() - 1, p_requires_approval => true)),
   'One that needs approval');
 select tests.assert_true(
   (select outcome = 'created' from public.create_chore(tests.i('c-check'), tests.i('home-a'), 'Plants',
@@ -270,9 +270,9 @@ select tests.assert_denied(
 -- The widget reads ---------------------------------------------------------------------------------------
 
 select tests.assert_true(
-  (select string_agg(title || ':' || status, ',') = 'Windows:pending_approval'
+  (select string_agg(title || ':' || status || ':' || estimated_minutes, ',') = 'Windows:pending_approval:15'
    from public.list_chore_widget(tests.i('home-a'), 'mine', 'outstanding')),
-  'Mine, outstanding: the pending one (the completed dishes are not)');
+  'Mine, outstanding: the pending one with its estimate (the completed dishes are not; S20-M4)');
 select tests.assert_true(
   (select string_agg(title, ',') = 'Dishes' and bool_and(contributor_me)
    from public.list_chore_widget(tests.i('home-a'), 'mine', 'completed', tests.today_a(), tests.today_a())),

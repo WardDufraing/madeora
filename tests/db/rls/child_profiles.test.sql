@@ -432,6 +432,13 @@ select tests.assert_true(
 );
 select tests.assert_true(
   (select outcome from public.set_child_access(tests.ch('home-a'), tests.ch('m-mia'),
+     'young_child', '{"viewHomeChores": true}', true,
+     (select settings_updated_at from public.home_children(tests.ch('home-a'))
+      where membership_id = tests.ch('m-mia')))) = 'not_permitted',
+  'Nor plant an "on" override that changes nothing today (S41-L1)'
+);
+select tests.assert_true(
+  (select outcome from public.set_child_access(tests.ch('home-a'), tests.ch('m-mia'),
      'young_child', '{"viewLeaderboard": false}', false,
      (select settings_updated_at from public.home_children(tests.ch('home-a'))
       where membership_id = tests.ch('m-mia')))) = 'saved',

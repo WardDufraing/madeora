@@ -2758,6 +2758,7 @@ export type Database = {
           contributor_me: boolean;
           contributor_member: string;
           due_date: string;
+          estimated_minutes: number;
           late: boolean;
           note: string;
           occurrence_id: string;
@@ -2959,6 +2960,7 @@ export type Database = {
           contributor_me: boolean;
           contributor_member: string;
           due_date: string;
+          estimated_minutes: number;
           id: string;
           in_rework: boolean;
           mandatory_open: number;
@@ -5042,6 +5044,7 @@ export type Database = {
           p_action: string;
           p_dry_run?: boolean;
           p_expected_revision: number;
+          p_habit_id: string;
           p_pause_id: string;
           p_resumes_on?: string;
         };

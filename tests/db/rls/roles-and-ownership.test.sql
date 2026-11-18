@@ -641,6 +641,12 @@ select tests.assert_true(
   'The Owner sees that it was declined'
 );
 select tests.assert_true(
+  (select outcome = 'already_decided' and transfer_id is null from public.start_ownership_transfer(
+    (select id from ids where name = 'home-a'), (select id from ids where name = 'm-erin-a'),
+    (select id from ids where name = 'transfer-request-1'))),
+  'Repeating the start request of a declined transfer says so, not started (S12-L3)'
+);
+select tests.assert_true(
   public.leave_home((select id from ids where name = 'home-a')) = 'owner_must_transfer',
   'A declined transfer does not let the Owner leave'
 );
@@ -677,6 +683,30 @@ select tests.assert_true(
   public.respond_to_ownership_transfer((select id from ids where name = 'home-a'),
     (select id from ids where name = 'transfer-3'), 'accept') = 'expired',
   'An expired transfer cannot be accepted'
+);
+
+-- S12-L3: a transfer already marked invalid answers no_longer_valid, to the recipient and to a replay.
+select tests.act_as('alice');
+insert into ids select 'transfer-request-invalid', gen_random_uuid();
+insert into ids
+  select 'transfer-invalid', transfer_id from public.start_ownership_transfer(
+    (select id from ids where name = 'home-a'), (select id from ids where name = 'm-erin-a'),
+    (select id from ids where name = 'transfer-request-invalid'));
+select tests.act_as_owner();
+update private.home_ownership_transfers set status = 'invalid', decided_at = now()
+  where id = (select id from ids where name = 'transfer-invalid');
+select tests.act_as('erin');
+select tests.assert_true(
+  public.respond_to_ownership_transfer((select id from ids where name = 'home-a'),
+    (select id from ids where name = 'transfer-invalid'), 'accept') = 'no_longer_valid',
+  'An invalid transfer answers no_longer_valid, not already_decided'
+);
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome from public.start_ownership_transfer(
+    (select id from ids where name = 'home-a'), (select id from ids where name = 'm-erin-a'),
+    (select id from ids where name = 'transfer-request-invalid'))) = 'no_longer_valid',
+  'And so does a replay of its start request'
 );
 
 -- The recipient leaves before accepting.

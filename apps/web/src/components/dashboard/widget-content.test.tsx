@@ -125,6 +125,7 @@ function choreRow(overrides: Partial<ChoreWidgetRow> = {}): ChoreWidgetRow {
     assigneeIds: [SELF],
     assignedToMe: true,
     mandatoryOpen: 0,
+    minutes: null,
     completedAt: null,
     contributor: null,
     revision: 1,
@@ -539,12 +540,13 @@ function withChoreWidget(
 
 describe("chore widgets", () => {
   it("lists my chores with quick complete and names the state and order", async () => {
-    state.chores = { ...emptyChores(), rows: [choreRow()], total: 3 };
+    state.chores = { ...emptyChores(), rows: [choreRow({ minutes: 20 })], total: 3 };
     const container = await show(await renderWidgets(withChoreWidget("my-chores"), homeScope()));
     const region = screen.getByRole("region", { name: "My Chores" });
     expect(within(region).getByTestId("chore-widget-scope")).toHaveTextContent(
-      "Outstanding · earliest due first",
+      "Outstanding · earliest due first (in America/New_York, the Home's timezone)",
     );
+    expect(within(region).getByText("about 20 minutes")).toBeInTheDocument();
     expect(within(region).getByRole("link", { name: "Bins" })).toHaveAttribute(
       "href",
       `/homes/${HOME_ID}/chores/6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0600`,
@@ -625,6 +627,7 @@ describe("chore widgets", () => {
           note: null,
           stepsDone: 0,
           stepsTotal: 0,
+          minutes: 25,
           revision: 4,
         },
       ],
@@ -636,6 +639,7 @@ describe("chore widgets", () => {
     expect(within(region).getByRole("button", { name: "Approve Windows" })).toBeInTheDocument();
     expect(within(region).getByRole("button", { name: "Reject Windows" })).toBeInTheDocument();
     expect(within(region).getByText(/submitted by .*Bea/)).toBeInTheDocument();
+    expect(within(region).getByText(/about 25 minutes/)).toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
   });
 
