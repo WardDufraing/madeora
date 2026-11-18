@@ -72,6 +72,7 @@ export async function prepareShare(
     audience: (name) => t("share.textAudience", { name }),
     day: (date) => formatDate(dayDate(date), "UTC", dateFormat),
     allDay: t("share.textAllDay"),
+    continues: t("share.textContinues"),
     noTime: t("share.textNoTime"),
     done: t("share.textDone"),
     module: (module) => t(`modules.${module}`),

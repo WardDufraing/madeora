@@ -217,6 +217,42 @@ select tests.assert_true(exists (select 1 from jsonb_array_elements(tests.lib('h
     where p ->> 'id' = tests.i('p1')::text and not (p ->> 'canRemove')::boolean),
   'The page offers "Remove from this album" only where she may');
 
+-- Lowering contribute to view keeps contributions (review S36-L5) --------------------------------------
+
+select tests.act_as('alice');
+select tests.assert_true(tests.share('al-p', 'home-b', 'view') = 'saved', 'Alice lowers Home B to view');
+select tests.act_as('erin');
+select tests.assert_true(tests.n(tests.lib('home-b', 'al-p')) = 4 and tests.readable('e1') and tests.readable('ep1'),
+  'Erin''s contributions stay in the album');
+select tests.assert_true((public.add_photos_to_album(tests.i('al-p'), array[tests.i('e1')]) ->> 'outcome')
+  = 'not_permitted', 'But she can no longer add to it');
+select tests.act_as('alice');
+select tests.assert_true(tests.share('al-p', 'home-b', 'contribute') = 'saved', 'Alice gives contribute back');
+
+-- At most 20 Homes per album (review S36-L5) --------------------------------------------------------------
+
+select tests.act_as_owner();
+select tests.assert_true((select count(*) from private.photo_album_shares where album_id = tests.i('al-p')) = 2,
+  'The album starts this block shared with two Homes, so 18 more make 20');
+insert into public.homes (name, timezone, created_by, creation_request_id)
+  select 'Extra ' || g, 'Europe/Brussels', tests.user_id('frank'), gen_random_uuid()
+  from generate_series(1, 18) g;
+insert into private.photo_album_shares (album_id, home_id, access, shared_by)
+  select tests.i('al-p'), h.id, 'view', tests.user_id('alice') from public.homes h where h.name like 'Extra %';
+select tests.act_as('alice');
+select tests.assert_true((public.share_photo_album(tests.i('al-p'), jsonb_build_array(jsonb_build_object(
+    'homeId', tests.i('home-b'), 'access', 'contribute'))) ->> 'shareCount') = '20',
+  'At 20 Homes an existing share can still be saved');
+select tests.assert_true((public.share_photo_album(tests.i('al-p'), jsonb_build_array(jsonb_build_object(
+    'homeId', tests.i('home-a'), 'access', 'view'))) ->> 'outcome') = 'limit',
+  'A 21st Home is refused with limit');
+select tests.act_as_owner();
+select tests.assert_true(not exists (select 1 from private.photo_album_shares
+    where album_id = tests.i('al-p') and home_id = tests.i('home-a')),
+  'And nothing of it was saved');
+delete from private.photo_album_shares where home_id in (select id from public.homes where name like 'Extra %');
+delete from public.homes where name like 'Extra %';
+
 -- Unshare one Home; remove the album from another --------------------------------------------------------
 
 select tests.act_as('alice');

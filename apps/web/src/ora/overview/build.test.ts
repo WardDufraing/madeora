@@ -100,6 +100,9 @@ describe("overview: arranging a day", () => {
     expect(days.map((day) => day.date)).toEqual(["2026-11-17", "2026-11-18", "2026-11-19"]);
     expect(days[0]?.timed).toHaveLength(1);
     expect(days[1]?.untimed).toHaveLength(1);
+    expect(days[0]?.timed[0]?.continues).toBeUndefined();
+    expect(days[1]?.untimed[0]?.continues).toBe(true);
+    expect(days[2]?.untimed[0]?.continues).toBe(true);
   });
 });
 

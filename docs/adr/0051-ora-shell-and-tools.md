@@ -22,7 +22,8 @@ Ora is the spec's persistent helper. The handoff fixes its look (a small floatin
 
 1. The per-Home colour choice replaces the spec's "fixed visual identity" wording (design review item 2; handoff confirms it).
 2. The mascot-style character relaxes "not a full character" (design decisions, point 3).
-3. Ephemeral Ora UI state is React context for now; S46 may move it to Zustand if the dashboard widget needs it.
+3. Ephemeral Ora UI state (open, closed, the current view) is component `useState` passed down as props, with no React context or store; S46 may move it to Zustand if the dashboard widget needs it (review S45 L9).
+4. When the Ora settings cannot be read, Ora stays hidden for that page (`getOraSettings` answers `null` and logs the error code), because the person may have switched Ora off; the settings page still opens with the defaults so it can be changed.
 
 ## Consequences
 

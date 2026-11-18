@@ -474,6 +474,15 @@ select tests.assert_true(
   'A settings change is audited with the changed fields only, never their values'
 );
 select tests.assert_true(
+  exists (
+    select 1 from private.audit_events
+    where action = 'home.settings_changed' and actor_user_id = tests.user_id('alice')
+      and home_id = (select id from ids where name = 'home-a')
+      and details = '{"fields": ["timezone"]}'
+  ),
+  'A timezone-only change is audited with that one field'
+);
+select tests.assert_true(
   not exists (
     select 1 from private.audit_events where details::text like '%Ons thuis%'
   ),

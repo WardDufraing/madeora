@@ -20,7 +20,7 @@ import { renderWithQuery } from "@/test/intl";
 import { ChoreClaim } from "./chore-claim";
 import { ChoreClaimPolicyEditor } from "./chore-claim-policy";
 import { ChorePool } from "./chore-pool";
-import { ChorePoolLive } from "./chore-pool-live";
+import { ChorePoolLive, reconcileDelay } from "./chore-pool-live";
 import { ChoreRequests } from "./chore-requests";
 import { ChoreSettingsForm } from "./chore-settings-form";
 
@@ -714,6 +714,35 @@ describe("live updates", () => {
       await vi.advanceTimersByTimeAsync(6000);
     });
     expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the reconcile wait", () => {
+  it("keeps reading the version after the first wait", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    realtime.version = 3;
+    renderWithQuery(<ChorePoolLive homeId={HOME} version={3} />);
+    await act(async () => {
+      realtime.channel.status?.("SUBSCRIBED");
+      await vi.advanceTimersByTimeAsync(5_100);
+    });
+    realtime.version = 4;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_400);
+    });
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    realtime.version = 5;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_400);
+    });
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("spreads the five-second interval by at most a tenth either way", () => {
+    expect(reconcileDelay(() => 0)).toBe(4500);
+    expect(reconcileDelay(() => 0.5)).toBe(5000);
+    expect(reconcileDelay(() => 0.999999)).toBe(5500);
   });
 });
 

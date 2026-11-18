@@ -186,6 +186,45 @@ describe("simultaneous ownership changes", () => {
     expect(current[0]).toBe(outcomes[0] === "accepted" ? sam : owner);
   });
 
+  it("accepts once when the recipient's acceptance arrives twice at the same moment", async () => {
+    const transferId = await startTransfer(sam);
+    const outcomes = await Promise.all(
+      [0, 1].map(() =>
+        asUser(
+          sam,
+          `select public.respond_to_ownership_transfer('${homeId}', '${transferId}', 'accept');`,
+          0.5,
+        ),
+      ),
+    );
+    expect(outcomes.map(([outcome]) => outcome).sort()).toEqual(["accepted", "already_decided"]);
+    expect(await owners()).toEqual([sam]);
+    const [audited] = await psql(
+      `select count(*) from private.audit_events where home_id = '${homeId}'
+         and action = 'home_membership.role_changed' and subject_id = '${sam}';`,
+    );
+    expect(audited).toBe("1");
+  });
+
+  it("lets acceptance or the recipient's own decline win, never both", async () => {
+    const transferId = await startTransfer(alex);
+    const [accept, decline] = await Promise.all(
+      (["accept", "decline"] as const).map((answer) =>
+        asUser(
+          alex,
+          `select public.respond_to_ownership_transfer('${homeId}', '${transferId}', '${answer}');`,
+          0.5,
+        ),
+      ),
+    );
+    const outcomes = [accept?.[0], decline?.[0]];
+    expect([
+      ["accepted", "already_decided"],
+      ["already_decided", "declined"],
+    ]).toContainEqual(outcomes);
+    expect(await owners()).toEqual([outcomes[0] === "accepted" ? alex : owner]);
+  });
+
   it("refuses a removal by an Administrator whose capability is revoked at the same moment", async () => {
     await asUser(
       owner,

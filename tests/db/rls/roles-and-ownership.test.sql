@@ -395,6 +395,30 @@ select tests.assert_row_count(
   $$select * from public.home_capabilities((select id from ids where name = 'home-a'))$$, 0,
   'A re-promoted Administrator starts again from no capabilities'
 );
+select tests.act_as_owner();
+select tests.assert_true(
+  (select count(*) from private.audit_events e
+    where e.action = 'home_membership.role_changed'
+      and e.home_id = (select id from ids where name = 'home-a')
+      and e.actor_user_id = tests.user_id('alice')
+      and e.subject_id = tests.user_id('carol')
+      and e.details = '{"from": "administrator", "to": "member"}'::jsonb) = 1
+  and (select count(*) from private.audit_events e
+    where e.action = 'home_membership.role_changed'
+      and e.home_id = (select id from ids where name = 'home-a')
+      and e.actor_user_id = tests.user_id('alice')
+      and e.subject_id = tests.user_id('carol')
+      and e.details = '{"from": "member", "to": "administrator"}'::jsonb) = 1,
+  'Each role change is audited once, with the Owner as actor and the old and new role'
+);
+select tests.assert_true(
+  (select count(*) from private.audit_events e
+    where e.action = 'home_membership.role_changed'
+      and e.home_id = (select id from ids where name = 'home-a')
+      and e.subject_id in (tests.user_id('alice'), tests.user_id('dave'))) = 0,
+  'Refused role changes leave no audit record'
+);
+select tests.act_as('alice');
 select tests.assert_true(
   public.set_administrator_capabilities(
     (select id from ids where name = 'home-a'), (select id from ids where name = 'm-carol-a'),

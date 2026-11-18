@@ -558,9 +558,11 @@ function ItemRow({
           minute: "2-digit",
           timeZone: item.timeZone,
         })
-      : item.module === "calendar"
-        ? t("allDay")
-        : null;
+      : item.module !== "calendar"
+        ? null
+        : item.continues
+          ? t("continues")
+          : t("allDay");
   return (
     <li className="flex flex-col gap-0.5 rounded-control border border-line px-2 py-1.5 text-helper">
       <span className="flex flex-wrap items-baseline gap-x-2">

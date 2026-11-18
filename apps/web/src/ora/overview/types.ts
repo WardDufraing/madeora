@@ -77,6 +77,11 @@ export interface OverviewItem {
   readonly day: string;
   /** Only events carry a time: a task or chore due date has none. */
   readonly allDay: boolean;
+  /**
+   * A later day of a timed event that started on an earlier day (an overnight event): shown as
+   * "Continues", never as "All day" (review S46-L4). Absent for everything else.
+   */
+  readonly continues?: true;
   readonly startsAt: string | null;
   readonly endsAt: string | null;
   readonly timeZone: string;

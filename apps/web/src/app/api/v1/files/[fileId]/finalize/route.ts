@@ -68,6 +68,11 @@ async function removeQuietly(storage: Storage, keys: readonly string[]): Promise
  * re-encoded without metadata, PDFs by signature) and then attached to its medical entry
  * (`attach_pet_medical_file`). Both re-check the person's rights with their own session at that
  * moment; a refusal leaves the file unused and the expiry job retires it.
+ *
+ * A library photo (S35, ADR 0045) is decoded (JPEG, PNG, WebP, GIF first frame, HEIC), oriented,
+ * stripped of metadata and stored as an optimized WebP master plus three smaller sizes
+ * (`finalizePhotoUpload`); all four are finalized together, so the pool is charged for their real
+ * sizes.
  */
 export async function POST(request: Request, { params }: FileRouteContext): Promise<Response> {
   const input = await readStorageMutation(request, attachmentFinalizeSchema, MAX_BODY_BYTES);

@@ -424,6 +424,24 @@ function withTasksWidget(
 }
 
 describe("tasks widgets", () => {
+  it("does not render or load a hidden widget, but keeps its title for edit mode", async () => {
+    const layout: DashboardLayout = {
+      ...personalStarterLayout,
+      widgets: personalStarterLayout.widgets.map((w) =>
+        w.type === "tasks" ? { ...w, hidden: true } : w,
+      ),
+    };
+    const entries = await renderWidgets(layout, personalScope());
+    const hidden = entries.find(
+      (entry) => entry.id === layout.widgets.find((w) => w.type === "tasks")?.id,
+    );
+    expect(hidden?.title).toBe("Personal tasks");
+    expect(hidden?.body).toBeNull();
+    await show(entries);
+    expect(state.taskCalls).toEqual([]);
+    expect(screen.getByText("Welcome to Madeora")).toBeInTheDocument();
+  });
+
   it("shows personal tasks on the starter dashboard with a truthful empty state", async () => {
     await show(await renderWidgets(personalStarterLayout, personalScope()));
     const region = screen.getByRole("region", { name: "Personal tasks" });

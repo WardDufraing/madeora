@@ -1333,5 +1333,13 @@ export async function renderWidgets(
   layout: DashboardLayout,
   scope: WidgetScope,
 ): Promise<WidgetEntry[]> {
-  return Promise.all(layout.widgets.map((widget) => entryFor(widget, scope)));
+  return Promise.all(
+    layout.widgets.map(async (widget) => {
+      const entry = await entryFor(widget, scope);
+      // A hidden widget is never shown in normal use, so its body is not rendered and its data is
+      // not read (review S17-L7). Edit mode shows its frame and title without content until the
+      // layout that shows it again is saved; the refresh after the save renders it.
+      return widget.hidden ? { ...entry, body: null } : entry;
+    }),
+  );
 }

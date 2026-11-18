@@ -37,6 +37,7 @@ The spec asks for personal and Home habits with flexible schedules, check-ins wi
 ## Consequences
 
 - Any new habit write must lock the habit row first, or two people could complete one date twice.
+- **One exception: the vacation-day refresh (review S28 L4, accepted).** `refresh_habit_vacation_days` runs from the vacation, participant and membership triggers without the habit lock. A check-in racing a vacation confirmation can therefore pass the `paused` check and record one completion on a day that has just become paused. The effect is benign (that day still counts as completed, nothing is lost or doubled). Taking the habit locks in id order inside `refresh_habit_vacations_for` would close it; that is a SQL follow-up.
 - Streak reads cost a scan of one habit's history; fine at household scale, revisit with an index or cache only with measurements.
 - History pages continue after the last row's id (the full sort key), so rows sharing a date or moment are never skipped.
 - Snooze works within the reminder's local day only.
