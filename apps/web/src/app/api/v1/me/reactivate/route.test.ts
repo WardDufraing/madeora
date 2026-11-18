@@ -62,7 +62,7 @@ describe("POST /api/v1/me/reactivate", () => {
     expect(state.deleted).toEqual(["sb-proj-auth-token"]);
   });
 
-  it.each(["signed-in", "signed-out", "second-factor"])(
+  it.each(["signed-in", "signed-out", "second-factor", "child", "display"])(
     "refuses a %s session: only a deactivated account reactivates",
     async (kind) => {
       state.kind = kind;

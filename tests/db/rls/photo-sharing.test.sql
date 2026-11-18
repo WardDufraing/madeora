@@ -232,6 +232,8 @@ select tests.assert_true(tests.share('al-p', 'home-b', 'contribute') = 'saved', 
 -- At most 20 Homes per album (review S36-L5) --------------------------------------------------------------
 
 select tests.act_as_owner();
+select tests.assert_true((select count(*) from private.photo_album_shares where album_id = tests.i('al-p')) = 2,
+  'The album starts this block shared with two Homes, so 18 more make 20');
 insert into public.homes (name, timezone, created_by, creation_request_id)
   select 'Extra ' || g, 'Europe/Brussels', tests.user_id('frank'), gen_random_uuid()
   from generate_series(1, 18) g;

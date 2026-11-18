@@ -718,6 +718,27 @@ describe("live updates", () => {
 });
 
 describe("the reconcile wait", () => {
+  it("keeps reading the version after the first wait", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    realtime.version = 3;
+    renderWithQuery(<ChorePoolLive homeId={HOME} version={3} />);
+    await act(async () => {
+      realtime.channel.status?.("SUBSCRIBED");
+      await vi.advanceTimersByTimeAsync(5_100);
+    });
+    realtime.version = 4;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_400);
+    });
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    realtime.version = 5;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_400);
+    });
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+  });
+
   it("spreads the five-second interval by at most a tenth either way", () => {
     expect(reconcileDelay(() => 0)).toBe(4500);
     expect(reconcileDelay(() => 0.5)).toBe(5000);
