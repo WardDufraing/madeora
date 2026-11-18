@@ -160,6 +160,8 @@ describe("NewTask with repeat fields", () => {
     const summary = screen.getByTestId("repeat-summary");
     expect(summary).toHaveTextContent("Every 2 weeks on Monday and Thursday, for 5 occurrences");
     expect(summary).toHaveTextContent("Next dates: 2026-10-15, 2026-10-26, and 2026-10-29");
+    // Thursday (the due date's day) is chosen, so the first date does not move.
+    expect(screen.queryByTestId("repeat-first-moves")).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
 
     fetchMock.mockResolvedValueOnce(
@@ -541,6 +543,17 @@ describe("TaskRepeats", () => {
       />,
     );
   }
+
+  it("says when a weekly rule moves the first date off the due date (S19-L9)", async () => {
+    const user = userEvent.setup();
+    repeats();
+    await user.click(screen.getByTestId("series-edit-schedule"));
+    // Starts Monday 12 October; leave only Thursday.
+    await user.click(screen.getByRole("checkbox", { name: "Monday" }));
+    expect(screen.getByTestId("repeat-first-moves")).toHaveTextContent(
+      "2026-10-12 is not on one of the chosen days, so the first date is 2026-10-15.",
+    );
+  });
 
   it("lists the next dates from today, not from a first date in the past (S19-L1)", async () => {
     const user = userEvent.setup();

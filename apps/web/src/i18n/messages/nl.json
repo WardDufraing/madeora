@@ -1837,6 +1837,7 @@
     "repeatEndsOnSummary": "tot {date}",
     "repeatEndsAfterSummary": "{count, plural, one {voor # keer} other {voor # keer}}",
     "repeatNextDates": "Volgende datums: {dates}",
+    "repeatFirstMoves": "{start} valt niet op een van de gekozen dagen, dus de eerste datum is {first}.",
     "repeatErrorInterval": "Vul een geheel getal van 1 tot 99 in.",
     "repeatErrorWeekdays": "Kies minstens één dag.",
     "repeatErrorEndsOn": "Kies een einde op of na de eerste datum.",

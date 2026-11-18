@@ -1837,6 +1837,7 @@
     "repeatEndsOnSummary": "until {date}",
     "repeatEndsAfterSummary": "{count, plural, one {for # occurrence} other {for # occurrences}}",
     "repeatNextDates": "Next dates: {dates}",
+    "repeatFirstMoves": "{start} is not on one of the chosen days, so the first date is {first}.",
     "repeatErrorInterval": "Enter a whole number from 1 to 99.",
     "repeatErrorWeekdays": "Choose at least one day.",
     "repeatErrorEndsOn": "Choose an end date on or after the first date.",
