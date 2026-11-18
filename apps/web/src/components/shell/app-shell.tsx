@@ -39,7 +39,7 @@ export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: 
       <div className="flex min-h-dvh">
         <Sidebar initialState={sidebar} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center gap-3 px-4 md:px-8">
+          <header className="relative flex h-16 items-center gap-3 px-4 md:px-8">
             <MobileNav />
             {/* Personal or one Home (S09); the spec requires a clearly identified Personal
                 context even with zero Homes. */}

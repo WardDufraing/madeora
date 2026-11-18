@@ -47,6 +47,30 @@ describe("ContextSwitcher", () => {
     );
   });
 
+  it("closes and moves focus to the page after a context is chosen (S09-L5)", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <>
+        <ContextSwitcher homes={homes} />
+        <main id="main" tabIndex={-1}>
+          Page
+        </main>
+      </>,
+    );
+    const button = screen.getByRole("button", { name: "Current context: Personal" });
+    await user.click(button);
+    const link = screen.getByRole("link", { name: "Thuis Owner" });
+    // Keep jsdom from trying to load the address; the app router handles it in a browser.
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+    });
+    await user.click(link);
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await vi.waitFor(() => {
+      expect(screen.getByRole("main")).toHaveFocus();
+    });
+  });
+
   it("lists every Home with the person's role there, and links to each", async () => {
     const user = userEvent.setup();
     renderWithIntl(<ContextSwitcher homes={homes} />);

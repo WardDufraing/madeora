@@ -94,7 +94,9 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
     homeId === null ? t("personalContext") : (current?.name ?? t("unknownHomeContext"));
 
   return (
-    <div ref={container} className="relative min-w-0">
+    // Below `sm` the panel spans the header (positioned there) instead of this button, so it never
+    // runs past a 320px screen (S09-L4).
+    <div ref={container} className="min-w-0 sm:relative">
       <button
         ref={button}
         type="button"
@@ -121,7 +123,19 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
       <div
         id={panelId}
         hidden={!open}
-        className="absolute start-0 top-full z-40 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-surface-elevated p-2 shadow-overlay"
+        className="absolute inset-x-4 top-full z-40 mt-2 rounded-card border border-line bg-surface-elevated p-2 shadow-overlay sm:inset-x-auto sm:start-0 sm:w-72 sm:max-w-[calc(100vw-2rem)]"
+        onClick={(event) => {
+          // A context was chosen: the list closes and focus goes to the page, not to a link in
+          // the hidden list, so keyboard users do not restart from the top (S09-L5).
+          // Not `defaultPrevented`: Link prevents the default itself for a client navigation.
+          if (event.button !== 0) return;
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          if (!(event.target instanceof Element) || !event.target.closest("a[href]")) return;
+          setOpen(false);
+          requestAnimationFrame(() => {
+            document.getElementById("main")?.focus();
+          });
+        }}
       >
         <nav aria-label={t("switchContext")}>
           <ul className="flex flex-col gap-1">
