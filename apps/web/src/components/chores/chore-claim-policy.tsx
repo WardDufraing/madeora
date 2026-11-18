@@ -91,7 +91,9 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
     setImpact(null);
     requestAnimationFrame(() => opener.current?.focus());
   };
-  const send = (values: FormValues, dryRun: boolean) =>
+  // `confirm` only after the manager saw and confirmed effects at once (S21-L6): a save without
+  // them lets the server refuse it when a claim or release since the preview changed the effects.
+  const send = (values: FormValues, dryRun: boolean, confirm: boolean) =>
     sendChoreRequest<PolicyAnswer>("PUT", `${CHORES_ENDPOINT}/${choreId}/claim-policy`, {
       expectedRevision: policy.revision,
       mode: values.mode,
@@ -99,33 +101,42 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
       expiry: values.expiry,
       autoReleaseHours: values.autoRelease ? Number(values.hours) : null,
       dryRun,
-      confirm: !dryRun,
+      confirm: !dryRun && confirm,
     });
   const save = useChoreMutation(
     `chore:${choreId}`,
-    (values: FormValues) => send(values, false),
+    (input: { readonly values: FormValues; readonly confirm: boolean }) =>
+      send(input.values, false, input.confirm),
     () => {
       announce(t("announceSaved"));
       close();
+    },
+    {
+      onError: (error) => {
+        // Something changed since the preview: show the new effects instead of an error.
+        if (error.failure === "needsConfirmation") preview.mutate(form.getValues());
+      },
     },
   );
   // A preview first: a change with effects at once is shown and confirmed, any other is saved.
   const preview = useChoreMutation(
     `chore:${choreId}`,
-    (values: FormValues) => send(values, true),
+    (values: FormValues) => send(values, true, false),
     (answer, values) => {
       const next = answer.impact;
       if (next && next.expireNow + next.releaseNow + next.claimedIneligible > 0) {
         setImpact(next);
         announce(t("policyImpactShown"));
       } else {
-        save.mutate(values);
+        save.mutate({ values, confirm: false });
       }
     },
     { refresh: () => false },
   );
   const busy = preview.busy || save.busy;
-  const error = save.error ?? preview.error;
+  // A refusal for unconfirmed effects is answered with the new preview, not shown as an error.
+  const error =
+    (save.error?.failure === "needsConfirmation" ? null : save.error) ?? preview.error;
   const mode = useWatch({ control: form.control, name: "mode" });
   const chosen = useWatch({ control: form.control, name: "memberIds" });
   const autoRelease = useWatch({ control: form.control, name: "autoRelease" });
@@ -266,7 +277,7 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
                 <Button
                   loading={busy}
                   onClick={() => {
-                    save.mutate(form.getValues());
+                    save.mutate({ values: form.getValues(), confirm: true });
                   }}
                   data-testid="chore-policy-confirm"
                 >

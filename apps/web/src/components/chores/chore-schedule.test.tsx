@@ -366,6 +366,46 @@ describe("moving an occurrence", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("treats picking the current assignee as keeping them (S21-L4)", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(
+      <ChoreMove
+        item={item()}
+        targetDate={null}
+        members={members}
+        formats={formats}
+        onClose={vi.fn()}
+      />,
+    );
+    // The chore is already mine: choosing me again changes nothing, so nothing is sent.
+    await user.selectOptions(screen.getByTestId("chore-move-assignee"), ME);
+    await user.click(screen.getByTestId("chore-move-preview"));
+    expect(screen.getByText("Choose another date or member first.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("moves only the date when the current assignee is picked with a new date (S21-L4)", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ outcome: "preview", impact: null, revision: 3 }),
+    );
+    renderWithQuery(
+      <ChoreMove
+        item={item()}
+        targetDate="2026-10-25"
+        members={members}
+        formats={formats}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByTestId("chore-move-assignee"), ME);
+    await user.click(screen.getByTestId("chore-move-preview"));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).not.toHaveProperty("assigneeIds");
+  });
+
   it("opens for nothing that cannot be moved", () => {
     renderWithQuery(
       <ChoreMove

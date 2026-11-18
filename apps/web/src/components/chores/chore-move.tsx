@@ -82,6 +82,10 @@ function MoveDialog({
   const [assignee, setAssignee] = useState(KEEP);
   const [preview, setPreview] = useState<MoveAnswer | null>(null);
   const [nothing, setNothing] = useState(false);
+  // Picking the person who already has it is the same as keeping them: sending the same set would
+  // end a claim and an open hand-over that the preview says nothing about (S21-L4).
+  const unchangedAssignee =
+    assignee === KEEP || (item.assigneeIds.length === 1 && item.assigneeIds[0] === assignee);
   const mutation = useChoreMutation(
     `chore-occurrence:${occurrenceId}`,
     (input: { readonly dryRun: boolean }) =>
@@ -92,7 +96,7 @@ function MoveDialog({
         ...(!input.dryRun && preview?.impact?.releaseNow ? { confirmRelease: true } : {}),
         ...(!input.dryRun && (preview?.impact?.away?.length ?? 0) > 0 ? { confirmAway: true } : {}),
         ...(date !== item.date ? { dueDate: date } : {}),
-        ...(assignee !== KEEP ? { assigneeIds: [assignee] } : {}),
+        ...(!unchangedAssignee ? { assigneeIds: [assignee] } : {}),
       }),
     (result, input) => {
       if (input.dryRun) {
@@ -106,7 +110,7 @@ function MoveDialog({
   );
   const who = (ids: readonly (string | null)[]) =>
     ids.length === 0 ? t("unassigned") : ids.map((id) => texts.member(id)).join(", ");
-  const newAssignees = assignee === KEEP ? item.assigneeIds : [assignee];
+  const newAssignees = unchangedAssignee ? item.assigneeIds : [assignee];
   const impact = preview?.impact ?? null;
   const effects: string[] = [];
   if (impact) {
@@ -149,7 +153,7 @@ function MoveDialog({
             <Button
               loading={mutation.busy}
               onClick={() => {
-                if (date === item.date && assignee === KEEP) {
+                if (date === item.date && unchangedAssignee) {
                   setNothing(true);
                   return;
                 }
