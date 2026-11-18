@@ -146,3 +146,21 @@ export function newestPageHref(path: string, filters: ActivityFilters): string {
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
+
+/**
+ * Where the date filters sit against the 12-month retention (S38-L2, spec: records beyond retention
+ * are clearly distinguished). `today` is the viewer's local date (YYYY-MM-DD). "beyond": the whole
+ * chosen range is older than what Madeora keeps; "partial": the range starts before it.
+ */
+export function retentionState(
+  filters: Pick<ActivityFilters, "from" | "to">,
+  today: string,
+): "beyond" | "partial" | null {
+  const year = Number(today.slice(0, 4));
+  if (!Number.isInteger(year)) return null;
+  // The first local date still inside the 12 months (29 February falls back to 1 March).
+  const cutoff = `${String(year - 1).padStart(4, "0")}${today.slice(4)}`;
+  if (filters.to !== "" && filters.to < cutoff) return "beyond";
+  if (filters.from !== "" && filters.from < cutoff) return "partial";
+  return null;
+}

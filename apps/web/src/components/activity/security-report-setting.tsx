@@ -216,7 +216,13 @@ export function SecurityReportSetting({
               email={email}
               userId={userId}
               twoFactor={twoFactor}
-              label={pending.type === "request" ? t("reportRequest") : t("downloadCsv")}
+              label={
+                pending.type === "request"
+                  ? t("reportRequest")
+                  : pending.format === "csv"
+                    ? t("downloadCsv")
+                    : t("downloadJson")
+              }
             />
             <div>
               <Button

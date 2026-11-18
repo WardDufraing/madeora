@@ -65,7 +65,7 @@ export default async function SecurityNotificationsPage() {
             <FormAlert tone="error">{t("unavailableHint")}</FormAlert>
           )}
         </Card>
-        <Card title={t("recentTitle")}>
+        <Card title={t("recentTitle")} description={t("recentScope")}>
           {notices.status === "unavailable" ? (
             <FormAlert tone="error">{t("recentUnavailable")}</FormAlert>
           ) : notices.value.length === 0 ? (
