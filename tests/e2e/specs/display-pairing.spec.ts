@@ -89,6 +89,10 @@ test("a manager pairs a tablet as a Household Display and revokes it", async ({
   await signIn(page, account);
   await page.goto(`/homes/${homeId}/displays`);
   await page.getByRole("button", { name: "Revoke Kitchen" }).click();
+  await page
+    .getByRole("dialog", { name: "Revoke Kitchen?" })
+    .getByRole("button", { name: "Revoke display" })
+    .click();
   await expect(page.getByText(/The display is revoked/)).toBeVisible();
   await restarted.reload();
   await expect(

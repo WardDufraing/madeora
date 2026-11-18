@@ -1,14 +1,17 @@
+import { getPublicEnv } from "@madeora/config/env/public";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { requireIdentity } from "@/auth/identity";
+import { DISPLAY_PATH } from "@/auth/redirects";
 import { HouseholdDisplaysManager } from "@/components/displays/household-displays-manager";
 import { loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
+import { displayPairingAddress } from "@/displays/schema";
 import { getHouseholdDisplays } from "@/displays/server";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
@@ -103,6 +106,7 @@ export default async function HomeDisplaysPage({ params }: HomeDisplaysPageProps
           <p className="mb-6 text-body text-fg-muted">{t("intro")}</p>
           <HouseholdDisplaysManager
             homeId={home.id}
+            displayAddress={displayPairingAddress(getPublicEnv().NEXT_PUBLIC_APP_URL, DISPLAY_PATH)}
             words={words}
             displays={displays.map((display) => ({
               id: display.id,
