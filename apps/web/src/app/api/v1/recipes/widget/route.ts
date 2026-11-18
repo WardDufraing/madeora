@@ -25,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
   const { homeId, mode, limit, seed } = query.data;
   const cards = await readRecipeWidget(homeId ?? null, mode, limit, seed ?? null);
   if (cards.status === "not-found") return failure(404, "not-found");
+  if (cards.status === "invalid") return failure(400, "invalid");
   if (cards.status === "unavailable") return failure(500, "failed");
   return json(200, cards.value);
 }

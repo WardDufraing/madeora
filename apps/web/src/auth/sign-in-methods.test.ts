@@ -39,6 +39,22 @@ describe("describeSignInMethods", () => {
     expect(canUnlink(view, "google")).toBe(false);
   });
 
+  it("takes the password status from the database when it is known (S08-LR3)", () => {
+    const googleOnly = { email: "g@gmail.test", identities: [identity("google", "g@gmail.test")] };
+    // A Google-only account that set a password through "Forgot your password?".
+    const withPassword = describeSignInMethods(googleOnly, true);
+    expect(withPassword.password).toBe(true);
+    expect(canUnlink(withPassword, "google")).toBe(true);
+    // An email identity whose password no longer works (unconfirmed email, for example).
+    const both = {
+      email: "a@example.test",
+      identities: [identity("email"), identity("google", "a@gmail.test")],
+    };
+    expect(canUnlink(describeSignInMethods(both, false), "google")).toBe(false);
+    // Unknown: the identity list decides.
+    expect(describeSignInMethods(googleOnly, null).password).toBe(false);
+  });
+
   it("handles a password-only account and missing identity data", () => {
     const view = describeSignInMethods({
       email: "p@example.test",

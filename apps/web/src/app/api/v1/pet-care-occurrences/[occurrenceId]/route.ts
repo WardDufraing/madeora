@@ -1,3 +1,4 @@
+import { nullableArg } from "@/api/rpc-args";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { occurrenceActionSchema } from "@/pets/care-schema";
 import {
@@ -60,7 +61,8 @@ export async function POST(
           p_occurrence_id: occurrenceId,
           p_expected_revision: body.revision,
           p_due_on: body.dueOn,
-          p_time: body.time as string,
+          // null: no time of day.
+          p_time: nullableArg(body.time),
           p_members: body.members,
         });
     }

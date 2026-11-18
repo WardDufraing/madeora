@@ -89,7 +89,15 @@ export const oraPatchSchema = z
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     error: "empty",
-  });
+  })
+  // A Home colour goes on its own: with personal fields it would be two separate writes, and a
+  // failure of the second would answer an error after the first was saved (S45-L7).
+  .refine(
+    (patch) =>
+      patch.homePalette === undefined ||
+      Object.entries(patch).every(([key, value]) => key === "homePalette" || value === undefined),
+    { error: "homePaletteAlone", path: ["homePalette"] },
+  );
 
 export type OraPatch = z.infer<typeof oraPatchSchema>;
 

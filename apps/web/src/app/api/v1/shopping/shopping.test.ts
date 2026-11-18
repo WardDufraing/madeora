@@ -453,6 +453,15 @@ describe("shopping items", () => {
     });
   });
 
+  it("refuses unchecking without the completion the person saw (S26-L3)", async () => {
+    const response = await completion(
+      request(`/items/${ITEM}/completion`, "PUT", { completed: false, seenCompletedAt: null }),
+      itemParams(ITEM),
+    );
+    expect(response.status).toBe(400);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
   it("transfers within a context, mapping each refusal", async () => {
     const body = {
       mode: "copy",
@@ -641,6 +650,18 @@ describe("categories, recurring items and the widget", () => {
       p_expected_revision: 1,
       p_action: "pause",
     });
+  });
+
+  it("answers a rule item that is no longer the active one as a conflict (S26-L9)", async () => {
+    answers({
+      update_shopping_recurrence: [{ outcome: "invalid_item", revision: null, next_on: null }],
+    });
+    const response = await patchRecurrence(
+      request(`/recurrences/${RULE}`, "PATCH", { revision: 1, action: "pause" }),
+      { params: Promise.resolve({ recurrenceId: RULE }) },
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "conflict" });
   });
 
   it("reads widget rows for the chosen lists in order", async () => {

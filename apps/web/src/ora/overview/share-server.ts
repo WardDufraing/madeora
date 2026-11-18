@@ -11,7 +11,7 @@ import { getRegionalFormats } from "@/preferences/server";
 
 import type { OraToolContext } from "../tools/types";
 import { loadOverview } from "./server";
-import { composeShareText, type ShareLabels } from "./share";
+import { composeShareText, shareIncomplete, type ShareLabels } from "./share";
 import type { OverviewShare, ShareRequest } from "./types";
 
 export type ShareLoad =
@@ -84,9 +84,10 @@ export async function prepareShare(
     leftOut: t("share.textLeftOut"),
   };
   const name = audience.name ?? t("share.textSomeone");
+  const shareAudience = { id: audience.membershipId, role: audience.role };
   const text = composeShareText(
     overview,
-    { id: audience.membershipId, role: audience.role, name },
+    { ...shareAudience, name },
     homeContext.context.home.name,
     labels,
   );
@@ -95,7 +96,7 @@ export async function prepareShare(
     share: {
       audience: { id: audience.membershipId, name: audience.name },
       text,
-      incomplete: overview.incomplete,
+      incomplete: shareIncomplete(overview, shareAudience),
     },
   };
 }

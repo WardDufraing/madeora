@@ -452,6 +452,23 @@ describe("reads", () => {
     });
   });
 
+  it("answers a request the database refuses as malformed with 400, not 500 (S24-L6)", async () => {
+    state.rpc.mockReturnValue({ data: null, error: { code: "22023", message: "invalid" } });
+    const list = await listRecipes(request(`/recipes?homeId=${HOME}&offset=9999999`, "GET"));
+    expect(list.status).toBe(400);
+    expect(await list.json()).toMatchObject({ error: "invalid" });
+    const cards = await widget(
+      request(`/recipes/widget?homeId=${HOME}&mode=random&limit=1&seed=a`, "GET"),
+    );
+    expect(cards.status).toBe(400);
+  });
+
+  it("still answers a database failure on a read with 500", async () => {
+    answers({});
+    const response = await listRecipes(request(`/recipes?homeId=${HOME}`, "GET"));
+    expect(response.status).toBe(500);
+  });
+
   it("lists only the caller's own drafts", async () => {
     answers({ list_my_recipe_drafts: [] });
     const response = await listDrafts();

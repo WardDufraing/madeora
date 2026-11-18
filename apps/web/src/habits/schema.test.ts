@@ -231,6 +231,15 @@ describe("numeric habit schemas (S29)", () => {
     expect(updateContributionSchema.safeParse({ action: "delete" }).success).toBe(false);
   });
 
+  it("trims a custom unit label before it reaches the database (S29-L8)", () => {
+    expect(
+      addContributionSchema.parse({ id: ID, quantity: "1", enteredUnit: " cups " }),
+    ).toMatchObject({ enteredUnit: "cups" });
+    expect(
+      addContributionSchema.safeParse({ id: ID, quantity: "1", enteredUnit: "   " }).success,
+    ).toBe(false);
+  });
+
   it("limits the quick-add presets and a day note", () => {
     expect(quickAddsSchema.safeParse({ revision: 1, quickAdds: [] }).success).toBe(true);
     expect(

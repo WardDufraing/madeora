@@ -35,6 +35,7 @@ export async function GET(request: Request): Promise<Response> {
   }
   const page = await listRecipes(homeId.data ?? null, parseRecipeQuery(raw));
   if (page.status === "not-found") return failure(404, "not-found");
+  if (page.status === "invalid") return failure(400, "invalid");
   if (page.status === "unavailable") return failure(500, "failed");
   return json(200, page.value);
 }

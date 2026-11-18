@@ -13,7 +13,7 @@ import {
   type DispatchOptions,
   type DispatchSummary,
 } from "../dispatcher.ts";
-import { PermanentJobError, RetryableJobError } from "../errors.ts";
+import { PermanentJobError, RetryableJobError, safeErrorCode } from "../errors.ts";
 import { runJob, type RunResult } from "../executor.ts";
 import type { JobServices } from "../services.ts";
 import type { ExecutionStore, OutboxStore } from "../store.ts";
@@ -90,19 +90,35 @@ export interface SweepDependencies extends DispatchOptions {
   /** Backlog counts for the log line; failures to read them never fail the sweep. */
   readonly stats?: () => Promise<Readonly<Record<string, number>>>;
   /**
-   * Work queued just before the rows are claimed, so it dispatches in the same sweep: the automatic
-   * Google Calendar sync (S33). Its failure is logged and never fails the sweep.
+   * Work done just before the rows are claimed, so what it queues dispatches in the same sweep: the
+   * automatic Google Calendar sync (S33) and the sign-in classification (S38). Each named step runs
+   * on its own, so one failing step never stops the others (S38-L11), and a failure is logged at
+   * error level with the step and its code, so it can raise an alert instead of stalling silently.
+   * It never fails the sweep.
    */
-  readonly prepare?: () => Promise<Readonly<Record<string, number>>>;
+  readonly prepare?: Readonly<Record<string, () => Promise<number>>>;
+}
+
+function failureCode(error: unknown): string {
+  return error instanceof Error && "code" in error && typeof error.code === "string"
+    ? safeErrorCode(error.code)
+    : "unknown";
 }
 
 export async function sweepOutbox(dependencies: SweepDependencies): Promise<DispatchSummary> {
   if (dependencies.prepare) {
-    try {
-      dependencies.logger.info("jobs.outbox.prepared", await dependencies.prepare());
-    } catch {
-      dependencies.logger.warn("jobs.outbox.prepare_failed");
+    const prepared: Record<string, number> = {};
+    for (const [step, run] of Object.entries(dependencies.prepare)) {
+      try {
+        prepared[step] = await run();
+      } catch (error) {
+        dependencies.logger.error("jobs.outbox.prepare_failed", {
+          step,
+          errorCode: failureCode(error),
+        });
+      }
     }
+    dependencies.logger.info("jobs.outbox.prepared", prepared);
   }
   const summary = await dispatchOutbox(dependencies);
   if (dependencies.stats) {

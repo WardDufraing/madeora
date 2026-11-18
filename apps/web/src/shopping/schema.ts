@@ -160,11 +160,17 @@ export const updateItemSchema = z
     path: ["unit"],
   });
 
-export const completionSchema = z.strictObject({
-  completed: z.boolean(),
-  /** The completion the person saw when reopening (a newer one answers conflict). */
-  seenCompletedAt: z.iso.datetime({ offset: true }).nullable(),
-});
+export const completionSchema = z
+  .strictObject({
+    completed: z.boolean(),
+    /** The completion the person saw when reopening (a newer one answers conflict). */
+    seenCompletedAt: z.iso.datetime({ offset: true }).nullable(),
+  })
+  // Unchecking without the completion seen would skip the conflict check (S26-L3).
+  .refine((body) => body.completed || body.seenCompletedAt !== null, {
+    error: "seenCompletedAtRequired",
+    path: ["seenCompletedAt"],
+  });
 
 export const transferSchema = z
   .strictObject({

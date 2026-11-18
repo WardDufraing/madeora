@@ -177,6 +177,28 @@ export function decideChildAction(facts: ChildFacts, action: ChildAction): boole
   }
 }
 
+export interface ChildCreationFacts {
+  /** The person's role in the Home, or null when they are not a member. */
+  readonly homeRole: "owner" | "administrator" | "member" | null;
+  /** The person is a guardian-managed child, or their account is deactivated. */
+  readonly callerIneligible: boolean;
+  /** The person may manage the Home's invitations (`home.invitations.manage`). */
+  readonly mayManageInvitations: boolean;
+  /** The primary guardian named in the request is the person themselves. */
+  readonly namesSelfAsGuardian: boolean;
+}
+
+/**
+ * Whether the person may add a child to this Home (S41-L4). `public.create_child` makes the same
+ * decision under the Home lock: any adult member may add a child with themselves as primary
+ * guardian; naming another adult takes the Owner or someone who may manage invitations. Whether
+ * the named adult is eligible stays the database's decision.
+ */
+export function decideChildCreation(facts: ChildCreationFacts): boolean {
+  if (facts.homeRole === null || facts.callerIneligible) return false;
+  return facts.namesSelfAsGuardian || facts.homeRole === "owner" || facts.mayManageInvitations;
+}
+
 export type ChildPermissionProjection = { readonly [A in ChildAction]: boolean };
 
 /** Every child action's answer for one person, for the interface. Never authoritative. */

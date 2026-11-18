@@ -1,6 +1,12 @@
 import { buildOverview } from "./build";
 import { chore, chores, HOME, input, occurrence, calendar, task, tasks } from "./fixtures";
-import { audienceMayView, composeShareText, itemsForAudience, type ShareLabels } from "./share";
+import {
+  audienceMayView,
+  composeShareText,
+  itemsForAudience,
+  shareIncomplete,
+  type ShareLabels,
+} from "./share";
 
 const labels: ShareLabels = {
   title: ({ from }) => `Overview ${from}`,
@@ -92,5 +98,29 @@ describe("sharing: the proposed text", () => {
     );
     expect(body).toContain("Incomplete.");
     expect(body).toContain("Nothing.");
+  });
+
+  it("does not call the text incomplete for a Google warning, whose events never enter it (S46-L2)", () => {
+    const google = buildOverview(
+      input({
+        calendar: {
+          status: "ok",
+          value: calendar([occurrence({ title: "Family dinner" })], {
+            googleWarnings: [
+              { calendar: "Work", own: true, sharedBy: null, state: "failed", lastSyncedAt: null },
+            ],
+          }),
+        },
+      }),
+    );
+    expect(google.incomplete).toBe(true);
+    const body = composeShareText(
+      google,
+      { id: "a", role: "member", name: "Sam" },
+      "Thuis",
+      labels,
+    );
+    expect(body).not.toContain("Incomplete.");
+    expect(shareIncomplete(google, { id: "a", role: "member" })).toBe(false);
   });
 });

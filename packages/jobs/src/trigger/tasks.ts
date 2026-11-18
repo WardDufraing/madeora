@@ -208,10 +208,10 @@ export const outboxDispatch = schedules.task({
       batchSize: DISPATCH_BATCH_SIZE,
       // Google Calendar (S33): connections due for their 15-minute sync; no extra schedule or run.
       // S38: settled sign-ins are classified for the activity history and their alerts sent.
-      prepare: async () => ({
-        googleCalendarSyncs: await services.data.queueGoogleCalendarSyncs(GOOGLE_SYNC_QUEUE_BATCH),
-        signInsClassified: await services.data.processSignInEvents(SIGN_IN_BATCH),
-      }),
+      prepare: {
+        googleCalendarSyncs: () => services.data.queueGoogleCalendarSyncs(GOOGLE_SYNC_QUEUE_BATCH),
+        signInsClassified: () => services.data.processSignInEvents(SIGN_IN_BATCH),
+      },
       stats: async () => {
         const { data, error } = await client.rpc("job_outbox_stats");
         if (error) throw new JobStoreError("job_outbox_stats", error.code);

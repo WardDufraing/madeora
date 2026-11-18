@@ -92,6 +92,8 @@ beforeEach(() => {
     today: "2026-11-16",
     timeZone: "UTC",
     incomplete: false,
+    notices: [],
+    truncated: false,
     days: [
       {
         date: "2026-11-16",

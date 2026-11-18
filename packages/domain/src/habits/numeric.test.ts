@@ -4,6 +4,7 @@ import {
   addThousandths,
   areUnitsConvertible,
   convertThousandths,
+  habitUnitInfo,
   decimalSeparator,
   isValidNumericTracking,
   parseQuantity,
@@ -102,6 +103,11 @@ describe("unit conversions", () => {
   it("converts time inside its dimension and flags inexact results", () => {
     expect(convertThousandths(90_000, minutes, hours)).toEqual({ thousandths: 1500, exact: true });
     expect(convertThousandths(20_000, minutes, hours)).toEqual({ thousandths: 333, exact: false });
+  });
+
+  it("keys a custom label by its trimmed text (S29-L8)", () => {
+    expect(habitUnitInfo({ unit: " cups ", kind: "custom" })?.dimension).toBe("custom:cups");
+    expect(habitUnitInfo({ unit: "   ", kind: "custom" })).toBeNull();
   });
 
   it("never converts glasses, pages or custom labels", () => {

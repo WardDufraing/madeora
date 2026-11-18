@@ -69,7 +69,7 @@ export function habitUnitInfo({ unit, kind }: HabitUnit): UnitInfo | null {
   const label = unit.trim();
   return label === "" || Array.from(label).length > HABIT_QUANTITY.customUnitLength
     ? null
-    : { dimension: `custom:${unit}`, factor: 1, discrete: false };
+    : { dimension: `custom:${label}`, factor: 1, discrete: false };
 }
 
 export function isDiscreteUnit(unit: HabitUnit): boolean {
