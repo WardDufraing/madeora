@@ -318,6 +318,8 @@ select tests.assert_true(tests.upd('k2', 'amend', 4) = 'not_permitted', 'Nor ame
 select tests.assert_true(tests.addo('k15', 'n-water', 1) = 'added'
   and tests.active_checkins('n-water', tests.d(0)) = 1 and tests.streak('n-water') = 2,
   '8/8 again completes the day with one active check-in');
+-- 'habits' notifications are opt-in: Carol turns them on, so she hears about a correction (S29-L9).
+select public.set_notification_preference('habits', 'in_app', true, null);
 select tests.act_as('bob');
 select tests.assert_true(tests.upd('k3', 'void', null, 'Typed twice') = 'corrected', 'Bob voids Carol''s 2 glasses');
 select tests.assert_true(tests.total('n-water', tests.d(0)) = 6 and tests.active_checkins('n-water', tests.d(0)) = 0,

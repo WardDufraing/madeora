@@ -116,6 +116,10 @@ describe("Ora celebration note", () => {
     answers.push({ celebration: { count: 1, points: 1, title: "Bins" } });
     renderWithIntl(note());
     expect(await screen.findByTestId("ora-celebration")).toBeInTheDocument();
+    // Let the effect that starts the 15-second timer run first (under load it can lag the render).
+    await act(async () => {
+      await Promise.resolve();
+    });
     act(() => {
       vi.advanceTimersByTime(16_000);
     });

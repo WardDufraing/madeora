@@ -1,6 +1,5 @@
 import "server-only";
 
-import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 
 import { isRecipeUnit, quantityStyles } from "@madeora/domain/recipes";
@@ -255,13 +254,12 @@ export async function listRecipeShares(recipeId: string): Promise<Read<readonly 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("list_recipe_shares", { p_recipe_id: recipeId });
   if (error) return failed("recipes.shares_failed", error);
-  // S25-L6: a destination Home the caller is not in is never named, only labelled.
-  const t = await getTranslations("Recipes");
   return {
     status: "ok",
     value: data.map((row) => ({
       homeId: row.home_id,
-      homeName: nullable(row.home_name) ?? t("anotherHome"),
+      // S25-L6: null for a destination Home the caller is not in (the page labels it).
+      homeName: nullable(row.home_name),
       state: row.state === "active" || row.state === "paused" ? row.state : "available",
       canEdit: row.can_edit,
       sharedAt: nullable(row.shared_at),
@@ -297,17 +295,7 @@ export async function getDeleteImpact(
     logRecipes("recipes.impact_unexpected_shape", "shape");
     return { status: "unavailable" };
   }
-  const t = await getTranslations("Recipes");
-  return {
-    status: "ok",
-    value: {
-      ...parsed.data,
-      shares: parsed.data.shares.map((share) => ({
-        ...share,
-        homeName: share.homeName ?? t("anotherHome"),
-      })),
-    },
-  };
+  return { status: "ok", value: parsed.data };
 }
 
 /** Recipes an import may duplicate in its destination (S25): same source URL or same name. */

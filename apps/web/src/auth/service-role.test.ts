@@ -81,6 +81,34 @@ describe("the service-role allowlist (S15-M3)", () => {
     }
   });
 
+  it("is read nowhere else in the repository than here and the jobs' own allowlisted runner", () => {
+    // Review M-5: every app and package, not only apps/web. The jobs' functions are listed and checked
+    // in packages/jobs/src/service-role-allowlist.test.ts.
+    const root = join(__dirname, "../../../..");
+    const roots = ["apps", "packages"].flatMap((group) =>
+      readdirSync(join(root, group))
+        .map((name) => join(root, group, name, "src"))
+        .filter((dir) => {
+          try {
+            return statSync(dir).isDirectory();
+          } catch {
+            return false;
+          }
+        }),
+    );
+    const readers = roots
+      .flatMap((dir) => sourceFiles(dir))
+      .filter((path) => readFileSync(path, "utf8").includes("SUPABASE_SERVICE_ROLE_KEY"))
+      .map((path) => relative(root, path).split(sep).join("/"))
+      .sort();
+    expect(readers).toEqual([
+      "apps/web/src/child-sign-in/service.ts",
+      "apps/web/src/storage/config.ts",
+      "packages/jobs/src/trigger/env.ts",
+      "packages/jobs/src/trigger/tasks.ts",
+    ]);
+  });
+
   it("refuses any other function at run time, before reaching the database", async () => {
     expect(SERVICE_ROLE_RPCS).toContain("finalize_upload");
     expect(isServiceRoleRpc("delete_account")).toBe(false);

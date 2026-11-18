@@ -104,6 +104,19 @@ describe("the share panel", () => {
     });
   });
 
+  it("labels a destination Home the person is not in without naming it (S25-L6)", () => {
+    const unnamed: RecipeShare[] = [
+      { homeId: CABIN, homeName: null, state: "active", canEdit: false, sharedAt: null },
+    ];
+    renderWithQuery(<RecipeSharePanel recipeId={RECIPE} recipeName="Pancakes" shares={unnamed} />);
+    expect(
+      within(screen.getByTestId("recipe-shares")).getByText("Another Home"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Stop sharing with Another Home" }),
+    ).toBeInTheDocument();
+  });
+
   it("removes a share only after confirming what that Home loses", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(jsonResponse(200, { outcome: "unshared" }));

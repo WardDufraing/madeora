@@ -386,6 +386,32 @@ describe("MealPlanner", () => {
     ).toHaveLength(1);
   });
 
+  it.each([
+    [true, "offers Undo to someone who may restore from the Home trash"],
+    [false, "offers no Undo to a Member, who cannot restore from the Home trash (S16-4)"],
+  ])("removes a meal to the trash and, restorable %s, %s", async (restorable) => {
+    const user = userEvent.setup();
+    answer({
+      "GET /api/v1/meals/recipes": () => [200, { recipes: [] }],
+      [`DELETE /api/v1/meals/entries/${ENTRY}`]: () => [
+        200,
+        { id: ENTRY, entryId: OTHER, restorable },
+      ],
+    });
+    renderPlanner();
+    await user.click(screen.getByRole("button", { name: /Lasagne/ }));
+    const dialog = await screen.findByTestId("meal-dialog");
+    await user.click(within(dialog).getByTestId("meal-remove"));
+    await user.click(within(dialog).getByTestId("meal-remove-confirm"));
+    await screen.findAllByText("Meal moved to the trash");
+    expect(sentTo("DELETE", `/api/v1/meals/entries/${ENTRY}`)).toHaveLength(1);
+    if (restorable) {
+      expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    }
+  });
+
   it("shows a view-only plan without changes, and a hidden recipe without details", async () => {
     const user = userEvent.setup();
     renderPlanner(plan({ access: "view" }));

@@ -697,10 +697,14 @@ select tests.assert_true(not private.child_on_hold(tests.ch('home-a'), tests.ch(
 delete from private.account_deactivations where user_id = tests.ch('bob');
 select tests.assert_true(
   private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('carol')) = 'primary'
-    and private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('bob'))
-      is distinct from 'primary',
-  'Bob''s return does not take the primary role back from Carol'
+    and private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('bob')) is null
+    and not exists (select 1 from public.child_guardians g
+      where g.home_id = tests.ch('home-a') and g.child_user_id = tests.ch('lio')
+        and g.guardian_user_id = tests.ch('bob')),
+  'Bob''s return gives him no guardian role at all: the appointment ended his (not even secondary)'
 );
+-- Lio is only needed here; later sections count the children Bob guards.
+delete from auth.users where id = tests.ch('lio');
 
 -- Mistaken creation and limits --------------------------------------------------------------------
 

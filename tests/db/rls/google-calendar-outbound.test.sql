@@ -510,7 +510,7 @@ insert into private.google_calendar_changes (calendar_id, user_id, action, scope
   select tests.cal('family'), tests.user_id('alice'), 'update', 'event', 'fam-stale', array['title'],
     private.google_snapshot(e), private.google_snapshot(e) || '{"title": "Verjaardag stale"}',
     private.google_snapshot(e) || '{"title": "Verjaardag Google"}', 'conflict', array['title'], 'Verjaardag stale'
-  from private.google_calendar_events e where e.google_event_id = 'fam-1';
+  from private.google_calendar_events e where e.calendar_id = tests.cal('family') and e.google_event_id = 'fam-2';
 select tests.act_as_service_role();
 select tests.assert_true((public.google_sync_begin(tests.conn('alice'), tests.i('lease-st'), 300) ->> 'outcome') = 'ok',
   'A later run starts');
@@ -524,7 +524,7 @@ select tests.assert_true(exists (select 1 from jsonb_array_elements(public.get_g
   where c ->> 'title' = 'Verjaardag stale' and (c ->> 'stale')::boolean),
   'It is listed as stale');
 select tests.assert_true(not exists (select 1 from jsonb_array_elements(public.get_google_calendar_connection() -> 'changes') c
-  where c ->> 'title' <> 'Verjaardag stale' and (c ->> 'stale')::boolean),
+  where c ->> 'calendar' <> 'Familie' and (c ->> 'stale')::boolean),
   'Changes on calendars Google still lists are not stale');
 select tests.assert_true(public.resolve_google_calendar_conflict((tests.change('fam-stale') ->> 'id')::uuid, 'madeora')
   = 'calendar_unavailable', 'Madeora''s version cannot be sent to a calendar Google no longer lists');

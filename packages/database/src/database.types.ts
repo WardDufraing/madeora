@@ -1061,6 +1061,7 @@ export type Database = {
           title: string;
         }[];
       };
+      can_restore_trash_entry: { Args: { p_entry_id: string }; Returns: boolean };
       cancel_account_recovery: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_backup_email_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       cancel_child_guardian_offer: { Args: { p_offer_id: string }; Returns: string };

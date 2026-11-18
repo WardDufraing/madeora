@@ -12,6 +12,10 @@
 --   S25-L6  origin recipe managers see only the names of destination Homes they belong to;
 --   S12b-L6 members see the ownership-recovery objection deadline;
 --   S35-L6  every member with photo access sees the Home pool's figures in the photo upload flow.
+-- Review fixes: Home trash managers see everything deleted in their modules and deletes say whether the
+-- caller may Undo (public.can_restore_trash_entry); an Owner's appointment ends an ineligible primary's
+-- role; a claimant back early (withdrawn, or the vacation cancelled) gets the restarted timer; a child on
+-- hold cannot act by PIN on household devices or Displays either.
 -- Forward-only. Rollback: re-apply the replaced function bodies from their original migrations,
 -- rename the *_before_* functions back into place (dropping the wrappers first), and drop the added
 -- helpers; no table or column changes, no data rewritten.
@@ -35,8 +39,9 @@ revoke all on function private.child_on_hold(uuid, uuid) from public, anon, auth
 
 -- S41-M2: whether p_user_id holds an unexpired re-authentication permission for p_action, given to the
 -- browser session p_session_id. Unlike consume_account_change_grant it is not used up: one fresh
--- confirmation covers the guardian changes made in the next two minutes.
-create function private.has_account_change_grant(p_user_id uuid, p_action text, p_session_id uuid)
+-- confirmation covers the guardian changes made in the next two minutes. It already exists (S38,
+-- 20261124090000_activity_history.sql); replaced in place with the same signature, adding null guards.
+create or replace function private.has_account_change_grant(p_user_id uuid, p_action text, p_session_id uuid)
 returns boolean
   language sql stable security definer set search_path = '' as $$
     select p_user_id is not null and p_session_id is not null and exists (
@@ -341,6 +346,49 @@ returns text
   end
   $$;
 
+-- As S41, except that a previous primary guardian who is no longer eligible (deactivated or pending
+-- deletion) is not carried over as secondary when someone else becomes primary: an Owner's appointment
+-- for a child on hold ends their role, so their return gives them no guardian access (S41-M3).
+create or replace function private.apply_child_guardian(
+  p_home_id uuid, p_child uuid, p_target uuid, p_role text, p_actor uuid
+) returns void
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_primary uuid;
+    v_secondary uuid;
+  begin
+    select g.guardian_user_id into v_primary from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = p_child and g.role = 'primary';
+    select g.guardian_user_id into v_secondary from public.child_guardians g
+      where g.home_id = p_home_id and g.child_user_id = p_child and g.role = 'secondary';
+
+    if p_role = 'secondary' then
+      delete from public.child_guardians g
+        where g.home_id = p_home_id and g.child_user_id = p_child and g.role = 'secondary';
+      insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+        values (p_home_id, p_child, p_target, 'secondary', p_actor);
+    else
+      delete from public.child_guardians g
+        where g.home_id = p_home_id and g.child_user_id = p_child;
+      insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+        values (p_home_id, p_child, p_target, 'primary', p_actor);
+      if v_secondary is not null and v_secondary <> p_target then
+        insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+          values (p_home_id, p_child, v_secondary, 'secondary', p_actor);
+      elsif v_primary is not null and v_primary <> p_target
+            and private.is_eligible_guardian(v_primary) then
+        insert into public.child_guardians (home_id, child_user_id, guardian_user_id, role, assigned_by)
+          values (p_home_id, p_child, v_primary, 'secondary', p_actor);
+      end if;
+    end if;
+    -- An open offer to the new guardian for the other role no longer makes sense.
+    delete from public.child_guardian_offers o
+      where o.home_id = p_home_id and o.child_user_id = p_child and o.guardian_user_id = p_target;
+    perform private.audit('child.guardian_assigned', p_home_id, 'user', p_child,
+      jsonb_build_object('role', p_role, 'guardian', p_target));
+  end
+  $$;
+
 -- As S41, plus: removing (or stepping down from) the secondary role needs a fresh re-authentication
 -- ('reauthentication_required', S41-M2).
 create or replace function public.remove_child_secondary_guardian(
@@ -543,23 +591,41 @@ revoke all on function private.can_manage_home_trash(uuid, text, uuid) from publ
 -- The owner's decision (2026-11-17): restoring and purging a Home's trash, in every module, is for the
 -- Owner and that module's managers only; a member who deleted an item no longer restores or purges it.
 -- One rule governs listing, restoring and purging (ADR 0020), so a Home entry is now also listed only to
--- them. Each module's own narrower rule still applies on top (pets' medical managers, for example).
--- Personal entries are unchanged: their owner's alone.
+-- them. In the modules with the generic rule (the deleter or manageHomeSettings), a manager now sees and
+-- restores everything deleted in their module, not only what they deleted themselves. The modules with
+-- their own rule (pets with its medical managers, calendar levels, photo access) keep it, narrowed to
+-- managers. Personal entries are unchanged: their owner's alone.
 alter function private.can_see_trash_entry(private.trash_entries, uuid) rename to can_see_trash_entry_before_managers;
 
 create function private.can_see_trash_entry(p_entry private.trash_entries, p_user_id uuid)
 returns boolean
   language sql stable security definer set search_path = '' as $$
-    select coalesce(
-      private.can_see_trash_entry_before_managers(p_entry, p_user_id)
-      and (p_entry.owner_home_id is null
-        or private.can_manage_home_trash(p_entry.owner_home_id, p_entry.module, p_user_id)),
-      false)
+    select coalesce(case
+      when p_entry.owner_home_id is null then private.can_see_trash_entry_before_managers(p_entry, p_user_id)
+      when p_entry.module in ('pets', 'calendar', 'photos') then
+        private.can_see_trash_entry_before_managers(p_entry, p_user_id)
+          and private.can_manage_home_trash(p_entry.owner_home_id, p_entry.module, p_user_id)
+      -- can_manage_home_trash holds only for a current member (has_home_capability checks it).
+      else private.can_manage_home_trash(p_entry.owner_home_id, p_entry.module, p_user_id)
+    end, false)
   $$;
 
 revoke all on function private.can_see_trash_entry(private.trash_entries, uuid) from public, anon, authenticated;
 revoke all on function private.can_see_trash_entry_before_managers(private.trash_entries, uuid)
   from public, anon, authenticated;
+
+-- Whether the caller may restore a trash entry now (S16-4), so a delete offers Undo only to someone whose
+-- Undo would work. False for an entry they may not see, one expired, restored or purged, and an unknown id.
+create function public.can_restore_trash_entry(p_entry_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+    select coalesce((
+      select t.status = 'trashed' and t.expires_at > pg_catalog.now()
+        and private.can_see_trash_entry(t, auth.uid())
+      from private.trash_entries t where t.id = p_entry_id), false)
+  $$;
+
+revoke all on function public.can_restore_trash_entry(uuid) from public, anon;
+grant execute on function public.can_restore_trash_entry(uuid) to authenticated;
 
 -- S30-L4: only active goals count toward the limit ---------------------------------------------------------
 
@@ -995,23 +1061,40 @@ grant execute on function public.get_google_calendar_connection() to authenticat
 
 -- S22-L3: the auto-release timer restarts after a vacation ------------------------------------------------
 
--- As S20, except that a claimant's vacation restarts the timer: when they were away (an accepted, not
--- cancelled participation that has begun) on or after the day they claimed, the hours count from the
--- day after their last day away when that is later than the day after the due date. While they are
--- away nothing is released either (private.auto_release_chore_claim, S22).
+-- As S20, except that a claimant's vacation restarts the timer: when they were away (a participation that
+-- had begun) on or after the day they claimed, the hours count from the day after their last day away
+-- when that is later than the day after the due date. The last day away is the participation's end, or
+-- the day before they came back early: the day before the vacation was cancelled, or before they
+-- withdrew or were removed (the date of that event). While they are away nothing is released either
+-- (private.auto_release_chore_claim, S22).
 create or replace function private.chore_release_at(
   p_occurrence private.chore_occurrences, p_chore private.chores, p_zone text
 ) returns timestamptz
   language sql stable set search_path = '' as $$
   select case when p_chore.auto_release_hours is not null and p_occurrence.claimed_by is not null
     then (greatest(p_occurrence.due_date + 1, coalesce((
-        select pg_catalog.max(p.ends_on) + 1
-        from private.home_vacation_participants p
-        join private.home_vacations v on v.id = p.vacation_id
-        where p.home_id = p_occurrence.home_id and p.user_id = p_occurrence.claimed_by
-          and p.status = 'accepted' and v.cancelled_at is null
-          and p.ends_on >= (p_occurrence.claimed_at at time zone coalesce(p_zone, 'UTC'))::date
-          and p.starts_on <= (pg_catalog.now() at time zone coalesce(p_zone, 'UTC'))::date
+        select pg_catalog.max(x.last_day) + 1
+        from (
+          select p.starts_on,
+            case
+              when p.status = 'accepted' and v.cancelled_at is null then p.ends_on
+              when p.status = 'accepted' then
+                least(p.ends_on, (v.cancelled_at at time zone coalesce(p_zone, 'UTC'))::date - 1)
+              else least(p.ends_on, (
+                select (pg_catalog.max(ev.created_at) at time zone coalesce(p_zone, 'UTC'))::date - 1
+                from private.home_vacation_events ev
+                where ev.vacation_id = p.vacation_id and ev.subject_id = p.user_id
+                  and ev.kind in ('withdrawn', 'removed')))
+            end as last_day
+          from private.home_vacation_participants p
+          join private.home_vacations v on v.id = p.vacation_id
+          where p.home_id = p_occurrence.home_id and p.user_id = p_occurrence.claimed_by
+            and (p.status = 'accepted'
+              or (p.status = 'withdrawn' and p.ended_reason in ('self', 'manager', 'creator')))
+            and p.starts_on <= (pg_catalog.now() at time zone coalesce(p_zone, 'UTC'))::date
+        ) x
+        where x.last_day >= x.starts_on
+          and x.last_day >= (p_occurrence.claimed_at at time zone coalesce(p_zone, 'UTC'))::date
       ), p_occurrence.due_date + 1))::timestamp at time zone coalesce(p_zone, 'UTC'))
       + pg_catalog.make_interval(hours => p_chore.auto_release_hours) end;
   $$;
@@ -1118,8 +1201,9 @@ create or replace function public.update_habit_contribution(
           'habit.contribution_corrected',
           pg_catalog.jsonb_build_object('habitId', v_habit.id, 'onDate', v_contribution.on_date,
             'action', p_action),
-          'habit-contribution-corrected:' || v_contribution.id::text || ':'
-            || pg_catalog.gen_random_uuid()::text);
+          -- One notice per correction: the same correction retried in one transaction is not repeated.
+          'habit-contribution-corrected:' || v_contribution.id::text || ':' || p_action || ':'
+            || pg_catalog.date_part('epoch', pg_catalog.now())::text);
       end if;
     end if;
     v_sync := private.habit_numeric_sync(v_habit, v_contribution.on_date, v_user_id, false);
@@ -1131,5 +1215,125 @@ create or replace function public.update_habit_contribution(
       'milestone', null,
       'habit', private.habit_summary_json(v_habit, v_user_id));
   end
+  $$;
+
+-- S41-M3 (review M-3): a child on hold cannot act in the Home by PIN either ----------------------------------
+
+-- As S42, except that a child on hold is not offered on an approved device's sign-in picker.
+create or replace function public.household_device_sign_in(p_device_hash text)
+returns table (
+  device_id uuid,
+  home_id uuid,
+  home_name text,
+  device_label text,
+  child_membership_id uuid,
+  child_name text,
+  child_accent_color text
+)
+  language sql stable security definer set search_path = '' as $$
+    select d.id, d.home_id, h.name, d.label, m.id,
+           coalesce(p.nickname, p.display_name, up.display_name),
+           coalesce(p.accent_color, up.accent_color)
+    from private.approved_device(coalesce(p_device_hash, '')) d
+    join public.homes h on h.id = d.home_id
+    left join public.home_memberships m on m.home_id = d.home_id
+      and exists (
+        select 1 from public.child_home_settings s
+        join private.child_home_pins hp
+          on hp.home_id = s.home_id and hp.child_user_id = s.child_user_id
+        where s.home_id = m.home_id and s.child_user_id = m.user_id and s.pin_sign_in
+          and not private.child_on_hold(m.home_id, m.user_id)
+      )
+    left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+    left join public.user_preferences up on up.user_id = m.user_id
+    where d.id is not null
+    order by m.created_at, m.id
+  $$;
+
+
+-- As S42 part 2, except that a child on hold is not listed on the device's board...
+create or replace function public.shared_device_board(p_device_hash text) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_device private.household_devices := private.approved_device(coalesce(p_device_hash, ''));
+    v_today date;
+  begin
+    if v_device.id is null then
+      return null;
+    end if;
+    v_today := private.task_today(v_device.home_id, null);
+    return jsonb_build_object(
+      'require_pin', coalesce((select s.require_pin from private.shared_device_settings s
+                               where s.home_id = v_device.home_id), false),
+      'members', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'membership_id', m.id,
+                 'name', coalesce(p.nickname, p.display_name, up.display_name),
+                 'accent_color', coalesce(p.accent_color, up.accent_color),
+                 'is_child', private.is_child(m.user_id),
+                 'requires_pin', exists (select 1 from private.shared_device_member_rules r
+                                         where r.home_id = m.home_id and r.user_id = m.user_id),
+                 'has_pin', case when private.is_child(m.user_id)
+                   then exists (select 1 from private.child_home_pins hp
+                                where hp.home_id = m.home_id and hp.child_user_id = m.user_id)
+                   else exists (select 1 from private.member_device_pins dp
+                                where dp.user_id = m.user_id) end)
+               order by m.created_at, m.id)
+        from public.home_memberships m
+        left join public.home_member_profiles p on p.home_id = m.home_id and p.user_id = m.user_id
+        left join public.user_preferences up on up.user_id = m.user_id
+        where m.home_id = v_device.home_id
+          and not (private.is_child(m.user_id) and private.child_on_hold(m.home_id, m.user_id))), '[]'::jsonb),
+      'chores', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'occurrence_id', o.id,
+                 'title', c.title,
+                 'due_date', o.due_date,
+                 'overdue', o.due_date < v_today,
+                 'assignee_ids', coalesce((
+                   select jsonb_agg(private.member_ref(a.home_id, a.user_id))
+                   from private.chore_occurrence_assignees a where a.occurrence_id = o.id),
+                   '[]'::jsonb),
+                 'mandatory_open', (select count(*) from private.chore_occurrence_steps st
+                   where st.occurrence_id = o.id and st.mandatory and st.checked_at is null),
+                 'requires_approval', c.requires_approval,
+                 'requires_pin', exists (select 1 from private.shared_device_chore_rules r
+                                         where r.chore_id = c.id))
+               order by o.due_date, c.title, o.id)
+        from private.chore_occurrences o
+        join private.chores c on c.id = o.chore_id
+        where o.home_id = v_device.home_id and o.status = 'open' and o.deleted_at is null
+          and c.deleted_at is null and o.due_date <= v_today), '[]'::jsonb)
+    );
+  end
+  $$;
+
+
+-- ...and cannot be named for a chore on the device (an adult never is "on hold": the check is for children).
+create or replace function private.device_member(
+  p_device private.household_devices, p_occurrence_id uuid, p_membership_id uuid
+) returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from public.home_memberships m
+    join private.chore_occurrences o on o.id = p_occurrence_id and o.home_id = m.home_id
+    where m.home_id = p_device.home_id and m.id = p_membership_id and o.deleted_at is null
+      and (not private.is_child(m.user_id)
+           or (exists (select 1 from private.chore_occurrence_assignees a
+                       where a.occurrence_id = o.id and a.user_id = m.user_id)
+               and not private.child_on_hold(m.home_id, m.user_id)))
+  $$;
+
+
+-- As S44: the same on a Household Display.
+create or replace function private.display_member(p_home_id uuid, p_occurrence_id uuid, p_membership_id uuid)
+returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select m.user_id from public.home_memberships m
+    join private.chore_occurrences o on o.id = p_occurrence_id and o.home_id = m.home_id
+    where m.home_id = p_home_id and m.id = p_membership_id and o.deleted_at is null
+      and (not private.is_child(m.user_id)
+           or (exists (select 1 from private.chore_occurrence_assignees a
+                       where a.occurrence_id = o.id and a.user_id = m.user_id)
+               and not private.child_on_hold(m.home_id, m.user_id)))
   $$;
 

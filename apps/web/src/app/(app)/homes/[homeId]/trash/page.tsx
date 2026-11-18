@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: HomeTrashPageProps): Promise<
 /**
  * A Home's trash (S16; spec "Confirmed Trash navigation placement": reached from that Home's
  * settings). Owner decision S16-4: only the Owner and Administrators open it (never Members); the
- * database shows an Administrator their own deletions in the modules they manage, and everything to
+ * database shows an Administrator everything deleted in the modules they manage, and everything to
  * the Owner and the Administrators granted manageHomeSettings. The permission check here only
  * decides what to render.
  */

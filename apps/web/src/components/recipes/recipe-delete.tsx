@@ -185,7 +185,7 @@ function ImpactDetails({
           <ul className="list-disc ps-6 text-body text-fg" data-testid="recipe-impact-homes">
             {impact.shares.map((share) => (
               <li key={share.homeId}>
-                <bdi>{share.homeName}</bdi>
+                <bdi>{share.homeName ?? t("anotherHome")}</bdi>
               </li>
             ))}
           </ul>

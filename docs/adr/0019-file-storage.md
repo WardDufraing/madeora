@@ -55,4 +55,4 @@ The owner approved the web server's Supabase secret key on one condition: it rea
 - a module that is not listed uses the client;
 - a module calls a function that is not on the list.
 
-Adding a function to the list needs the owner's approval, like any other privileged client. The background jobs (`packages/jobs`) are a separate process with their own service-role functions and are outside this list.
+Adding a function to the list needs the owner's approval, like any other privileged client. The same test scans every app and package for the key: only these two files and the background jobs' runner (`packages/jobs/src/trigger/env.ts` and `tasks.ts`) may read it. The jobs are a separate process with their own service-role functions; `packages/jobs/src/service-role-allowlist.test.ts` holds their written allowlist (`JOB_SERVICE_ROLE_RPCS`, every one a `service_role`-only function) and fails when a job calls a function that is not on it, calls one by a computed name, or when a file other than the deployed and local runner creates a client.

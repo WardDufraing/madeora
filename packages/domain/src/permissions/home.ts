@@ -139,7 +139,7 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   "home.storage.view": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
   // The Home's trash (S16; spec "Confirmed central personal and Home trash organization"). Owner
   // decision S16-4: restoring and purging Home items is for the Owner and managers only, in every
-  // module, so Members no longer open it. An Administrator sees what they deleted in a module they
+  // module, so Members no longer open it. An Administrator sees everything deleted in a module they
   // manage (its manage capability); the Owner and Administrators granted manageHomeSettings see
   // everything in it. The database applies the same rule (SQL: private.can_see_trash_entry).
   "home.trash.view": { roles: ["owner", "administrator"] },

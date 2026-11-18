@@ -468,10 +468,21 @@ insert into ids select 'att-hold', attempt_id from public.child_password_attempt
 select tests.assert_true(
   (select outcome from public.child_sign_in_verified(tests.cs('att-hold'))) = 'not_enabled',
   'And the right password signs nobody in while she is on hold');
+select tests.assert_true(
+  exists (select 1 from public.household_device_sign_in(tests.cs_key('device-a')) where device_id is not null)
+    and not exists (select 1 from public.household_device_sign_in(tests.cs_key('device-a'))
+      where child_membership_id = tests.cs('m-mia')),
+  'The household device no longer offers her for PIN sign-in (review M-3)');
 select tests.act_as_owner();
 delete from private.account_deactivations where user_id = tests.cs('alice');
 select tests.assert_true(tests.cs_session_ok(tests.cs('mia'), tests.cs('sess-pw')),
   'Reactivating her guardian restores her access');
+select tests.act_as_service_role();
+select tests.assert_true(
+  exists (select 1 from public.household_device_sign_in(tests.cs_key('device-a'))
+    where child_membership_id = tests.cs('m-mia')),
+  'And the device offers her again');
+select tests.act_as_owner();
 
 -- Revoking the device.
 select tests.act_as_service_role();
