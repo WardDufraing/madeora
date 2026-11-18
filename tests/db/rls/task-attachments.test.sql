@@ -343,9 +343,16 @@ select tests.assert_true(
 select tests.assert_row_count($$select * from public.authorize_file_read(tests.i('f-carol'))$$, 0,
   'A removed attachment cannot be read');
 select tests.assert_true(
+  not exists (select 1 from public.list_trash(tests.i('home-a'), 'tasks', 'task_attachment')),
+  'A member who removed it does not see it in the Home trash (S16-4: Owner and managers only)');
+select tests.assert_true(
+  (select outcome = 'not_found' from public.restore_trash_entries(array[tests.i('e-carol')])),
+  'Nor restores it');
+select tests.act_as('alice');
+select tests.assert_true(
   exists (select 1 from public.list_trash(tests.i('home-a'), 'tasks', 'task_attachment')
     where label = 'Receipt.pdf'),
-  'The person who removed it sees it in the Home trash under its name');
+  'The Owner sees it in the Home trash under its name');
 select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('e-carol')])),
   'Restored');
@@ -353,16 +360,17 @@ select tests.assert_true(tests.links(tests.i('t-carol')) = 1 and tests.file_stat
   'The attachment and its file are back');
 
 -- Restoring onto a task that has room no longer: the limit is a conflict.
+select tests.act_as('carol');
 insert into ids select 'e-carol-2', entry_id from public.remove_task_attachment(tests.i('a:f-carol'));
 select tests.fill(tests.i('t-carol'), 10);
-select tests.act_as('carol');
+select tests.act_as('alice');
 select tests.assert_true(
   (select outcome = 'needs_resolution' and conflict = 'attachment_limit'
    from public.restore_trash_entries(array[tests.i('e-carol-2')])),
   'A task already at ten attachments is a conflict');
 select tests.act_as_owner();
 delete from private.task_attachments where task_id = tests.i('t-carol') and display_name = 'Filler.pdf';
-select tests.act_as('carol');
+select tests.act_as('alice');
 select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('e-carol-2')])),
   'With room again, it is restored');
@@ -379,16 +387,17 @@ select tests.act_as('alice');
 select tests.assert_true(
   (select outcome = 'not_found' from public.remove_task_attachment(tests.i('a:f-del'))),
   'An attachment of a deleted task cannot be removed on its own');
-select tests.act_as('carol');
 select tests.assert_true(
   (select outcome = 'restored' and attachments_lost = 0 from public.restore_trash_entries(array[tests.i('e-del')])),
-  'Restoring the task');
+  'The Owner restores the task');
 select tests.assert_true(tests.links(tests.i('t-del')) = 1 and tests.file_status('f-del') = 'ready',
   'The task comes back with its attachment');
 
 -- An attachment removed, then its task deleted: restoring the attachment first is a conflict.
+select tests.act_as('carol');
 insert into ids select 'e-del-a', entry_id from public.remove_task_attachment(tests.i('a:f-del'));
 insert into ids select 'e-del-t', entry_id from public.delete_task(tests.i('t-del'));
+select tests.act_as('alice');
 select tests.assert_true(
   (select outcome = 'needs_resolution' and conflict = 'task_unavailable'
    from public.restore_trash_entries(array[tests.i('e-del-a')])),

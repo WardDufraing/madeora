@@ -117,10 +117,9 @@ async function claim(secret: string): Promise<PairingScreen> {
   const row = claimed.data[0];
   if (row?.outcome !== "ready" || !row.alias_email) return { kind: "expired" };
 
-  const link = await client.auth.admin.generateLink({ type: "magiclink", email: row.alias_email });
-  const tokenHash = link.data.properties?.hashed_token;
-  if (link.error || !tokenHash) {
-    log("display_pairing.link_failed", link.error?.code);
+  const { tokenHash, error: linkError } = await client.magicLinkToken(row.alias_email);
+  if (linkError) {
+    log("display_pairing.link_failed", linkError.code);
     return { kind: "unavailable" };
   }
   // Sets the session cookies on this response. The route made sure no session was here before.

@@ -79,6 +79,8 @@ export function outcomeFailure(outcome: unknown): Response | null {
       return failure(409, "pending-changes");
     case "not_in_conflict":
       return failure(409, "not-in-conflict");
+    case "calendar_unavailable":
+      return failure(409, "calendar-unavailable");
     case "in_conflict":
       return failure(409, "in-conflict");
     case "not_failed":

@@ -137,7 +137,7 @@ test("personal trash: list, restore, a conflict, bulk, delete permanently and em
   expect(sampleState(draft)).toBe("gone");
 });
 
-test("Home trash: members see their own deletions, the Owner sees all, strangers nothing", async ({
+test("Home trash: the Owner sees and restores all, members and strangers nothing (S16-4)", async ({
   page,
   browser,
   baseURL,
@@ -170,16 +170,19 @@ test("Home trash: members see their own deletions, the Owner sees all, strangers
   await expect(page.getByText("Member private")).toHaveCount(0);
   expect(await axeViolations(page)).toEqual([]);
 
-  // The member sees only what they deleted, and their own personal trash is separate.
+  // Owner decision S16-4: a member does not open the Home trash, not even for what they deleted;
+  // their own personal trash is separate.
   await memberPage.goto(url);
-  await expect(memberPage.getByTestId("trash-entry")).toHaveCount(1);
-  await expect(memberPage.getByTestId("trash-entry")).toContainText("Member's item");
-  await expect(memberPage.getByTestId("trash-entry")).toContainText("Deleted by you");
+  await expect(memberPage.getByText("This Home's trash is not available to you.")).toBeVisible();
+  await expect(memberPage.getByTestId("trash-entry")).toHaveCount(0);
+  const memberListing = await memberPage.request.get(`/api/v1/trash?homeId=${homeId}`);
+  expect(memberListing.status()).toBe(200);
+  expect(((await memberListing.json()) as { entries: unknown[] }).entries).toHaveLength(0);
   await memberPage.goto("/settings/trash");
   await expect(memberPage.getByTestId("trash-entry")).toHaveCount(1);
   await expect(memberPage.getByTestId("trash-entry")).toContainText("Member private");
 
-  // The member cannot reach the Owner's entry, even by guessing its id through the API.
+  // The member cannot reach the Owner's entry (or their own), even by guessing its id through the API.
   const ownerEntry = sql(`select id from private.trash_entries where subject_id = :'id'::uuid;`, {
     id: byOwner,
   });

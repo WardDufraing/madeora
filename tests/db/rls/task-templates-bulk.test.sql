@@ -379,7 +379,34 @@ select tests.assert_true(
      tests.i('home-a'), p_priority => null) r),
   'Back to unspecified');
 
+-- One task that fails unexpectedly is rolled back on its own: the others in the selection still change
+select tests.act_as_owner();
+create function tests.refuse_low_b2() returns trigger language plpgsql as $$
+  begin
+    if new.id = tests.i('b2') and new.priority = 'low' then
+      raise exception 'forced failure' using errcode = 'XX001';
+    end if;
+    return new;
+  end $$;
+create trigger refuse_low_b2 after update on private.tasks
+  for each row execute function tests.refuse_low_b2();
+select tests.act_as('carol');
+select tests.assert_true(
+  (select jsonb_object_agg(r.task_id, r.outcome) = jsonb_build_object(tests.i('b1'), 'changed', tests.i('b2'), 'failed')
+     and bool_or(r.task_id = tests.i('b2') and r.revision is null)
+   from public.bulk_update_tasks(array[tests.i('b1'), tests.i('b2')], 'priority', tests.revs('b1', 'b2'), false,
+     tests.i('home-a'), p_priority => 'low') r),
+  'The task that fails is reported as failed (without a revision); the other is still changed');
+select tests.act_as_owner();
+select tests.assert_true(
+  (select t.priority = 'low' from private.tasks t where t.id = tests.i('b1'))
+  and (select t.priority is null from private.tasks t where t.id = tests.i('b2')),
+  'The failed task keeps its old priority; nothing half-done remains');
+drop trigger refuse_low_b2 on private.tasks;
+drop function tests.refuse_low_b2();
+
 -- Labels: add, remove, replace
+select tests.act_as('carol');
 select tests.assert_true(
   (select bool_and(r.outcome = case when r.task_id = tests.i('b2') then 'changed' else 'unchanged' end)
    from public.bulk_update_tasks(array[tests.i('b1'), tests.i('b2')], 'labels', tests.revs('b1', 'b2'),

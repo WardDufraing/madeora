@@ -9,6 +9,7 @@ import {
   readShoppingMutation,
 } from "@/shopping/route-helpers";
 import { updateItemSchema } from "@/shopping/schema";
+import { isEntryRestorable } from "@/trash/restorable";
 
 interface ItemRouteContext {
   readonly params: Promise<{ readonly itemId: string }>;
@@ -47,7 +48,10 @@ export async function PATCH(request: Request, { params }: ItemRouteContext): Pro
   );
 }
 
-/** Moves an item to the trash (editors of an active list); restorable for 7 days. */
+/**
+ * Moves an item to the trash (editors of an active list); restorable for 7 days by the Home's Owner
+ * and shopping managers (S16-4). `restorable` says whether the caller may Undo it.
+ */
 export async function DELETE(request: Request, { params }: ItemRouteContext): Promise<Response> {
   const input = await readShoppingMutation(request, z.strictObject({}));
   if (!input.ok) return input.response;
@@ -57,8 +61,10 @@ export async function DELETE(request: Request, { params }: ItemRouteContext): Pr
   const { data, error } = await supabase.rpc("delete_shopping_item", { p_item_id: itemId });
   if (error) return databaseFailure("shopping.delete_item_failed", error);
   const row = data[0];
+  const entryId = row?.entry_id ?? null;
   return outcomeAnswer("shopping.delete_item_failed", row?.outcome, {
     id: itemId,
-    entryId: row?.entry_id ?? null,
+    entryId,
+    restorable: await isEntryRestorable(supabase, entryId),
   });
 }

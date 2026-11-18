@@ -502,6 +502,37 @@ select tests.assert_true(public.discard_google_calendar_change((select (c ->> 'i
   public.get_google_calendar_connection() -> 'changes') c where c ->> 'title' = 'Yoga Madeora')) = 'discarded',
   'And Alice discards it');
 
+-- S34-M6: a conflict outlives a calendar Google stops listing; while stale it can only be dropped.
+select tests.act_as_owner();
+insert into ids values ('lease-st', gen_random_uuid());
+insert into private.google_calendar_changes (calendar_id, user_id, action, scope, google_event_id, fields,
+    base, mine, theirs, state, conflict_fields, title)
+  select tests.cal('family'), tests.user_id('alice'), 'update', 'event', 'fam-stale', array['title'],
+    private.google_snapshot(e), private.google_snapshot(e) || '{"title": "Verjaardag stale"}',
+    private.google_snapshot(e) || '{"title": "Verjaardag Google"}', 'conflict', array['title'], 'Verjaardag stale'
+  from private.google_calendar_events e where e.calendar_id = tests.cal('family') and e.google_event_id = 'fam-2';
+select tests.act_as_service_role();
+select tests.assert_true((public.google_sync_begin(tests.conn('alice'), tests.i('lease-st'), 300) ->> 'outcome') = 'ok',
+  'A later run starts');
+select public.google_sync_calendars(tests.conn('alice'), tests.i('lease-st'), jsonb_build_array(
+  jsonb_build_object('id', 'alice@gmail.com', 'name', 'Alice', 'timeZone', 'Europe/Brussels', 'accessRole', 'owner', 'primary', true),
+  jsonb_build_object('id', 'holidays', 'name', 'Feestdagen', 'accessRole', 'reader')));
+select tests.assert_true((tests.change('fam-stale') ->> 'state') = 'conflict',
+  'Google no longer lists the family calendar, but the conflict is kept');
+select tests.act_as('alice');
+select tests.assert_true(exists (select 1 from jsonb_array_elements(public.get_google_calendar_connection() -> 'changes') c
+  where c ->> 'title' = 'Verjaardag stale' and (c ->> 'stale')::boolean),
+  'It is listed as stale');
+select tests.assert_true(not exists (select 1 from jsonb_array_elements(public.get_google_calendar_connection() -> 'changes') c
+  where c ->> 'calendar' <> 'Familie' and (c ->> 'stale')::boolean),
+  'Changes on calendars Google still lists are not stale');
+select tests.assert_true(public.resolve_google_calendar_conflict((tests.change('fam-stale') ->> 'id')::uuid, 'madeora')
+  = 'calendar_unavailable', 'Madeora''s version cannot be sent to a calendar Google no longer lists');
+select tests.assert_true(public.resolve_google_calendar_conflict((tests.change('fam-stale') ->> 'id')::uuid, 'google')
+  = 'resolved' and tests.change('fam-stale') is null, 'Dropping it works');
+select tests.act_as_service_role();
+select public.google_sync_finish(tests.conn('alice'), tests.i('lease-st'), 'ok');
+
 -- Malformed requests --------------------------------------------------------------------------------------------
 
 select tests.act_as('alice');

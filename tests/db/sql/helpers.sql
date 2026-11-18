@@ -71,6 +71,17 @@ create function tests.act_as_user(user_id uuid) returns void
   end
   $$;
 
+-- A fresh re-authentication permission (S37's account_change_grants) for p_action, bound to the user's
+-- standing test session, valid for the rest of the test (now() does not move inside its transaction).
+create function tests.grant_account_change(p_user_id uuid, p_action text) returns void
+  language sql security definer set search_path = ''
+  as $$
+    insert into private.account_change_grants (user_id, action, session_id, expires_at)
+      values (p_user_id, p_action, tests.session_id(p_user_id), pg_catalog.now() + interval '1 minute')
+      on conflict (user_id, action) do update
+        set session_id = excluded.session_id, expires_at = excluded.expires_at
+  $$;
+
 -- Act as a seeded user by name, for example tests.act_as('alice').
 create function tests.act_as(name text) returns void
   language plpgsql

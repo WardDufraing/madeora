@@ -113,6 +113,7 @@ insert into ids values
   ('m-bob', tests.cs_mid(tests.cs('home-a'), tests.cs('bob'))),
   ('m-erin-b', tests.cs_mid(tests.cs('home-b'), tests.cs('erin')));
 
+select tests.grant_account_change(tests.cs('alice'), 'child_guardians');
 select tests.act_as('alice');
 insert into ids select 'm-mia', membership_id from public.create_child(
   tests.cs('home-a'), 'Mia', tests.cs('m-alice'), null, '#16a34a', gen_random_uuid());
@@ -454,6 +455,34 @@ select tests.assert_true(not tests.cs_session_ok(tests.cs('mia'), tests.cs('sess
   'An ended PIN session does not come back when the switch is turned on again');
 select tests.assert_true(tests.cs_session_ok(tests.cs('mia'), tests.cs('sess-pw')),
   'A password session follows the switch while it is still registered');
+
+-- On hold (S41-M3): while her only primary guardian is deactivated, a child neither uses nor starts a
+-- session; reactivation restores her access.
+select tests.act_as_owner();
+insert into private.account_deactivations (user_id) values (tests.cs('alice'));
+select tests.assert_true(not tests.cs_session_ok(tests.cs('mia'), tests.cs('sess-pw')),
+  'With her primary guardian deactivated, Mia''s password session stops working');
+select tests.act_as_service_role();
+insert into ids select 'att-hold', attempt_id from public.child_password_attempt(
+  'mia.k', tests.cs_key('c-hold'));
+select tests.assert_true(
+  (select outcome from public.child_sign_in_verified(tests.cs('att-hold'))) = 'not_enabled',
+  'And the right password signs nobody in while she is on hold');
+select tests.assert_true(
+  exists (select 1 from public.household_device_sign_in(tests.cs_key('device-a')) where device_id is not null)
+    and not exists (select 1 from public.household_device_sign_in(tests.cs_key('device-a'))
+      where child_membership_id = tests.cs('m-mia')),
+  'The household device no longer offers her for PIN sign-in (review M-3)');
+select tests.act_as_owner();
+delete from private.account_deactivations where user_id = tests.cs('alice');
+select tests.assert_true(tests.cs_session_ok(tests.cs('mia'), tests.cs('sess-pw')),
+  'Reactivating her guardian restores her access');
+select tests.act_as_service_role();
+select tests.assert_true(
+  exists (select 1 from public.household_device_sign_in(tests.cs_key('device-a'))
+    where child_membership_id = tests.cs('m-mia')),
+  'And the device offers her again');
+select tests.act_as_owner();
 
 -- Revoking the device.
 select tests.act_as_service_role();

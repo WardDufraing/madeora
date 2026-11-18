@@ -334,10 +334,16 @@ select tests.assert_true(
 select public.create_meal_entry(tests.i('e-x'), tests.d(4), tests.slot(tests.i('home-a'), 'breakfast'),
   tests.i('home-a'), null, 'Yoghurt');
 select tests.assert_true(
+  (select outcome = 'not_found' from public.restore_trash_entries(array[tests.i('trash-1')])),
+  'A member cannot restore from the Home trash, not even what she removed (S16-4: Owner and managers only)');
+select tests.act_as('alice');
+select tests.assert_true(
   (select outcome <> 'restored' and conflict = 'meal_slot_occupied'
     from public.restore_trash_entries(array[tests.i('trash-1')])),
   'A restore into a taken slot is refused');
+select tests.act_as('carol');
 select public.delete_meal_entry(tests.i('e-x'), 1);
+select tests.act_as('alice');
 select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('trash-1')])),
   'Once it is free the meal comes back');

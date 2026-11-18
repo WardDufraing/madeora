@@ -2,7 +2,8 @@
 // same recipe at the same moment (exactly one gets the lock); a double publish of one draft (one
 // recipe, published once); and a save racing the editor's own departure from the Home (the save
 // either lands before the departure or is refused after it, never a deadlock and never a save by a
-// former member).
+// former member); and a save racing the expiry of its editing lock while another member takes the lock
+// over (the late save is refused, the lock has one holder).
 //
 // Like the other concurrency tests this needs overlapping psql sessions, so the data is committed.
 // It uses the seeded users and removes what it created afterwards; the database is a disposable
@@ -116,6 +117,49 @@ select pg_sleep(0.3);`,
       `select status || ':' || revision from private.recipes where id = '${DRAFT}';`,
     );
     expect(state).toBe("published:2");
+  });
+
+  it("refuses a save whose lock expired while another member takes the lock over", async () => {
+    const stale = "5b0f2c84-7f38-4d55-9a3e-2f6a1e0c24a1";
+    const taken = "5b0f2c84-7f38-4d55-9a3e-2f6a1e0c24a2";
+    const [lock] = await as(
+      "alice",
+      `select outcome from public.acquire_recipe_lock('${RECIPE}', '${stale}');`,
+    );
+    expect(lock).toBe("acquired");
+    // The window passes behind the editor's back (a forgotten tab).
+    await psql(
+      `update private.recipe_edit_locks set expires_at = now() - interval '1 second' where recipe_id = '${RECIPE}';`,
+    );
+    // Sequentially first: with nobody else involved, only the expiry check can refuse this save.
+    const [expired] = await as(
+      "alice",
+      `select outcome from public.update_recipe('${RECIPE}', 1, ${content}, '${stale}');`,
+    );
+    expect(expired).toBe("lock_lost");
+    const [unchanged] = await psql(`select revision from private.recipes where id = '${RECIPE}';`);
+    expect(unchanged).toBe("1");
+    // Then the race, for the single-holder property.
+    const [[saved], [acquired]] = await Promise.all([
+      as(
+        "alice",
+        `select outcome from public.update_recipe('${RECIPE}', 1, ${content}, '${stale}');
+select pg_sleep(0.3);`,
+      ),
+      as(
+        "bob",
+        `select outcome from public.acquire_recipe_lock('${RECIPE}', '${taken}');
+select pg_sleep(0.3);`,
+      ),
+    ]);
+    expect(saved).toBe("lock_lost");
+    expect(acquired).toBe("acquired");
+    const [state] = await psql(
+      `select (select count(*) from private.recipe_edit_locks where recipe_id = '${RECIPE}' and token = '${taken}')
+        || ':' || (select revision from private.recipes where id = '${RECIPE}');`,
+    );
+    expect(state).toBe("1:1");
+    await psql(`delete from private.recipe_edit_locks where recipe_id = '${RECIPE}';`);
   });
 
   it("never lets a member save after leaving, and never deadlocks", async () => {

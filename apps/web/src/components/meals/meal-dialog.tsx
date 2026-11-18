@@ -339,7 +339,7 @@ export function MealDialog({ target, plan, homeId, onClose }: MealDialogProps) {
     `meal:${meal ? mealKey(meal) : ids.entry}`,
     async () => {
       if (target.mode === "entry") {
-        return sendMealRequest<{ entryId: string | null }>(
+        return sendMealRequest<{ entryId: string | null; restorable?: boolean }>(
           "DELETE",
           mealEntryEndpoint(target.meal.id),
           { revision: target.meal.revision },
@@ -352,9 +352,9 @@ export function MealDialog({ target, plan, homeId, onClose }: MealDialogProps) {
           {},
         );
       }
-      return { entryId: null };
+      return { entryId: null, restorable: false };
     },
-    ({ entryId }) => {
+    ({ entryId, restorable }) => {
       onClose();
       if (target.mode === "occurrence") {
         const { recurrenceId, date } = target.meal;
@@ -376,7 +376,8 @@ export function MealDialog({ target, plan, homeId, onClose }: MealDialogProps) {
       toast.show({
         title: t("mealRemoved"),
         tone: "success",
-        ...(entryId
+        // S16-4: Undo restores from the Home trash, which only its Owner and managers may do.
+        ...(entryId && restorable
           ? {
               action: {
                 label: t("undo"),

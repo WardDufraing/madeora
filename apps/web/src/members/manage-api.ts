@@ -81,6 +81,7 @@ export type MemberErrorCode =
   | "username-taken"
   | "username-required"
   | "already-used"
+  | "reauthentication-required"
   | "failed";
 
 export interface MemberErrorResponse {
@@ -129,6 +130,7 @@ export type MemberFailure =
   | "usernameTaken"
   | "usernameRequired"
   | "alreadyUsed"
+  | "reauthenticationRequired"
   | "network"
   | "failed";
 
@@ -163,6 +165,7 @@ const failureByCode: Partial<Record<MemberErrorCode, MemberFailure>> = {
   "username-taken": "usernameTaken",
   "username-required": "usernameRequired",
   "already-used": "alreadyUsed",
+  "reauthentication-required": "reauthenticationRequired",
 };
 
 async function send(method: "POST" | "PATCH" | "PUT", url: string, body: unknown) {

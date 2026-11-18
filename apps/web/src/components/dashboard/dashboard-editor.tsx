@@ -60,6 +60,7 @@ import { WidgetFrame } from "./dashboard-grid";
 import { useFailureMessage } from "./use-failure-message";
 import { dashboardTemplatesKey, useTemplateOptions } from "./use-template-options";
 import { useWidgetLabels } from "./use-widget-labels";
+import { WidgetPreview } from "./widget-preview";
 import { WidgetSettings } from "./widget-settings";
 
 /**
@@ -741,6 +742,7 @@ function AddWidgets({
           return (
             <li key={`${type}:${String(bound)}`} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
+                <WidgetPreview type={type} />
                 <p className="min-w-0 flex-1 text-body font-medium">
                   {bound && chosenHome
                     ? t("widgetFromHome", {

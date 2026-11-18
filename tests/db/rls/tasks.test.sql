@@ -512,9 +512,11 @@ select tests.assert_true(
   (select outcome = 'not_found' from public.set_task_completion(tests.i('t1'), true)),
   'A trashed task cannot be completed');
 select tests.assert_true(
-  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')
-     and module = 'tasks' and item_type = 'task' and label = 'Paint the hall'),
-  'Carol sees it in the Home trash');
+  (select count(*) = 0 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')),
+  'Carol, a member, does not see it in the Home trash (S16-4: Owner and managers only)');
+select tests.assert_true(
+  (select outcome = 'not_found' from public.restore_trash_entries(array[tests.i('e-t1')])),
+  'Nor restores it');
 select tests.act_as('bob');
 select tests.assert_true(
   (select count(*) = 0 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')),
@@ -522,15 +524,36 @@ select tests.assert_true(
 select tests.assert_true(
   (select outcome = 'not_found' from public.restore_trash_entries(array[tests.i('e-t1')])),
   'Nor restore it');
+select tests.assert_true(not public.can_restore_trash_entry(tests.i('e-t1')),
+  'And a delete would offer him no Undo');
+-- Review M-4: a tasks manager sees and may restore everything deleted in Tasks, not only their own.
 select tests.act_as('alice');
+select public.set_administrator_capabilities(tests.i('home-a'), tests.i('m-bob-a'), array['manageHomeTasks']);
+select tests.act_as('bob');
 select tests.assert_true(
-  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')),
-  'The Owner sees it');
-
+  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1'))
+    and public.can_restore_trash_entry(tests.i('e-t1')),
+  'With manageHomeTasks an Administrator sees a Member''s deleted task and may restore it');
+select tests.assert_true(
+  not exists (select 1 from public.list_trash(tests.i('home-a')) where module <> 'tasks'),
+  'But nothing of the modules he does not manage');
+select tests.act_as('alice');
+select public.set_administrator_capabilities(tests.i('home-a'), tests.i('m-bob-a'), array[]::text[]);
 select tests.act_as('carol');
+select tests.assert_true(not public.can_restore_trash_entry(tests.i('e-t1')),
+  'The Member who deleted it may not restore it, so no Undo is offered to her');
+select tests.assert_true(not public.can_restore_trash_entry(gen_random_uuid()), 'Nor for an unknown id');
+select tests.act_as('alice');
+select tests.assert_true(public.can_restore_trash_entry(tests.i('e-t1')), 'The Owner may');
+select tests.assert_true(
+  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')
+     and module = 'tasks' and item_type = 'task' and label = 'Paint the hall'),
+  'The Owner sees it');
 select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('e-t1')])),
-  'Carol restores it');
+  'The Owner restores it');
+
+select tests.act_as('carol');
 select tests.assert_true(
   (select jsonb_array_length(public.get_task(tests.i('t1')) -> 'subtasks') = 1
      and (public.get_task(tests.i('t1')) ->> 'commentCount')::integer = 1),
@@ -558,7 +581,6 @@ select tests.assert_true(
   (select count(*) = 0 from public.list_task_lists(tests.i('home-a'), true) where id = tests.i('l-a2')),
   'And is no longer listed');
 
-select tests.act_as('carol');
 select tests.assert_true(
   (select outcome = 'needs_resolution' and conflict = 'list_unavailable' and options = array['move_to_list']
     from public.restore_trash_entries(array[tests.i('e-t1b')])),

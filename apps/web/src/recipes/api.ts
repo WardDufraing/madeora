@@ -207,7 +207,8 @@ export interface RecipeDetail {
 /** One Home in the share panel: shared now, paused (since it was deleted), or one to share with. */
 export interface RecipeShare {
   readonly homeId: string;
-  readonly homeName: string;
+  /** Null for a destination Home the caller is not a member of (S25-L6): never named to them. */
+  readonly homeName: string | null;
   readonly state: "active" | "paused" | "available";
   readonly canEdit: boolean;
   readonly sharedAt: string | null;
@@ -220,7 +221,8 @@ export interface RecipeDeleteImpact {
   readonly homeId: string | null;
   readonly shares: readonly {
     readonly homeId: string;
-    readonly homeName: string;
+    /** Null for a destination Home the caller is not a member of (S25-L6). */
+    readonly homeName: string | null;
     readonly canEdit: boolean;
   }[];
   readonly favoriteCount: number;

@@ -614,6 +614,8 @@ select tests.act_as_owner();
 
 update private.account_activity_events set created_at = now() - interval '13 months'
   where user_id = (select id from ids where name = 'ann') and kind = 'password_changed';
+update private.account_security_events set created_at = now() - interval '13 months'
+  where user_id = (select id from ids where name = 'ann') and kind = 'session_reported';
 select tests.act_as_user((select id from ids where name = 'ann'));
 select tests.assert_row_count(
   $q$select * from public.list_my_activity(p_kinds => array['password_changed'])$q$, 0,
@@ -631,6 +633,10 @@ select tests.assert_true(
     and not exists (select 1 from private.security_reports r
                     where r.user_id = (select id from ids where name = 'ann') and r.rows is not null),
   'expired reports are kept a week, but their frozen rows go at once (S38-M3)');
+select tests.assert_true(
+  exists (select 1 from private.account_security_events e
+          where e.user_id = (select id from ids where name = 'ann') and e.kind = 'session_reported'),
+  'the purge keeps old security audit events (S38-M7)');
 select tests.act_as_user((select id from ids where name = 'ann'));
 select tests.assert_denied($q$select public.purge_account_activity()$q$, 'only the job purges');
 select tests.act_as_owner();

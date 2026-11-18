@@ -97,6 +97,16 @@ describe("RecoveryNotice", () => {
     );
   });
 
+  it("tells other members until when they can object (S12b-L6)", async () => {
+    state.cases = [
+      openCase("member", { state: "approved", objectionEndsAt: "2026-10-29T16:00:00Z" }),
+    ];
+    await show();
+    expect(screen.getByTestId("recovery-member-deadline")).toHaveTextContent(
+      "You can object until 29/10/2026 16:00.",
+    );
+  });
+
   it("drops the link once the member has objected, and hides a stopped case", async () => {
     state.cases = [openCase("member", { objected: true })];
     await show();

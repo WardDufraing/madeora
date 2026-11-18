@@ -505,9 +505,23 @@ describe("shopping items", () => {
         )
       ).status,
     ).toBe(200);
-    answers({ delete_shopping_item: [{ outcome: "deleted", entry_id: ENTRY }] });
+    answers({
+      delete_shopping_item: [{ outcome: "deleted", entry_id: ENTRY }],
+      can_restore_trash_entry: true,
+    });
     const deleted = await deleteItem(request(`/items/${ITEM}`, "DELETE", {}), itemParams(ITEM));
-    expect(await deleted.json()).toEqual({ id: ITEM, entryId: ENTRY });
+    expect(await deleted.json()).toEqual({ id: ITEM, entryId: ENTRY, restorable: true });
+    expect(state.rpc).toHaveBeenCalledWith("can_restore_trash_entry", { p_entry_id: ENTRY });
+    // S16-4: a Member may delete but not restore from the Home trash, so no Undo is offered.
+    answers({
+      delete_shopping_item: [{ outcome: "deleted", entry_id: ENTRY }],
+      can_restore_trash_entry: false,
+    });
+    const memberDeleted = await deleteItem(
+      request(`/items/${ITEM}`, "DELETE", {}),
+      itemParams(ITEM),
+    );
+    expect(await memberDeleted.json()).toEqual({ id: ITEM, entryId: ENTRY, restorable: false });
     answers({
       clear_completed_shopping_items: [
         { outcome: "cleared", cleared: 2, skipped: 1, entry_id: ENTRY },

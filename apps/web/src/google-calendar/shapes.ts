@@ -70,6 +70,8 @@ export const googleConnectionSchema = z.object({
         state: z.enum(changeStates),
         errorCode: z.string().nullable(),
         updatedAt: z.string(),
+        /** S34-M6: Google no longer lists the change's calendar; a conflict can only be dropped. */
+        stale: z.boolean().default(false),
       }),
     )
     .default([]),

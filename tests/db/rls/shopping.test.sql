@@ -367,12 +367,17 @@ select tests.assert_true(
     where x ->> 'id' in (tests.i('i-batch-1')::text, tests.i('i-batch-2')::text)),
   'They are gone from the list');
 select tests.assert_true(
+  (select count(*) = 0 from public.list_trash(tests.i('home-a')) where item_type = 'shopping_clear'),
+  'A member does not see the Home trash, not even her own clear (S16-4: Owner and managers only)');
+select tests.act_as('alice');
+select tests.assert_true(
   (select count(*) = 1 from public.list_trash(tests.i('home-a')) where item_type = 'shopping_clear'),
-  'And in the trash as one entry');
+  'The Owner sees it in the trash as one entry');
 select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(
     array[(select entry_id from public.list_trash(tests.i('home-a')) where item_type = 'shopping_clear')])),
   'Restoring the clear');
+select tests.act_as('carol');
 select tests.assert_true(
   (select count(*) = 2 from jsonb_array_elements(public.get_shopping_list(tests.i('l-groceries')) -> 'items') x
     where x ->> 'id' in (tests.i('i-batch-1')::text, tests.i('i-batch-2')::text) and x ->> 'completedAt' is not null),

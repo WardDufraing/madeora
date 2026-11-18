@@ -406,8 +406,8 @@ select tests.assert_row_count($$select * from public.list_trash() where label = 
   'Home items are not in Alice''s personal trash');
 select tests.act_as('carol');
 select tests.assert_true(
-  (select count(*) = 2 and bool_and(deleted_by_me) from public.list_trash((select id from ids where name = 'home-a'))),
-  'A Member sees only what they deleted');
+  (select count(*) = 0 from public.list_trash((select id from ids where name = 'home-a'))),
+  'A Member sees nothing of the Home trash, not even what they deleted (S16-4: Owner and managers only)');
 select tests.assert_denied(
   $$select * from public.list_trash((select id from ids where name = 'home-b'))$$,
   'Carol cannot list a Home she is not in');
@@ -428,10 +428,16 @@ select tests.assert_true(
   (select outcome from public.purge_trash_entries(array[tests.e('h-alice')])) = 'not_found',
   'Carol cannot purge it');
 select tests.assert_true(
-  (select outcome from public.restore_trash_entries(array[tests.e('h-carol')])) = 'restored',
-  'Carol restores her own');
-select tests.assert_true(tests.file_state('hf') = 'deleted', 'Alice''s Home file is untouched');
+  (select outcome from public.restore_trash_entries(array[tests.e('h-carol')])) = 'not_found',
+  'Nor her own: only the Owner and managers restore from a Home trash (S16-4)');
+select tests.assert_true(
+  (select outcome from public.purge_trash_entries(array[tests.e('h-carol')])) = 'not_found',
+  'Or purge it');
 select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome from public.restore_trash_entries(array[tests.e('h-carol')])) = 'restored',
+  'The Owner restores Carol''s entry');
+select tests.assert_true(tests.file_state('hf') = 'deleted', 'Alice''s Home file is untouched');
 select tests.assert_true(
   (select used_bytes = 0 and deleted_bytes = 400 from public.home_storage_usage((select id from ids where name = 'home-a'))),
   'The Home pool still counts the trashed file');
@@ -450,8 +456,8 @@ select tests.act_as('alice');
 select tests.drop_sample('alice', 'h-alice');
 select tests.act_as('carol');
 select tests.assert_true(
-  (select count(*) = 1 and bool_and(deleted_by_me) from public.list_trash((select id from ids where name = 'home-a'))),
-  'An Administrator without the grant sees only their own');
+  (select count(*) = 0 from public.list_trash((select id from ids where name = 'home-a'))),
+  'An Administrator without the grant sees nothing of it, not even their own');
 select tests.act_as_owner();
 insert into private.home_admin_capabilities (home_id, user_id, capability)
   values ((select id from ids where name = 'home-a'), tests.user_id('carol'), 'manageHomeSettings');

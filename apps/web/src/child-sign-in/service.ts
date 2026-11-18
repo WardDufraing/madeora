@@ -1,13 +1,11 @@
 import "server-only";
 
 import { parseEnv } from "@madeora/config/env";
-import { getPublicEnv } from "@madeora/config/env/public";
-import type { Database } from "@madeora/database";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import { headers } from "next/headers";
 import { z } from "zod";
 
+import { createServiceRoleClient, type ServiceRoleClient } from "@/auth/service-role";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
 import { dummyChildSecretHash, verifyChildSecret } from "./secret-hash";
@@ -26,25 +24,23 @@ const serviceEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().regex(SERVICE_KEY).optional(),
 });
 
-let cached: { readonly client: SupabaseClient<Database>; readonly key: string } | null | undefined;
+let cached: { readonly client: ServiceRoleClient; readonly key: string } | null | undefined;
 
 /** The service-role client, or `null` where this environment has no secret key configured. */
-function service(): { readonly client: SupabaseClient<Database>; readonly key: string } | null {
+function service(): { readonly client: ServiceRoleClient; readonly key: string } | null {
   if (cached !== undefined) return cached;
   const key = parseEnv(serviceEnvSchema, process.env).SUPABASE_SERVICE_ROLE_KEY;
   cached = key
     ? {
         key,
-        client: createClient<Database>(getPublicEnv().NEXT_PUBLIC_SUPABASE_URL, key, {
-          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        }),
+        client: createServiceRoleClient(key),
       }
     : null;
   return cached;
 }
 
 /** The service-role client for the other household-device flows (`null`: not configured). */
-export function householdService(): SupabaseClient<Database> | null {
+export function householdService(): ServiceRoleClient | null {
   try {
     return service()?.client ?? null;
   } catch {
@@ -121,7 +117,7 @@ export function sessionIdOf(accessToken: string): string | null {
 
 /** Steps 2 and 3, once the secret matched: issue the session and register it. */
 async function issueSession(
-  client: SupabaseClient<Database>,
+  client: ServiceRoleClient,
   attemptId: string,
 ): Promise<ChildSignInResult> {
   const verified = await client.rpc("child_sign_in_verified", { p_attempt_id: attemptId });
@@ -137,10 +133,9 @@ async function issueSession(
   }
   if (row?.outcome !== "verified" || !row.alias_email) return { kind: "invalid" };
 
-  const link = await client.auth.admin.generateLink({ type: "magiclink", email: row.alias_email });
-  const tokenHash = link.data.properties?.hashed_token;
-  if (link.error || !tokenHash) {
-    log("child_sign_in.link_failed", link.error?.code);
+  const { tokenHash, error: linkError } = await client.magicLinkToken(row.alias_email);
+  if (linkError) {
+    log("child_sign_in.link_failed", linkError.code);
     return { kind: "unavailable" };
   }
   // Sets the session cookies on this response, replacing any session this browser had.
@@ -168,7 +163,7 @@ async function issueSession(
 }
 
 async function checkAttempt(
-  client: SupabaseClient<Database>,
+  client: ServiceRoleClient,
   attempt: { readonly data: AttemptRow | undefined; readonly hash: string | null },
   secret: string,
 ): Promise<ChildSignInResult> {

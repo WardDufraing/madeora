@@ -565,15 +565,24 @@ select tests.assert_true(
   (select count(*) = 0 from public.authorize_file_read(tests.i('f-second'))), 'Or its cover');
 select tests.act_as('carol');
 select tests.assert_true(
+  (select outcome = 'not_found' from public.restore_trash_entries(array[tests.i('e-cover')])),
+  'Carol, a member, cannot restore it from the Home trash (S16-4: Owner and managers only)');
+select tests.act_as('alice');
+select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('e-cover')])),
-  'She restores it');
+  'The Owner restores it');
+select tests.act_as('carol');
 select tests.assert_true(tests.file_status('f-second') = 'ready'
   and (public.get_recipe(tests.i('d-cover')) ->> 'coverFileId')::uuid = tests.i('f-second'),
   'With its cover');
 insert into ids select 'e-cover-2', entry_id from public.delete_recipe(tests.i('d-cover')) where outcome = 'deleted';
 select tests.assert_true(
+  (select outcome = 'not_found' from public.purge_trash_entries(array[tests.i('e-cover-2')])),
+  'Nor can she delete it for good');
+select tests.act_as('alice');
+select tests.assert_true(
   (select outcome = 'purged' from public.purge_trash_entries(array[tests.i('e-cover-2')])),
-  'And deletes it for good');
+  'The Owner deletes it for good');
 select tests.act_as_owner();
 select tests.assert_true(not exists (select 1 from private.recipes where id = tests.i('d-cover')),
   'The row is gone');

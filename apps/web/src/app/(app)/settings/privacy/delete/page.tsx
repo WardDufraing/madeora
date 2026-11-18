@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
-import { listMyDeactivationBlockers } from "@/activity/server";
+import { listMyDeactivationBlockers, listMyGuardianHoldWarnings } from "@/activity/server";
 import { parseAccountChangeAction } from "@/auth/google-reauth";
 import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { getAccountSecurity } from "@/auth/security-server";
 import { verifiedTotpFactor } from "@/auth/two-factor";
 import { FormAlert } from "@/components/auth/form-alert";
+import { GuardianHoldWarning } from "@/components/children/guardian-hold-warning";
 import { CancelPendingCopies } from "@/components/copies/cancel-pending-copies";
 import { DeleteAccount } from "@/components/deletion/delete-account";
 import { PageHeader } from "@/components/shell/page-header";
@@ -35,7 +36,7 @@ interface DeleteAccountPageProps {
  */
 export default async function DeleteAccountPage({ searchParams }: DeleteAccountPageProps) {
   await requireIdentity();
-  const [t, tCopies, params, user, security, blockers, openCopies, shared, formats] =
+  const [t, tCopies, params, user, security, blockers, openCopies, shared, formats, holds] =
     await Promise.all([
       getTranslations("Deletion"),
       getTranslations("HomeCopies"),
@@ -46,6 +47,7 @@ export default async function DeleteAccountPage({ searchParams }: DeleteAccountP
       listMyOpenHomeCopies(),
       listMySharedCopyableItems(),
       getDateTimeFormats(),
+      listMyGuardianHoldWarnings(),
     ]);
   if (!user) return null;
   const hasPassword = security.status === "ok" ? security.value.hasPassword : true;
@@ -117,6 +119,9 @@ export default async function DeleteAccountPage({ searchParams }: DeleteAccountP
           </Card>
         ) : null}
         <Card title={t("accountConfirmTitle")}>
+          <div className="mb-4 empty:hidden">
+            <GuardianHoldWarning warnings={holds} context="account" />
+          </div>
           {blockers.status === "ok" ? (
             <DeleteAccount
               email={user.email ?? ""}

@@ -1061,6 +1061,7 @@ export type Database = {
           title: string;
         }[];
       };
+      can_restore_trash_entry: { Args: { p_entry_id: string }; Returns: boolean };
       cancel_account_recovery: { Args: Record<PropertyKey, never>; Returns: boolean };
       cancel_backup_email_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       cancel_child_guardian_offer: { Args: { p_offer_id: string }; Returns: string };
@@ -2689,6 +2690,16 @@ export type Database = {
           state: string;
         }[];
       };
+      home_photo_storage_usage: {
+        Args: { p_home_id: string };
+        Returns: {
+          allowance_bytes: number;
+          deleted_bytes: number;
+          reserved_bytes: number;
+          used_bytes: number;
+          warning_level: number;
+        }[];
+      };
       home_storage_usage: {
         Args: { p_home_id: string };
         Returns: {
@@ -3530,6 +3541,14 @@ export type Database = {
         Returns: {
           has_pin: boolean;
           locked_until: string;
+        }[];
+      };
+      my_guardian_hold_warnings: {
+        Args: { p_home_id?: string };
+        Returns: {
+          children: number;
+          home_id: string;
+          home_name: string;
         }[];
       };
       my_notification_channels: {

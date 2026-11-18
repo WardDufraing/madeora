@@ -318,6 +318,8 @@ select tests.assert_true(tests.upd('k2', 'amend', 4) = 'not_permitted', 'Nor ame
 select tests.assert_true(tests.addo('k15', 'n-water', 1) = 'added'
   and tests.active_checkins('n-water', tests.d(0)) = 1 and tests.streak('n-water') = 2,
   '8/8 again completes the day with one active check-in');
+-- 'habits' notifications are opt-in: Carol turns them on, so she hears about a correction (S29-L9).
+select public.set_notification_preference('habits', 'in_app', true, null);
 select tests.act_as('bob');
 select tests.assert_true(tests.upd('k3', 'void', null, 'Typed twice') = 'corrected', 'Bob voids Carol''s 2 glasses');
 select tests.assert_true(tests.total('n-water', tests.d(0)) = 6 and tests.active_checkins('n-water', tests.d(0)) = 0,
@@ -339,6 +341,16 @@ select tests.assert_true(
   tests.private_count(format('select count(*) from private.habit_events where habit_id = %L and kind in (%L, %L)',
     tests.i('n-water'), 'checked_in', 'undone')) = 0,
   'A completion by total writes no check-in events that name a person');
+select tests.assert_true(
+  (select count(*) = 0 from public.notifications where kind = 'habit.contribution_corrected'),
+  'Correcting his own contribution tells Bob nothing');
+select tests.act_as('carol');
+select tests.assert_true(
+  (select count(*) = 1 and bool_and(params ->> 'habitId' = tests.i('n-water')::text
+      and params ->> 'action' = 'void' and not params ? 'reason')
+    from public.notifications where kind = 'habit.contribution_corrected'),
+  'Carol is told that a manager corrected her contribution, without the reason (S29-L9)');
+select tests.act_as('bob');
 
 -- Who sees the contributions --------------------------------------------------------------------------------
 
