@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -329,6 +329,7 @@ export function HouseholdDisplaysManager({
   const [renaming, setRenaming] = useState<string | null>(null);
   // The display a manager asked to revoke; revoking happens only after they confirm (S43-L3).
   const [confirming, setConfirming] = useState<HouseholdDisplayView | null>(null);
+  const listHeading = useRef<HTMLHeadingElement>(null);
   const revoke = useMutation<undefined, MemberActionError, string>({
     mutationFn: async (displayId) => {
       await revokeDisplay(homeId, displayId);
@@ -338,6 +339,9 @@ export function HouseholdDisplaysManager({
       setConfirming(null);
       setNotice({ kind: "revoked" });
       router.refresh();
+      // The row's Revoke button the dialog returns focus to moves to "Recently revoked" and goes;
+      // focus goes to the list instead, so keyboard users keep their place.
+      requestAnimationFrame(() => listHeading.current?.focus());
     },
   });
   const active = displays.filter((display) => display.active);
@@ -374,7 +378,12 @@ export function HouseholdDisplaysManager({
         </FormAlert>
       ) : null}
       <section aria-labelledby="displays-list-title" className="flex flex-col gap-3">
-        <h2 id="displays-list-title" className="text-section-title font-semibold text-fg">
+        <h2
+          ref={listHeading}
+          id="displays-list-title"
+          tabIndex={-1}
+          className="text-section-title font-semibold text-fg focus:outline-none"
+        >
           {t("listTitle")}
         </h2>
         {active.length === 0 ? (

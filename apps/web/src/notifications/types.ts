@@ -1,3 +1,4 @@
+import type { HabitWeekStart } from "@madeora/domain/habits";
 import type {
   NotificationChannel,
   OptionalNotificationCategory,
@@ -75,6 +76,15 @@ export interface NotificationView {
   readonly eventOn: string | null;
   readonly eventTitle: string | null;
   readonly weekly: boolean;
+  /**
+   * A weekly habit reminder's habit week (S28-L5): the habit's week start and its own today, read
+   * now with the viewer's access; null for other notices, or when the habit is no longer active or
+   * visible.
+   */
+  readonly habitWeek: {
+    readonly weekStart: HabitWeekStart;
+    readonly today: string;
+  } | null;
   /** A numeric habit's progress when a reminder was sent (S29); null for other habits. */
   readonly progress: {
     readonly total: number;

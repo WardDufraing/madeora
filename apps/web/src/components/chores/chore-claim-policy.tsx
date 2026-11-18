@@ -78,6 +78,10 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
   const [open, setOpen] = useState(false);
   const [impact, setImpact] = useState<ClaimPolicyImpact | null>(null);
   const opener = useRef<HTMLButtonElement>(null);
+  // One automatic re-preview per submit: if the server keeps refusing for unconfirmed effects that
+  // its preview does not report, the refusal is shown instead of looping.
+  const rePreviewed = useRef(false);
+  const [refusedAgain, setRefusedAgain] = useState(false);
   const defaults: FormValues = {
     mode: policy.claimMode,
     memberIds: (policy.members ?? []).filter((id): id is string => id !== null),
@@ -114,7 +118,13 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
     {
       onError: (error) => {
         // Something changed since the preview: show the new effects instead of an error.
-        if (error.failure === "needsConfirmation") preview.mutate(form.getValues());
+        if (error.failure !== "needsConfirmation") return;
+        if (rePreviewed.current) {
+          setRefusedAgain(true);
+          return;
+        }
+        rePreviewed.current = true;
+        preview.mutate(form.getValues());
       },
     },
   );
@@ -135,13 +145,16 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
   );
   const busy = preview.busy || save.busy;
   // A refusal for unconfirmed effects is answered with the new preview, not shown as an error.
-  const error = (save.error?.failure === "needsConfirmation" ? null : save.error) ?? preview.error;
+  const error =
+    (save.error?.failure === "needsConfirmation" && !refusedAgain ? null : save.error) ??
+    preview.error;
   const mode = useWatch({ control: form.control, name: "mode" });
   const chosen = useWatch({ control: form.control, name: "memberIds" });
   const autoRelease = useWatch({ control: form.control, name: "autoRelease" });
   const submit = form.handleSubmit((values) => {
     setImpact(null);
     save.reset();
+    setRefusedAgain(false);
     preview.mutate(values);
   });
 
@@ -172,6 +185,8 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
           <form
             noValidate
             onSubmit={(event) => {
+              // A new submit may re-preview once again.
+              rePreviewed.current = false;
               void submit(event);
             }}
             className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"

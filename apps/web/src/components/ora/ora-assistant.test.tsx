@@ -199,7 +199,7 @@ describe("Ora assistant", () => {
     const surface = screen.getByRole("dialog", { name: "Ora" });
     expect(surface).toHaveFocus();
     expect(launcher()).toHaveAttribute("aria-expanded", "true");
-    // One stable name; aria-expanded alone says whether it is open (S45-L2).
+    // One stable name; aria-expanded alone says whether it is open (S45-L1).
     expect(launcher()).toHaveAccessibleName("Ora, your Madeora helper");
     expect(await screen.findByRole("button", { name: "Open tasks" })).toBeInTheDocument();
     expect(screen.getByTestId("ora-context")).toHaveTextContent("Helping in Personal");
@@ -248,13 +248,13 @@ describe("Ora assistant", () => {
       body: { tool: "open-tasks", homeId: null },
     });
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
-    // Focus goes to the page, not to the hidden surface or body (S45-L4).
+    // Focus goes to the page, not to the hidden surface or body (S45-L3).
     await waitFor(() => {
       expect(screen.getByRole("main")).toHaveFocus();
     });
   });
 
-  it("does not navigate when the answer arrives after the person switched place (S45-L1)", async () => {
+  it("does not navigate when the answer arrives after the person switched place (S45-L4)", async () => {
     const user = userEvent.setup();
     let release: (value: Response) => void = () => undefined;
     const pending = new Promise<Response>((resolve) => {
@@ -336,7 +336,7 @@ describe("Ora assistant", () => {
     await user.click(screen.getByRole("button", { name: "Page button" }));
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
 
-    // Escape that a page dialog already handled leaves Ora open (S45-L3).
+    // Escape that a page dialog already handled leaves Ora open (S45-L2).
     await user.click(launcher());
     const prevent = (event: KeyboardEvent) => {
       if (event.key === "Escape") event.preventDefault();
@@ -371,7 +371,7 @@ describe("Ora assistant", () => {
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
   });
 
-  it("also closes with a swipe down on the header, but not from its buttons (S45-L5)", () => {
+  it("also closes with a swipe down on the header, but not from its buttons or by mouse (S45-L5)", () => {
     setup();
     fireEvent.click(launcher());
     const header = screen.getByTestId("ora-sheet-header");
@@ -382,8 +382,12 @@ describe("Ora assistant", () => {
     fireEvent.pointerDown(close, { clientY: 100, pointerId: 1 });
     fireEvent.pointerUp(close, { clientY: 220, pointerId: 1 });
     expect(screen.getByTestId("ora-surface")).toBeVisible();
-    fireEvent.pointerDown(header, { clientY: 100, pointerId: 3 });
-    fireEvent.pointerUp(header, { clientY: 220, pointerId: 3 });
+    // A mouse drag over the header (a desktop) never closes it.
+    fireEvent.pointerDown(header, { clientY: 100, pointerId: 2, pointerType: "mouse" });
+    fireEvent.pointerUp(header, { clientY: 220, pointerId: 2, pointerType: "mouse" });
+    expect(screen.getByTestId("ora-surface")).toBeVisible();
+    fireEvent.pointerDown(header, { clientY: 100, pointerId: 3, pointerType: "touch" });
+    fireEvent.pointerUp(header, { clientY: 220, pointerId: 3, pointerType: "touch" });
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
   });
 

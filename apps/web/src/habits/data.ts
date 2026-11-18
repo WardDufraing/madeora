@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import type { z } from "zod";
 
-import type { HabitView } from "@madeora/domain/habits";
+import type { HabitView, HabitWeekStart } from "@madeora/domain/habits";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
@@ -192,4 +192,23 @@ export async function habitNoticeNames(
     return new Map();
   }
   return new Map(data.map((row) => [row.habit_id, row.name]));
+}
+
+/**
+ * The habit week of each active habit in the given contexts (a Home id, or null for personal), for
+ * weekly habit reminders (S28-L5): the habit's week start and its own today. Read with the viewer's
+ * session, one list per distinct context; a context that cannot be read adds nothing.
+ */
+export async function habitNoticeWeeks(
+  contexts: readonly (string | null)[],
+): Promise<ReadonlyMap<string, { readonly weekStart: HabitWeekStart; readonly today: string }>> {
+  const weeks = new Map<string, { readonly weekStart: HabitWeekStart; readonly today: string }>();
+  const lists = await Promise.all([...new Set(contexts)].map((homeId) => readHabits(homeId)));
+  for (const list of lists) {
+    if (list.status !== "ok") continue;
+    for (const habit of list.value.habits) {
+      weeks.set(habit.id, { weekStart: habit.weekStart, today: habit.today });
+    }
+  }
+  return weeks;
 }

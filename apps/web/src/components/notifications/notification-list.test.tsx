@@ -66,6 +66,7 @@ function item(overrides: Partial<NotificationView> = {}): NotificationView {
     eventOn: null,
     eventTitle: null,
     weekly: false,
+    habitWeek: null,
     progress: null,
     resumesOn: null,
     automatic: false,
@@ -239,7 +240,8 @@ describe("NotificationList", () => {
     const habitId = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00d1";
     await showWithToasts(
       [
-        // Yesterday's daily reminder, and a weekly one from more than a week ago.
+        // Yesterday's daily reminder, and a weekly one for the habit's previous week: NOW is
+        // Tuesday 2026-11-10, and a Monday week starts on 2026-11-09, so Sunday the 8th is last week.
         item({ kind: "habit.reminder", habitId, habitName: "Walk", onDate: "2026-11-09" }),
         item({
           id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00b1",
@@ -247,22 +249,36 @@ describe("NotificationList", () => {
           habitId,
           habitName: "Swim",
           weekly: true,
-          createdAt: "2026-11-02T08:00:00Z",
+          onDate: "2026-11-08",
+          habitWeek: { weekStart: "monday", today: "2026-11-10" },
+          createdAt: "2026-11-08T08:00:00Z",
         }),
-        // This week's weekly reminder still offers them.
+        // The same Sunday is this week for a habit whose week starts on Sunday.
         item({
           id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00b2",
           kind: "habit.reminder",
           habitId,
           habitName: "Yoga",
           weekly: true,
+          onDate: "2026-11-08",
+          habitWeek: { weekStart: "sunday", today: "2026-11-10" },
           createdAt: "2026-11-08T08:00:00Z",
+        }),
+        // A weekly reminder whose habit week could not be read offers no actions.
+        item({
+          id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a00b3",
+          kind: "habit.reminder",
+          habitId,
+          habitName: "Run",
+          weekly: true,
+          onDate: "2026-11-10",
+          createdAt: "2026-11-10T08:00:00Z",
         }),
       ],
       NOW,
     );
-    const [walk, swim, yoga] = screen.getAllByTestId("notification");
-    for (const old of [walk, swim]) {
+    const [walk, swim, yoga, run] = screen.getAllByTestId("notification");
+    for (const old of [walk, swim, run]) {
       expect(within(old as HTMLElement).queryByRole("button", { name: /Complete/ })).toBeNull();
       expect(within(old as HTMLElement).queryByRole("button", { name: /Snooze/ })).toBeNull();
       expect(within(old as HTMLElement).getByRole("link", { name: "Open" })).toBeInTheDocument();
