@@ -469,6 +469,20 @@ describe("templates", () => {
     expect(retried.status).toBe(200);
   });
 
+  it("accepts the longest valid template in non-ASCII text (S19b-L4)", async () => {
+    answers({ create_task_template: [{ outcome: "created", revision: 1 }] });
+    const body = {
+      id: TEMPLATE,
+      homeId: HOME,
+      ...template,
+      description: "家".repeat(5000),
+      subtasks: Array.from({ length: 100 }, () => "猫".repeat(200)),
+    };
+    expect(new TextEncoder().encode(JSON.stringify(body)).byteLength).toBeGreaterThan(32 * 1024);
+    const response = await createTemplate(request("/task-templates", "POST", body));
+    expect(response.status).toBe(201);
+  });
+
   it.each([
     [{ ...template, name: "" }, "an empty name"],
     [{ ...template, name: "x".repeat(61) }, "a name over 60 characters"],

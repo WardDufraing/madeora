@@ -12,7 +12,8 @@ import { AuthPageTitle } from "../../auth-page-title";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("ChildTransition");
-  return { title: await pageTitle(t("verifyTitle")) };
+  // The token is in the address: never send it on in a Referer header (S42P-L3).
+  return { title: await pageTitle(t("verifyTitle")), referrer: "no-referrer" };
 }
 
 interface VerifyPageProps {

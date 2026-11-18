@@ -161,7 +161,11 @@ const impactSchema = z.object({
 /** What disabling a slot would affect. */
 export async function readSlotImpact(slotId: string): Promise<Read<MealSlotImpact>> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("meal_slot_impact", { p_slot_id: slotId });
+  const { data, error } = await supabase.rpc("meal_slot_impact", {
+    p_slot_id: slotId,
+    // The same day the disable itself uses: a Home's own day wins in the database (S27-L2).
+    ...(await todayArg(null)),
+  });
   if (error) return failed("meals.slot_impact_failed", error);
   const row = data[0];
   if (row?.outcome !== "ok") return { status: "not-found" };

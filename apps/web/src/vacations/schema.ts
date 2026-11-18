@@ -28,8 +28,12 @@ export const absenceReasonSchema = z
 const datesRefine = (stay: { readonly startsOn: string; readonly endsOn: string }) =>
   stay.endsOn >= stay.startsOn;
 
+// The database matches member ids in lower case only (S22-L5), so an id in upper case is
+// lower-cased here rather than refused there.
+const memberIdSchema = id.transform((value) => value.toLowerCase());
+
 export const staySchema = z
-  .strictObject({ memberId: id, startsOn: dateOnlySchema, endsOn: dateOnlySchema })
+  .strictObject({ memberId: memberIdSchema, startsOn: dateOnlySchema, endsOn: dateOnlySchema })
   .refine(datesRefine, { message: "endBeforeStart", path: ["endsOn"] });
 
 const peopleSchema = z

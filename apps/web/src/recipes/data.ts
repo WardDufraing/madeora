@@ -31,6 +31,8 @@ export type Read<T> =
   | { readonly status: "ok"; readonly value: T }
   /** Not a Home the person belongs to (or none such), or not theirs to see. */
   | { readonly status: "not-found" }
+  /** The database refused the request itself as malformed (22023), such as an offset too far. */
+  | { readonly status: "invalid" }
   | { readonly status: "unavailable" };
 
 /** Widens a value to include null, because the generated database types do not. */
@@ -40,6 +42,8 @@ function nullable<T>(value: T): T | null {
 
 function failed<T>(event: string, error: { readonly code?: string }): Read<T> {
   if (error.code === "42501") return { status: "not-found" };
+  // A malformed request is the caller's error, not a failure to log (S24-L6).
+  if (error.code === "22023") return { status: "invalid" };
   logRecipes(event, error.code);
   return { status: "unavailable" };
 }

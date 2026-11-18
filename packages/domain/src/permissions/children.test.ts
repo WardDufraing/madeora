@@ -9,6 +9,7 @@ import {
   childPresetCapabilities,
   compareChildAccess,
   decideChildAction,
+  decideChildCreation,
   effectiveChildCapabilities,
   suggestedPreset,
   type ChildFacts,
@@ -19,6 +20,42 @@ const facts = (overrides: Partial<ChildFacts>): ChildFacts => ({
   guardianRole: null,
   hasPrimaryGuardian: true,
   ...overrides,
+});
+
+describe("adding a child (S41-L4)", () => {
+  const base = {
+    homeRole: "member" as const,
+    callerIneligible: false,
+    mayManageInvitations: false,
+    namesSelfAsGuardian: true,
+  };
+
+  it("lets any adult member add a child they guard themselves", () => {
+    expect(decideChildCreation(base)).toBe(true);
+  });
+
+  it("needs the Owner or invitation rights to name another adult", () => {
+    expect(decideChildCreation({ ...base, namesSelfAsGuardian: false })).toBe(false);
+    expect(
+      decideChildCreation({ ...base, homeRole: "administrator", namesSelfAsGuardian: false }),
+    ).toBe(false);
+    expect(
+      decideChildCreation({
+        ...base,
+        homeRole: "administrator",
+        namesSelfAsGuardian: false,
+        mayManageInvitations: true,
+      }),
+    ).toBe(true);
+    expect(decideChildCreation({ ...base, homeRole: "owner", namesSelfAsGuardian: false })).toBe(
+      true,
+    );
+  });
+
+  it("refuses non-members, children and deactivated accounts, whatever else holds", () => {
+    expect(decideChildCreation({ ...base, homeRole: null })).toBe(false);
+    expect(decideChildCreation({ ...base, homeRole: "owner", callerIneligible: true })).toBe(false);
+  });
 });
 
 describe("child presets", () => {

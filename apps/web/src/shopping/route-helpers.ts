@@ -130,8 +130,10 @@ export function outcomeAnswer(
     case "destination_unavailable":
       return failure(409, "destination-unavailable");
     case "invalid_category":
-    case "invalid_item":
       return failure(409, "invalid-category");
+    // The item is no longer the rule's active item: the person saw an older state (S26-L9).
+    case "invalid_item":
+      return failure(409, "conflict");
     case "already_repeating":
       return failure(409, "already-repeating");
     default:

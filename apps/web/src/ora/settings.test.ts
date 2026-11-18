@@ -31,6 +31,12 @@ describe("oraPatchSchema", () => {
     );
   });
 
+  it("takes a Home colour only on its own (S45-L7)", () => {
+    const homePalette = { homeId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001", palette: "heather" };
+    expect(oraPatchSchema.safeParse({ homePalette }).success).toBe(true);
+    expect(oraPatchSchema.safeParse({ homePalette, enabled: false }).success).toBe(false);
+  });
+
   it("refuses an empty change, unknown fields and values outside the lists", () => {
     for (const value of [
       {},

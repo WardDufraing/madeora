@@ -7,7 +7,9 @@ interface State {
   session: { kind: string };
   screen: Readonly<Record<string, string>>;
 }
-const state = vi.hoisted((): State => ({
+const state = vi.hoisted((): State & { cookieSession: boolean; userError: boolean } => ({
+  cookieSession: false,
+  userError: false,
   kind: "signed-out",
   session: { kind: "ok" },
   screen: { kind: "pending", code: "ABCDEFGH", expiresAt: "2026-11-12T20:10:00Z" },
@@ -41,7 +43,22 @@ vi.mock("@/displays/server", () => ({
     ),
 }));
 vi.mock("@/auth/supabase-server", () => ({
-  createSupabaseServerClient: () => Promise.resolve({ auth: { signOut } }),
+  createSupabaseServerClient: () =>
+    Promise.resolve({
+      auth: {
+        signOut,
+        getSession: () =>
+          Promise.resolve({
+            data: { session: state.cookieSession ? { access_token: "dead" } : null },
+          }),
+        getUser: () =>
+          Promise.resolve(
+            state.userError
+              ? { data: { user: null }, error: { status: 403, code: "user_not_found" } }
+              : { data: { user: { id: "u" } }, error: null },
+          ),
+      },
+    }),
 }));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
@@ -69,6 +86,8 @@ function post(
 }
 
 beforeEach(() => {
+  state.cookieSession = false;
+  state.userError = false;
   state.kind = "signed-out";
   state.session = { kind: "ok" };
   state.screen = { kind: "pending", code: "ABCDEFGH", expiresAt: "2026-11-12T20:10:00Z" };
@@ -163,6 +182,22 @@ describe("POST /api/v1/display/reset", () => {
   it("never signs a working display out", async () => {
     state.kind = "display";
     expect((await post(reset, "reset", {})).status).toBe(409);
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it("clears the dead cookies of a display whose Auth user is gone (S43-L10)", async () => {
+    state.kind = "signed-out";
+    state.cookieSession = true;
+    state.userError = true;
+    expect((await post(reset, "reset", {})).status).toBe(200);
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("leaves a signed-out browser without cookies, and a session Auth accepts, alone", async () => {
+    state.kind = "signed-out";
+    expect((await post(reset, "reset", {})).status).toBe(200);
+    state.cookieSession = true;
+    expect((await post(reset, "reset", {})).status).toBe(200);
     expect(signOut).not.toHaveBeenCalled();
   });
 

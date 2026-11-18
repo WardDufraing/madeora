@@ -2,6 +2,7 @@ import "server-only";
 
 import type { z } from "zod";
 
+import { nullableArg } from "@/api/rpc-args";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
 import {
@@ -129,8 +130,8 @@ export async function readHomeCare(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("list_home_pet_care", {
     p_home_id: homeId,
-    // The generated types read every parameter as required; null means every pet.
-    p_pet_id: options.petId as string,
+    // null means every pet.
+    p_pet_id: nullableArg(options.petId),
     p_days: options.days,
     p_who: options.who,
     p_limit: options.count,

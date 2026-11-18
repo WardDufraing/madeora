@@ -545,6 +545,8 @@ describe("slots and settings", () => {
       params({ slotId: SLOT }),
     );
     expect(await read.json()).toEqual({ impact });
+    // The same Personal day as the disable (S27-L2), not the database's UTC day.
+    expect(state.rpc).toHaveBeenCalledWith("meal_slot_impact", { p_slot_id: SLOT, p_today: today });
     const moved = await moveSlot(
       request(`/slots/${SLOT}/move`, "POST", { direction: "up" }),
       params({ slotId: SLOT }),

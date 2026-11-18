@@ -5,7 +5,7 @@ import {
   json,
   outcomeFailure,
   readMemberMutation,
-  requireHomeAction,
+  requireChildCreation,
 } from "@/members/manage-server";
 
 const MAX_BODY_BYTES = 1024;
@@ -26,7 +26,7 @@ export async function POST(request: Request, { params }: ChildrenRouteContext): 
   if (!input.ok) return input.response;
   const { homeId } = await params;
 
-  const allowed = await requireHomeAction(homeId, "home.members.view");
+  const allowed = await requireChildCreation(homeId, input.data.primaryGuardianMembershipId);
   if (!allowed.ok) return allowed.response;
 
   const supabase = await createSupabaseServerClient();

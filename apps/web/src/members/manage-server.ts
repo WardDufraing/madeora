@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  decideChildCreation,
   decideHomeAction,
   decideMemberAction,
   isDelegableCapability,
@@ -212,6 +213,35 @@ export async function requireMemberAction(
   );
   if (!decision.allowed) return { ok: false, response: failure(403, "not-permitted") };
   return { ok: true, context: found.context, target };
+}
+
+/**
+ * Whether the caller may add a child naming `guardianMembershipId` as primary guardian (S41-L4),
+ * asked of the permission engine with the caller's current membership, grants and own directory
+ * row (never the request). `public.create_child` decides again under the Home lock, including
+ * whether the named adult is eligible.
+ */
+export async function requireChildCreation(
+  homeId: string,
+  guardianMembershipId: string,
+): Promise<Allowed<{ readonly context: HomeContext }>> {
+  const found = await getHomeContext(homeId);
+  if (found.status === "unavailable") return { ok: false, response: failure(500, "failed") };
+  if (found.status === "not-found") return { ok: false, response: failure(404, "not-found") };
+  const directory = await getHomeDirectory(found.context.home.id);
+  if (directory.status === "unavailable") return { ok: false, response: failure(500, "failed") };
+  if (directory.status === "not-found") return { ok: false, response: failure(404, "not-found") };
+  const self = directory.members.find((member) => member.isSelf);
+  if (!self) return { ok: false, response: failure(404, "not-found") };
+  const { home, membership } = found.context;
+  const allowed = decideChildCreation({
+    homeRole: membership.role,
+    callerIneligible: self.isChild === true || self.isInactive === true,
+    mayManageInvitations: decideHomeAction(home.id, membership, "home.invitations.manage").allowed,
+    namesSelfAsGuardian: self.membershipId === guardianMembershipId,
+  });
+  if (!allowed) return { ok: false, response: failure(403, "not-permitted") };
+  return { ok: true, context: found.context };
 }
 
 /** Answers for the outcomes the database functions share. */

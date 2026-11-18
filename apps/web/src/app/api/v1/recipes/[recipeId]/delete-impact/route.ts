@@ -19,6 +19,7 @@ export async function GET(_request: Request, { params }: RecipeRouteContext): Pr
   const impact = await getDeleteImpact(recipeId);
   if (impact.status === "not-found") return failure(404, "not-found");
   if (impact.status === "not-permitted") return failure(403, "not-permitted");
+  if (impact.status === "invalid") return failure(400, "invalid");
   if (impact.status === "unavailable") return failure(500, "failed");
   return json(200, impact.value);
 }

@@ -105,6 +105,28 @@ describe("recording a vacation", () => {
     expect(args).not.toHaveProperty("p_reminder_days");
   });
 
+  it("sends a member id given in upper case in lower case (S22-L5)", async () => {
+    answers({ create_home_vacation: [{ outcome: "preview", impact: null, revision: null }] });
+    const people = newVacation.people.map((p) => ({ ...p, memberId: p.memberId.toUpperCase() }));
+    const response = await createVacation(
+      request("/vacations", "POST", { ...newVacation, people }),
+    );
+    expect(response.status).toBe(200);
+    expect(state.rpc.mock.calls[0]?.[1]?.p_people).toEqual(newVacation.people);
+  });
+
+  it("refuses the same person twice in different letter case", async () => {
+    const first = newVacation.people[0];
+    if (first === undefined) throw new Error("fixture");
+    const twice = {
+      ...newVacation,
+      people: [first, { ...first, memberId: first.memberId.toUpperCase() }],
+    };
+    const response = await createVacation(request("/vacations", "POST", twice));
+    expect(response.status).toBe(400);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
   it("refuses a person twice, a stay ending before it starts and too many people", async () => {
     const twice = {
       ...newVacation,

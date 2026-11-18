@@ -14,6 +14,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!homeId.success) return failure(400, "invalid");
   const tags = await listRecipeTags(homeId.data ?? null);
   if (tags.status === "not-found") return failure(404, "not-found");
+  if (tags.status === "invalid") return failure(400, "invalid");
   if (tags.status === "unavailable") return failure(500, "failed");
   return json(200, { tags: tags.value });
 }

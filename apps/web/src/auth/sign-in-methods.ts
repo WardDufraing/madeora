@@ -28,13 +28,22 @@ function identityEmail(identity: UserIdentity): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-/** What the settings page shows, from the user that Supabase Auth has just confirmed. */
-export function describeSignInMethods(user: Pick<User, "email" | "identities">): SignInMethodsView {
+/**
+ * What the settings page shows, from the user that Supabase Auth has just confirmed. The password
+ * status comes from the database's own rule (`has_password` of `my_account_security`, the same
+ * `private.has_usable_password` that guards unlinking) when it could be read, so a Google-only
+ * account that set a password through "Forgot your password?" reads correctly (S08-LR3). Without
+ * that answer it falls back to the identity list.
+ */
+export function describeSignInMethods(
+  user: Pick<User, "email" | "identities">,
+  hasUsablePassword: boolean | null = null,
+): SignInMethodsView {
   const identities = user.identities ?? [];
   const google = identities.find((identity) => identity.provider === "google");
   return {
     email: user.email ?? "",
-    password: identities.some((identity) => identity.provider === "email"),
+    password: hasUsablePassword ?? identities.some((identity) => identity.provider === "email"),
     google: google ? { email: identityEmail(google) } : null,
   };
 }

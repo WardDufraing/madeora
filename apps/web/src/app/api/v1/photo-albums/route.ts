@@ -1,3 +1,4 @@
+import { nullableArg } from "@/api/rpc-args";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { createAlbumSchema } from "@/photos/schema";
 import { homeOf } from "@/photos/route-helpers";
@@ -12,8 +13,8 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("create_photo_album", {
     p_id: input.data.id,
-    // The generated types read every parameter as required; null is the personal library.
-    p_home_id: homeOf(input.data.owner) as string,
+    // null is the personal library.
+    p_home_id: nullableArg(homeOf(input.data.owner)),
     p_name: input.data.name,
   });
   if (error) return databaseFailure("photos.album_create_failed", error.code);

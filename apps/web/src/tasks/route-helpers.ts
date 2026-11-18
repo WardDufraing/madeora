@@ -8,8 +8,13 @@ import { getVerifiedIdentity } from "@/auth/identity";
 import type { TaskErrorCode, TaskErrorResponse } from "./api";
 import { logTasks } from "./log";
 
-/** Body size limits: a task with its longest description and every label, or a small change. */
-export const TASK_BODY_BYTES = 32 * 1024;
+/**
+ * Body size limits: a task or template with its longest description, every label and every
+ * checklist item, or a small change. Up to 25,200 characters of text fit the schema; in UTF-8 a
+ * character outside ASCII takes up to 3 bytes (4 for a pair), so 96 KiB keeps every valid
+ * non-ASCII body within the cap (S19b-L4).
+ */
+export const TASK_BODY_BYTES = 96 * 1024;
 export const SMALL_BODY_BYTES = 8 * 1024;
 
 /** A JSON answer that no cache may keep. */

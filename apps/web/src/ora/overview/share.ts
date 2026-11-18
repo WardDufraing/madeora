@@ -63,6 +63,21 @@ export function itemsForAudience(
   return kept;
 }
 
+/**
+ * Whether the text for this audience may miss something (S46-L2): only sources that can feed the
+ * text count, so a source the audience may not view, or a Google calendar warning (Google events
+ * never enter the text), does not make it say "may be incomplete" and so does not hint at the
+ * requester's integrations. A truncated read still counts.
+ */
+export function shareIncomplete(overview: Overview, audience: ShareAudience): boolean {
+  const homeId = overview.homeId;
+  if (homeId === null) return false;
+  if (overview.truncated) return true;
+  return overview.notices.some(
+    (notice) => notice.kind === "unavailable" && audienceMayView(homeId, audience, notice.module),
+  );
+}
+
 export interface ShareLabels {
   readonly title: (range: { from: string; to: string; scope: "day" | "week" }) => string;
   readonly context: (home: string) => string;
@@ -111,7 +126,7 @@ export function composeShareText(
     }
   }
   lines.push("");
-  if (overview.incomplete) lines.push(labels.incomplete);
+  if (shareIncomplete(overview, audience)) lines.push(labels.incomplete);
   lines.push(labels.leftOut);
   return lines.join("\n");
 }

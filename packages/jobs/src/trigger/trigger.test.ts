@@ -176,6 +176,38 @@ describe("sweepOutbox", () => {
   });
 });
 
+describe("sweepOutbox preparation (S38-L11)", () => {
+  it("runs every step even when one fails, and logs the failure as an error with its code", async () => {
+    const store = new FakeJobStore();
+    const lines: { level: string; line: Record<string, unknown> }[] = [];
+    const sweepLogger = createLogger({
+      env: "test",
+      sink: (level, line) =>
+        lines.push({ level, line: JSON.parse(line) as Record<string, unknown> }),
+    });
+    const classify = vi.fn(() => Promise.resolve(3));
+    const failure = Object.assign(new Error("queue failed"), { code: "57014" });
+    await sweepOutbox({
+      store,
+      client: triggerDispatchClient,
+      registry: jobRegistry,
+      logger: sweepLogger,
+      prepare: {
+        googleCalendarSyncs: () => Promise.reject(failure),
+        signInsClassified: classify,
+      },
+    });
+    expect(classify).toHaveBeenCalledOnce();
+    const failed = lines.find(({ line }) => line.event === "jobs.outbox.prepare_failed");
+    expect(failed?.level).toBe("error");
+    expect(failed?.line).toMatchObject({ step: "googleCalendarSyncs", errorCode: "57014" });
+    expect(JSON.stringify(failed?.line)).not.toContain("queue failed");
+    expect(lines.find(({ line }) => line.event === "jobs.outbox.prepared")?.line).toMatchObject({
+      signInsClassified: 3,
+    });
+  });
+});
+
 describe("worker environment", () => {
   const valid = {
     APP_ENV: "development",

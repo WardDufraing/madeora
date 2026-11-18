@@ -1,3 +1,4 @@
+import { nullableArg } from "@/api/rpc-args";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { photoUploadIntentSchema } from "@/photos/schema";
 import { homeOf } from "@/photos/route-helpers";
@@ -24,8 +25,8 @@ export async function POST(request: Request): Promise<Response> {
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("create_photo_intent", {
-    // The generated types read every parameter as required; null is the personal library.
-    p_home_id: homeOf(input.data.owner) as string,
+    // null is the personal library.
+    p_home_id: nullableArg(homeOf(input.data.owner)),
     p_content_type: input.data.contentType,
     p_size: input.data.size,
     p_request_id: input.data.requestId,

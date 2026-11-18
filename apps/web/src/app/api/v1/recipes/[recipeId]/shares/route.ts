@@ -27,6 +27,7 @@ export async function GET(_request: Request, { params }: RecipeRouteContext): Pr
   if (!recipeId) return failure(404, "not-found");
   const shares = await listRecipeShares(recipeId);
   if (shares.status === "not-found") return failure(404, "not-found");
+  if (shares.status === "invalid") return failure(400, "invalid");
   if (shares.status === "unavailable") return failure(500, "failed");
   return json(200, { shares: shares.value });
 }

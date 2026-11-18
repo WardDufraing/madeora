@@ -36,6 +36,7 @@ export async function GET(request: Request, { params }: RecipeRouteContext): Pro
   if (!homeId.success) return failure(400, "invalid");
   const recipe = await getRecipe(recipeId, homeId.data ?? null);
   if (recipe.status === "not-found") return failure(404, "not-found");
+  if (recipe.status === "invalid") return failure(400, "invalid");
   if (recipe.status === "unavailable") return failure(500, "failed");
   return json(200, recipe.value);
 }

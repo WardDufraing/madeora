@@ -83,7 +83,8 @@ export const quantitySchema = z.union([
     ),
 ]);
 
-const unitLabel = z.string().min(1).max(HABIT_QUANTITY.customUnitLength);
+// Trimmed, so the database stores the same label the domain compares (S29-L8).
+const unitLabel = z.string().trim().min(1).max(HABIT_QUANTITY.customUnitLength);
 
 /** A numeric daily target with its unit and quick-add presets. */
 export const habitTrackingInputSchema = z

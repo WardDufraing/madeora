@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 
 import { getVerifiedUser, requireIdentity } from "@/auth/identity";
+import { getAccountSecurity } from "@/auth/security-server";
 import { isGoogleSignInEnabled } from "@/auth/providers";
 import { describeSignInMethods } from "@/auth/sign-in-methods";
 import { verifiedTotpFactor } from "@/auth/two-factor";
@@ -66,6 +67,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     tActivity,
     tPrivacy,
     tOra,
+    security,
   ] = await Promise.all([
     getTranslations("Nav"),
     getTranslations("Settings"),
@@ -88,6 +90,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     getTranslations("Activity"),
     getTranslations("Privacy"),
     getTranslations("OraSettings"),
+    getAccountSecurity(),
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
@@ -137,7 +140,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <Card title={t("signInMethods")} description={t("signInMethodsHint")}>
               <SignInMethodsSetting
                 userId={userId}
-                methods={describeSignInMethods(user)}
+                methods={describeSignInMethods(
+                  user,
+                  security.status === "ok" ? security.value.hasPassword : null,
+                )}
                 twoFactor={verifiedTotpFactor(user) !== null}
                 googleAvailable={googleEnabled}
                 notice={
