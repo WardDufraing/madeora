@@ -1,7 +1,8 @@
 // S26: races the shopping functions must decide in the database. Two members check off the same item
 // at the same moment (one completion, one event); two readers apply a due recurring item at once (one
 // new item); the same item moved to two lists at once (it lands in exactly one); and two members
-// reordering the same list's items at once (both moves apply, no deadlock, no lost item).
+// reordering the same list's items at once (both moves apply, no deadlock, no lost item); and the same
+// copy sent twice at once (one copy; the second answers 'exists', review backlog S26-L1).
 //
 // Like the other concurrency tests this needs overlapping psql sessions, so the data is committed.
 // It uses the seeded users and removes what it created afterwards; the database is a disposable
@@ -24,6 +25,8 @@ const RULE = "6c1a3d95-8a49-4e66-ab4f-3a7b2f1d3507";
 const EGGS = "6c1a3d95-8a49-4e66-ab4f-3a7b2f1d3508";
 const TEA = "6c1a3d95-8a49-4e66-ab4f-3a7b2f1d3509";
 const SOAP = "6c1a3d95-8a49-4e66-ab4f-3a7b2f1d350a";
+const CHEESE = "6c1a3d95-8a49-4e66-ab4f-3a7b2f1d350b";
+const CHEESE_COPY = "6c1a3d95-8a49-4e66-ab4f-3a7b2f1d350c";
 
 function psql(script: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
@@ -179,5 +182,30 @@ select pg_sleep(0.2);`,
   where list_id = '${LIST}' and deleted_at is null and completed_at is null;`,
     );
     expect(positions).toBe("3:3");
+  });
+
+  it("makes one copy when the same copy request arrives twice at once", async () => {
+    const [added] = await as(
+      "alice",
+      `select outcome from public.add_shopping_items('${LIST}', jsonb_build_array(${row(CHEESE, "Kaas")}));`,
+    );
+    expect(added).toBe("created");
+    // Both pass the early existence check before either has inserted; the second waits for the lists
+    // and then hits the primary key, which the function answers as a retry.
+    const results = await Promise.all(
+      [0, 1].map(() =>
+        as(
+          "alice",
+          `select outcome from public.transfer_shopping_item('${CHEESE}', 'copy', '${LIST_2}', 1, null, true, true,
+    '${CHEESE_COPY}');
+select pg_sleep(1);`,
+        ),
+      ),
+    );
+    expect(results.map(([outcome]) => outcome).sort()).toEqual(["copied", "exists"]);
+    const [copies] = await psql(
+      `select count(*) from private.shopping_items where id = '${CHEESE_COPY}';`,
+    );
+    expect(copies).toBe("1");
   });
 });

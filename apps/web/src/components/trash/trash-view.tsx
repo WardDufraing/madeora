@@ -104,16 +104,24 @@ function conflictMessage(kind: string) {
       return "conflictChoreUnavailable";
     case "chore_limit":
       return "conflictChoreLimit";
+    case "series_limit":
+      return "conflictSeriesLimit";
+    case "habit_limit":
+      return "conflictHabitLimit";
     case "recipe_limit":
       return "conflictRecipeLimit";
     case "shopping_list_limit":
       return "conflictShoppingListLimit";
     case "shopping_list_unavailable":
       return "conflictShoppingListUnavailable";
+    case "shopping_list_archived":
+      return "conflictShoppingListArchived";
     case "shopping_item_limit":
       return "conflictShoppingItemLimit";
     case "meal_slot_occupied":
       return "conflictMealSlotOccupied";
+    case "meal_slot_disabled_series":
+      return "conflictMealSlotDisabledSeries";
     case "pet_limit":
       return "conflictPetLimit";
     case "pet_in_trash":

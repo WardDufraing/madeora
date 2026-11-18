@@ -577,12 +577,15 @@ begin
     v_last := v_id;
     v_last_rev := v_rev;
   end loop;
-  perform tests.assert_true(
-    (public.set_goal_achievement(v_last, v_last_rev, true) ->> 'outcome') = 'achieved',
-    'A goal at the limit is achieved');
+  v_rev := (public.set_goal_achievement(v_last, v_last_rev, true) ->> 'revision')::integer;
+  perform tests.assert_true(v_rev is not null, 'A goal at the limit is achieved');
   select c.outcome into v_outcome
     from public.create_goal(gen_random_uuid(), tests.i('home-a'), 'completion', 'One more') c;
   perform tests.assert_true(v_outcome = 'created', 'An achieved goal no longer counts toward the limit');
+  -- Follow-up: reopening that achieved goal would pass the limit again, so it is refused.
+  perform tests.assert_true(
+    (public.set_goal_achievement(v_last, v_rev, false) ->> 'outcome') = 'too_many',
+    'Reopening an achieved goal at the limit is refused');
 end $$;
 select tests.act_as('alice');
 select tests.assert_true(
