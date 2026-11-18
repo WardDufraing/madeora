@@ -418,7 +418,7 @@ select tests.assert_true(tests.complete('c-pause', 'h-daily', tests.d(1)) = 'fut
   'Today stays done');
 select tests.assert_true(
   (select outcome = 'not_permitted' from public.update_habit_pause(
-     tests.pause('h-daily'), 1, 'resume', null, false)),
+     tests.i('h-daily'), tests.pause('h-daily'), 1, 'resume', null, false)),
   'A member cannot resume it');
 -- Paused days are neither done nor missed: pause the streak fixture from today, nothing changes.
 select tests.act_as('alice');
@@ -448,8 +448,12 @@ select tests.assert_true(
   'Days already past are never changed afterwards');
 select tests.act_as('bob');
 select tests.assert_true(
+  (select outcome = 'not_found' from public.update_habit_pause(
+     tests.i('h-streak'), tests.pause('h-daily'), 1, 'resume', null, false)),
+  'A pause is not changed through another habit''s path (S28-L2)');
+select tests.assert_true(
   (select outcome = 'saved' and (impact ->> 'vacationToday')::boolean from public.update_habit_pause(
-     tests.pause('h-daily'), 1, 'resume', null, false)),
+     tests.i('h-daily'), tests.pause('h-daily'), 1, 'resume', null, false)),
   'Bob resumes the manual pause while the vacation still applies');
 select tests.assert_true(tests.notices('carol', 'habit.resumed') = 0,
   'Nobody is told it resumed: the vacation still pauses it');

@@ -542,6 +542,8 @@ select tests.assert_true((select outcome from public.archive_goal(tests.i('g-km'
 select tests.assert_true(tests.add('k16', 'h-run', 5) = 'added', 'And runs 5 km');
 select tests.assert_true(tests.linked(tests.i('g-km')) = tests.hsum('h-run', tests.d(0), tests.d(0)) - 5 + tests.hsum('h-walk', tests.d(0), tests.d(0)),
   'An archived goal is left alone');
+select tests.assert_true(public.change_goal_link_start(tests.i('l-1'), 'beginning', null, true) ->> 'outcome' = 'archived',
+  'Changing the start of a link to an archived goal answers archived, not an empty preview (S30c-L3)');
 select tests.assert_true((select outcome from public.archive_goal(tests.i('g-km'), tests.grev('g-km'), false)) = 'saved',
   'She unarchives it');
 select tests.assert_true(tests.linked(tests.i('g-km')) = tests.hsum('h-run', tests.d(0), tests.d(0)) + tests.hsum('h-walk', tests.d(0), tests.d(0)),

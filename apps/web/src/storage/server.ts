@@ -6,7 +6,9 @@ import { createServiceRoleClient } from "@/auth/service-role";
 
 import { parseWebStorageSettings } from "./config";
 
-export type FinalizeOutcome = "ready" | "not_found" | "expired" | "invalid" | "storage_full";
+/** `not_permitted`: `finalize_photo` only, when the uploader can no longer add to the Home library. */
+export type FinalizeOutcome =
+  "ready" | "not_found" | "expired" | "invalid" | "storage_full" | "not_permitted";
 
 /** The one privileged call the web app makes (ADR 0019). */
 export interface UploadFinalizer {
@@ -43,6 +45,7 @@ const outcomes: readonly FinalizeOutcome[] = [
   "expired",
   "invalid",
   "storage_full",
+  "not_permitted",
 ];
 
 let cached: { readonly storage: Storage | null } | undefined;

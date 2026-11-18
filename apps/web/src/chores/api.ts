@@ -501,6 +501,8 @@ export interface ChoreApproval {
   readonly note: string | null;
   readonly stepsDone: number;
   readonly stepsTotal: number;
+  /** The occurrence's estimate, in minutes (null: none). */
+  readonly minutes: number | null;
   readonly revision: number;
 }
 

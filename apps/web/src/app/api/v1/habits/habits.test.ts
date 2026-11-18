@@ -8,6 +8,7 @@ import { CHECKIN, HABIT, HOME, habitCheckin, habitSummary } from "@/habits/testi
 import { POST as undo } from "../habit-checkins/[checkinId]/undo/route";
 import { POST as snooze } from "../habit-reminders/[notificationId]/snooze/route";
 import { POST as complete } from "./[habitId]/checkins/route";
+import { PATCH as updatePause } from "./[habitId]/pauses/[pauseId]/route";
 import { POST as pause } from "./[habitId]/pauses/route";
 import { POST as create } from "./route";
 import { PATCH as settings } from "./settings/route";
@@ -255,6 +256,23 @@ describe("pausing", () => {
     );
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "conflict", revision: 4 });
+  });
+
+  it("changes a pause only through its own habit's path (S28-L2)", async () => {
+    const PAUSE = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0f01";
+    answers({ update_habit_pause: [{ outcome: "not_found", impact: null, revision: null }] });
+    const response = await updatePause(
+      request(`/habits/${HABIT}/pauses/${PAUSE}`, "PATCH", { revision: 1, action: "resume" }),
+      { params: Promise.resolve({ habitId: HABIT, pauseId: PAUSE }) },
+    );
+    expect(response.status).toBe(404);
+    expect(state.rpc).toHaveBeenCalledWith("update_habit_pause", {
+      p_habit_id: HABIT,
+      p_pause_id: PAUSE,
+      p_expected_revision: 1,
+      p_action: "resume",
+      p_dry_run: false,
+    });
   });
 });
 

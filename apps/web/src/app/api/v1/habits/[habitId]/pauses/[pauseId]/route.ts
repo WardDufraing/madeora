@@ -14,7 +14,8 @@ interface PauseRouteContext {
 
 /**
  * Resumes a current pause now, or moves its resume date to tomorrow or later (or clears it: until
- * resumed). Previews with `preview: true`; a pause that already ended answers `409 pause-ended`.
+ * resumed). Previews with `preview: true`; a pause that already ended answers `409 pause-ended`. A
+ * pause of another habit than the one in the path answers `404 not-found`.
  */
 export async function PATCH(request: Request, { params }: PauseRouteContext): Promise<Response> {
   const input = await readHabitMutation(request, updatePauseSchema);
@@ -26,6 +27,7 @@ export async function PATCH(request: Request, { params }: PauseRouteContext): Pr
   const body = input.data;
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("update_habit_pause", {
+    p_habit_id: habitId,
     p_pause_id: pauseId,
     p_expected_revision: body.revision,
     p_action: body.action,

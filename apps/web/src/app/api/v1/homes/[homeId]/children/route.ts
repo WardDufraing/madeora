@@ -1,3 +1,4 @@
+import { DEFAULT_ACCENT } from "@/accent/accent";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { createChildSchema } from "@/children/schema";
 import {
@@ -35,7 +36,7 @@ export async function POST(request: Request, { params }: ChildrenRouteContext): 
     p_name: input.data.name,
     p_primary_guardian_membership_id: input.data.primaryGuardianMembershipId,
     p_age_band: input.data.ageBand ?? "",
-    p_accent_color: input.data.accentColor,
+    p_accent_color: input.data.accentColor ?? DEFAULT_ACCENT,
     p_request_id: input.data.requestId,
   });
   if (error) return databaseFailure("children.create_failed", error.code);

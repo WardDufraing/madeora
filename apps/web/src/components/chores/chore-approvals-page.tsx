@@ -124,6 +124,9 @@ export async function ChoreApprovalsPage({
                       <span>{t("uncategorized")}</span>
                     )}
                     <span>{t("dueOn", { date: formatTaskDate(item.dueDate, formats) })}</span>
+                    {item.minutes !== null ? (
+                      <span>{t("minutes", { count: item.minutes })}</span>
+                    ) : null}
                     {item.late ? (
                       <span className="font-semibold text-fg">{t("reportedLate")}</span>
                     ) : null}

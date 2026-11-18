@@ -294,6 +294,27 @@ select tests.assert_true(
   'Linking used up the permission'
 );
 
+-- S08-L3: one identity per provider. With a new permission and a finished link flow, a second Google
+-- identity is still refused, and the permission stays unused.
+select tests.act_as_session((select id from ids where name = 'pat'), (select id from ids where name = 'pat_fresh'));
+select public.authorize_sign_in_method_change('link', 'google');
+select tests.act_as_owner();
+select tests.complete_link_flow((select id from ids where name = 'pat'), 'google');
+select tests.assert_denied(
+  format(
+    $q$insert into auth.identities (provider_id, user_id, identity_data, provider)
+       values ('google-pat-second', %L, '{"email": "pat.second@madeora.test"}', 'google')$q$,
+    (select id from ids where name = 'pat')
+  ),
+  'An account that already has a Google identity never gets a second one'
+);
+select tests.assert_true(
+  tests.grant_count((select id from ids where name = 'pat')) = 1,
+  'The refused link did not use up the permission'
+);
+select tests.act_as_owner();
+delete from private.sign_in_method_grants where user_id = (select id from ids where name = 'pat');
+
 -- An expired permission is useless.
 select tests.act_as_session((select id from ids where name = 'other'), (select id from ids where name = 'other_fresh'));
 select public.authorize_sign_in_method_change('link', 'google');

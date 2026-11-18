@@ -511,6 +511,7 @@ export async function listChoreApprovals(homeId: string): Promise<Read<readonly 
         note: nullable(row.note),
         stepsDone: row.steps_done,
         stepsTotal: row.steps_total,
+        minutes: nullable(row.estimated_minutes),
         revision: row.revision,
       };
     }),

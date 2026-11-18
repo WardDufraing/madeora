@@ -258,6 +258,18 @@ select tests.assert_true(public.share_dashboard_template(tests.i('tch'), tests.i
   'A Member may not share a Home-dashboard template');
 select tests.assert_row_count($$select * from public.list_dashboard_templates(tests.i('home-a'))$$, 3,
   'Members see every template shared into the Home');
+-- S17-L2: a Home-template share outlives its sharer's right to share (here: written directly for a
+-- Member, as a share left behind by an Administrator whose grant was revoked). It is no longer listed.
+select tests.act_as_owner();
+insert into private.dashboard_template_shares (template_id, home_id, shared_by)
+  values (tests.i('tch'), tests.i('home-a'), tests.user_id('carol'));
+select tests.act_as('alice');
+select tests.assert_true(
+  not exists (select 1 from public.list_dashboard_templates(tests.i('home-a')) where template_id = tests.i('tch')),
+  'A Home-template share whose sharer may no longer share it is not listed');
+select tests.act_as_owner();
+delete from private.dashboard_template_shares where template_id = tests.i('tch');
+select tests.act_as('carol');
 select tests.assert_true(
   (select not is_mine and shared_home_ids = array[tests.i('home-a')] and name = 'Ochtend'
    from public.list_dashboard_templates() where template_id = tests.i('tp')),

@@ -640,3 +640,37 @@ select tests.assert_true(
 select tests.act_as_user((select id from ids where name = 'ann'));
 select tests.assert_denied($q$select public.purge_account_activity()$q$, 'only the job purges');
 select tests.act_as_owner();
+
+-- S38-L11: one sign-in that fails to classify does not stop the batch. It stays unclassified (and is
+-- logged), and the next sweep picks it up once the cause is gone.
+create function tests.ah_fail_session() returns trigger
+  language plpgsql
+  as $$
+  begin
+    if new.session_id = (select id from ids where name = 'ann_broken') then
+      raise exception 'simulated failure';
+    end if;
+    return new;
+  end
+  $$;
+insert into ids values
+  ('ann_broken', tests.ah_sign_in((select id from ids where name = 'ann'), 'curl/8.0', interval '10 minutes')),
+  ('ann_fine', tests.ah_sign_in((select id from ids where name = 'ann'), 'curl/8.0', interval '9 minutes'));
+create trigger ah_fail_session before insert on private.account_activity_events
+  for each row execute function tests.ah_fail_session();
+select tests.act_as_service_role();
+select public.process_sign_in_events(100);
+select tests.act_as_owner();
+select tests.assert_true(
+  exists (select 1 from private.account_activity_events a where a.session_id = (select id from ids where name = 'ann_fine'))
+  and exists (select 1 from private.account_security_events e
+              where e.session_id = (select id from ids where name = 'ann_broken') and e.kind = 'signed_in'
+                and e.classified_at is null),
+  'a failing sign-in is left unclassified while the next one is classified (S38-L11)');
+drop trigger ah_fail_session on private.account_activity_events;
+select tests.act_as_service_role();
+select public.process_sign_in_events(100);
+select tests.act_as_owner();
+select tests.assert_true(
+  exists (select 1 from private.account_activity_events a where a.session_id = (select id from ids where name = 'ann_broken')),
+  'the next sweep classifies it');

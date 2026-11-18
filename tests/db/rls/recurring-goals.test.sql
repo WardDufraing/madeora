@@ -585,3 +585,32 @@ select tests.assert_true(tests.periods('s-run') = 3
   and (select finalized_at is not null and outcome = 'not_reached' and outcome_total = 60 from private.goals where id = tests.i('g-run-2'))
   and (select target = 80 from private.goals g where g.series_id = tests.i('s-run') and g.period_start = tests.month_start(tests.today())),
   'The moved month closed at 60/80, not reached; the new month takes its target from the schedule');
+
+-- S30b-L2: one series that fails to roll is logged and skipped; the others in the batch still roll.
+select tests.act_as_owner();
+update private.goal_series set next_roll_at = now() - interval '1 minute' where id in (tests.i('s-run'), tests.i('s-week'));
+create function tests.rg_fail_series() returns trigger
+  language plpgsql
+  as $$
+  begin
+    if new.id = tests.i('s-week') then
+      raise exception 'simulated failure';
+    end if;
+    return new;
+  end
+  $$;
+create trigger rg_fail_series before update on private.goal_series
+  for each row execute function tests.rg_fail_series();
+select tests.act_as_service_role();
+select public.roll_goal_periods();
+select tests.act_as_owner();
+select tests.assert_true(
+  (select next_roll_at > now() from private.goal_series where id = tests.i('s-run'))
+  and (select next_roll_at < now() from private.goal_series where id = tests.i('s-week')),
+  'A failing series stays due while the rest of the batch rolls');
+drop trigger rg_fail_series on private.goal_series;
+select tests.act_as_service_role();
+select public.roll_goal_periods();
+select tests.act_as_owner();
+select tests.assert_true((select next_roll_at is null or next_roll_at > now() from private.goal_series where id = tests.i('s-week')),
+  'The next run rolls it');

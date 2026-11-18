@@ -256,6 +256,23 @@ select tests.act_as_user((select id from ids where name = 'ana'));
 select tests.assert_true(
   public.get_copy_origin('calendar_event', (select id from ids where name = 'party')) is null,
   'a personal item has no origin label');
+-- S40P2-L4: the label is answered through the item's own view check (a recipe through can_see_recipe):
+-- a member of the Home that holds it sees it; anyone else gets nothing.
+select tests.act_as_owner();
+insert into ids values ('birch_recipe', tests.cd_recipe((select id from ids where name = 'ola'),
+  (select id from ids where name = 'birch'), 'Tart', null));
+update private.recipes set copied_from_personal_at = now() where id = (select id from ids where name = 'birch_recipe');
+select tests.act_as_user((select id from ids where name = 'ana'));
+select tests.assert_true(
+  public.get_copy_origin('recipe', (select id from ids where name = 'birch_recipe')) is not null,
+  'a member who sees a Home recipe sees when it was copied');
+select tests.act_as_user((select id from ids where name = 'ben'));
+select tests.assert_true(
+  public.get_copy_origin('recipe', (select id from ids where name = 'birch_recipe')) is null,
+  'someone who may not see the recipe does not');
+select tests.act_as_owner();
+delete from private.recipes where id = (select id from ids where name = 'birch_recipe');
+select tests.act_as_user((select id from ids where name = 'ana'));
 
 -- Requests waiting for approval ------------------------------------------------------------------
 
