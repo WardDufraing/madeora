@@ -29,7 +29,7 @@ Modules.md §4.2 lets a person create events in a configured Google calendar fro
 ## Consequences
 
 - No new service, schedule or cost: changes ride the existing job run, which already holds the lease and an access token. Google's quotas are far above one person's edits.
-- When Google stops listing a calendar, its events leave Madeora (as in S33) and so do its waiting changes and conflicts, since nothing can be sent there any more. The owner may prefer otherwise; this is listed for their decision.
+- When Google stops listing a calendar, its events leave Madeora (as in S33) and so do its waiting changes and conflicts, since nothing can be sent there any more. The owner may prefer otherwise; this is listed for their decision. Decided by Ward on 2026-11-17: keep the conflicts and mark them stale (see ADR 0056).
 - Conflicts may wait indefinitely; that is intended (the spec forbids silent resolution). Settings lists them.
 - Occurrences removed from Google by a split may stay in Madeora until the next full pass (at most 24 hours), as for any change S33 learns about late.
 - Monthly days 29 to 31 and 29 February rely on Google honouring `BYSETPOS`, which RFC 5545 defines and Google documents; if a calendar shows otherwise, the event can still be changed in Google.
