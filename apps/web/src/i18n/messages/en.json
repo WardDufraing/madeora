@@ -5180,7 +5180,7 @@
     "blockFuture": "This day has not begun.",
     "blockOutsideWindow": "This day is more than 7 days ago, so progress can no longer be added.",
     "blockUntracked": "The habit was not tracked on this day.",
-    "blockNotScheduled": "The habit is not scheduled today.",
+    "blockNotScheduled": "The habit is not scheduled on this day.",
     "blockPaused": "The habit is paused.",
     "blockNotNumeric": "This habit is completed once a day and has no target quantity.",
     "normalized": "Will be saved as {value}.",

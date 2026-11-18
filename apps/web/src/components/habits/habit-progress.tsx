@@ -195,6 +195,10 @@ export function ProgressEntry({
         event.preventDefault();
         if (!parsed.ok) {
           setMissing(true);
+          // Keyboard and screen-reader users land on the field that says what is wrong (S29-L6).
+          event.currentTarget
+            .querySelector<HTMLInputElement>('[data-testid="habit-progress-quantity"]')
+            ?.focus();
           return;
         }
         if (conversion && !conversion.exact) return;

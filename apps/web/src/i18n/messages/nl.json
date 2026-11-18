@@ -5180,7 +5180,7 @@
     "blockFuture": "Deze dag is nog niet begonnen.",
     "blockOutsideWindow": "Deze dag is meer dan 7 dagen geleden, dus er kan geen voortgang meer bij.",
     "blockUntracked": "De gewoonte werd op deze dag niet bijgehouden.",
-    "blockNotScheduled": "De gewoonte staat vandaag niet gepland.",
+    "blockNotScheduled": "De gewoonte staat op deze dag niet gepland.",
     "blockPaused": "De gewoonte is gepauzeerd.",
     "blockNotNumeric": "Deze gewoonte wordt één keer per dag afgevinkt en heeft geen doelhoeveelheid.",
     "normalized": "Wordt opgeslagen als {value}.",
