@@ -215,6 +215,11 @@ export interface RepeatFieldsProps {
   readonly dateFormat: DateFormat;
   /** Offers "Does not repeat" (creating); a series' schedule always repeats. */
   readonly allowNone: boolean;
+  /**
+   * Today in the schedule's timezone: "Next dates" never lists days before it (S19-L1), since a
+   * first date in the past creates nothing for those days.
+   */
+  readonly today?: string | null;
 }
 
 /**
@@ -228,6 +233,7 @@ export function RepeatFields({
   errors,
   dateFormat,
   allowNone,
+  today = null,
 }: RepeatFieldsProps) {
   const t = useTranslations("Tasks");
   const text = useRecurrenceText(dateFormat);
@@ -238,7 +244,9 @@ export function RepeatFields({
     onChange({ ...value, ...patch });
   };
   const rule = draftRule(value, startsOn);
-  const next = rule ? upcomingDates(rule, rule.startsOn, 3) : [];
+  const next = rule
+    ? upcomingDates(rule, today && today > rule.startsOn ? today : rule.startsOn, 3)
+    : [];
   const choices = allowNone ? repeatChoices : recurrenceFrequencies;
 
   return (

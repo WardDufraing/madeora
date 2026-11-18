@@ -145,6 +145,7 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
             loadedAt={loadedAt}
             members={memberOptions}
             formats={formats}
+            today={isoDate(new Date(), reminder.value.timeZone ?? formats.timeZone)}
           />
         ) : null}
         {homeId ? (

@@ -91,7 +91,7 @@ test("weekly task: complete, change following, history, delete the series and re
   await expect(
     history.getByRole("listitem").filter({ hasText: "(this occurrence)" }),
   ).toContainText("Completed by You");
-  await expect(history.getByRole("listitem").filter({ hasText: "Missed" })).toHaveCount(2);
+  await expect(history.getByRole("listitem").filter({ hasText: "Missed, still open" })).toHaveCount(2);
   await page.getByTestId("history-filter").selectOption("missed");
   await expect(history.getByRole("listitem")).toHaveCount(2);
   expect(await axeViolations(page)).toEqual([]);
