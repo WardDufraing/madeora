@@ -55,6 +55,8 @@ export function CareActivityView({
   const texts = usePetTexts();
   const router = useRouter();
   const names = useCareNames(members);
+  const skippedBySelf = (membershipId: string | null) =>
+    membershipId !== null && members.some((member) => member.id === membershipId && member.isSelf);
   const summary = useScheduleSummary();
   const when = useOccurrenceWhen(activity.today);
   const [editing, setEditing] = useState<{ readonly from?: string } | null>(null);
@@ -284,7 +286,10 @@ export function CareActivityView({
                   {occurrence.note ? <p className="text-body text-fg">{occurrence.note}</p> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {activity.canManage || occurrence.recordedByMe ? (
+                  {/* Whoever completed or skipped it reopens it, as the database allows (S31c-L4). */}
+                  {activity.canManage ||
+                  occurrence.recordedByMe ||
+                  (occurrence.status === "skipped" && skippedBySelf(occurrence.skippedBy)) ? (
                     <Button
                       size="sm"
                       variant="secondary"

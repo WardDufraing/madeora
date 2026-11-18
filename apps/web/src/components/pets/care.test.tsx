@@ -290,6 +290,43 @@ describe("a care activity's page", () => {
     });
   });
 
+  it("lets whoever skipped an occurrence reopen it, and nobody else (S31c-L4)", () => {
+    const skipped = {
+      ...recent,
+      status: "skipped" as const,
+      completedAt: null,
+      completedBy: null,
+      skippedAt: "2026-11-03T07:00:00Z",
+    };
+    const { unmount } = renderWithQuery(
+      <CareActivityView
+        activity={careActivityDetail({
+          canEdit: false,
+          canManage: false,
+          recent: [{ ...skipped, skippedBy: MEMBERSHIP }],
+        })}
+        petName="Miso"
+        members={members}
+        canMarkMedical={false}
+      />,
+    );
+    expect(screen.getByTestId("care-reopen")).toBeInTheDocument();
+    unmount();
+    renderWithQuery(
+      <CareActivityView
+        activity={careActivityDetail({
+          canEdit: false,
+          canManage: false,
+          recent: [{ ...skipped, skippedBy: OTHER_MEMBERSHIP }],
+        })}
+        petName="Miso"
+        members={members}
+        canMarkMedical={false}
+      />,
+    );
+    expect(screen.queryByTestId("care-reopen")).not.toBeInTheDocument();
+  });
+
   it("shows a concealed activity's category and the reason, without its texts", () => {
     renderWithQuery(
       <CareActivityView
