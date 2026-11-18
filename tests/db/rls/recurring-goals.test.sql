@@ -156,6 +156,14 @@ select tests.assert_denied($$select tests.mk('s-bad', 'home-a', 'measurable', 'm
   'A measurable series needs a target and unit', '22023');
 select tests.assert_denied($$select tests.mk('s-bad', 'home-a', 'measurable', 'daily', 5, 'km')$$,
   'An unknown frequency is refused', '22023');
+-- S30b-M1: an advance reminder must fit inside one period.
+select tests.assert_denied($$select tests.mk('s-bad', 'home-a', 'measurable', 'weekly', 5, 'km', null, null, 'monday', true, 7::smallint)$$,
+  'A weekly series refuses a 7-day advance reminder', '22023');
+select tests.assert_denied($$select tests.mk('s-bad', 'home-a', 'measurable', 'monthly', 5, 'km', null, null, 'monday', true, 28::smallint)$$,
+  'A monthly series refuses a 28-day advance reminder', '22023');
+select tests.assert_true(
+  (tests.mk('s-bad', 'home-a', 'measurable', 'weekly', 5, 'km', null, null, 'monday', true, 6::smallint) ->> 'outcome') = 'preview',
+  'A weekly series takes a 6-day advance reminder');
 select tests.assert_true(tests.mko('s-bad', 'home-a', 'measurable', 'monthly', 100, 'km',
     tests.month_start(tests.today()) - 1) = 'invalid_dates', 'A first period before the current one is refused (no backfill)');
 select tests.assert_true(tests.mko('s-bad', 'home-a', 'measurable', 'monthly', 100, 'km',

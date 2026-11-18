@@ -1479,6 +1479,8 @@
     "conflictScheduleChanged": "Het schema van het klusje is veranderd sinds deze werden verwijderd. Alleen de keren zelf kunnen terugkomen.",
     "conflictChoreUnavailable": "Het klusje zelf staat in de prullenbak of bestaat niet meer. Zet eerst het klusje terug.",
     "conflictChoreLimit": "Dit Home heeft al het maximum aantal klusjes.",
+    "conflictSeriesLimit": "Hier staat al het maximum aantal herhalende taken. Er is niets gewijzigd.",
+    "conflictHabitLimit": "Hier staat al het maximum aantal actieve gewoontes. Er is niets gewijzigd.",
     "resolveRestoreOccurrencesOnly": "Alleen de keren terugzetten",
     "moduleRecipes": "Recepten",
     "itemTypeRecipe": "Recept",

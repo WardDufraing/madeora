@@ -175,6 +175,22 @@ select tests.assert_true(
   (select outcome = 'saved' from public.update_meal_slot(tests.slot(tests.i('home-a'), 'dinner'),
     tests.slot_rev(tests.slot(tests.i('home-a'), 'dinner')), null, true)),
   'And it goes back to the standard name');
+-- S27-L1: going back to the standard name checks it is still free.
+select public.update_meal_slot(tests.slot(tests.i('home-a'), 'dinner'),
+  tests.slot_rev(tests.slot(tests.i('home-a'), 'dinner')), 'Late meal', true);
+select tests.assert_true(
+  (select outcome = 'saved' from public.update_meal_slot(tests.i('s-snacks'), tests.slot_rev(tests.i('s-snacks')),
+    'Dinner', true)),
+  'Another slot may take the standard name while Dinner is renamed');
+select tests.assert_true(
+  (select outcome = 'name_taken' from public.update_meal_slot(tests.slot(tests.i('home-a'), 'dinner'),
+    tests.slot_rev(tests.slot(tests.i('home-a'), 'dinner')), null, true)),
+  'Dinner cannot go back to a standard name another slot now uses');
+select public.update_meal_slot(tests.i('s-snacks'), tests.slot_rev(tests.i('s-snacks')), 'Snacks', true);
+select tests.assert_true(
+  (select outcome = 'saved' from public.update_meal_slot(tests.slot(tests.i('home-a'), 'dinner'),
+    tests.slot_rev(tests.slot(tests.i('home-a'), 'dinner')), null, true)),
+  'Once it is free again, Dinner goes back');
 select tests.assert_denied($$select * from public.update_meal_slot(tests.i('s-snacks'), tests.slot_rev(tests.i('s-snacks')), null, true)$$,
   'A custom slot always has a name', '22023');
 select public.create_meal_slot(tests.i(n), 'Extra ' || n, tests.i('home-a')) from unnest(array['s-x1', 's-x2', 's-x3', 's-x4']) n;

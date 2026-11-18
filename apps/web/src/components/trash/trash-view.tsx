@@ -104,6 +104,10 @@ function conflictMessage(kind: string) {
       return "conflictChoreUnavailable";
     case "chore_limit":
       return "conflictChoreLimit";
+    case "series_limit":
+      return "conflictSeriesLimit";
+    case "habit_limit":
+      return "conflictHabitLimit";
     case "recipe_limit":
       return "conflictRecipeLimit";
     case "shopping_list_limit":

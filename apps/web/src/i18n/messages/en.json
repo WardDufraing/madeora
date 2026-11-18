@@ -1479,6 +1479,8 @@
     "conflictScheduleChanged": "The chore's schedule changed since these were deleted. Only the occurrences themselves can come back.",
     "conflictChoreUnavailable": "The chore itself is in the trash or no longer exists. Restore the chore first.",
     "conflictChoreLimit": "This Home already has the most chores it can have.",
+    "conflictSeriesLimit": "This place already has the most repeating tasks it can have. Nothing was changed.",
+    "conflictHabitLimit": "This place already has the most active habits it can have. Nothing was changed.",
     "resolveRestoreOccurrencesOnly": "Restore only the occurrences",
     "moduleRecipes": "Recipes",
     "itemTypeRecipe": "Recipe",
