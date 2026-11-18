@@ -317,6 +317,8 @@ export function LinkHabitDialog({
               onChange={(event) => {
                 setHabitId(event.target.value);
                 setPreview(null);
+                // A refused answer belongs to the old choice: drop it with the preview (S30c-L4).
+                send.reset();
               }}
               data-testid="goal-link-habit"
             />
@@ -329,6 +331,8 @@ export function LinkHabitDialog({
                 setStart(nextStart);
                 setDate(nextDate);
                 setPreview(null);
+                // A refused answer belongs to the old choice: drop it with the preview (S30c-L4).
+                send.reset();
               }}
             />
           </>
@@ -435,6 +439,8 @@ function ChangeStartDialog({
             setStart(nextStart);
             setDate(nextDate);
             setPreview(null);
+            // A refused answer belongs to the old choice: drop it with the preview (S30c-L4).
+            send.reset();
           }}
         />
         {shown ? <GoalLinkImpactSummary impact={shown.impact} unit={unit} /> : null}
@@ -525,6 +531,8 @@ function UnlinkDialog({
           onChange={(event) => {
             setMode(event.target.value as GoalLinkRemoval);
             setPreview(null);
+            // A refused answer belongs to the old choice: drop it with the preview (S30c-L4).
+            send.reset();
           }}
           data-testid="goal-unlink-mode"
         />

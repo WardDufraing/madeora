@@ -5615,6 +5615,7 @@
     "seriesImpactOnward": "Applies to the period starting {from} and every later one.",
     "seriesImpactUntil": "Applies to the periods from {from} until {until}, when a later change takes over.",
     "seriesImpactPastKept": "The current and earlier periods keep their target.",
+    "seriesImpactReminders": "Reminders for this period stay on and use the new target.",
     "seriesEditTitle": "Edit recurring goal",
     "seriesEditExplanation": "Changes apply to periods that start from now on. Existing periods keep their title and settings.",
     "seriesStopTitle": "Stop recurring goal",

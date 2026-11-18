@@ -5615,6 +5615,7 @@
     "seriesImpactOnward": "Geldt voor de periode die begint op {from} en alle latere.",
     "seriesImpactUntil": "Geldt voor de periodes van {from} tot {until}, waarna een latere wijziging geldt.",
     "seriesImpactPastKept": "De huidige en eerdere periodes houden hun doelwaarde.",
+    "seriesImpactReminders": "Herinneringen voor deze periode blijven aan en gebruiken het nieuwe doel.",
     "seriesEditTitle": "Terugkerend doel bewerken",
     "seriesEditExplanation": "Wijzigingen gelden voor periodes die vanaf nu beginnen. Bestaande periodes houden hun titel en instellingen.",
     "seriesStopTitle": "Terugkerend doel stoppen",
