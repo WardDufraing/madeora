@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 
 import { isRecipeUnit, quantityStyles } from "@madeora/domain/recipes";
@@ -254,11 +255,13 @@ export async function listRecipeShares(recipeId: string): Promise<Read<readonly 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("list_recipe_shares", { p_recipe_id: recipeId });
   if (error) return failed("recipes.shares_failed", error);
+  // S25-L6: a destination Home the caller is not in is never named, only labelled.
+  const t = await getTranslations("Recipes");
   return {
     status: "ok",
     value: data.map((row) => ({
       homeId: row.home_id,
-      homeName: row.home_name,
+      homeName: nullable(row.home_name) ?? t("anotherHome"),
       state: row.state === "active" || row.state === "paused" ? row.state : "available",
       canEdit: row.can_edit,
       sharedAt: nullable(row.shared_at),
@@ -270,7 +273,9 @@ const impactSchema = z.object({
   token: z.string(),
   status: z.enum(["draft", "published"]),
   homeId: z.uuid().nullable(),
-  shares: z.array(z.object({ homeId: z.uuid(), homeName: z.string(), canEdit: z.boolean() })),
+  shares: z.array(
+    z.object({ homeId: z.uuid(), homeName: z.string().nullable(), canEdit: z.boolean() }),
+  ),
   favoriteCount: z.number().int(),
   beingEdited: z.boolean(),
   plannedMeals: z.number().int(),
@@ -292,7 +297,17 @@ export async function getDeleteImpact(
     logRecipes("recipes.impact_unexpected_shape", "shape");
     return { status: "unavailable" };
   }
-  return { status: "ok", value: parsed.data };
+  const t = await getTranslations("Recipes");
+  return {
+    status: "ok",
+    value: {
+      ...parsed.data,
+      shares: parsed.data.shares.map((share) => ({
+        ...share,
+        homeName: share.homeName ?? t("anotherHome"),
+      })),
+    },
+  };
 }
 
 /** Recipes an import may duplicate in its destination (S25): same source URL or same name. */

@@ -512,9 +512,11 @@ select tests.assert_true(
   (select outcome = 'not_found' from public.set_task_completion(tests.i('t1'), true)),
   'A trashed task cannot be completed');
 select tests.assert_true(
-  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')
-     and module = 'tasks' and item_type = 'task' and label = 'Paint the hall'),
-  'Carol sees it in the Home trash');
+  (select count(*) = 0 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')),
+  'Carol, a member, does not see it in the Home trash (S16-4: Owner and managers only)');
+select tests.assert_true(
+  (select outcome = 'not_found' from public.restore_trash_entries(array[tests.i('e-t1')])),
+  'Nor restores it');
 select tests.act_as('bob');
 select tests.assert_true(
   (select count(*) = 0 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')),
@@ -524,13 +526,14 @@ select tests.assert_true(
   'Nor restore it');
 select tests.act_as('alice');
 select tests.assert_true(
-  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')),
+  (select count(*) = 1 from public.list_trash(tests.i('home-a')) where entry_id = tests.i('e-t1')
+     and module = 'tasks' and item_type = 'task' and label = 'Paint the hall'),
   'The Owner sees it');
-
-select tests.act_as('carol');
 select tests.assert_true(
   (select outcome = 'restored' from public.restore_trash_entries(array[tests.i('e-t1')])),
-  'Carol restores it');
+  'The Owner restores it');
+
+select tests.act_as('carol');
 select tests.assert_true(
   (select jsonb_array_length(public.get_task(tests.i('t1')) -> 'subtasks') = 1
      and (public.get_task(tests.i('t1')) ->> 'commentCount')::integer = 1),
@@ -558,7 +561,6 @@ select tests.assert_true(
   (select count(*) = 0 from public.list_task_lists(tests.i('home-a'), true) where id = tests.i('l-a2')),
   'And is no longer listed');
 
-select tests.act_as('carol');
 select tests.assert_true(
   (select outcome = 'needs_resolution' and conflict = 'list_unavailable' and options = array['move_to_list']
     from public.restore_trash_entries(array[tests.i('e-t1b')])),

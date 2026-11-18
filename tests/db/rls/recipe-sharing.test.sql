@@ -113,6 +113,22 @@ select tests.assert_true(
   (select count(*) = 1 from private.recipe_shares where recipe_id = tests.i('r-c')),
   'One share, never two');
 
+-- S25-L6: a destination the origin manager is not in is not named. The row stands in for a share Bob
+-- made into his own Home (set up directly, as no current flow makes it for Home C's recipe).
+insert into private.recipe_shares (recipe_id, home_id, can_edit, shared_by)
+  values (tests.i('r-c'), tests.i('home-b'), false, tests.user_id('bob'));
+select tests.act_as('alice');
+select tests.assert_true(
+  (select home_name is null from public.list_recipe_shares(tests.i('r-c')) where home_id = tests.i('home-b'))
+    and (select home_name = 'Thuis' from public.list_recipe_shares(tests.i('r-c')) where home_id = tests.i('home-a')),
+  'The origin manager sees no name for a destination Home she is not in, and her own Home by name');
+select tests.assert_true(
+  (select impact #>> '{shares,0,homeName}' = 'Thuis' and impact #> '{shares,1,homeName}' = 'null'::jsonb
+    from public.recipe_delete_impact(tests.i('r-c'))),
+  'The impact review lists the unnamed destination last, without its name');
+select tests.act_as_owner();
+delete from private.recipe_shares where recipe_id = tests.i('r-c') and home_id = tests.i('home-b');
+
 select tests.act_as('bob');
 select tests.assert_true(public.share_recipe(tests.i('r-c'), tests.i('home-b'), false) = 'not_permitted',
   'Bob, who sees it in Home A, cannot share it onward');

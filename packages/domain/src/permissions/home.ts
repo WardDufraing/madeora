@@ -137,12 +137,12 @@ const rules: { readonly [A in HomeAction]: Rule } = {
   // warnings": only authorized Home storage managers). Storage is a Home setting, so the same
   // grant reaches it (SQL: private.can_view_home_storage).
   "home.storage.view": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
-  // The Home's trash (S16; spec "Confirmed central personal and Home trash organization"). Every
-  // current member may open it, but sees only what they deleted themselves; the Owner and
-  // Administrators granted manageHomeSettings see everything in it. The database applies the same
-  // rule (SQL: private.can_see_trash_entry). The per-module matrix is open in the spec, so a module
-  // step may refine it for its own item type.
-  "home.trash.view": { roles: ["owner", "administrator", "member"] },
+  // The Home's trash (S16; spec "Confirmed central personal and Home trash organization"). Owner
+  // decision S16-4: restoring and purging Home items is for the Owner and managers only, in every
+  // module, so Members no longer open it. An Administrator sees what they deleted in a module they
+  // manage (its manage capability); the Owner and Administrators granted manageHomeSettings see
+  // everything in it. The database applies the same rule (SQL: private.can_see_trash_entry).
+  "home.trash.view": { roles: ["owner", "administrator"] },
   "home.trash.viewAll": { roles: ["owner"], delegatedThrough: "manageHomeSettings" },
   // Member invitations, links and join codes, and deciding Member join requests (S10). The SQL
   // function private.can_manage_invitations makes the same decision for every database call.

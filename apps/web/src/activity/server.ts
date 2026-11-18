@@ -248,6 +248,35 @@ export async function listMyDeactivationBlockers(): Promise<
   };
 }
 
+/** S41-M3: a Home where leaving (or deactivating, or deleting the account) puts children on hold. */
+export interface GuardianHoldWarning {
+  readonly homeId: string;
+  readonly homeName: string;
+  readonly children: number;
+}
+
+/**
+ * S41-M3: the Homes where the person is the only eligible primary guardian of a child, so that the
+ * child is put on hold (cannot sign in there) when they leave, deactivate or delete their account;
+ * one Home only with `homeId`. A failure to load shows no warning rather than blocking the page.
+ */
+export async function listMyGuardianHoldWarnings(
+  homeId?: string,
+): Promise<readonly GuardianHoldWarning[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc(
+    "my_guardian_hold_warnings",
+    homeId === undefined ? {} : { p_home_id: homeId },
+  );
+  if (error) {
+    logFailure("account.guardian_hold_failed", error.code);
+    return [];
+  }
+  return data
+    .filter((row) => row.children > 0)
+    .map((row) => ({ homeId: row.home_id, homeName: row.home_name, children: row.children }));
+}
+
 /** S40: a Home its Owner closed, with the date it will be deleted for good. */
 export interface ClosedHome {
   readonly homeId: string;

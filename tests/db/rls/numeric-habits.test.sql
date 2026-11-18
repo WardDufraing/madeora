@@ -339,6 +339,16 @@ select tests.assert_true(
   tests.private_count(format('select count(*) from private.habit_events where habit_id = %L and kind in (%L, %L)',
     tests.i('n-water'), 'checked_in', 'undone')) = 0,
   'A completion by total writes no check-in events that name a person');
+select tests.assert_true(
+  (select count(*) = 0 from public.notifications where kind = 'habit.contribution_corrected'),
+  'Correcting his own contribution tells Bob nothing');
+select tests.act_as('carol');
+select tests.assert_true(
+  (select count(*) = 1 and bool_and(params ->> 'habitId' = tests.i('n-water')::text
+      and params ->> 'action' = 'void' and not params ? 'reason')
+    from public.notifications where kind = 'habit.contribution_corrected'),
+  'Carol is told that a manager corrected her contribution, without the reason (S29-L9)');
+select tests.act_as('bob');
 
 -- Who sees the contributions --------------------------------------------------------------------------------
 

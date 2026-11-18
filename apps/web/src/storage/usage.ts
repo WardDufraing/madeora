@@ -45,6 +45,29 @@ export const getHomeStorageUsage = cache(async (homeId: string): Promise<Storage
   return row ? { status: "ok", usage: toStorageUsage(row) } : { status: "unavailable" };
 });
 
+/**
+ * A Home's storage figures for anyone who may see its photo library (owner decision S35-L6: shown
+ * to every member in the photo upload flow). Only the figures: managing storage stays with the
+ * Home's storage managers (`getHomeStorageUsage`).
+ */
+export const getHomePhotoStorageUsage = cache(
+  async (homeId: string): Promise<StorageUsageResult> => {
+    const parsed = homeIdSchema.safeParse(homeId);
+    if (!parsed.success) return { status: "not-found" };
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("home_photo_storage_usage", {
+      p_home_id: parsed.data,
+    });
+    if (error?.code === "42501") return { status: "not-found" };
+    if (error) {
+      logFailure("storage.home_photo_usage_read_failed", error.code);
+      return { status: "unavailable" };
+    }
+    const row = data[0];
+    return row ? { status: "ok", usage: toStorageUsage(row) } : { status: "unavailable" };
+  },
+);
+
 export type MyAvatars =
   | {
       readonly status: "ok";

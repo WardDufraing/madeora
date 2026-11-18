@@ -2689,6 +2689,16 @@ export type Database = {
           state: string;
         }[];
       };
+      home_photo_storage_usage: {
+        Args: { p_home_id: string };
+        Returns: {
+          allowance_bytes: number;
+          deleted_bytes: number;
+          reserved_bytes: number;
+          used_bytes: number;
+          warning_level: number;
+        }[];
+      };
       home_storage_usage: {
         Args: { p_home_id: string };
         Returns: {
@@ -3530,6 +3540,14 @@ export type Database = {
         Returns: {
           has_pin: boolean;
           locked_until: string;
+        }[];
+      };
+      my_guardian_hold_warnings: {
+        Args: { p_home_id?: string };
+        Returns: {
+          children: number;
+          home_id: string;
+          home_name: string;
         }[];
       };
       my_notification_channels: {

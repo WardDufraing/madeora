@@ -387,7 +387,8 @@ select tests.assert_true((public.delete_calendar_event(tests.i('e-weekly'), test
 select tests.assert_true((public.delete_calendar_event(tests.i('e-weekly'), tests.rev('e-weekly'), 'all', null) ->> 'outcome') = 'deleted'
   and tests.dates('home-a', 'e-weekly', date '2027-03-10', date '2027-05-09') = '{}',
   'All events go to the trash');
-select tests.assert_true(tests.trash_ids('home-a') = array['Zwemles'], 'Carol sees the trash entry');
+select tests.assert_true(tests.trash_ids('home-a') = '{}',
+  'Carol, a member who may delete events, does not see the Home trash entry (S16-4: Owner and managers only)');
 select tests.act_as('alice');
 select public.set_home_calendar_access(tests.i('home-a'), tests.i('m-carol-a'), 'edit');
 select tests.act_as('carol');

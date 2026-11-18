@@ -9,7 +9,7 @@ const service = vi.hoisted(() => ({ configured: true }));
 const jar = new Map<string, string>();
 
 vi.mock("@/child-sign-in/service", () => ({
-  householdService: () => (service.configured ? { rpc, auth: { admin: { generateLink } } } : null),
+  householdService: () => (service.configured ? { rpc, magicLinkToken: generateLink } : null),
   householdClientKey: () => Promise.resolve(service.configured ? "c".repeat(64) : null),
   sessionIdOf: (token: string) => (token === "token-1" ? SESSION : null),
 }));
@@ -133,17 +133,14 @@ describe("resumePairing", () => {
       ],
       display_pairing_complete: ["registered"],
     });
-    generateLink.mockResolvedValue({ data: { properties: { hashed_token: "th" } }, error: null });
+    generateLink.mockResolvedValue({ tokenHash: "th", error: null });
     verifyOtp.mockResolvedValue({
       data: { session: { access_token: "token-1" } },
       error: null,
     });
 
     expect(await resumePairing(false, "")).toEqual({ kind: "paired" });
-    expect(generateLink).toHaveBeenCalledWith({
-      type: "magiclink",
-      email: "display-x@displays.madeora.invalid",
-    });
+    expect(generateLink).toHaveBeenCalledWith("display-x@displays.madeora.invalid");
     expect(rpc).toHaveBeenCalledWith("display_pairing_complete", {
       p_secret_hash: sha256Hex(SECRET),
       p_session_id: SESSION,
@@ -161,7 +158,7 @@ describe("resumePairing", () => {
       ],
       display_pairing_complete: ["invalid"],
     });
-    generateLink.mockResolvedValue({ data: { properties: { hashed_token: "th" } }, error: null });
+    generateLink.mockResolvedValue({ tokenHash: "th", error: null });
     verifyOtp.mockResolvedValue({ data: { session: { access_token: "token-1" } }, error: null });
 
     expect(await resumePairing(false, "")).toEqual({ kind: "unavailable" });

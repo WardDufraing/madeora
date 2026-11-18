@@ -67,6 +67,11 @@ insert into ids values
   ('m-dave', tests.ch_mid(tests.ch('home-a'), tests.ch('dave'))),
   ('m-erin-b', tests.ch_mid(tests.ch('home-b'), tests.ch('erin')));
 insert into ids values ('req-1', gen_random_uuid());
+-- Guardian changes need a fresh re-authentication (S41-M2): every adult here has just confirmed it's
+-- them. The section "Fresh re-authentication" below takes it away again.
+select tests.grant_account_change(u, 'child_guardians')
+  from unnest(array[tests.ch('alice'), tests.ch('bob'), tests.ch('carol'), tests.ch('dave'),
+    tests.ch('erin')]) as u;
 
 -- Creating a child ---------------------------------------------------------------------------------
 
@@ -356,6 +361,49 @@ select tests.assert_true(
   'Guardian assignments are audited'
 );
 
+-- Fresh re-authentication (S41-M2) ----------------------------------------------------------------
+
+select tests.act_as_owner();
+delete from private.account_change_grants where user_id = tests.ch('bob') and action = 'child_guardians';
+select tests.act_as('bob');
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-mia'), tests.ch('m-carol'),
+    'secondary') = 'reauthentication_required',
+  'Without a fresh re-authentication the primary guardian cannot offer a guardian role'
+);
+select tests.assert_true(
+  public.remove_child_secondary_guardian(tests.ch('home-a'), tests.ch('m-mia')) = 'reauthentication_required',
+  'Nor remove the secondary guardian'
+);
+select tests.assert_true(
+  (select my_guardian_role from public.home_children(tests.ch('home-a'))
+   where membership_id = tests.ch('m-mia')) = 'primary'
+  and not exists (select 1 from public.child_guardian_offers o
+    where o.guardian_user_id = tests.ch('carol') and o.role = 'secondary'),
+  'Nothing changed'
+);
+select tests.act_as_owner();
+insert into private.account_change_grants (user_id, action, session_id, expires_at)
+  values (tests.ch('bob'), 'child_guardians', gen_random_uuid(), now() + interval '1 minute');
+select tests.act_as('bob');
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-mia'), tests.ch('m-carol'),
+    'secondary') = 'reauthentication_required',
+  'A permission given to another browser session does not count'
+);
+select tests.act_as_owner();
+update private.account_change_grants set session_id = tests.session_id(tests.ch('bob')),
+    expires_at = now() - interval '1 second'
+  where user_id = tests.ch('bob') and action = 'child_guardians';
+select tests.act_as('bob');
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-mia'), tests.ch('m-carol'),
+    'secondary') = 'reauthentication_required',
+  'Nor an expired one'
+);
+select tests.act_as_owner();
+select tests.grant_account_change(tests.ch('bob'), 'child_guardians');
+
 -- Secondary guardian limits ------------------------------------------------------------------------
 
 select tests.act_as_user(tests.ch('dave'));
@@ -576,6 +624,82 @@ select tests.assert_true(
   (select preset is null from public.home_children(tests.ch('home-a'))
    where membership_id = tests.ch('m-mia')),
   'Appointing a guardian does not give the Owner guardian access'
+);
+
+-- On hold: the primary guardian is deactivated (S41-M3) ----------------------------------------------
+
+select tests.act_as('bob');
+select tests.assert_true(
+  (select count(*) = 1 and sum(w.children) = 1 and bool_and(w.home_id = tests.ch('home-a'))
+   from public.my_guardian_hold_warnings(tests.ch('home-a')) w),
+  'Before leaving Home A, Bob is warned that one child would be put on hold'
+);
+select tests.assert_true(
+  (select sum(w.children) = 1 from public.my_guardian_hold_warnings() w),
+  'And before deactivating or deleting his account'
+);
+select tests.act_as('carol');
+select tests.assert_true(
+  not exists (select 1 from public.my_guardian_hold_warnings()),
+  'Someone who is nobody''s primary guardian gets no warning'
+);
+select tests.act_as_anon();
+select tests.assert_denied($$select * from public.my_guardian_hold_warnings()$$,
+  'A signed-out visitor is refused');
+
+select tests.act_as_owner();
+select tests.assert_true(not private.child_on_hold(tests.ch('home-a'), tests.ch('mia')),
+  'Mia has an eligible primary guardian');
+insert into private.account_deactivations (user_id) values (tests.ch('bob'));
+select tests.assert_true(private.child_on_hold(tests.ch('home-a'), tests.ch('mia')),
+  'While her primary guardian is deactivated, Mia is on hold');
+select tests.assert_true(
+  private.child_guardian_role(tests.ch('home-a'), tests.ch('mia'), tests.ch('bob')) is null,
+  'And he holds no guardian role meanwhile'
+);
+select tests.act_as('alice');
+select tests.assert_true(
+  (select primary_guardian_membership_id is null from public.home_children(tests.ch('home-a'))
+   where membership_id = tests.ch('m-mia')),
+  'The Home''s child list shows her as on hold, so the Owner can appoint someone'
+);
+select tests.act_as_owner();
+delete from private.account_deactivations where user_id = tests.ch('bob');
+select tests.assert_true(
+  not private.child_on_hold(tests.ch('home-a'), tests.ch('mia'))
+    and private.child_guardian_role(tests.ch('home-a'), tests.ch('mia'), tests.ch('bob')) = 'primary',
+  'Reactivating restores his role, and with it her access'
+);
+
+-- While a primary guardian is deactivated the Owner may appoint another; their return then does not
+-- take the role back.
+select tests.act_as('bob');
+insert into ids select 'm-lio', membership_id from public.create_child(
+  tests.ch('home-a'), 'Lio', tests.ch('m-bob'), null, '#9333ea', gen_random_uuid());
+select tests.act_as_owner();
+insert into ids select 'lio', m.user_id from private.home_memberships_all m where m.id = tests.ch('m-lio');
+insert into private.account_deactivations (user_id) values (tests.ch('bob'));
+select tests.act_as('alice');
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-lio'), tests.ch('m-carol'),
+    'primary') = 'offered',
+  'With Lio''s primary guardian deactivated, the Owner offers the primary role to Carol'
+);
+select tests.act_as('carol');
+select tests.assert_true(
+  public.answer_child_guardian_offer(tests.ch_offer(tests.ch('m-lio'), tests.ch('carol')), true)
+    = 'accepted',
+  'Carol accepts it'
+);
+select tests.act_as_owner();
+select tests.assert_true(not private.child_on_hold(tests.ch('home-a'), tests.ch('lio')),
+  'Lio is no longer on hold');
+delete from private.account_deactivations where user_id = tests.ch('bob');
+select tests.assert_true(
+  private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('carol')) = 'primary'
+    and private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('bob'))
+      is distinct from 'primary',
+  'Bob''s return does not take the primary role back from Carol'
 );
 
 -- Mistaken creation and limits --------------------------------------------------------------------

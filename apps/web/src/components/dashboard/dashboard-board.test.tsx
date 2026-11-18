@@ -250,6 +250,19 @@ describe("DashboardBoard edit mode", () => {
     expect(within(catalogue).getByRole("button", { name: "Add Tasks · ⁨Thuis⁩" })).toBeEnabled();
   });
 
+  it("shows a small decorative preview beside each widget in the picker (S17-L9)", async () => {
+    renderBoard();
+    await openEditor();
+    const catalogue = screen.getByTestId("dashboard-catalogue");
+    const items = within(catalogue).getAllByRole("listitem");
+    for (const item of items) {
+      const preview = item.querySelector("[data-testid^='widget-preview-']");
+      expect(preview).not.toBeNull();
+      expect(preview).toHaveAttribute("aria-hidden", "true");
+    }
+    expect(items.length).toBeGreaterThan(0);
+  });
+
   it("explains that Home widgets need a Home when the person has none", async () => {
     renderBoard({ sourceHomes: [] });
     await openEditor();

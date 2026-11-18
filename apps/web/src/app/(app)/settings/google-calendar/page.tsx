@@ -8,6 +8,7 @@ import { googleEventPath } from "@/calendar/format";
 import {
   CalendarChoicesForm,
   ChangeRetryActions,
+  StaleConflictActions,
   DisconnectButton,
   RestoreHiddenButton,
   SyncNowButton,
@@ -242,7 +243,15 @@ function Connected({
                   <span className="block text-helper text-fg-muted">
                     {t(`changeRow_${change.state}_${change.action}`, { calendar: change.calendar })}
                   </span>
+                  {change.stale ? (
+                    <span className="block text-helper text-fg-muted" data-testid="google-stale">
+                      {t("staleConflict", { calendar: change.calendar })}
+                    </span>
+                  ) : null}
                 </p>
+                {change.stale && change.state === "conflict" ? (
+                  <StaleConflictActions changeId={change.id} />
+                ) : null}
                 {change.state === "failed" ? (
                   <ChangeRetryActions changeId={change.id} create={change.action === "create"} />
                 ) : null}
