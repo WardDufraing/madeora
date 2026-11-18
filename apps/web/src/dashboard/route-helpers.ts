@@ -106,6 +106,11 @@ export function layoutJson(layout: DashboardLayout): Json {
 /**
  * Saves `layout` as `target`'s dashboard if nobody saved it since `expectedRevision`, keeping
  * `previous` for one Undo when given. The database re-checks membership and editing rights.
+ *
+ * `previous` is the layout as `readLayout` returned it, not the stored JSON (S17-L8): Undo brings
+ * back that normalized copy, so it is compacted and anything the reader dropped (an unknown widget,
+ * a placement it could not use) stays gone. That is intended: Undo never restores what could not be
+ * shown anyway.
  */
 export async function persistLayout(
   event: string,

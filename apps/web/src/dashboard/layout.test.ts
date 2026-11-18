@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { canMove, canResize, compact, hasOverlap, moveWidget, resizeWidget } from "./geometry";
+import {
+  canMove,
+  canResize,
+  compact,
+  fitsRows,
+  hasOverlap,
+  MAX_ROWS,
+  moveWidget,
+  resizeWidget,
+} from "./geometry";
 import {
   addWidget,
+  canAddWidget,
   checkLayout,
   emptyLayout,
   MAX_WIDGETS,
@@ -401,6 +411,36 @@ describe("keyboard move and resize", () => {
     expect(canResize(lg, welcome ?? "", "welcome", "shorter", "lg")).toBe(false);
     const sm = personalStarterLayout.placements.sm;
     expect(canResize(sm, welcome ?? "", "welcome", "wider", "sm")).toBe(false);
+  });
+
+  it("never grows or moves a widget past the last row (S17-L1)", () => {
+    // A phone column of 2-row welcome widgets that fills every row exactly.
+    const stack = Array.from({ length: MAX_ROWS / 2 }, (_, i) => ({
+      id: `w${String(i)}`,
+      x: 0,
+      y: i * 2,
+      w: 1,
+      h: 2,
+    }));
+    expect(fitsRows(stack)).toBe(true);
+    expect(canResize(stack, "w0", "welcome", "taller", "sm")).toBe(false);
+    expect(canResize(stack, `w${String(MAX_ROWS / 2 - 1)}`, "welcome", "taller", "sm")).toBe(false);
+    expect(fitsRows([{ id: "x", x: 0, y: MAX_ROWS - 1, w: 1, h: 2 }])).toBe(false);
+    // One row of room left: taller is allowed.
+    expect(canResize(stack.slice(1), "w1", "welcome", "taller", "sm")).toBe(true);
+  });
+
+  it("refuses to add a widget that would pass the last row (S17-L1)", () => {
+    const layout = withWidget(emptyLayout(), "welcome");
+    expect(canAddWidget(layout, "notifications")).toBe(true);
+    const full: DashboardLayout = {
+      ...layout,
+      placements: {
+        ...layout.placements,
+        sm: layout.placements.sm.map((p) => ({ ...p, y: MAX_ROWS - p.h })),
+      },
+    };
+    expect(canAddWidget(full, "notifications")).toBe(false);
   });
 
   it("compacts to the same result as the grid would", () => {

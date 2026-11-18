@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -33,6 +34,8 @@ import {
 } from "@/dashboard/geometry";
 import {
   addWidget,
+  canAddWidget,
+  MAX_ROWS,
   MAX_WIDGETS,
   removeWidget,
   type DashboardLayout,
@@ -133,7 +136,14 @@ export function DashboardEditor({
   const helpId = useId();
   const [draft, setDraft] = useState(initial);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [announcement, setAnnouncement] = useState("");
+  const [announcement, setAnnouncementText] = useState("");
+  // The same message twice (another "cannot move", or the same position) would not be announced
+  // again, so every other message ends in an invisible no-break space (S17-L5).
+  const repeat = useRef(false);
+  const setAnnouncement = useCallback((text: string) => {
+    repeat.current = !repeat.current;
+    setAnnouncementText(text === "" ? "" : repeat.current ? `${text}\u00a0` : text);
+  }, []);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   // Where keyboard focus goes after a widget is removed: the next widget's handle, or the catalogue
   // when none is left, so focus never falls back to the top of the page.
@@ -180,6 +190,15 @@ export function DashboardEditor({
 
   const placements = draft.placements[breakpoint];
   const selected = draft.widgets.find((widget) => widget.id === selectedId) ?? null;
+  // Reading and tab order follow what is on screen at this width: top to bottom, then start to end
+  // (S17-L6). React Grid Layout places each item by its layout, whatever the DOM order.
+  const position = new Map(placements.map((p) => [p.id, p]));
+  const ordered = [...draft.widgets].sort((a, b) => {
+    const pa = position.get(a.id);
+    const pb = position.get(b.id);
+    if (!pa || !pb) return 0;
+    return pa.y - pb.y || pa.x - pb.x;
+  });
 
   function updatePlacements(next: Placement[]) {
     setDraft((current) => ({
@@ -282,8 +301,8 @@ export function DashboardEditor({
   }, [draft]);
 
   function remove(widget: DashboardWidget) {
-    const index = draft.widgets.findIndex((w) => w.id === widget.id);
-    const next = draft.widgets[index + 1] ?? draft.widgets[index - 1];
+    const index = ordered.findIndex((w) => w.id === widget.id);
+    const next = ordered[index + 1] ?? ordered[index - 1];
     focusAfterRemove.current = { id: next?.id ?? null };
     setDraft((current) => removeWidget(current, widget.id));
     setSelectedId(null);
@@ -291,6 +310,10 @@ export function DashboardEditor({
   }
 
   function add(type: WidgetType, sourceHomeId: string | null) {
+    if (!canAddWidget(draft, type)) {
+      setAnnouncement(t("addRowsFull"));
+      return;
+    }
     const widget: DashboardWidget = {
       id: newId(),
       type,
@@ -449,6 +472,7 @@ export function DashboardEditor({
             kind={kind}
             sourceHomes={sourceHomes}
             full={draft.widgets.length >= MAX_WIDGETS}
+            fits={(type) => canAddWidget(draft, type)}
             onAdd={add}
           />
         </EditorPanel>
@@ -486,14 +510,14 @@ export function DashboardEditor({
             cols={breakpointColumns}
             layouts={rglLayouts}
             rowHeight={ROW_HEIGHT}
-            maxRows={200}
+            maxRows={MAX_ROWS}
             margin={[GRID_GAP, GRID_GAP]}
             containerPadding={[0, 0]}
             dragConfig={{ enabled: true, handle: ".dash-drag-handle" }}
             resizeConfig={{ enabled: true, handles: ["se"] }}
             onLayoutChange={handleLayoutChange}
           >
-            {draft.widgets.map((widget) => {
+            {ordered.map((widget) => {
               const title = titleOf(widget);
               const entry = entryById.get(widget.id);
               const isSelected = widget.id === selectedId;
@@ -708,11 +732,14 @@ function AddWidgets({
   kind,
   sourceHomes,
   full,
+  fits,
   onAdd,
 }: {
   readonly kind: DashboardTarget["kind"];
   readonly sourceHomes: readonly SourceHome[];
   readonly full: boolean;
+  /** Whether a widget of this type still fits within the row limit at every width (S17-L1). */
+  readonly fits: (type: WidgetType) => boolean;
   readonly onAdd: (type: WidgetType, sourceHomeId: string | null) => void;
 }) {
   const t = useTranslations("Dashboard");
@@ -739,6 +766,7 @@ function AddWidgets({
       <ul className="flex flex-col gap-3" data-testid="dashboard-catalogue">
         {catalogue.map(({ type, needsSource: bound }) => {
           const unavailable = bound && !chosenHome;
+          const tooTall = !full && !fits(type);
           return (
             <li key={`${type}:${String(bound)}`} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
@@ -756,7 +784,7 @@ function AddWidgets({
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={full || unavailable}
+                  disabled={full || unavailable || tooTall}
                   onClick={() => {
                     onAdd(type, bound && chosenHome ? chosenHome.id : null);
                   }}
@@ -777,6 +805,7 @@ function AddWidgets({
               </div>
               <p className="text-helper text-fg-muted">{labels.description(type)}</p>
               {unavailable ? <p className="text-helper text-fg-muted">{t("needsHome")}</p> : null}
+              {tooTall ? <p className="text-helper text-fg-muted">{t("addRowsFull")}</p> : null}
             </li>
           );
         })}

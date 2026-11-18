@@ -124,6 +124,7 @@
     "addWidget": "Add",
     "addWidgetNamed": "Add {widget}",
     "addFull": "A dashboard holds at most {count} widgets. Remove one to add another.",
+    "addRowsFull": "This widget no longer fits: the dashboard has reached its 200-row limit. Remove or shrink a widget first.",
     "sourceHome": "Home for Home widgets",
     "sourceHomeDescription": "A Home widget on your personal dashboard always shows one Home, named in its title.",
     "needsHome": "Join or create a Home to add this widget.",
