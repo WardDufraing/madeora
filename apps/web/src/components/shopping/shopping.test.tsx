@@ -9,6 +9,7 @@ import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
 
 import { AddSeveral } from "./add-several";
+import { ItemTransfer } from "./item-transfer";
 import { QuickAdd } from "./quick-add";
 import { ShoppingListView } from "./shopping-list-view";
 import { ShoppingLive } from "./shopping-live";
@@ -593,5 +594,44 @@ describe("the shopping widget", () => {
       />,
     );
     expect(screen.queryByTestId("shopping-quick-add")).not.toBeInTheDocument();
+  });
+});
+
+describe("undoing a move", () => {
+  it("does not double up an item the original list got again meanwhile (S26-L6)", async () => {
+    const user = userEvent.setup();
+    const milk = list().items[0];
+    if (!milk) throw new Error("no item");
+    fetchMock.mockImplementation((url, init) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET") {
+        // The destination list, now holding the moved item.
+        return Promise.resolve(
+          jsonResponse(200, list({ id: OTHER_LIST, items: [{ ...milk, revision: 2 }] })),
+        );
+      }
+      const body = JSON.parse(bodyText(init)) as { destinationListId: string };
+      return Promise.resolve(
+        body.destinationListId === OTHER_LIST
+          ? jsonResponse(200, { outcome: "moved", itemId: MILK })
+          : jsonResponse(409, { error: "duplicate" }),
+      );
+    });
+    render(
+      <ItemTransfer item={milk} list={list()} homeId={HOME} onDone={vi.fn()} onCancel={vi.fn()} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Move item" }));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(
+      await screen.findAllByText(
+        /Milk was not moved back: this list already has the same item again/,
+      ),
+    ).not.toHaveLength(0);
+    const undo = fetchMock.mock.calls.findLast(([, init]) => init?.method === "POST");
+    expect(JSON.parse(bodyText(undo?.[1]))).toMatchObject({
+      destinationListId: LIST,
+      allowDuplicate: false,
+      revision: 2,
+    });
   });
 });

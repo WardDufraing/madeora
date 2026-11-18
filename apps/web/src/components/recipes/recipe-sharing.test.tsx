@@ -98,7 +98,13 @@ describe("the share panel", () => {
     expect(
       screen.getByRole("button", { name: "Stop sharing with Beach house" }),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Turn sharing with Cabin back on" }));
+    // Coming back view only is said, also when editing was allowed before (S25-L2).
+    expect(screen.getByTestId("share-reinstate-hint")).toHaveTextContent(
+      "Recipe managers there could edit it before. It comes back view only",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Turn sharing with Cabin back on (view only)" }),
+    );
     await waitFor(() => {
       expect(sent(0).body).toEqual({ homeId: CABIN, canEdit: false });
     });

@@ -14,7 +14,7 @@ import {
   shoppingListEndpoint,
   type ShoppingItem,
   type ShoppingListDetail,
-  type ShoppingRequestError,
+  ShoppingRequestError,
   type ShoppingTransferAnswer,
 } from "@/shopping/api";
 import { shoppingKeys } from "@/shopping/format";
@@ -90,13 +90,20 @@ export function ItemTransfer({
           revision: current.revision,
           categoryId: item.categoryId,
           keepCompleted: true,
-          allowDuplicate: true,
+          // A same item added to this list meanwhile is not doubled up without asking (S26-L6).
+          allowDuplicate: false,
           copyId: null,
         },
       );
       toast.show({ title: t("moveUndone", { name: item.name }), tone: "success" });
-    } catch {
-      toast.show({ title: t("moveNotUndone"), tone: "error" });
+    } catch (error) {
+      toast.show({
+        title:
+          error instanceof ShoppingRequestError && error.failure === "duplicate"
+            ? t("moveNotUndoneDuplicate", { name: item.name })
+            : t("moveNotUndone"),
+        tone: "error",
+      });
     }
   };
 
