@@ -1,7 +1,12 @@
 "use client";
 
 import { CheckIcon } from "@madeora/icons";
-import { oraPaletteKeys, oraPalettes, type OraPaletteKey } from "@madeora/design-tokens";
+import {
+  defaultOraPalette,
+  oraPaletteKeys,
+  oraPalettes,
+  type OraPaletteKey,
+} from "@madeora/design-tokens";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -13,7 +18,6 @@ import { Card } from "@/components/ui/card";
 import { cx } from "@/components/ui/cx";
 import { saveOraSettings, type OraSaveError, type OraSaveFailure } from "@/ora/api";
 import type { OraPatch, OraSettings } from "@/ora/settings";
-import { defaultOraSettings } from "@/ora/settings";
 import { oraFrequencies } from "@/ora/settings";
 import { oraMotionModes, type OraMotionMode } from "@/ora/types";
 
@@ -79,6 +83,8 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
   const enabledHintId = useId();
   const teasersId = useId();
   const teasersHintId = useId();
+  const enabledStateId = useId();
+  const teasersStateId = useId();
   const personalPalette = current.personalPalette;
 
   return (
@@ -99,7 +105,7 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
             type="checkbox"
             role="switch"
             checked={current.enabled}
-            aria-describedby={enabledHintId}
+            aria-describedby={`${enabledStateId} ${enabledHintId}`}
             onChange={(event) => {
               const value = event.target.checked;
               change(
@@ -112,8 +118,11 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
           />
           <div className="flex flex-col gap-1">
             <label htmlFor={enabledId} className="cursor-pointer text-body font-medium">
-              {current.enabled ? t("enabledOn") : t("enabledOff")}
+              {t("enabledLabel")}
             </label>
+            <p id={enabledStateId} className="text-helper text-fg">
+              {current.enabled ? t("enabledOn") : t("enabledOff")}
+            </p>
             <p id={enabledHintId} className="text-helper text-fg-muted">
               {t("enabledHint")}
             </p>
@@ -128,7 +137,7 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
             type="checkbox"
             role="switch"
             checked={!current.teasersMuted}
-            aria-describedby={teasersHintId}
+            aria-describedby={`${teasersStateId} ${teasersHintId}`}
             onChange={(event) => {
               const muted = !event.target.checked;
               change(
@@ -141,8 +150,11 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
           />
           <div className="flex flex-col gap-1">
             <label htmlFor={teasersId} className="cursor-pointer text-body font-medium">
-              {current.teasersMuted ? t("teasersOff") : t("teasersOn")}
+              {t("teasersLabel")}
             </label>
+            <p id={teasersStateId} className="text-helper text-fg">
+              {current.teasersMuted ? t("teasersOff") : t("teasersOn")}
+            </p>
             <p id={teasersHintId} className="text-helper text-fg-muted">
               {t("teasersHint")}
             </p>
@@ -300,7 +312,7 @@ export function OraSettingsForm({ settings, homes }: OraSettingsFormProps) {
               key={home.id}
               name={`ora-palette-${home.id}`}
               legend={home.name}
-              value={current.homePalettes[home.id] ?? defaultOraSettings.personalPalette}
+              value={current.homePalettes[home.id] ?? defaultOraPalette}
               motion={current.motion}
               onChoose={(palette) => {
                 const previous = current.homePalettes[home.id];

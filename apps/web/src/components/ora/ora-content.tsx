@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
@@ -103,6 +103,13 @@ export function OraContent({
   // Unfinished changes live here, in memory: this component is rebuilt for another Home or Personal.
   const [drafts, setDrafts] = useState<ActionDrafts>({});
   const queryClient = useQueryClient();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // A page (the dashboard widget) asked for the overview: show it, once per request.
   if (requested && requested.id !== handled) {
     setHandled(requested.id);
@@ -165,6 +172,8 @@ export function OraContent({
     setFailed(false);
     try {
       const output = await callOraTool(homeId, id);
+      // This content is rebuilt for another Home or Personal: a late answer must not navigate.
+      if (!mounted.current) return;
       if (output.kind === "navigate" && isInternalPath(output.href)) {
         router.push(output.href);
         onNavigated();
@@ -172,6 +181,7 @@ export function OraContent({
         setExample(output.tools);
       }
     } catch (error) {
+      if (!mounted.current) return;
       setFailed(true);
       // Permissions may have changed: ask the server again what is on offer.
       if (error instanceof OraToolError && error.failure === "forbidden") void tools.refetch();

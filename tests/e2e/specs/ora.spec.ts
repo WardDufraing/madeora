@@ -12,7 +12,7 @@ test.use({
   viewport: { width: 1280, height: 800 },
 });
 
-const launcherName = "Open Ora, your Madeora helper";
+const launcherName = "Ora, your Madeora helper";
 
 test("Ora opens from the button, offers only what the person may use, and closes with Escape", async ({
   page,
@@ -101,7 +101,7 @@ test("hiding Ora in settings removes it everywhere for this person, and it can c
   await page.goto("/settings/ora");
   await expect(page.getByTestId("ora-launcher")).toBeVisible();
 
-  await page.getByRole("switch", { name: "Ora is shown" }).uncheck();
+  await page.getByRole("switch", { name: "Show Ora on my screens" }).uncheck();
   await expect(page.getByText("Saved.")).toBeVisible();
   await expect(page.getByTestId("ora-launcher")).toHaveCount(0);
   await page.goto("/?context=personal");
@@ -110,7 +110,7 @@ test("hiding Ora in settings removes it everywhere for this person, and it can c
   await expect(page.getByRole("main")).toBeVisible();
 
   await page.goto("/settings/ora");
-  await page.getByRole("switch", { name: "Ora is hidden and disabled" }).check();
+  await page.getByRole("switch", { name: "Show Ora on my screens" }).check();
   await expect(page.getByText("Saved.")).toBeVisible();
   await expect(page.getByTestId("ora-launcher")).toBeVisible();
 });

@@ -128,7 +128,7 @@ export function OraCharacter({
               dx="0"
               dy="1.6"
               stdDeviation="1.2"
-              floodColor="var(--ora-eye-shadow)"
+              style={{ floodColor: "var(--ora-eye-shadow)" }}
               floodOpacity=".5"
             />
           </filter>

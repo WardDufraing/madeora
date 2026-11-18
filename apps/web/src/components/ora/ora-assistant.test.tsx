@@ -153,6 +153,9 @@ function setup(settings: Partial<OraSettings> = {}) {
       <QueryClientProvider client={client}>
         <ToastProvider regionLabel="Notifications" dismissLabel="Dismiss">
           <button type="button">Page button</button>
+          <main id="main" tabIndex={-1}>
+            Page
+          </main>
           <OraAssistant
             userId="user-a"
             settings={{ ...defaultOraSettings, intro: "completed", ...settings }}
@@ -182,7 +185,7 @@ const launcher = () => screen.getByTestId("ora-launcher");
 describe("Ora assistant", () => {
   it("shows the always-available button, and nothing else until it is opened", () => {
     setup();
-    expect(launcher()).toHaveAccessibleName("Open Ora, your Madeora helper");
+    expect(launcher()).toHaveAccessibleName("Ora, your Madeora helper");
     expect(launcher()).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("ora-surface")).toBeNull();
     // Closed Ora asks the server for nothing.
@@ -196,6 +199,8 @@ describe("Ora assistant", () => {
     const surface = screen.getByRole("dialog", { name: "Ora" });
     expect(surface).toHaveFocus();
     expect(launcher()).toHaveAttribute("aria-expanded", "true");
+    // One stable name; aria-expanded alone says whether it is open (S45-L2).
+    expect(launcher()).toHaveAccessibleName("Ora, your Madeora helper");
     expect(await screen.findByRole("button", { name: "Open tasks" })).toBeInTheDocument();
     expect(screen.getByTestId("ora-context")).toHaveTextContent("Helping in Personal");
     expect(screen.getByText(/personal things/)).toBeInTheDocument();
@@ -243,6 +248,44 @@ describe("Ora assistant", () => {
       body: { tool: "open-tasks", homeId: null },
     });
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
+    // Focus goes to the page, not to the hidden surface or body (S45-L4).
+    await waitFor(() => {
+      expect(screen.getByRole("main")).toHaveFocus();
+    });
+  });
+
+  it("does not navigate when the answer arrives after the person switched place (S45-L1)", async () => {
+    const user = userEvent.setup();
+    let release: (value: Response) => void = () => undefined;
+    const pending = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    const view = setup();
+    await user.click(launcher());
+    const original = globalThis.fetch;
+    vi.stubGlobal("fetch", (input: string, init?: RequestInit) =>
+      init?.method === "POST" && input === "/api/v1/ora/tools" ? pending : original(input, init),
+    );
+    await user.click(await screen.findByRole("button", { name: "Open tasks" }));
+    // The person moves to a Home: Ora's content is rebuilt for it.
+    navigation.pathname = `/homes/${HOME_ID}/chores`;
+    fetchState.tools = homeTools;
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
+        <QueryClientProvider client={new QueryClient()}>
+          <ToastProvider regionLabel="Notifications" dismissLabel="Dismiss">
+            <OraAssistant
+              userId="user-a"
+              settings={{ ...defaultOraSettings, intro: "completed" }}
+              homes={homes}
+            />
+          </ToastProvider>
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
+    release(Response.json({ output: { kind: "navigate", href: "/tasks" } }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(navigation.push).not.toHaveBeenCalled();
   });
 
   it("never follows an address that leaves Madeora", async () => {
@@ -291,6 +334,18 @@ describe("Ora assistant", () => {
 
     await user.click(launcher());
     await user.click(screen.getByRole("button", { name: "Page button" }));
+    expect(screen.getByTestId("ora-surface")).not.toBeVisible();
+
+    // Escape that a page dialog already handled leaves Ora open (S45-L3).
+    await user.click(launcher());
+    const prevent = (event: KeyboardEvent) => {
+      if (event.key === "Escape") event.preventDefault();
+    };
+    window.addEventListener("keydown", prevent, { capture: true });
+    await user.keyboard("{Escape}");
+    window.removeEventListener("keydown", prevent, { capture: true });
+    expect(screen.getByTestId("ora-surface")).toBeVisible();
+    await user.keyboard("{Escape}");
     expect(screen.getByTestId("ora-surface")).not.toBeVisible();
 
     // Clicking inside does not close it.

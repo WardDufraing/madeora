@@ -8167,6 +8167,7 @@
     "title": "Ora",
     "open": "Open Ora, je hulpje in Madeora",
     "close": "Sluit Ora",
+    "launcher": "Ora, je hulpje in Madeora",
     "expand": "Toon Ora groter",
     "collapse": "Toon Ora kleiner",
     "context": "Helpt in {context}",
@@ -8331,6 +8332,7 @@
     "cardLink": "Open Ora-instellingen",
     "enabledTitle": "Ora tonen",
     "enabledHint": "Ora is een klein hulpje onderaan het scherm. Verbergen geldt overal, maar alleen voor jou; je instellingen blijven bewaard en niemand anders merkt iets.",
+    "enabledLabel": "Ora tonen op mijn schermen",
     "enabledOn": "Ora wordt getoond",
     "enabledOff": "Ora is verborgen en uitgeschakeld",
     "motionTitle": "Beweging",
@@ -8369,7 +8371,8 @@
     "teasersTitle": "Suggesties van Ora",
     "teasersOn": "Ora mag één korte suggestie per dag tonen",
     "teasersOff": "Ora toont geen ongevraagde suggesties",
-    "teasersHint": "Hooguit één klein bericht per dag, voor al je Homes en apparaten samen. Dempen geldt overal tot je het weer aanzet; suggesties blijven beschikbaar in Ora."
+    "teasersHint": "Hooguit één klein bericht per dag, voor al je Homes en apparaten samen. Dempen geldt overal tot je het weer aanzet; suggesties blijven beschikbaar in Ora.",
+    "teasersLabel": "Een korte dagelijkse suggestie toestaan"
   },
   "OraOverview": {
     "title": "Wat staat er gepland",

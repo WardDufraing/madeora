@@ -8167,6 +8167,7 @@
     "title": "Ora",
     "open": "Open Ora, your Madeora helper",
     "close": "Close Ora",
+    "launcher": "Ora, your Madeora helper",
     "expand": "Show Ora larger",
     "collapse": "Show Ora smaller",
     "context": "Helping in {context}",
@@ -8331,6 +8332,7 @@
     "cardLink": "Open Ora settings",
     "enabledTitle": "Show Ora",
     "enabledHint": "Ora is a small helper at the bottom of the screen. Hiding it removes it everywhere for you only; your settings stay, and nobody else is affected.",
+    "enabledLabel": "Show Ora on my screens",
     "enabledOn": "Ora is shown",
     "enabledOff": "Ora is hidden and disabled",
     "motionTitle": "Movement",
@@ -8369,7 +8371,8 @@
     "teasersTitle": "Suggestions from Ora",
     "teasersOn": "Ora may show one short suggestion a day",
     "teasersOff": "Ora does not show unprompted suggestions",
-    "teasersHint": "One small note at most per day, across all your Homes and devices. Muting applies everywhere until you turn it back on; suggestions stay available inside Ora."
+    "teasersHint": "One small note at most per day, across all your Homes and devices. Muting applies everywhere until you turn it back on; suggestions stay available inside Ora.",
+    "teasersLabel": "Allow a short daily suggestion"
   },
   "OraOverview": {
     "title": "What's planned",
