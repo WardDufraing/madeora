@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 
 import { onSignedOutElsewhere } from "@/auth/broadcast";
 import { getSupabaseBrowserClient } from "@/auth/supabase-browser";
+import { clearAccountTabStorage } from "@/auth/tab-storage";
 
 export interface AuthSyncProps {
   /** The account the server confirmed for this page. */
@@ -14,7 +15,7 @@ export interface AuthSyncProps {
 
 /**
  * Keeps client caches tied to one account (architecture.md §7, §9). It empties the whole
- * TanStack Query cache when this tab signs out, another tab signs out, or a different account
+ * TanStack Query cache (and the account's drafts in this tab's storage) when this tab signs out, another tab signs out, or a different account
  * appears, and then asks the server to re-check access. It also keeps the browser's Supabase
  * client running, which refreshes the session before it expires.
  */
@@ -27,12 +28,14 @@ export function AuthSync({ userId }: AuthSyncProps) {
     if (confirmedUser.current !== userId) {
       confirmedUser.current = userId;
       queryClient.clear();
+      clearAccountTabStorage();
     }
   }, [userId, queryClient]);
 
   useEffect(() => {
     const reset = () => {
       queryClient.clear();
+      clearAccountTabStorage();
       router.refresh();
     };
     const stopListening = onSignedOutElsewhere(reset);

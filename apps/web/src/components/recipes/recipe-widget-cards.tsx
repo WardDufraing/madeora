@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { RECIPE_WIDGET_ENDPOINT, sendRecipeRequest, type RecipeWidgetData } from "@/recipes/api";
-import { recipePath } from "@/recipes/format";
+import { recipeKeys, recipePath } from "@/recipes/format";
 import type { RecipeWidgetMode } from "@/recipes/schema";
 
 import { RecipeCover } from "./recipe-cover";
@@ -22,6 +22,8 @@ const emptyKey = {
 } as const satisfies Record<RecipeWidgetMode, readonly [string, string]>;
 
 export interface RecipeWidgetCardsProps {
+  /** The viewer, so a pick cached for one account is never shown to another. */
+  readonly userId: string;
   readonly homeId: string | null;
   readonly mode: RecipeWidgetMode;
   readonly count: number;
@@ -31,12 +33,19 @@ export interface RecipeWidgetCardsProps {
 }
 
 /** The widget's cards; Random shows another pick on request (no automatic rotation). */
-export function RecipeWidgetCards({ homeId, mode, count, seed, initial }: RecipeWidgetCardsProps) {
+export function RecipeWidgetCards({
+  userId,
+  homeId,
+  mode,
+  count,
+  seed,
+  initial,
+}: RecipeWidgetCardsProps) {
   const t = useTranslations("RecipeWidgets");
   const [round, setRound] = useState(0);
   const roundSeed = round === 0 ? seed : `${seed}:${String(round)}`;
   const picked = useQuery({
-    queryKey: ["recipes", "widget", homeId ?? "personal", seed, roundSeed],
+    queryKey: recipeKeys.widget(userId, homeId, mode, count, roundSeed),
     enabled: round > 0,
     queryFn: () => {
       const params = new URLSearchParams({ mode, limit: String(count), seed: roundSeed });
@@ -46,6 +55,7 @@ export function RecipeWidgetCards({ homeId, mode, count, seed, initial }: Recipe
         `${RECIPE_WIDGET_ENDPOINT}?${params.toString()}`,
       );
     },
+    // A pick stays until a recipe change invalidates `recipeKeys.all` or Show another asks again.
     staleTime: Number.POSITIVE_INFINITY,
   });
   const data = round === 0 ? initial : (picked.data ?? null);

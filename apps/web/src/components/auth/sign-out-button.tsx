@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { clearAccountTabStorage } from "@/auth/tab-storage";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -22,6 +23,7 @@ export function SignOutButton() {
       onSubmit={() => {
         setPending(true);
         queryClient.clear();
+        clearAccountTabStorage();
       }}
     >
       <Button type="submit" variant="ghost" size="sm" loading={pending}>
