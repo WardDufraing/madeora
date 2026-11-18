@@ -98,12 +98,24 @@ export async function RecoveryNotice({
   const open = status.cases.filter((item) => isOpenForOthers(item.state));
   if (open.length === 0) return confirmation;
   const objected = open.every((item) => item.objected);
+  // S12b-L6: every member sees until when they can object (the latest open deadline).
+  const deadline = open
+    .map((item) => item.objectionEndsAt)
+    .filter((value): value is string => value !== null)
+    .sort()
+    .at(-1);
+  const formats = deadline === undefined || objected ? null : await getDateTimeFormats();
   return (
     <FormAlert tone="info" className="mb-6">
       <p className="font-semibold" data-testid="recovery-member-notice">
         {t("memberNoticeTitle", { home: homeName })}
       </p>
       <p className="mt-1">{objected ? t("memberNoticeObjected") : t("memberNoticeText")}</p>
+      {deadline !== undefined && formats !== null ? (
+        <p className="mt-1" data-testid="recovery-member-deadline">
+          {t("memberNoticeDeadline", { date: formatDateTime(deadline, formats) })}
+        </p>
+      ) : null}
       {objected ? null : <p className="mt-1">{recoveryLink}</p>}
     </FormAlert>
   );

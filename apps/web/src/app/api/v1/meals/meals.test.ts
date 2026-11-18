@@ -306,16 +306,31 @@ describe("planned meals", () => {
   });
 
   it("moves a meal to the trash from its revision", async () => {
-    answers({ delete_meal_entry: [{ outcome: "deleted", entry_id: TRANSFER }] });
+    answers({
+      delete_meal_entry: [{ outcome: "deleted", entry_id: TRANSFER }],
+      can_restore_trash_entry: true,
+    });
     const response = await deleteEntry(
       request(`/entries/${ENTRY}`, "DELETE", { revision: 2 }),
       params({ entryId: ENTRY }),
     );
-    expect(await response.json()).toEqual({ id: ENTRY, entryId: TRANSFER });
+    expect(await response.json()).toEqual({ id: ENTRY, entryId: TRANSFER, restorable: true });
     expect(state.rpc).toHaveBeenCalledWith("delete_meal_entry", {
       p_id: ENTRY,
       p_expected_revision: 2,
     });
+  });
+
+  it("offers no Undo to someone who may not restore from the Home trash (S16-4)", async () => {
+    answers({
+      delete_meal_entry: [{ outcome: "deleted", entry_id: TRANSFER }],
+      can_restore_trash_entry: false,
+    });
+    const response = await deleteEntry(
+      request(`/entries/${ENTRY}`, "DELETE", { revision: 2 }),
+      params({ entryId: ENTRY }),
+    );
+    expect(await response.json()).toEqual({ id: ENTRY, entryId: TRANSFER, restorable: false });
   });
 });
 

@@ -553,6 +553,37 @@ select tests.assert_true(
      array[(select entry_id from public.list_trash(tests.i('home-a'), 'goals') where label = 'G-Arch')])),
   'And restored');
 select tests.assert_true((tests.goal('g-arch') ->> 'status') = 'active', 'Back as it was');
+
+-- Only active goals count toward the limit (S30-L4) ------------------------------------------------------
+
+do $$
+declare
+  v_id uuid;
+  v_last uuid;
+  v_outcome text;
+  v_rev integer;
+  v_last_rev integer;
+  v_n integer := 0;
+begin
+  loop
+    v_n := v_n + 1;
+    if v_n > 500 then
+      raise exception 'the goal limit was never reached';
+    end if;
+    v_id := gen_random_uuid();
+    select c.outcome, c.revision into v_outcome, v_rev
+      from public.create_goal(v_id, tests.i('home-a'), 'completion', 'Filler') c;
+    exit when v_outcome = 'too_many';
+    v_last := v_id;
+    v_last_rev := v_rev;
+  end loop;
+  perform tests.assert_true(
+    (public.set_goal_achievement(v_last, v_last_rev, true) ->> 'outcome') = 'achieved',
+    'A goal at the limit is achieved');
+  select c.outcome into v_outcome
+    from public.create_goal(gen_random_uuid(), tests.i('home-a'), 'completion', 'One more') c;
+  perform tests.assert_true(v_outcome = 'created', 'An achieved goal no longer counts toward the limit');
+end $$;
 select tests.act_as('alice');
 select tests.assert_true(
   (select count(*) = 1 from public.goal_notice_names(array[tests.i('g-arch'), tests.i('g-b')])),

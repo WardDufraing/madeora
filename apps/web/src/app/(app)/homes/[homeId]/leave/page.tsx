@@ -4,7 +4,9 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { listMyGuardianHoldWarnings } from "@/activity/server";
 import { requireIdentity } from "@/auth/identity";
+import { GuardianHoldWarning } from "@/components/children/guardian-hold-warning";
 import { HOME_UNAVAILABLE_PATH, loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
 import { MemberAvatar } from "@/components/members/member-avatar";
@@ -70,6 +72,7 @@ export default async function LeavePage({ params }: LeavePageProps) {
   );
 
   if (permissions["home.leave"]) {
+    const holds = await listMyGuardianHoldWarnings(home.id);
     return (
       <>
         {header}
@@ -82,6 +85,9 @@ export default async function LeavePage({ params }: LeavePageProps) {
             <li>{t("leaveContent")}</li>
             <li>{t("leaveRejoin")}</li>
           </ul>
+          <div className="mb-6 empty:hidden">
+            <GuardianHoldWarning warnings={holds} context="leave" />
+          </div>
           <LeaveHome homeId={home.id} homeName={home.name} />
         </Card>
       </>

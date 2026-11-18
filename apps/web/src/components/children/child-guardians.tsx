@@ -5,8 +5,16 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import type { AccountChangeAction } from "@/auth/google-reauth";
+import {
+  ReauthenticatedAction,
+  type ActionResult,
+} from "@/components/account/reauthenticated-action";
 import { FormAlert } from "@/components/auth/form-alert";
-import { MemberFailureAlert } from "@/components/members/manage/member-failure-alert";
+import {
+  MemberFailureAlert,
+  memberFailureMessageKey,
+} from "@/components/members/manage/member-failure-alert";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
@@ -17,7 +25,7 @@ import {
   removeChildSecondaryGuardian,
 } from "@/children/api";
 import { isolate } from "@/invitations/format";
-import type { MemberActionError } from "@/members/manage-api";
+import { MemberActionError } from "@/members/manage-api";
 
 import type { GuardianOption } from "./add-child-form";
 
@@ -50,6 +58,11 @@ export function ChildGuardians({
   canAppointPrimary,
   canRemoveSecondary,
   isSecondary,
+  email,
+  userId,
+  twoFactor,
+  hasPassword,
+  confirmed,
 }: {
   readonly homeId: string;
   readonly membershipId: string;
@@ -69,8 +82,15 @@ export function ChildGuardians({
   readonly canAppointPrimary: boolean;
   readonly canRemoveSecondary: boolean;
   readonly isSecondary: boolean;
+  /** For the fresh "confirm it's you" a guardian change needs (S41-M2). */
+  readonly email: string;
+  readonly userId: string;
+  readonly twoFactor: boolean;
+  readonly hasPassword: boolean;
+  readonly confirmed: AccountChangeAction | null;
 }) {
   const t = useTranslations("Children");
+  const tManage = useTranslations("Manage");
   const router = useRouter();
   const hydrated = useHydrated();
   const [selected, setSelected] = useState(candidates[0]?.membershipId ?? "");
@@ -78,20 +98,24 @@ export function ChildGuardians({
   // A primary role is asked for only after the person has read what it changes.
   const [confirmingPrimary, setConfirmingPrimary] = useState(false);
 
+  const apply = async (change: GuardianChange): Promise<undefined> => {
+    if (change.kind === "assign") {
+      await assignChildGuardian(homeId, membershipId, {
+        role: change.role,
+        guardianMembershipId: change.id,
+      });
+    } else if (change.kind === "withdraw") {
+      await answerGuardianOffer(homeId, change.offerId, { action: "cancel" });
+    } else {
+      await removeChildSecondaryGuardian(homeId, membershipId);
+    }
+    return undefined;
+  };
+  const doneFor = (change: GuardianChange) =>
+    change.kind === "assign" ? "offered" : change.kind === "withdraw" ? "withdrawn" : "saved";
+
   const mutation = useMutation<undefined, MemberActionError, GuardianChange>({
-    mutationFn: async (change) => {
-      if (change.kind === "assign") {
-        await assignChildGuardian(homeId, membershipId, {
-          role: change.role,
-          guardianMembershipId: change.id,
-        });
-      } else if (change.kind === "withdraw") {
-        await answerGuardianOffer(homeId, change.offerId, { action: "cancel" });
-      } else {
-        await removeChildSecondaryGuardian(homeId, membershipId);
-      }
-      return undefined;
-    },
+    mutationFn: apply,
     // The failure alert sits outside the modal dialog, which makes it inert: close the dialog so
     // the alert can be seen and reached.
     onError: () => {
@@ -99,12 +123,30 @@ export function ChildGuardians({
     },
     onSuccess: (_, change) => {
       setConfirmingPrimary(false);
-      setDone(
-        change.kind === "assign" ? "offered" : change.kind === "withdraw" ? "withdrawn" : "saved",
-      );
+      setDone(doneFor(change));
       router.refresh();
     },
   });
+  // A guardian change needs a fresh confirmation first (S41-M2): the same change is tried again
+  // once the person has confirmed it's them.
+  const needsConfirmation =
+    mutation.error?.failure === "reauthenticationRequired" ? mutation.variables : undefined;
+  const retry = async (): Promise<ActionResult> => {
+    if (needsConfirmation === undefined) return { kind: "done" };
+    try {
+      await apply(needsConfirmation);
+    } catch (error) {
+      if (error instanceof MemberActionError) {
+        if (error.failure === "reauthenticationRequired") return { kind: "reauthenticate" };
+        return { kind: "message", message: tManage(memberFailureMessageKey[error.failure]) };
+      }
+      throw error;
+    }
+    setDone(doneFor(needsConfirmation));
+    mutation.reset();
+    router.refresh();
+    return { kind: "done" };
+  };
   const guardianName = candidates.find((option) => option.membershipId === selected)?.name ?? "";
   const run = (change: GuardianChange) => {
     setDone(null);
@@ -225,7 +267,28 @@ export function ChildGuardians({
           </Button>
         </div>
       ) : null}
-      <MemberFailureAlert failure={mutation.error?.failure ?? null} />
+      {needsConfirmation !== undefined ? (
+        <div className="flex flex-col gap-3" data-testid="guardian-reauth">
+          <FormAlert tone="info" announce>
+            {t("guardianReauthIntro")}
+          </FormAlert>
+          <ReauthenticatedAction
+            action="child_guardians"
+            email={email}
+            userId={userId}
+            twoFactor={twoFactor}
+            hasPassword={hasPassword}
+            confirmed={confirmed}
+            returnPath={`/homes/${homeId}/children/${membershipId}`}
+            label={t("guardianReauthConfirm")}
+            confirmIntro={t("guardianReauthIntro")}
+            variant="primary"
+            perform={retry}
+          />
+        </div>
+      ) : (
+        <MemberFailureAlert failure={mutation.error?.failure ?? null} />
+      )}
       <Dialog
         open={confirmingPrimary}
         onClose={() => {

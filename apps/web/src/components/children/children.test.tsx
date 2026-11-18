@@ -8,6 +8,7 @@ import { AddChildForm } from "./add-child-form";
 import { ChildAccessForm } from "./child-access-form";
 import { ChildGuardians } from "./child-guardians";
 import { DeleteMistakenChild } from "./delete-mistaken-child";
+import { GuardianHoldWarning } from "./guardian-hold-warning";
 import { GuardianOffers } from "./guardian-offers";
 import { LinkChildForm } from "./link-child-form";
 import { LinkCodeCard } from "./link-code-card";
@@ -15,6 +16,13 @@ import { RemoveChild } from "./remove-child";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@/components/auth/captcha", () => ({
+  useCaptcha: () => ({ ready: true, options: undefined, check: null, reset: vi.fn() }),
+}));
+const reauthenticate = vi.fn();
+vi.mock("@/auth/reauthenticate", () => ({
+  reauthenticate: (...args: unknown[]) => reauthenticate(...args) as unknown,
+}));
 
 const fetchMock = vi.fn<typeof fetch>();
 const bodyOf = (init: RequestInit | undefined): unknown =>
@@ -27,6 +35,13 @@ const SELF_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0011";
 const OTHER_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0012";
 const CHILD_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0031";
 const UPDATED_AT = "2026-11-12T08:00:00.000Z";
+const reauthProps = {
+  email: "bob@madeora.test",
+  userId: SELF_ID,
+  twoFactor: false,
+  hasPassword: true,
+  confirmed: null,
+} as const;
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -204,6 +219,7 @@ describe("ChildGuardians", () => {
         canAppointPrimary
         canRemoveSecondary={false}
         isSecondary={false}
+        {...reauthProps}
       />,
     );
     expect(screen.getByTestId("primary-guardian")).toHaveTextContent("None (on hold)");
@@ -246,6 +262,7 @@ describe("ChildGuardians", () => {
         canAppointPrimary
         canRemoveSecondary={false}
         isSecondary={false}
+        {...reauthProps}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Ask to be primary guardian" }));
@@ -255,6 +272,54 @@ describe("ChildGuardians", () => {
     // The alert sits outside the modal, so the dialog must be gone for it to be reachable.
     expect(await screen.findByRole("alert")).toBeVisible();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("asks for a fresh confirmation before a guardian change, then makes it (S41-M2)", async () => {
+    const user = userEvent.setup();
+    reauthenticate.mockResolvedValue(null);
+    fetchMock
+      .mockResolvedValueOnce(Response.json({ error: "reauthentication-required" }, { status: 403 }))
+      .mockResolvedValueOnce(Response.json({ error: "reauthentication-required" }, { status: 403 }))
+      .mockResolvedValueOnce(Response.json({}, { status: 200 }));
+    renderWithQuery(
+      <ChildGuardians
+        homeId={HOME_ID}
+        membershipId={CHILD_ID}
+        childName="Kim"
+        primaryName="Bob"
+        secondaryName="Dave"
+        hasSecondary
+        pendingPrimaryName={null}
+        pendingSecondaryName={null}
+        pendingPrimaryOfferId={null}
+        pendingSecondaryOfferId={null}
+        candidates={[]}
+        canAssignSecondary={false}
+        canHandOverPrimary={false}
+        canAppointPrimary={false}
+        canRemoveSecondary
+        isSecondary={false}
+        {...reauthProps}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Remove secondary guardian" }));
+    const panel = await screen.findByTestId("guardian-reauth");
+    expect(panel).toHaveTextContent("needs a fresh confirmation");
+    await user.click(within(panel).getByRole("button", { name: "Confirm and continue" }));
+    const confirm = await screen.findByRole("form", {
+      name: "Changing a child's guardians needs a fresh confirmation that it's you.",
+    });
+    await user.type(within(confirm).getByLabelText(/password/i), "correct horse");
+    await user.click(within(confirm).getByRole("button", { name: "Confirm and continue" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+    expect(reauthenticate).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      `/api/v1/homes/${HOME_ID}/children/${CHILD_ID}/guardians/remove-secondary`,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Guardians updated.");
+    expect(screen.queryByTestId("guardian-reauth")).not.toBeInTheDocument();
   });
 
   it("offers nothing to change to a member who is not a guardian", () => {
@@ -276,6 +341,7 @@ describe("ChildGuardians", () => {
         canAppointPrimary={false}
         canRemoveSecondary={false}
         isSecondary={false}
+        {...reauthProps}
       />,
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
@@ -420,5 +486,38 @@ describe("LinkChildForm", () => {
     await user.click(screen.getByRole("button", { name: "Link child" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("That code isn't valid.");
     expect(router.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("GuardianHoldWarning (S41-M3)", () => {
+  it("warns before leaving that the children would be put on hold", () => {
+    renderWithQuery(
+      <GuardianHoldWarning
+        warnings={[{ homeId: HOME_ID, homeName: "Thuis", children: 2 }]}
+        context="leave"
+      />,
+    );
+    expect(screen.getByTestId("guardian-hold-warning")).toHaveTextContent(
+      "You are the only primary guardian of 2 children in this Home.",
+    );
+  });
+
+  it("lists each Home before deactivating or deleting the account, and nothing when none", () => {
+    const { unmount } = renderWithQuery(
+      <GuardianHoldWarning
+        warnings={[
+          { homeId: HOME_ID, homeName: "Thuis", children: 1 },
+          { homeId: OTHER_ID, homeName: "Kot", children: 3 },
+        ]}
+        context="account"
+      />,
+    );
+    const warning = screen.getByTestId("guardian-hold-warning");
+    expect(warning).toHaveTextContent("\u2068Thuis\u2069: 1 child");
+    expect(warning).toHaveTextContent("\u2068Kot\u2069: 3 children");
+    expect(warning).toHaveTextContent("Reactivating a deactivated account restores their access");
+    unmount();
+    renderWithQuery(<GuardianHoldWarning warnings={[]} context="account" />);
+    expect(screen.queryByTestId("guardian-hold-warning")).not.toBeInTheDocument();
   });
 });

@@ -141,13 +141,18 @@ export function ItemEditor({
   const remove = useShoppingMutation(
     `shopping-item:${item.id}`,
     () =>
-      sendShoppingRequest<{ entryId: string | null }>("DELETE", shoppingItemEndpoint(item.id), {}),
-    ({ entryId }) => {
+      sendShoppingRequest<{ entryId: string | null; restorable?: boolean }>(
+        "DELETE",
+        shoppingItemEndpoint(item.id),
+        {},
+      ),
+    ({ entryId, restorable }) => {
       onClose();
       toast.show({
         title: t("itemDeleted", { name: item.name }),
         tone: "success",
-        ...(entryId
+        // S16-4: Undo restores from the Home trash, which only its Owner and managers may do.
+        ...(entryId && restorable
           ? {
               action: {
                 label: t("undo"),

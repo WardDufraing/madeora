@@ -45,3 +45,14 @@ Architecture §10 fixes the upload lifecycle: an authorized upload intent, a ser
 - The web server now holds a Supabase secret key where storage is on. It is server-only, validated at startup (the app refuses to start with storage on and no key), used for one function, and never given to PR previews unless the owner chooses to. This needs the owner's explicit approval (decided 2026-11-17: kept, restricted to an allowlist, ADR 0056) (CLAUDE.md: privileged server clients are exceptional); the alternative is a narrower, HMAC-signed finalize check inside the database, which adds a secret to manage in Postgres.
 - There is no restore-from-deleted screen yet: the spec's recovery UI comes with the first feature where people delete files themselves. The data model already supports it.
 - Uploads of other kinds (documents, photos, Home files) reuse the same pipeline; each new purpose adds its own type and size policy and processing step.
+
+## Note: the service-role key allowlist (owner decision, review item S15-M3)
+
+The owner approved the web server's Supabase secret key on one condition: it reaches a minimal, written allowlist of server functions and nothing else. `apps/web/src/auth/service-role.ts` is the only place that builds a client with it. That client exposes only the listed functions (`SERVICE_ROLE_RPCS`: child sign-in, shared household devices, Household Display pairing and PINs, child-to-adult transition links, and `finalize_upload` / `finalize_photo`) plus minting a one-time sign-in link for a child's or display's internal alias. The function name is checked when the code is compiled and again when it runs. `apps/web/src/auth/service-role.test.ts` fails in these cases:
+
+- another file reads the key;
+- another file creates a Supabase client from `@supabase/supabase-js` with it;
+- a module that is not listed uses the client;
+- a module calls a function that is not on the list.
+
+Adding a function to the list needs the owner's approval, like any other privileged client. The same test scans every app and package for the key: only these two files and the background jobs' runner (`packages/jobs/src/trigger/env.ts` and `tasks.ts`) may read it. The jobs are a separate process with their own service-role functions; `packages/jobs/src/service-role-allowlist.test.ts` holds their written allowlist (`JOB_SERVICE_ROLE_RPCS`, every one a `service_role`-only function) and fails when a job calls a function that is not on it, calls one by a computed name, or when a file other than the deployed and local runner creates a client.

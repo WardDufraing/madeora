@@ -8,6 +8,7 @@ import {
   readMealMutation,
 } from "@/meals/route-helpers";
 import { deleteEntrySchema, updateEntrySchema } from "@/meals/schema";
+import { isEntryRestorable } from "@/trash/restorable";
 
 interface EntryRouteContext {
   readonly params: Promise<{ readonly entryId: string }>;
@@ -43,7 +44,10 @@ export async function PATCH(request: Request, { params }: EntryRouteContext): Pr
   );
 }
 
-/** Moves a meal to the trash (revision-checked); restorable for 7 days while its slot is free. */
+/**
+ * Moves a meal to the trash (revision-checked); restorable for 7 days while its slot is free, by the
+ * Home's Owner and meal managers (S16-4). `restorable` says whether the caller may Undo it.
+ */
 export async function DELETE(request: Request, { params }: EntryRouteContext): Promise<Response> {
   const input = await readMealMutation(request, deleteEntrySchema);
   if (!input.ok) return input.response;
@@ -56,8 +60,10 @@ export async function DELETE(request: Request, { params }: EntryRouteContext): P
   });
   if (error) return databaseFailure("meals.delete_entry_failed", error);
   const row = data[0];
+  const trashEntryId = row?.entry_id ?? null;
   return outcomeAnswer("meals.delete_entry_failed", row?.outcome, {
     id: entryId,
-    entryId: row?.entry_id ?? null,
+    entryId: trashEntryId,
+    restorable: await isEntryRestorable(supabase, trashEntryId),
   });
 }

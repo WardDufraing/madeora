@@ -38,6 +38,8 @@ import type {
  *
  * A Home the caller is not in, or a membership that is not a child of it: `404 not-found`. An
  * action their guardian role does not allow: `403 not-permitted`. An outdated edit: `409 stale`.
+ * Offering a guardian role or removing the secondary guardian without a fresh confirmation
+ * ('child_guardians', S41-M2): `403 reauthentication-required`.
  */
 export function childrenEndpoint(homeId: string): string {
   return `${homeEndpoint(homeId)}/children`;

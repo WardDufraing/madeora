@@ -316,6 +316,12 @@ select tests.assert_true(
     (select id from ids where name = 'home-a')) where viewer = 'claimant') >= now() + interval '13 days',
   'Resuming starts a fresh 14-day objection period'
 );
+select tests.act_as('finn');
+select tests.assert_true(
+  (select max(objection_ends_at) from public.home_ownership_recovery_status(
+    (select id from ids where name = 'home-a')) where viewer = 'member') >= now() + interval '13 days',
+  'Other members see the objection deadline too (S12b-L6)'
+);
 
 -- Completion ----------------------------------------------------------------------------------------
 

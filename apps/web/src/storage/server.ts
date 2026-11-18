@@ -1,9 +1,8 @@
 import "server-only";
 
-import { getPublicEnv } from "@madeora/config/env/public";
-import type { Database } from "@madeora/database";
 import { createObjectStore, type ObjectStore } from "@madeora/storage";
-import { createClient } from "@supabase/supabase-js";
+
+import { createServiceRoleClient } from "@/auth/service-role";
 
 import { parseWebStorageSettings } from "./config";
 
@@ -63,11 +62,7 @@ export function getStorage(): Storage | null {
     cached = { storage: null };
     return null;
   }
-  const service = createClient<Database>(
-    getPublicEnv().NEXT_PUBLIC_SUPABASE_URL,
-    settings.serviceRoleKey,
-    { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
-  );
+  const service = createServiceRoleClient(settings.serviceRoleKey);
   const storage: Storage = {
     objects: createObjectStore(settings.store),
     finalizer: {

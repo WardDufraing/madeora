@@ -124,6 +124,13 @@ select tests.assert_true((select outcome from public.create_photo_intent(tests.i
 select tests.act_as('dave');
 select tests.assert_true((select outcome from public.create_photo_intent(tests.i('home-a'), 'image/jpeg', 1000,
   gen_random_uuid())) = 'not_permitted', 'Dave cannot upload into a Home he is not in');
+select tests.assert_denied($$select * from public.home_photo_storage_usage(tests.i('home-a'))$$,
+  'Nor read its storage figures (S35-L6)', '42501');
+select tests.act_as('carol');
+select tests.assert_row_count($$select * from public.home_photo_storage_usage(tests.i('home-a'))$$, 1,
+  'A Member sees the Home''s storage figures in the upload flow (S35-L6)');
+select tests.assert_denied($$select * from public.home_storage_usage(tests.i('home-a'))$$,
+  'But still cannot manage storage', '42501');
 select tests.act_as('alice');
 do $$
 declare
@@ -236,10 +243,13 @@ select tests.act_as('alice');
 select tests.assert_true((select count(*) from public.list_trash(tests.i('home-a'), 'photos', 'photo')) = 1,
   'The Owner does');
 select tests.act_as('carol');
-select tests.assert_true((select count(*) from public.list_trash(tests.i('home-a'), 'photos', 'photo')) = 1,
-  'Carol sees her own');
+select tests.assert_true((select count(*) from public.list_trash(tests.i('home-a'), 'photos', 'photo')) = 0,
+  'Carol, a member, does not see the Home trash entry, not even her own (S16-4: Owner and managers only)');
+select tests.assert_true((select outcome from public.restore_trash_entries(array[tests.open_trash('photo')])) = 'not_found',
+  'Nor restores it');
+select tests.act_as('alice');
 select tests.assert_true((select outcome from public.restore_trash_entries(array[tests.open_trash('photo')])) = 'restored',
-  'She restores it');
+  'The Owner restores it');
 select tests.assert_true(tests.n(tests.lib('home-a')) = 2 and tests.used_home('home-a') >= 8000,
   'It is back, and not counted twice');
 select tests.act_as('alice');

@@ -37,6 +37,8 @@ export const ACCOUNT_CHANGE_ACTIONS = [
   "close_home",
   // S40 part 2: deleting personal data by category.
   "delete_personal_data",
+  // Review decision S41-M2: adding, removing or changing a child's guardians.
+  "child_guardians",
 ] as const;
 export type AccountChangeAction = (typeof ACCOUNT_CHANGE_ACTIONS)[number];
 
@@ -72,15 +74,20 @@ export function sectionOf(action: AccountChangeAction): string {
       return "close";
     case "delete_personal_data":
       return "delete-data";
+    case "child_guardians":
+      return "guardians";
   }
 }
 
 /**
  * Pages other than the action's own that may ask to be returned to: a Home's export page (S39), a
- * Home's close page and the closed Homes page (S40).
+ * Home's close page and the closed Homes page (S40), and a child's page (S41-M2: guardians).
  */
-const RETURN_PATH =
-  /^(?:\/homes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(?:export|close)|\/settings\/closed-homes)$/;
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const RETURN_PATH = new RegExp(
+  `^(?:/homes/${UUID}/(?:export|close|children/${UUID})|/settings/closed-homes)$`,
+);
+const CHILD_PAGE = new RegExp(`^/homes/${UUID}/children/${UUID}$`);
 
 export function isReturnPath(value: unknown): value is string {
   return typeof value === "string" && RETURN_PATH.test(value);
@@ -91,7 +98,9 @@ export function isReturnPath(value: unknown): value is string {
  * A data export started on a Home's export page returns there (`returnPath`).
  */
 export function confirmedPath(action: AccountChangeAction, returnPath?: string): string {
-  if (isReturnPath(returnPath)) {
+  if (isReturnPath(returnPath) && CHILD_PAGE.test(returnPath)) {
+    if (action === "child_guardians") return `${returnPath}?confirmed=${action}#guardians`;
+  } else if (isReturnPath(returnPath)) {
     const exportPage = returnPath.endsWith("/export");
     if (action === "data_export" ? exportPage : action === "close_home" && !exportPage) {
       return `${returnPath}?confirmed=${action}`;

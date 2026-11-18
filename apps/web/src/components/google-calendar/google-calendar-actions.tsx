@@ -72,6 +72,7 @@ export function Failure({
     "nonexistent-time": "failureNonexistentTime",
     "pending-changes": "failurePendingChanges",
     "not-in-conflict": "failureStale",
+    "calendar-unavailable": "failureCalendarUnavailable",
     "in-conflict": "failureConflictOpen",
     "not-failed": "failureStale",
   } as const;
@@ -374,6 +375,38 @@ export function ChangeRetryActions({
           data-testid="google-change-discard"
         >
           {create ? t("discardCreate") : t("discard")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * S34-M6: a conflict on a calendar Google no longer lists is kept, marked stale; Madeora's version
+ * cannot be sent there any more, so the only choice is to drop it (Google's version).
+ */
+export function StaleConflictActions({ changeId }: { readonly changeId: string }) {
+  const t = useTranslations("GoogleCalendar");
+  const drop = useGoogleMutation(`google-change:${changeId}`, () =>
+    sendGoogleRequest("POST", googleChangeEndpoint(changeId), {
+      action: "resolve",
+      choice: "google",
+    }),
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      <Failure error={drop.error} about="event" />
+      <div>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={drop.busy}
+          onClick={() => {
+            drop.mutate(undefined);
+          }}
+          data-testid="google-change-drop-stale"
+        >
+          {t("dropStaleConflict")}
         </Button>
       </div>
     </div>

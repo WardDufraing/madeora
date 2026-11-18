@@ -6,7 +6,7 @@
 
 ## Context
 
-The review backlog left a number of "owner should confirm" items in earlier ADRs and reviews. Ward answered them one by one on 2026-11-17. Some answers confirm what was built; others asked for a code change, made in PR #97.
+The review backlog left a number of "owner should confirm" items in earlier ADRs and reviews. Ward answered them one by one on 2026-11-17. Some answers confirm what was built; others asked for a code change, made in PR #97 (merged into main on 2026-11-18).
 
 ## Decisions accepted as built or confirmed
 
@@ -23,7 +23,7 @@ The review backlog left a number of "owner should confirm" items in earlier ADRs
 11. **S35-M1, photo upload limits.** 120 upload intents per hour and 25 pending uploads per account.
 12. **S35-M5, thumbnail redirects.** Private cache of 30 seconds. Downloads and all other variants stay `no-store`. Revoking access to a thumbnail can lag by up to 30 seconds.
 
-## Decisions implemented in code (PR #97, migration `20261213090000_review_decisions.sql`)
+## Decisions implemented in code (PR #97, merged; migration `20261213090000_review_decisions.sql`)
 
 - **S41-M3:** a child whose only primary guardian is inactive or pending deletion is put on hold, with a warning; reactivation restores the role (`private.child_on_hold`, `my_guardian_hold_warnings`).
 - **S41-M2:** changing a child's guardians needs fresh re-authentication (re-auth action `child_guardians`, 2-minute grant).

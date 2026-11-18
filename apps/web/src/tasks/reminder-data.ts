@@ -17,7 +17,8 @@ import { logTasks } from "./log";
 const dst = z.enum(["gap", "overlap"]).nullable();
 const clock = z.string().regex(/^\d{2}:\d{2}$/);
 
-const reminderViewSchema = z.object({
+/** Exported for the contract test against the shapes `get_task_reminder` answers. */
+export const reminderViewSchema = z.object({
   taskId: z.uuid(),
   dueDate: z.iso.date().nullable(),
   completed: z.boolean(),

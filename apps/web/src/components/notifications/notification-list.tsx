@@ -77,6 +77,7 @@ const kindMessage = {
   "chore.volunteer_accepted": "kindChoreVolunteerAccepted",
   "chore.assignment_corrected": "kindChoreAssignmentCorrected",
   "chore.reminder": "kindChoreReminder",
+  "habit.contribution_corrected": "kindHabitContributionCorrected",
   "chore.manager_summary": "kindChoreManagerSummary",
   "vacation.invited": "kindVacationInvited",
   "vacation.dates_proposed": "kindVacationDatesProposed",

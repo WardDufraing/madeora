@@ -94,6 +94,8 @@ export const notificationKinds = [
   "habit.reminder",
   "habit.paused",
   "habit.resumed",
+  // Review decision S29-L9: a manager corrected (voided or amended) the reader's contribution.
+  "habit.contribution_corrected",
   "goal.reminder",
   "pet_care.reminder",
   "calendar.reminder",

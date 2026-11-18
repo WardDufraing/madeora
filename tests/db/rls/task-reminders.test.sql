@@ -38,6 +38,17 @@ insert into ids select n, gen_random_uuid() from unnest(array[
 
 create function tests.i(p_name text) returns uuid
   language sql stable security definer as $$ select id from ids where name = p_name; $$;
+-- Last Sunday of a month in the year after today: the EU clock changes, always in the future
+create function tests.last_sunday(p_month integer) returns date
+  language sql stable as $$
+  select d - extract(dow from d)::integer
+  from (select make_date((extract(year from current_date)::integer + 1), p_month, 31) as d) x
+$$;
+-- Sorted, comma-joined top-level keys of a JSON object (shape checks of the read path)
+create function tests.keys_of(p_json jsonb) returns text
+  language sql immutable as $$
+  select coalesce(string_agg(k, ',' order by k), '') from jsonb_object_keys(p_json) as k; $$;
+grant execute on function tests.keys_of(jsonb) to authenticated, service_role;
 create function tests.today_a() returns date
   language sql stable as $$ select (now() at time zone 'Europe/Brussels')::date; $$;
 create function tests.rem(p_task uuid) returns private.task_reminders
@@ -63,7 +74,7 @@ create function tests.reminded_user(p_task uuid, p_user text) returns bigint
   language sql stable security definer as $$
   select count(*) from public.notifications
   where kind = 'task.reminder' and params ->> 'taskId' = p_task::text and user_id = tests.user_id(p_user); $$;
-grant execute on function tests.i(text), tests.today_a(), tests.rem(uuid), tests.rrev(uuid), tests.trev(text),
+grant execute on function tests.i(text), tests.last_sunday(integer), tests.today_a(), tests.rem(uuid), tests.rrev(uuid), tests.trev(text),
   tests.occ(text, date), tests.reminded(uuid), tests.reminded_user(uuid, text) to authenticated, service_role;
 
 -- Nothing reachable --------------------------------------------------------------------------------
@@ -186,19 +197,19 @@ select tests.assert_true(
 
 -- DST -------------------------------------------------------------------------------------------------
 
-select public.create_task(tests.i('t-dst'), tests.i('l-c'), 'Clocks', p_due_date => date '2027-10-31');
+select public.create_task(tests.i('t-dst'), tests.i('l-c'), 'Clocks', p_due_date => tests.last_sunday(10));
 select tests.assert_true(
-  (select outcome = 'preview' and dst = 'gap' and fire_at = timestamptz '2027-03-28 01:30:00+00'
+  (select outcome = 'preview' and dst = 'gap' and fire_at = (tests.last_sunday(3) + time '01:30') at time zone 'UTC'
    from public.set_task_reminder(tests.i('t-dst'), 'this', 'absolute', 0,
-     p_local_at => timestamp '2027-03-28 02:30', p_time_zone => 'Europe/Brussels', p_dry_run => true)),
+     p_local_at => tests.last_sunday(3) + time '02:30', p_time_zone => 'Europe/Brussels', p_dry_run => true)),
   '02:30 does not exist when the clocks go forward: it moves forward by the gap (03:30) and says so');
 select tests.assert_true(
-  (select outcome = 'preview' and dst = 'overlap' and fire_at = timestamptz '2027-10-31 01:30:00+00'
+  (select outcome = 'preview' and dst = 'overlap' and fire_at = (tests.last_sunday(10) + time '01:30') at time zone 'UTC'
    from public.set_task_reminder(tests.i('t-dst'), 'this', 'relative', 0, p_days_before => 0,
      p_time => '02:30', p_time_zone => 'Europe/Brussels', p_dry_run => true)),
   '02:30 happens twice when the clocks go back: the second (standard time) is used and it says so');
 select tests.assert_true(
-  (select outcome = 'preview' and dst is null and fire_at = timestamptz '2027-10-30 22:00:00+00'
+  (select outcome = 'preview' and dst is null and fire_at = ((tests.last_sunday(10) - 1) + time '22:00') at time zone 'UTC'
    from public.set_task_reminder(tests.i('t-dst'), 'this', 'relative', 0, p_days_before => 0,
      p_time => '00:00', p_time_zone => 'Europe/Brussels', p_dry_run => true)),
   'An ordinary time that day is just that time');
@@ -366,6 +377,13 @@ select tests.assert_true(
        = ((tests.today_a() + 5) + time '09:00') at time zone 'Europe/Brussels'
    from public.get_task_reminder(tests.i('t-due')) r),
   'The editor shows when it would come with the new due date');
+-- Shape of an on-hold reminder, read while t-due is still on hold (it is removed further down).
+select tests.assert_true(
+  (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
+     and (r -> 'reminder' ->> 'status') = 'needs_review' and jsonb_typeof(r -> 'reminder' -> 'fireAt') = 'null'
+     and (r -> 'reminder' ->> 'reviewFireAt') is not null
+   from public.get_task_reminder(tests.i('t-due')) r),
+  'An on-hold reminder: the same keys, a null fire time and a proposed one');
 select tests.act_as_owner();
 update private.task_reminders set fire_at = now() - interval '1 minute' where task_id = tests.i('t-due');
 select tests.act_as_service_role();
@@ -555,3 +573,28 @@ select tests.assert_true(
 select tests.assert_denied(
   $$select public.task_reminder_titles(array(select gen_random_uuid() from generate_series(1, 101)))$$,
   'At most 100 at a time', '22023');
+
+-- The read path's shape, for every reminder status (the web's reminderViewSchema in
+-- apps/web/src/tasks/reminder-data.ts mirrors these key lists; reminder-data.test.ts parses the same shapes) -----
+
+select tests.act_as('carol');
+select tests.assert_true(
+  (select tests.keys_of(r) = 'canEdit,canEditSeries,channels,completed,dueDate,recipients,recipientsAreAssignees,recurring,reminder,seriesReminder,taskId,timeZone'
+   from public.get_task_reminder(tests.i('t1')) r),
+  'The view has exactly the keys the web schema parses');
+select tests.assert_true(
+  (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
+     and (r -> 'reminder' ->> 'status') = 'sent' and (r -> 'reminder' ->> 'fireAt') is not null
+   from public.get_task_reminder(tests.i('t1')) r),
+  'A sent reminder: every key present, with its time');
+select tests.assert_true(
+  (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
+     and (r -> 'reminder' ->> 'status') = 'not_sent'
+   from public.get_task_reminder(tests.i('t-done')) r),
+  'A not-sent reminder: the same keys');
+select tests.assert_true(
+  (select tests.keys_of(r -> 'reminder') = 'daysBefore,dst,fireAt,localAt,mode,own,reviewDst,reviewFireAt,revision,status,time,timeZone'
+     and (r -> 'reminder' ->> 'status') = 'off' and jsonb_typeof(r -> 'reminder' -> 'fireAt') = 'null'
+     and tests.keys_of(r -> 'seriesReminder') = 'active,daysBefore,revision,time'
+   from public.get_task_reminder(tests.occ('s2', tests.today_c() + 1)) r),
+  'A reminder switched off on one occurrence: the same keys, nulls for what it no longer has; the series part has its own');

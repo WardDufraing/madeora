@@ -470,6 +470,71 @@ select tests.assert_true(
     jsonb_populate_record(null::private.chores, '{"auto_release_hours": 0}'::jsonb),
     'Europe/Brussels') = '2027-03-28 22:00+00'::timestamptz$q$),
   'The day that has 23 hours ends at local midnight');
+
+-- S22-L3: a claimant's vacation (begun, on or after the claim) restarts the timer from the day after
+-- their last day away; a vacation still to come or one before the claim does not.
+insert into ids select n, gen_random_uuid() from unnest(array['vac-1', 'vac-2']) as n;
+insert into private.home_vacations (id, home_id, starts_on, ends_on, created_by) values
+  (tests.i('vac-1'), tests.i('home-a'), tests.today_a() - 3, tests.today_a() - 1, tests.user_id('carol')),
+  (tests.i('vac-2'), tests.i('home-a'), tests.today_a() + 1, tests.today_a() + 5, tests.user_id('carol'));
+insert into private.home_vacation_participants (id, vacation_id, home_id, user_id, status, starts_on, ends_on, direct)
+values
+  (gen_random_uuid(), tests.i('vac-1'), tests.i('home-a'), tests.user_id('carol'), 'accepted',
+    tests.today_a() - 3, tests.today_a() - 1, true),
+  (gen_random_uuid(), tests.i('vac-2'), tests.i('home-a'), tests.user_id('carol'), 'accepted',
+    tests.today_a() + 1, tests.today_a() + 5, true);
+select tests.assert_true(
+  tests.sd(format($q$private.chore_release_at(
+    jsonb_populate_record(null::private.chore_occurrences, jsonb_build_object('home_id', %L,
+      'due_date', %L, 'claimed_by', %L, 'claimed_at', now() - interval '10 days')),
+    jsonb_populate_record(null::private.chores, '{"auto_release_hours": 24}'::jsonb),
+    'Europe/Brussels') = (%L::date::timestamp at time zone 'Europe/Brussels') + interval '24 hours'$q$,
+    tests.i('home-a'), tests.today_a() - 5, tests.user_id('carol'), tests.today_a())),
+  'Back from a vacation, the claimant gets the full time again from the day after her return');
+select tests.assert_true(
+  tests.sd(format($q$private.chore_release_at(
+    jsonb_populate_record(null::private.chore_occurrences, jsonb_build_object('home_id', %L,
+      'due_date', %L, 'claimed_by', %L, 'claimed_at', now())),
+    jsonb_populate_record(null::private.chores, '{"auto_release_hours": 24}'::jsonb),
+    'Europe/Brussels') = (%L::date::timestamp at time zone 'Europe/Brussels') + interval '24 hours'$q$,
+    tests.i('home-a'), tests.today_a() - 5, tests.user_id('carol'), tests.today_a() - 4)),
+  'A vacation before the claim, or one still to come, changes nothing');
+delete from private.home_vacations where id in (tests.i('vac-1'), tests.i('vac-2'));
+-- Back early (S22-L3 review M-1): a stay she withdrew from, or a vacation cancelled while she was away,
+-- counts up to the day before that happened, here today: the full time starts again from today.
+insert into ids select n, gen_random_uuid() from unnest(array['vac-3', 'vac-4']) as n;
+insert into private.home_vacations (id, home_id, starts_on, ends_on, created_by) values
+  (tests.i('vac-3'), tests.i('home-a'), tests.today_a() - 3, tests.today_a() + 3, tests.user_id('carol'));
+insert into private.home_vacation_participants (id, vacation_id, home_id, user_id, status, starts_on, ends_on, direct,
+    ended_by, ended_reason)
+values (gen_random_uuid(), tests.i('vac-3'), tests.i('home-a'), tests.user_id('carol'), 'withdrawn',
+    tests.today_a() - 3, tests.today_a() + 3, true, tests.user_id('carol'), 'self');
+insert into private.home_vacation_events (vacation_id, kind, actor_id, subject_id)
+  values (tests.i('vac-3'), 'withdrawn', tests.user_id('carol'), tests.user_id('carol'));
+select tests.assert_true(
+  tests.sd(format($q$private.chore_release_at(
+    jsonb_populate_record(null::private.chore_occurrences, jsonb_build_object('home_id', %L,
+      'due_date', %L, 'claimed_by', %L, 'claimed_at', now() - interval '10 days')),
+    jsonb_populate_record(null::private.chores, '{"auto_release_hours": 24}'::jsonb),
+    'Europe/Brussels') = (%L::date::timestamp at time zone 'Europe/Brussels') + interval '24 hours'$q$,
+    tests.i('home-a'), tests.today_a() - 5, tests.user_id('carol'), tests.today_a())),
+  'Withdrawing from a stay that had begun restarts the timer from her return, not from its planned end');
+delete from private.home_vacations where id = tests.i('vac-3');
+insert into private.home_vacations (id, home_id, starts_on, ends_on, created_by, cancelled_at, cancelled_by) values
+  (tests.i('vac-4'), tests.i('home-a'), tests.today_a() - 2, tests.today_a() + 4, tests.user_id('carol'), now(),
+    tests.user_id('carol'));
+insert into private.home_vacation_participants (id, vacation_id, home_id, user_id, status, starts_on, ends_on, direct)
+values (gen_random_uuid(), tests.i('vac-4'), tests.i('home-a'), tests.user_id('carol'), 'accepted',
+    tests.today_a() - 2, tests.today_a() + 4, true);
+select tests.assert_true(
+  tests.sd(format($q$private.chore_release_at(
+    jsonb_populate_record(null::private.chore_occurrences, jsonb_build_object('home_id', %L,
+      'due_date', %L, 'claimed_by', %L, 'claimed_at', now() - interval '10 days')),
+    jsonb_populate_record(null::private.chores, '{"auto_release_hours": 24}'::jsonb),
+    'Europe/Brussels') = (%L::date::timestamp at time zone 'Europe/Brussels') + interval '24 hours'$q$,
+    tests.i('home-a'), tests.today_a() - 5, tests.user_id('carol'), tests.today_a())),
+  'A vacation cancelled while she was away restarts the timer from the cancellation day');
+delete from private.home_vacations where id = tests.i('vac-4');
 select tests.sd($q$(select 1 = 1 from (select set_config('tests.dst_home', home_id::text, true)
   from private.chore_occurrences where id = tests.first_occ('c-claim')) x)$q$);
 create function tests.set_zone() returns void
