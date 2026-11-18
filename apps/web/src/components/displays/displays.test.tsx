@@ -119,7 +119,12 @@ describe("HouseholdDisplaysManager", () => {
       )
       .mockReturnValueOnce(answer(201, { display: { id: DISPLAY_ID } }));
     const { container } = renderWithQuery(
-      <HouseholdDisplaysManager homeId={HOME_ID} displays={[]} words={words} displayAddress="localhost:3000/display" />,
+      <HouseholdDisplaysManager
+        homeId={HOME_ID}
+        displays={[]}
+        words={words}
+        displayAddress="localhost:3000/display"
+      />,
     );
     expect(await axeViolations(container)).toEqual([]);
 
@@ -195,7 +200,14 @@ describe("HouseholdDisplaysManager", () => {
   ])("explains a refused code (%s %s)", async (status, error, message) => {
     const user = userEvent.setup();
     fetchMock.mockReturnValueOnce(answer(status, { error }));
-    renderWithQuery(<HouseholdDisplaysManager homeId={HOME_ID} displays={[]} words={words} displayAddress="localhost:3000/display" />);
+    renderWithQuery(
+      <HouseholdDisplaysManager
+        homeId={HOME_ID}
+        displays={[]}
+        words={words}
+        displayAddress="localhost:3000/display"
+      />,
+    );
     await user.type(screen.getByRole("textbox", { name: /Pairing code/ }), "ABCD-EFGH");
     await user.click(screen.getByRole("button", { name: "Check code" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(message);

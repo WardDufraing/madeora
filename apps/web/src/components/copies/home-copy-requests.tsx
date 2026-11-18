@@ -128,8 +128,7 @@ export function HomeCopyRequests({
                         decide(row.id, true);
                       }}
                       aria-describedby={`copy-request-${row.id}`}
-                      aria-describedby={`copy-request-${row.id}`}
-                    data-testid="copy-request-confirm"
+                      data-testid="copy-request-confirm"
                     >
                       {t("approveConfirm")}
                     </Button>

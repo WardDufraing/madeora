@@ -46,13 +46,8 @@ export const recipeKeys = {
     ["recipes", userId, homeId ?? "personal", "page", query, loadedAt] as const,
   detail: (userId: string, recipeId: string) => ["recipes", userId, "detail", recipeId] as const,
   /** A widget's Show-another pick (S24-L1): per viewer, context, mode, count and seed. */
-  widget: (
-    userId: string,
-    homeId: string | null,
-    mode: string,
-    count: number,
-    seed: string,
-  ) => ["recipes", userId, homeId ?? "personal", "widget", mode, count, seed] as const,
+  widget: (userId: string, homeId: string | null, mode: string, count: number, seed: string) =>
+    ["recipes", userId, homeId ?? "personal", "widget", mode, count, seed] as const,
 };
 
 /** A recipe's content as the editor's values, every field as text a person can type back in. */

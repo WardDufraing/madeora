@@ -4,7 +4,7 @@ import { ChevronDownIcon } from "@madeora/icons";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useId, useRef, useState } from "react";
 
 import { cx } from "@/components/ui/cx";
 import type { MyHome } from "@/homes/types";
@@ -90,6 +90,18 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
     };
   }, [open]);
 
+  // A context was chosen: the list closes and focus goes to the page, not to a link in the
+  // hidden list, so keyboard users do not restart from the top (S09-L5). Not `defaultPrevented`:
+  // Link prevents the default itself for a client navigation.
+  const onPick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    setOpen(false);
+    requestAnimationFrame(() => {
+      document.getElementById("main")?.focus();
+    });
+  };
+
   const currentName =
     homeId === null ? t("personalContext") : (current?.name ?? t("unknownHomeContext"));
 
@@ -124,23 +136,12 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
         id={panelId}
         hidden={!open}
         className="absolute inset-x-4 top-full z-40 mt-2 rounded-card border border-line bg-surface-elevated p-2 shadow-overlay sm:inset-x-auto sm:start-0 sm:w-72 sm:max-w-[calc(100vw-2rem)]"
-        onClick={(event) => {
-          // A context was chosen: the list closes and focus goes to the page, not to a link in
-          // the hidden list, so keyboard users do not restart from the top (S09-L5).
-          // Not `defaultPrevented`: Link prevents the default itself for a client navigation.
-          if (event.button !== 0) return;
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          if (!(event.target instanceof Element) || !event.target.closest("a[href]")) return;
-          setOpen(false);
-          requestAnimationFrame(() => {
-            document.getElementById("main")?.focus();
-          });
-        }}
       >
         <nav aria-label={t("switchContext")}>
           <ul className="flex flex-col gap-1">
             <li>
               <Link
+                onClick={onPick}
                 href="/?context=personal"
                 aria-current={homeId === null && pathname === "/" ? "page" : undefined}
                 className={cx(itemClass, homeId === null && "font-semibold")}
@@ -156,6 +157,7 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
             {homes?.map((home) => (
               <li key={home.id}>
                 <Link
+                  onClick={onPick}
                   href={`/homes/${home.id}`}
                   aria-current={pathname === `/homes/${home.id}` ? "page" : undefined}
                   className={cx(itemClass, home.id === homeId && "font-semibold")}
@@ -174,10 +176,10 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
             <p className="px-3 py-2 text-helper text-fg-muted">{t("homesUnavailable")}</p>
           ) : null}
           <div className="mt-1 border-t border-line pt-1">
-            <Link href="/homes/new" className={itemClass}>
+            <Link href="/homes/new" onClick={onPick} className={itemClass}>
               {t("createHome")}
             </Link>
-            <Link href="/homes/join" className={itemClass}>
+            <Link href="/homes/join" onClick={onPick} className={itemClass}>
               {t("joinHome")}
             </Link>
           </div>

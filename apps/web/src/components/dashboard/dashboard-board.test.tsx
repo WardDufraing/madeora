@@ -165,9 +165,9 @@ describe("DashboardBoard edit mode", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/^Quick actions: row 1, column 1 of 1/);
     expect(handle).toHaveFocus();
     // The edit-mode order follows the screen: Quick actions is now first to read and tab to (S17-L6).
-    expect(
-      screen.getAllByTestId("dashboard-edit-widget")[0]?.getAttribute("data-widget-id"),
-    ).toBe(personalStarterLayout.widgets[1]?.id);
+    expect(screen.getAllByTestId("dashboard-edit-widget")[0]?.getAttribute("data-widget-id")).toBe(
+      personalStarterLayout.widgets[1]?.id,
+    );
 
     // The same refusal twice is still a new message for screen readers (S17-L5).
     await user.keyboard("{ArrowUp}");

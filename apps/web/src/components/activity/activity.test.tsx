@@ -377,7 +377,9 @@ describe("SecurityReportSetting", () => {
       />,
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Download JSON of the report for 08/10/2026 to 07/11/2026" }),
+      screen.getByRole("button", {
+        name: "Download JSON of the report for 08/10/2026 to 07/11/2026",
+      }),
     );
     expect(await screen.findByRole("button", { name: "Download JSON" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Download CSV" })).not.toBeInTheDocument();

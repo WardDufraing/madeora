@@ -188,9 +188,7 @@ describe("HomeCopyRequests", () => {
     expect(await axeViolations(container)).toEqual([]);
     expect(screen.getByText(/Asked by Ann on 1 Nov/)).toHaveTextContent("12 photos");
     // Approve and Reject repeat on every row; each names its request as description (S40P2-L7).
-    expect(screen.getByRole("button", { name: "Approve" })).toHaveAccessibleDescription(
-      /^Summer/,
-    );
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveAccessibleDescription(/^Summer/);
     expect(screen.getByRole("button", { name: "Reject" })).toHaveAccessibleDescription(/^Summer/);
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(screen.getByText(/Oak gets its own copy/)).toBeInTheDocument();

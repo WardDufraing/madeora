@@ -553,9 +553,7 @@ describe("changing the target", () => {
     fetchMock.mockImplementation(() => reply(200, { outcome: "preview", impact, revision: 1 }));
     const base = numericHabitDetail();
     const progress = base.progress ? { ...base.progress, total: 5_000_000 } : null;
-    withToasts(
-      <TrackingChangeDialog habit={numericHabitDetail({ progress })} onClose={vi.fn()} />,
-    );
+    withToasts(<TrackingChangeDialog habit={numericHabitDetail({ progress })} onClose={vi.fn()} />);
     const target = screen.getByRole("textbox", { name: "Daily target" });
     await user.clear(target);
     await user.type(target, "500");

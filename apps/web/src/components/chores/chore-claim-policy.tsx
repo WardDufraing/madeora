@@ -135,8 +135,7 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
   );
   const busy = preview.busy || save.busy;
   // A refusal for unconfirmed effects is answered with the new preview, not shown as an error.
-  const error =
-    (save.error?.failure === "needsConfirmation" ? null : save.error) ?? preview.error;
+  const error = (save.error?.failure === "needsConfirmation" ? null : save.error) ?? preview.error;
   const mode = useWatch({ control: form.control, name: "mode" });
   const chosen = useWatch({ control: form.control, name: "memberIds" });
   const autoRelease = useWatch({ control: form.control, name: "autoRelease" });
