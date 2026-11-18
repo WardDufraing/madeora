@@ -20,7 +20,7 @@ import { renderWithQuery } from "@/test/intl";
 import { ChoreClaim } from "./chore-claim";
 import { ChoreClaimPolicyEditor } from "./chore-claim-policy";
 import { ChorePool } from "./chore-pool";
-import { ChorePoolLive } from "./chore-pool-live";
+import { ChorePoolLive, reconcileDelay } from "./chore-pool-live";
 import { ChoreRequests } from "./chore-requests";
 import { ChoreSettingsForm } from "./chore-settings-form";
 
@@ -714,6 +714,14 @@ describe("live updates", () => {
       await vi.advanceTimersByTimeAsync(6000);
     });
     expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the reconcile wait", () => {
+  it("spreads the five-second interval by at most a tenth either way", () => {
+    expect(reconcileDelay(() => 0)).toBe(4500);
+    expect(reconcileDelay(() => 0.5)).toBe(5000);
+    expect(reconcileDelay(() => 0.999999)).toBe(5500);
   });
 });
 

@@ -900,6 +900,15 @@ This can happen on `madeora-preview` when a pull request is changed after you te
 
 Never do this on `madeora-production`: production only gets files from `main`, after review, so they do not change afterwards. If a merged migration needs a correction, it comes as a new file.
 
+**Known case: `20261124090000_activity_history.sql` (S38, review item S38P2-L4).** Its second commit on the S38 pull request (#71) added four kinds to the `account_security_events_kind_check` constraint (`account_deactivated`, `account_reactivated`, `inactivity_reminder_sent`, `security_review_completed`) and `deactivate_account` to the re-authentication actions. Both commits reached `main` together in #71, so `madeora-production` can only have the final file. Only a `madeora-preview` that ran the file from the first commit can differ, and only for the event kinds (later migrations rewrite the re-authentication action list). Check in the SQL Editor of `madeora-preview`:
+
+```sql
+select pg_get_constraintdef(oid) like '%account_deactivated%' as s38_final
+from pg_constraint where conname = 'account_security_events_kind_check';
+```
+
+`true` means the database has the final file. `false` means deactivating an account fails there: run the `alter table private.account_security_events` statements for that constraint from the file again (drop, then add).
+
 ## If you need to undo S07
 
 Only if the S07 pull request is abandoned, or Claude asks for it. This deletes every saved preference in that project.

@@ -207,7 +207,7 @@ select tests.act_as('bob');
 select tests.assert_true(tests.upd('p-mia', '{"name": "Mia", "species": "other", "speciesLabel": "Fret",
   "birthDate": "2022-05-01", "sex": "female", "neutered": true}') = 'saved', 'Another species with its label');
 select tests.assert_true(tests.private_count($$select count(*) from private.audit_events where action = 'pet.updated'
-  and details::text like '%Peeters%'$$) = 0, 'The audit names fields, never values');
+  and home_id = tests.i('home-a') and details::text like '%Peeters%'$$) = 0, 'The audit names fields, never values');
 
 -- Medical access -------------------------------------------------------------------------------------
 
@@ -240,7 +240,7 @@ select tests.assert_true(jsonb_array_length(public.list_pet_medical_access(tests
 select tests.act_as('alice');
 select tests.assert_true(tests.grant_level('m-bob-a', 'manage') = 'ok', 'The Owner grants Bob manage');
 select tests.assert_true(tests.private_count($$select count(*) from private.audit_events
-  where action = 'pet.medical_access.changed'$$) = 2, 'Each change is audited');
+  where action = 'pet.medical_access.changed' and home_id = tests.i('home-a')$$) = 2, 'Each change is audited');
 
 -- Sensitive details ----------------------------------------------------------------------------------
 

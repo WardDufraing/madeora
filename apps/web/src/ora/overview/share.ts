@@ -84,6 +84,7 @@ export interface ShareLabels {
   readonly audience: (name: string) => string;
   readonly day: (date: string) => string;
   readonly allDay: string;
+  readonly continues: string;
   readonly noTime: string;
   readonly done: string;
   readonly module: (module: OverviewModule) => string;
@@ -120,7 +121,12 @@ export function composeShareText(
       );
     }
     for (const item of rest) {
-      const prefix = item.module === "calendar" ? labels.allDay : labels.noTime;
+      const prefix =
+        item.module !== "calendar"
+          ? labels.noTime
+          : item.continues
+            ? labels.continues
+            : labels.allDay;
       const done = item.status === "done" ? ` – ${labels.done}` : "";
       lines.push(`- ${prefix}: ${item.title} (${labels.module(item.module)})${done}`);
     }

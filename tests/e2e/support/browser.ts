@@ -88,8 +88,9 @@ export async function axeViolations(
 /**
  * Colours painted on visible elements that are not a `--md-color-*` token value. A member's own
  * identifying colour (an avatar, marked `data-member-colour`) is personal data, not design, and is
- * left out (its text, fill and the outline that defaults to its text colour); its border still
- * has to be a token.
+ * left out (its text, fill and the outline that defaults to its text colour), and so are those
+ * colours where a descendant inherits them; its border, and any other colour of a descendant,
+ * still has to be a token.
  */
 export async function nonTokenColours(page: Page): Promise<string[]> {
   await settle(page);
@@ -113,12 +114,20 @@ export async function nonTokenColours(page: Page): Promise<string[]> {
     for (const element of document.querySelectorAll("body, body *")) {
       const style = getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden") continue;
-      const memberColour = element.closest("[data-member-colour]") !== null;
-      for (const colour of memberColour
-        ? [style.borderTopColor]
-        : [style.color, style.backgroundColor, style.borderTopColor, style.outlineColor]) {
-        found.add(colour);
-      }
+      // Only the marked element and what its descendants inherit from it are exempt: a descendant
+      // with its own background, border or a colour of its own (a future badge) is still checked.
+      const member = element.closest("[data-member-colour]");
+      const memberStyle = member === null ? null : getComputedStyle(member);
+      const inherited = (colour: string) =>
+        memberStyle !== null &&
+        (colour === memberStyle.color || colour === memberStyle.backgroundColor);
+      const checked =
+        member === element
+          ? [style.borderTopColor]
+          : [style.color, style.backgroundColor, style.borderTopColor, style.outlineColor].filter(
+              (colour) => !inherited(colour),
+            );
+      for (const colour of checked) found.add(colour);
       // Ora (S45) draws with one of nine fixed palettes from @madeora/design-tokens, chosen by
       // the person; like member colours, they are not the interface's own colour tokens.
       const oraColour = element.closest(".ora-char") !== null;

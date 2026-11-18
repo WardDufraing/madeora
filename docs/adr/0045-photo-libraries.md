@@ -27,6 +27,7 @@ Modules.md §4.7 adds a lightweight Photos module: personal and Home libraries, 
 - New dependency `heic-decode` (ISC) pulling `libheif-js` (LGPL-3.0, unmodified, used server-side as a WebAssembly bundle). Both are kept external to the server bundle (`serverExternalPackages`). The owner should confirm the LGPL dependency is acceptable. Approved by Ward on 2026-11-17, with conditions: see ADR 0056.
 - Decoding a 50 MP HEIC takes roughly 200 MB of memory for the pixels; the Vercel function memory and duration limits apply (provider-cost register unchanged, €0).
 - Photo trash labels are the fixed word "Photo"; an album's is its name.
+- The header comment of `20261121090000_photos.sql` cites ADR 0043; the right reference is this ADR (0045). The migration is merged and applied, so it is not edited in place (review S35 L1).
 - Rollback: the migration only adds tables and functions and widens four constraints; to undo, drop the S35 objects (the tables hold only photo data) and restore the previous constraints. Database rollbacks are not automatic.
 
 ## Addendum: own upload limits (review backlog, 2026-11-17)

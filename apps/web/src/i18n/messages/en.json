@@ -8452,6 +8452,7 @@
     "itemsIncomplete": "This list may be incomplete.",
     "noSetTime": "No set time",
     "allDay": "All day",
+    "continues": "Continues",
     "status": {
       "done": "Done",
       "overdue": "Overdue",
@@ -8490,6 +8491,7 @@
       "textContext": "Home: {home}",
       "textAudience": "For: {name}",
       "textAllDay": "All day",
+      "textContinues": "Continues",
       "textNoTime": "No set time",
       "textDone": "done",
       "textSomeone": "a member",

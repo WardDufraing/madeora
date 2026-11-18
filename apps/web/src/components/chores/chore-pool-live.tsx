@@ -14,6 +14,17 @@ const REFRESH_DELAY_MS = 300;
 /** While the tab is visible the stored version is also read this often: delivery is not assumed. */
 const RECONCILE_INTERVAL_MS = 5_000;
 
+/**
+ * Each wait is spread by up to this share either way, so the open pages of one Home (a wall
+ * display and every member's phone) do not all read at the same moment (review CP-L4).
+ */
+const RECONCILE_JITTER = 0.1;
+
+/** The next reconcile wait: the interval, spread by the jitter. */
+export function reconcileDelay(random: () => number = Math.random): number {
+  return Math.round(RECONCILE_INTERVAL_MS * (1 + RECONCILE_JITTER * (2 * random() - 1)));
+}
+
 export interface ChorePoolLiveProps {
   readonly homeId: string;
   /** The Home's pool signal version the page was rendered at (null: unknown, refresh on connect). */
@@ -30,9 +41,9 @@ export interface ChorePoolLiveProps {
  * Delivery and order are not trusted: on (re)connecting and when the tab becomes visible again it
  * compares the stored version with the rendered one, so a change missed between rendering and
  * subscribing, or while offline, still shows. While the tab is visible it also compares them every
- * few seconds, so a dropped or never-delivered event delays an update instead of losing it. The
- * subscription ends when the view unmounts, the Home changes, or the person signs out (the shell
- * then re-renders without it).
+ * few seconds (with a little random spread), so a dropped or never-delivered event delays an
+ * update instead of losing it. The subscription ends when the view unmounts, the Home changes, or
+ * the person signs out (the shell then re-renders without it).
  */
 export function ChorePoolLive({ homeId, version }: ChorePoolLiveProps) {
   const router = useRouter();
@@ -91,10 +102,17 @@ export function ChorePoolLive({ homeId, version }: ChorePoolLiveProps) {
       if (document.visibilityState === "visible") void check();
     };
     document.addEventListener("visibilitychange", checkIfVisible);
-    const reconcile = setInterval(checkIfVisible, RECONCILE_INTERVAL_MS);
+    let reconcile: ReturnType<typeof setTimeout> | undefined;
+    const scheduleReconcile = () => {
+      reconcile = setTimeout(() => {
+        checkIfVisible();
+        if (active) scheduleReconcile();
+      }, reconcileDelay());
+    };
+    scheduleReconcile();
     return () => {
       active = false;
-      clearInterval(reconcile);
+      clearTimeout(reconcile);
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", checkIfVisible);
       void supabase.removeChannel(channel);

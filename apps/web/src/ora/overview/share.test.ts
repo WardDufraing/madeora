@@ -14,6 +14,7 @@ const labels: ShareLabels = {
   audience: (name) => `For: ${name}`,
   day: (date) => date,
   allDay: "All day",
+  continues: "Continues",
   noTime: "No set time",
   done: "done",
   module: (module) => module,
@@ -122,5 +123,30 @@ describe("sharing: the proposed text", () => {
     );
     expect(body).not.toContain("Incomplete.");
     expect(shareIncomplete(google, { id: "a", role: "member" })).toBe(false);
+  });
+
+  it("calls the later days of an overnight event Continues, never All day (S46-L4)", () => {
+    const body = composeShareText(
+      buildOverview(
+        input({
+          to: "2026-11-17",
+          scope: "week",
+          calendar: {
+            status: "ok",
+            value: calendar([
+              occurrence({ title: "Night shift", from: "2026-11-16", to: "2026-11-17" }),
+              occurrence({ title: "Birthday", allDay: true, startsAt: null, endsAt: null }),
+            ]),
+          },
+        }),
+      ),
+      { id: "a", role: "member", name: "Sam" },
+      "Thuis",
+      labels,
+    );
+    expect(body).toContain("09:00 Night shift (calendar)");
+    expect(body).toContain("Continues: Night shift (calendar)");
+    expect(body).not.toContain("All day: Night shift");
+    expect(body).toContain("All day: Birthday (calendar)");
   });
 });

@@ -92,14 +92,16 @@ function eventItems(input: BuildInput, list: CalendarList): OverviewItem[] {
 }
 
 function eventItem(input: BuildInput, occurrence: Occurrence, date: string): OverviewItem {
-  // A timed event is "timed" on the day it starts; its later days read as all-day continuation.
+  // A timed event is "timed" on the day it starts; its later days are untimed continuations.
   const timed = !occurrence.allDay && occurrence.startsAt !== null && occurrence.from === date;
+  const continues = !occurrence.allDay && occurrence.startsAt !== null && !timed;
   return {
     key: `calendar:${occurrence.eventId}:${occurrence.on ?? ""}:${date}`,
     module: "calendar",
     title: occurrence.title,
     day: date,
     allDay: !timed,
+    ...(continues ? { continues: true as const } : {}),
     startsAt: timed ? occurrence.startsAt : null,
     endsAt: timed ? occurrence.endsAt : null,
     timeZone: input.timeZone,

@@ -8452,6 +8452,7 @@
     "itemsIncomplete": "Deze lijst kan onvolledig zijn.",
     "noSetTime": "Geen vast tijdstip",
     "allDay": "Hele dag",
+    "continues": "Gaat door",
     "status": {
       "done": "Klaar",
       "overdue": "Te laat",
@@ -8490,6 +8491,7 @@
       "textContext": "Thuis: {home}",
       "textAudience": "Voor: {name}",
       "textAllDay": "Hele dag",
+      "textContinues": "Gaat door",
       "textNoTime": "Geen vast tijdstip",
       "textDone": "klaar",
       "textSomeone": "een lid",

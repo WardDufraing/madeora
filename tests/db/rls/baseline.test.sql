@@ -110,10 +110,9 @@ select tests.assert_true(
 -- not be able to execute any of them. When a migration adds one, add its signature here as
 -- regprocedure text, such as 'public.claim_job_outbox(integer,integer)'. A signature that does not
 -- resolve fails this test; it is not skipped. The list is every such function in the migrations.
-select tests.assert_true(
-  not exists (
-    select 1
-    from unnest(array[
+create temporary table service_role_only on commit drop as
+  select s.signature
+  from unnest(array[
       -- S13: the dispatcher and execution functions.
       'public.claim_job_outbox(integer,integer)',
       'public.complete_job_outbox(uuid,text)',
@@ -163,6 +162,37 @@ select tests.assert_true(
       'public.get_security_email(uuid)',
       'public.record_security_email(uuid,text)',
       'public.deliver_account_recovery_ready(uuid,timestamptz)',
+      -- Pet care: the advance job and its reminder.
+      'public.advance_all_pet_care(integer)',
+      'public.deliver_pet_care_reminder(uuid,timestamptz)',
+      -- Native calendar: the event reminder.
+      'public.deliver_calendar_reminder(uuid,date,timestamptz)',
+      -- Google Calendar: the sync and push jobs.
+      'public.google_sync_begin(uuid,uuid,integer)',
+      'public.google_sync_calendars(uuid,uuid,jsonb)',
+      'public.google_sync_apply_events(uuid,uuid,boolean,jsonb)',
+      'public.google_sync_finish_calendar(uuid,uuid,boolean,text,text)',
+      'public.google_sync_finish(uuid,uuid,text)',
+      'public.queue_google_calendar_syncs(integer)',
+      'public.google_push_changes(uuid,uuid)',
+      'public.google_push_result(uuid,uuid,integer,jsonb)',
+      -- Photo libraries: the finalize of a photo's four sizes.
+      'public.finalize_photo(uuid,uuid,jsonb)',
+      -- Activity history and account lifecycle jobs.
+      'public.process_sign_in_events(integer)',
+      'public.purge_account_activity()',
+      'public.send_inactivity_reminders(integer)',
+      -- Privacy exports.
+      'public.begin_data_export(uuid)',
+      'public.collect_data_export(uuid,text)',
+      'public.finish_data_export(uuid,bigint,jsonb,boolean)',
+      'public.fail_data_export(uuid,text)',
+      'public.sweep_data_exports(integer)',
+      -- Account and Home deletion, and copies between Homes.
+      'public.purge_due_deletions(integer)',
+      'public.begin_home_copy_files(uuid)',
+      'public.finish_home_copy_files(uuid,boolean,text)',
+      'public.sweep_home_copies(integer)',
       -- S42: child sign-in steps (the web server checks the PIN or password hash) and the PIN
       -- screen of an approved household device.
       'public.child_password_attempt(text,text)',
@@ -179,6 +209,12 @@ select tests.assert_true(
       'public.claim_child_transition(text,text)',
       'public.child_transition_review(text)',
       'public.complete_child_transition(text)',
+      -- S43: the unpaired display's pairing steps (the web server holds the claim secret).
+      'public.display_pairing_start(text,text,text,text)',
+      'public.display_pairing_status(text)',
+      'public.display_pairing_cancel(text)',
+      'public.display_pairing_claim(text)',
+      'public.display_pairing_complete(text,uuid)',
       -- S44: chores completed and the privacy lock turned on at a Household Display (the web
       -- server checks the PIN hash; the display id comes from the display's own session).
       'public.display_chore_attempt(uuid,uuid,uuid,boolean,text)',
@@ -186,10 +222,30 @@ select tests.assert_true(
       'public.display_chore_undo(uuid,uuid)',
       'public.display_lock_attempt(uuid,uuid,text)',
       'public.display_lock_verified(uuid,uuid)'
-    ]::regprocedure[]) as s(signature)
+    ]::regprocedure[]) as s(signature);
+
+select tests.assert_true(
+  not exists (
+    select 1 from service_role_only s
     where has_function_privilege('authenticated', s.signature, 'execute')
   ),
   'Signed-in users cannot execute service-role-only functions'
+);
+
+-- The list above is complete: every function in schema public that service_role may execute and a
+-- signed-in user may not is listed, so a new job or runbook function cannot be left out of the
+-- check above by accident (review item S43-L9).
+select tests.assert_true(
+  not exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and has_function_privilege('service_role', p.oid, 'execute')
+      and not has_function_privilege('authenticated', p.oid, 'execute')
+      and p.oid not in (select s.signature::oid from service_role_only s)
+  ),
+  'Every service-role-only function in schema public is in the list of the check above'
 );
 
 -- The synthetic seed is loaded, with its fixed IDs.
