@@ -237,6 +237,8 @@ export function outcomeFailure(outcome: string): Response {
       return failure(409, "no-longer-valid");
     case "invalid_guardian":
       return failure(409, "invalid-guardian");
+    case "reauthentication_required":
+      return failure(403, "reauthentication-required");
     case "confirmation_required":
       return failure(409, "confirmation-required");
     case "child_last_home":

@@ -174,7 +174,8 @@ describe("notificationKinds", () => {
           name.endsWith("_privacy_exports.sql") ||
           name.endsWith("_account_home_deletion.sql") ||
           name.endsWith("_category_deletion_home_copies.sql") ||
-          name.endsWith("_child_independent_account.sql"),
+          name.endsWith("_child_independent_account.sql") ||
+          name.endsWith("_review_decisions.sql"),
       )
       .map((name) => readFileSync(join(migrations, name), "utf8"))
       .join("\n");
@@ -202,6 +203,8 @@ describe("notificationKinds", () => {
       // S42 part 3: guardians' notices about a child's move (audit actions share the prefix).
       ...[...sql.matchAll(/'security', '(child\.[a-z_]+)'/g)].map((m) => m[1]),
       ...[...sql.matchAll(/habit_notify_pause\(v_habit, '(habit\.[a-z_]+)'/g)].map((m) => m[1]),
+      // Review decision S29-L9: a corrected contribution (audit actions share the prefix).
+      ...[...sql.matchAll(/'habits',\s+'(habit\.[a-z_]+)'/g)].map((m) => m[1]),
     ]);
     expect([...written].sort()).toEqual([...notificationKinds].sort());
   });

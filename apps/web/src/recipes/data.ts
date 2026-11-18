@@ -258,7 +258,8 @@ export async function listRecipeShares(recipeId: string): Promise<Read<readonly 
     status: "ok",
     value: data.map((row) => ({
       homeId: row.home_id,
-      homeName: row.home_name,
+      // S25-L6: null for a destination Home the caller is not in (the page labels it).
+      homeName: nullable(row.home_name),
       state: row.state === "active" || row.state === "paused" ? row.state : "available",
       canEdit: row.can_edit,
       sharedAt: nullable(row.shared_at),
@@ -270,7 +271,9 @@ const impactSchema = z.object({
   token: z.string(),
   status: z.enum(["draft", "published"]),
   homeId: z.uuid().nullable(),
-  shares: z.array(z.object({ homeId: z.uuid(), homeName: z.string(), canEdit: z.boolean() })),
+  shares: z.array(
+    z.object({ homeId: z.uuid(), homeName: z.string().nullable(), canEdit: z.boolean() }),
+  ),
   favoriteCount: z.number().int(),
   beingEdited: z.boolean(),
   plannedMeals: z.number().int(),

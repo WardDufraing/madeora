@@ -172,6 +172,19 @@ describe("return path after confirming", () => {
     );
   });
 
+  it("returns a guardian change to the child's page only (S41-M2)", () => {
+    const child = `/homes/${home}/children/${home}`;
+    expect(isReturnPath(child)).toBe(true);
+    expect(confirmedPath("child_guardians", child)).toBe(
+      `${child}?confirmed=child_guardians#guardians`,
+    );
+    expect(confirmedPath("close_home", child)).toBe("/settings/closed-homes?confirmed=close_home");
+    expect(confirmedPath("child_guardians", `/homes/${home}/close`)).toBe(
+      "/settings/security?confirmed=child_guardians#guardians",
+    );
+    expect(isReturnPath(`/homes/${home}/children/not-a-uuid`)).toBe(false);
+  });
+
   it("refuses anything that could lead elsewhere", () => {
     for (const path of [
       "https://evil.test/homes/x/export",

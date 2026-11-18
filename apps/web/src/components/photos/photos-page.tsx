@@ -10,7 +10,7 @@ import { copyPagePath } from "@/copies/catalogue";
 import { listMyHomes } from "@/homes/server";
 import { readLibrary } from "@/photos/data";
 import { storageEnabled } from "@/storage/server";
-import { getHomeStorageUsage, getMyStorageUsage } from "@/storage/usage";
+import { getHomePhotoStorageUsage, getHomeStorageUsage, getMyStorageUsage } from "@/storage/usage";
 
 import { PhotosView } from "./photos-view";
 
@@ -28,13 +28,14 @@ export async function PhotosPage({
   readonly albumId: string | null;
   readonly offset: number;
 }) {
-  const [t, library, locale, usage, myHomes] = await Promise.all([
+  const [t, library, locale, usage, managed, myHomes] = await Promise.all([
     getTranslations("Photos"),
     readLibrary(home?.id ?? null, albumId, offset),
     getLocale(),
-    // A Home's storage is for its storage managers (S15); anyone else gets no figures here and sees
-    // the pool named if an upload does not fit.
-    home ? getHomeStorageUsage(home.id) : getMyStorageUsage(),
+    // S35-L6: every member who uploads here sees the Home's storage figures; the storage page
+    // itself stays with the Home's storage managers (S15), so the link shows only for them.
+    home ? getHomePhotoStorageUsage(home.id) : getMyStorageUsage(),
+    home ? getHomeStorageUsage(home.id) : Promise.resolve({ status: "ok" } as const),
     listMyHomes(),
   ]);
   if (library.status === "not-found") notFound();
@@ -82,7 +83,7 @@ export async function PhotosPage({
         {usage.status === "ok" ? (
           <p className="text-helper text-fg-muted">{t("storageCountsHint")}</p>
         ) : null}
-        {usage.status === "ok" ? (
+        {usage.status === "ok" && managed.status === "ok" ? (
           <Link
             href={home ? `/homes/${home.id}/storage` : "/settings/storage"}
             className="text-body font-semibold text-accent-fg underline"

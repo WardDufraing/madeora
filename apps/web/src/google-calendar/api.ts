@@ -26,7 +26,9 @@
  * - `DELETE /api/v1/calendar/google-events/:id` `{ scope, destination, revision, dryRun? }` →
  *   `{ outcome: "removed" | "deleting" }` or a preview.
  * - `POST /api/v1/integrations/google-calendar/changes/:id` `{ action: "resolve", choice } | { action:
- *   "retry" } | { action: "discard" }` → `{ outcome }`; `not-in-conflict`, `in-conflict`, `not-failed` (409).
+ *   "retry" } | { action: "discard" }` → `{ outcome }`; `not-in-conflict`, `in-conflict`, `not-failed` (409);
+ *   keeping Madeora's version of a conflict whose calendar Google no longer lists: `calendar-unavailable`
+ *   (409, S34-M6).
  * - `DELETE /api/v1/integrations/google-calendar/hidden/:id` `{}` → `{ outcome: "restored" }`.
  */
 export const GOOGLE_CALENDAR_ENDPOINT = "/api/v1/integrations/google-calendar";
@@ -76,6 +78,7 @@ export type GoogleCalendarErrorCode =
   | "nonexistent-time"
   | "pending-changes"
   | "not-in-conflict"
+  | "calendar-unavailable"
   | "in-conflict"
   | "not-failed"
   | "failed";
@@ -116,6 +119,7 @@ const errorCodes: readonly string[] = [
   "nonexistent-time",
   "pending-changes",
   "not-in-conflict",
+  "calendar-unavailable",
   "in-conflict",
   "not-failed",
   "failed",

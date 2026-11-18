@@ -6,7 +6,10 @@ import { notFound, redirect } from "next/navigation";
 
 import { DEFAULT_ACCENT } from "@/accent/accent";
 import { suggestDistinctColors } from "@/accent/similarity";
-import { requireIdentity } from "@/auth/identity";
+import { parseAccountChangeAction } from "@/auth/google-reauth";
+import { getVerifiedUser, requireIdentity } from "@/auth/identity";
+import { getAccountSecurity } from "@/auth/security-server";
+import { verifiedTotpFactor } from "@/auth/two-factor";
 import { getChildSignInSettings } from "@/child-sign-in/server";
 import { getChildTransitionState } from "@/child-transition/server";
 import { ChildSignInSettings } from "@/components/child-sign-in/child-sign-in-settings";
@@ -35,6 +38,7 @@ interface ChildPageProps {
   readonly searchParams: Promise<{
     readonly created?: string | string[];
     readonly linked?: string | string[];
+    readonly confirmed?: string | string[];
   }>;
 }
 
@@ -83,11 +87,13 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
     return <ErrorState title={tHomes("loadFailedTitle")} description={tHomes("loadFailed")} />;
   }
   const { home, membership } = context;
-  const [children, directory, formats, query] = await Promise.all([
+  const [children, directory, formats, query, user, security] = await Promise.all([
     getHomeChildren(home.id),
     getHomeDirectory(home.id),
     getDateTimeFormats(),
     searchParams,
+    getVerifiedUser(),
+    getAccountSecurity(),
   ]);
   if (children.status === "not-found" || directory.status === "not-found") {
     redirect(HOME_UNAVAILABLE_PATH);
@@ -193,6 +199,11 @@ export default async function ChildPage({ params, searchParams }: ChildPageProps
             canAppointPrimary={can["child.guardian.appointPrimary"]}
             canRemoveSecondary={can["child.guardian.removeSecondary"]}
             isSecondary={child.myGuardianRole === "secondary"}
+            email={user?.email ?? ""}
+            userId={user?.id ?? ""}
+            twoFactor={user ? verifiedTotpFactor(user) !== null : false}
+            hasPassword={security.status === "ok" ? security.value.hasPassword : true}
+            confirmed={parseAccountChangeAction(query.confirmed)}
           />
         </Card>
         {child.access && child.myGuardianRole ? (

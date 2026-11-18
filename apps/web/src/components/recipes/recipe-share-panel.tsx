@@ -35,8 +35,10 @@ export function RecipeSharePanel({ recipeId, recipeName, shares }: RecipeSharePa
   const t = useTranslations("Recipes");
   const failure = useRecipeFailure();
   const { announce, region } = useAnnouncer();
-  const available = shares.filter((share) => share.state === "available");
-  const current = shares.filter((share) => share.state !== "available");
+  // S25-L6: a destination Home the person is not in comes without its name; it is labelled instead.
+  const named = shares.map((share) => ({ ...share, homeName: share.homeName ?? t("anotherHome") }));
+  const available = named.filter((share) => share.state === "available");
+  const current = named.filter((share) => share.state !== "available");
   const [target, setTarget] = useState(available[0]?.homeId ?? "");
   const [canEdit, setCanEdit] = useState(false);
   const [confirming, setConfirming] = useState(false);

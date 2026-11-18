@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { FormAlert } from "@/components/auth/form-alert";
 import type { MemberFailure } from "@/members/manage-api";
 
-const messageKey = {
+export const memberFailureMessageKey = {
   signedOut: "failSignedOut",
   invalid: "failInvalid",
   notFound: "failNotFound",
@@ -29,6 +29,7 @@ const messageKey = {
   usernameTaken: "failUsernameTaken",
   usernameRequired: "failUsernameRequired",
   alreadyUsed: "failAlreadyUsed",
+  reauthenticationRequired: "failReauthenticationRequired",
   network: "failNetwork",
   failed: "failFailed",
 } as const satisfies Record<MemberFailure, string>;
@@ -45,7 +46,7 @@ export function MemberFailureAlert({
   if (!failure) return null;
   return (
     <FormAlert tone="error" announce {...(className ? { className } : {})}>
-      {t(messageKey[failure])}
+      {t(memberFailureMessageKey[failure])}
     </FormAlert>
   );
 }

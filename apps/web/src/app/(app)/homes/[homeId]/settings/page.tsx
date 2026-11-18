@@ -155,7 +155,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           </Link>
         </Card>
       ) : null}
-      {/* The Home's trash: every member may open it and sees what they may (S16). */}
+      {/* The Home's trash: the Owner and Administrators open it (S16-4) and see what they may. */}
       {permissions["home.trash.view"] ? (
         <Card title={tTrash("settingsCardTitle")} className="mt-6 max-w-2xl">
           <Link

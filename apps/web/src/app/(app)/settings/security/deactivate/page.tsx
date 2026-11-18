@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
-import { listMyDeactivationBlockers } from "@/activity/server";
+import { listMyDeactivationBlockers, listMyGuardianHoldWarnings } from "@/activity/server";
 import { parseAccountChangeAction } from "@/auth/google-reauth";
 import { getVerifiedUser, requireIdentity } from "@/auth/identity";
 import { getAccountSecurity } from "@/auth/security-server";
 import { verifiedTotpFactor } from "@/auth/two-factor";
 import { DeactivateAccount } from "@/components/account/deactivate-account";
 import { FormAlert } from "@/components/auth/form-alert";
+import { GuardianHoldWarning } from "@/components/children/guardian-hold-warning";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { pageTitle } from "@/i18n/page-title";
@@ -28,12 +29,13 @@ interface DeactivatePageProps {
  */
 export default async function DeactivatePage({ searchParams }: DeactivatePageProps) {
   await requireIdentity();
-  const [t, params, user, security, blockers] = await Promise.all([
+  const [t, params, user, security, blockers, holds] = await Promise.all([
     getTranslations("Lifecycle"),
     searchParams,
     getVerifiedUser(),
     getAccountSecurity(),
     listMyDeactivationBlockers(),
+    listMyGuardianHoldWarnings(),
   ]);
   if (!user) return null;
   const hasPassword = security.status === "ok" ? security.value.hasPassword : true;
@@ -67,6 +69,9 @@ export default async function DeactivatePage({ searchParams }: DeactivatePagePro
         </Card>
         <Card title={t("responsibilitiesTitle")}>
           <p className="mb-4 text-body">{t("responsibilities")}</p>
+          <div className="mb-4 empty:hidden">
+            <GuardianHoldWarning warnings={holds} context="account" />
+          </div>
           {blockers.status === "ok" ? (
             <DeactivateAccount
               email={user.email ?? ""}
