@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { accountTabKey, useAccountId } from "@/auth/tab-storage";
 import { Button } from "@/components/ui/button";
 import {
   recipeEndpoint,
@@ -67,7 +68,11 @@ function readProgress(key: string, steps: number): Progress {
 export function CookingMode({ recipe, homeId, initialServings }: CookingModeProps) {
   const t = useTranslations("Recipes");
   const router = useRouter();
-  const storageKey = `madeora:recipe-cook:${recipe.id}:${String(recipe.revision)}`;
+  const storageKey = accountTabKey(
+    "recipe-cook",
+    useAccountId(),
+    `${recipe.id}:${String(recipe.revision)}`,
+  );
   const steps = recipe.steps;
   const [progress, setProgress] = useState<Progress>({ step: 0, checked: [] });
   const [servings, setServings] = useState(

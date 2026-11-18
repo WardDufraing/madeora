@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { AccountContext } from "@/auth/tab-storage";
 import type { RecipeDetail, RecipeIngredient } from "@/recipes/api";
 import type * as CoverUploadModule from "@/recipes/cover-upload";
 import { emptyRecipeForm } from "@/recipes/schema";
@@ -188,6 +189,37 @@ describe("rating and favorites", () => {
 });
 
 describe("the editor", () => {
+  it("offers only the signed-in account's unsaved changes from this tab (S24-L2)", async () => {
+    const values = { ...emptyRecipeForm(), name: "Someone else's soup" };
+    window.sessionStorage.setItem(
+      `madeora:recipe-edit:user-a:${RECIPE}`,
+      JSON.stringify({ revision: 2, values }),
+    );
+    const published = (account: string) => (
+      <AccountContext value={account}>
+        <RecipeEditor
+          mode="published"
+          recipeId={RECIPE}
+          homeId={HOME}
+          revision={2}
+          homes={[]}
+          initial={emptyRecipeForm()}
+          lockToken="lock"
+          locked={false}
+          onLockLost={vi.fn()}
+          onConflict={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </AccountContext>
+    );
+    const other = renderWithQuery(published("user-b"));
+    await act(async () => {});
+    expect(screen.queryByText(/unsaved changes to this recipe/)).toBeNull();
+    other.unmount();
+    renderWithQuery(published("user-a"));
+    expect(await screen.findByText(/unsaved changes to this recipe/)).toBeInTheDocument();
+  });
+
   it("saves a new recipe as a private draft with its client id and destination", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(jsonResponse(201, { id: RECIPE, revision: 1, status: "draft" }));

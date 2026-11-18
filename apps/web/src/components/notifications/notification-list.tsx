@@ -1,3 +1,4 @@
+import { habitWeekOf } from "@madeora/domain/habits";
 import { notificationPath } from "@madeora/domain/notifications";
 import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
@@ -11,8 +12,6 @@ import { petCareCategories, type PetCareCategory } from "@/pets/care-schema";
 import { formatTaskDate } from "@/tasks/format";
 
 import { MarkAllReadButton, MarkReadButton } from "./mark-read-buttons";
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** YYYY-MM-DD of `instant` in `timeZone`. */
 function localDay(instant: Date, timeZone: string): string {
@@ -247,13 +246,19 @@ export async function NotificationList({
   const today = localDay(now, formats.timeZone);
   /**
    * An old habit reminder keeps its Open link but loses Complete and Snooze (S28-L5): a daily one
-   * for a day before today would backdate a check-in, and a weekly one from an earlier week would
-   * complete this week instead.
+   * for a day before today would backdate a check-in, and a weekly one from an earlier habit week
+   * would complete this week instead. The week is the habit's own (its week start and its today);
+   * without it, a weekly reminder offers no actions.
    */
-  const reminderCurrent = (item: NotificationView) =>
-    item.weekly
-      ? now.getTime() - Date.parse(item.createdAt) < WEEK_MS
-      : item.onDate === null || item.onDate >= today;
+  const reminderCurrent = (item: NotificationView) => {
+    if (!item.weekly) return item.onDate === null || item.onDate >= today;
+    const week = item.habitWeek;
+    return (
+      week !== null &&
+      item.onDate !== null &&
+      habitWeekOf(item.onDate, week.weekStart) === habitWeekOf(week.today, week.weekStart)
+    );
+  };
   const [t, tn, tp, locale] = await Promise.all([
     getTranslations("Notifications"),
     getTranslations("HabitsNumeric"),

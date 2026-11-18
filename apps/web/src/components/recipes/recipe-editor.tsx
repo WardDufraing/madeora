@@ -8,6 +8,7 @@ import { Controller, useFieldArray, useForm, useWatch, type FieldPath } from "re
 import { recipeUnits } from "@madeora/domain/recipes";
 
 import { FormAlert } from "@/components/auth/form-alert";
+import { accountTabKey, useAccountId } from "@/auth/tab-storage";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
@@ -133,7 +134,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
   // A published recipe's unsaved changes are also kept in this tab's session storage, so a lapsed
   // lock, a conflict or a reload never loses them. They are offered back for review; changes made
   // to an older revision say so, because restoring them replaces what someone else saved.
-  const backupKey = `madeora:recipe-edit:${props.recipeId}`;
+  const backupKey = accountTabKey("recipe-edit", useAccountId(), props.recipeId);
   const [backup, setBackup] = useState<Backup | null>(null);
   const backupRevision = props.mode === "published" ? props.revision : null;
   useEffect(() => {

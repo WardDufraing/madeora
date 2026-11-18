@@ -311,7 +311,7 @@ export function DashboardEditor({
 
   function add(type: WidgetType, sourceHomeId: string | null) {
     if (!canAddWidget(draft, type)) {
-      setAnnouncement(t("addRowsFull"));
+      setAnnouncement(t("addRowsFull", { max: MAX_ROWS }));
       return;
     }
     const widget: DashboardWidget = {
@@ -805,7 +805,9 @@ function AddWidgets({
               </div>
               <p className="text-helper text-fg-muted">{labels.description(type)}</p>
               {unavailable ? <p className="text-helper text-fg-muted">{t("needsHome")}</p> : null}
-              {tooTall ? <p className="text-helper text-fg-muted">{t("addRowsFull")}</p> : null}
+              {tooTall ? (
+                <p className="text-helper text-fg-muted">{t("addRowsFull", { max: MAX_ROWS })}</p>
+              ) : null}
             </li>
           );
         })}

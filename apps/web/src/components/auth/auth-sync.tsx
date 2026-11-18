@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 
 import { onSignedOutElsewhere } from "@/auth/broadcast";
 import { getSupabaseBrowserClient } from "@/auth/supabase-browser";
-import { clearAccountTabStorage } from "@/auth/tab-storage";
+import { clearAccountTabStorage, clearOtherAccountsTabStorage } from "@/auth/tab-storage";
 
 export interface AuthSyncProps {
   /** The account the server confirmed for this page. */
@@ -14,15 +14,22 @@ export interface AuthSyncProps {
 }
 
 /**
- * Keeps client caches tied to one account (architecture.md §7, §9). It empties the whole
- * TanStack Query cache (and the account's drafts in this tab's storage) when this tab signs out, another tab signs out, or a different account
- * appears, and then asks the server to re-check access. It also keeps the browser's Supabase
- * client running, which refreshes the session before it expires.
+ * Keeps client caches tied to one account (architecture.md §7, §9). It empties the whole TanStack
+ * Query cache, and the account's drafts in this tab's storage, when this tab signs out, another tab
+ * signs out, or a different account appears, and then asks the server to re-check access. On each
+ * page load it also removes drafts another account left in this tab. It keeps the browser's
+ * Supabase client running, which refreshes the session before it expires.
  */
 export function AuthSync({ userId }: AuthSyncProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const confirmedUser = useRef(userId);
+
+  useEffect(() => {
+    // A session can end without an event here (cookies cleared, expiry on the server); the next
+    // account's page load then removes what the earlier one left (S24-L2).
+    clearOtherAccountsTabStorage(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (confirmedUser.current !== userId) {

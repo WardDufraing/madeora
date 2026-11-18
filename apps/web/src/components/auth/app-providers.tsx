@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
+import { AccountContext } from "@/auth/tab-storage";
+
 import { AuthSync } from "./auth-sync";
 
 export interface AppProvidersProps {
@@ -18,8 +20,10 @@ export function AppProviders({ userId, children }: AppProvidersProps) {
   const [queryClient] = useState(() => new QueryClient());
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthSync userId={userId} />
-      {children}
+      <AccountContext value={userId}>
+        <AuthSync userId={userId} />
+        {children}
+      </AccountContext>
     </QueryClientProvider>
   );
 }

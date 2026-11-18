@@ -124,7 +124,7 @@
     "addWidget": "Toevoegen",
     "addWidgetNamed": "{widget} toevoegen",
     "addFull": "Een dashboard bevat hoogstens {count} widgets. Verwijder er een om een andere toe te voegen.",
-    "addRowsFull": "Deze widget past niet meer: het dashboard heeft de grens van 200 rijen bereikt. Verwijder of verklein eerst een widget.",
+    "addRowsFull": "Deze widget past niet meer: het dashboard heeft de grens van {max} rijen bereikt. Verwijder of verklein eerst een widget.",
     "sourceHome": "Home voor Home-widgets",
     "sourceHomeDescription": "Een Home-widget op je persoonlijke dashboard toont altijd één Home, met de naam in de titel.",
     "needsHome": "Sluit je aan bij een Home of maak er een aan om deze widget toe te voegen.",

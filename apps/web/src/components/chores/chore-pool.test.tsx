@@ -652,6 +652,29 @@ describe("the claim policy editor", () => {
     expect(screen.getByTestId("chore-policy-form").querySelector("[role='alert']")).toBeNull();
     expect(screen.getByTestId("chore-policy-confirm")).toBeVisible();
   });
+
+  it("re-previews once only: a second refusal is shown instead of looping", async () => {
+    const user = userEvent.setup();
+    const calm = () =>
+      Response.json({
+        outcome: "preview",
+        impact: { expireNow: 0, releaseNow: 0, claimedIneligible: 0 },
+        revision: 4,
+      });
+    const refused = () => Response.json({ error: "needs-confirmation" }, { status: 409 });
+    fetchMock
+      .mockResolvedValueOnce(calm())
+      .mockResolvedValueOnce(refused())
+      .mockResolvedValueOnce(calm())
+      .mockResolvedValueOnce(refused())
+      .mockResolvedValue(calm());
+    withToasts(<ChoreClaimPolicyEditor choreId={CHORE} policy={storedPolicy} members={members} />);
+    await user.click(screen.getByTestId("chore-policy-edit"));
+    await user.click(screen.getByTestId("chore-policy-save"));
+    const form = screen.getByTestId("chore-policy-form");
+    expect(await within(form).findByRole("alert")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
 });
 
 describe("live updates", () => {

@@ -51,25 +51,41 @@ describe("AuthSync", () => {
   });
 
   it("drops the account's recipe drafts from this tab on sign-out, and nothing else (S24-L2)", () => {
-    window.sessionStorage.setItem("madeora:recipe-edit:r1", "{}");
-    window.sessionStorage.setItem("madeora:recipe-cook:r1:3", "{}");
+    window.sessionStorage.setItem("madeora:recipe-edit:user-a:r1", "{}");
+    window.sessionStorage.setItem("madeora:recipe-cook:user-a:r1:3", "{}");
     window.sessionStorage.setItem("other", "kept");
     setup();
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:user-a:r1")).toBe("{}");
     act(() => {
       for (const listener of listeners) listener("SIGNED_OUT", null);
     });
-    expect(window.sessionStorage.getItem("madeora:recipe-edit:r1")).toBeNull();
-    expect(window.sessionStorage.getItem("madeora:recipe-cook:r1:3")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:user-a:r1")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-cook:user-a:r1:3")).toBeNull();
     expect(window.sessionStorage.getItem("other")).toBe("kept");
   });
 
   it("drops the recipe drafts when the server confirms another account for the page", () => {
     const { view } = setup();
-    window.sessionStorage.setItem("madeora:recipe-edit:r1", "{}");
+    window.sessionStorage.setItem("madeora:recipe-edit:user-a:r1", "{}");
     view.rerender(<AuthSync userId="user-a" />);
-    expect(window.sessionStorage.getItem("madeora:recipe-edit:r1")).toBe("{}");
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:user-a:r1")).toBe("{}");
     view.rerender(<AuthSync userId="user-b" />);
-    expect(window.sessionStorage.getItem("madeora:recipe-edit:r1")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:user-a:r1")).toBeNull();
+  });
+
+  it("on a fresh page load, drops drafts another account left in this tab and keeps its own (S24-L2)", () => {
+    // User A's session ended without an event in this tab; user B then signs in on a full load.
+    window.sessionStorage.setItem("madeora:recipe-edit:user-a:r1", "{}");
+    window.sessionStorage.setItem("madeora:recipe-cook:user-a:r1:3", "{}");
+    window.sessionStorage.setItem("madeora:recipe-edit:r2", "{}");
+    window.sessionStorage.setItem("madeora:recipe-edit:user-b:r1", "{}");
+    window.sessionStorage.setItem("other", "kept");
+    setup("user-b");
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:user-a:r1")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-cook:user-a:r1:3")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:r2")).toBeNull();
+    expect(window.sessionStorage.getItem("madeora:recipe-edit:user-b:r1")).toBe("{}");
+    expect(window.sessionStorage.getItem("other")).toBe("kept");
   });
 
   it("empties the cache when a different account appears", () => {

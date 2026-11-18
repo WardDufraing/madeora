@@ -126,8 +126,10 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
   }, [open, close]);
 
   // The handle and the header both start a swipe (S45-L5), but not a press on a header button,
-  // which must stay a plain click. Only the pointer that started it can finish it.
+  // which must stay a plain click. Only the pointer that started it can finish it. A mouse never
+  // swipes: on a desktop, dragging over the header selects text and must not close Ora.
   const onHandleDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse") return;
     if (event.target instanceof Element && event.target.closest("button")) return;
     if (typeof event.currentTarget.setPointerCapture === "function") {
       event.currentTarget.setPointerCapture(event.pointerId);

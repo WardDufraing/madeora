@@ -257,6 +257,10 @@ describe("HouseholdDisplaysManager", () => {
     expect(
       await screen.findByText("The display is revoked. It goes back to its pairing screen."),
     ).toBeInTheDocument();
+    // The Revoke button is gone after the refresh; focus goes to the list heading (review L4).
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Paired displays" })).toHaveFocus();
+    });
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       `/api/v1/homes/${HOME_ID}/displays/${DISPLAY_ID}/revoke`,
     );
