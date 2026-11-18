@@ -25,7 +25,7 @@ insert into public.home_memberships (home_id, user_id, role) values
 insert into ids select 'm-bob-a', id from public.home_memberships
   where home_id = (select id from ids where name = 'home-a') and user_id = tests.user_id('bob');
 insert into ids select n, gen_random_uuid() from unnest(array[
-  's-run', 's-cal', 's-leap', 's-year', 's-week', 's-sun', 's-b', 's-carol', 's-rem', 's-done', 's-bad'
+  's-run', 's-cal', 's-leap', 's-year', 's-week', 's-sun', 's-b', 's-carol', 's-rem', 's-done', 's-bad', 's-upd', 's-purge'
 ]) as n;
 insert into ids select 'e' || g, gen_random_uuid() from generate_series(1, 40) g;
 
@@ -496,6 +496,77 @@ select tests.assert_true(
   'Alice restores it');
 select tests.assert_true(tests.series('s-week') is not null and tests.goal(tests.pid('s-week', '2027-01-04')) is not null,
   'Back with its periods');
+
+-- Editing a series, view-only members, early purge -----------------------------------------------------
+
+select tests.act_as('alice');
+select tests.assert_true(tests.mko('s-upd', 'home-a', 'completion', 'monthly') = 'created', 'Alice creates a series to edit');
+select tests.act_as('carol');
+select tests.assert_true(
+  (select outcome = 'not_permitted' from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Mine now')),
+  'A Member does not edit a Home series');
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'conflict' and revision = tests.srev('s-upd')
+   from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd') + 1, 'Renamed')),
+  'An edit from a stale revision is a conflict and says the current one');
+select tests.assert_true(
+  (select outcome = 'unchanged' from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'S-Upd')),
+  'Saving the same values changes nothing');
+select tests.assert_denied(
+  $$select * from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), '')$$,
+  'An empty title is invalid', '22023');
+select tests.assert_denied(
+  $$select * from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Renamed', null, null, null, 3::smallint)$$,
+  'A reminder needs both a lead time and a time', '22023');
+select tests.assert_true(
+  (select outcome = 'invalid_dates' from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Renamed',
+     null, date '2020-01-01')),
+  'An end date before the current period is refused');
+select tests.assert_true(
+  (select outcome = 'saved' from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Renamed',
+     'Every month', tests.today() + 400)),
+  'A manager edits the title, description and end date');
+select tests.assert_true(
+  tests.p($q$select title = 'Renamed' and description = 'Every month' and ends_on = tests.today() + 400
+     from private.goal_series where id = tests.i('s-upd')$q$),
+  'They are saved');
+select tests.assert_true(
+  tests.p($q$select count(*) = 1 from private.audit_events where action = 'goal_series.updated'
+     and subject_id = tests.i('s-upd')$q$),
+  'and recorded once');
+
+-- View-only members see the series but change nothing
+select tests.act_as('bob');
+select tests.assert_true(public.update_goal_settings(tests.i('home-a'), 'view') = 'saved', 'A manager sets goals to view only');
+select tests.act_as('carol');
+select tests.assert_true(tests.series('s-upd') is not null, 'A view-only member still sees the series');
+select tests.assert_true(
+  (select outcome = 'not_permitted' from public.update_goal_series(tests.i('s-upd'), tests.srev('s-upd'), 'Hijack')),
+  'but cannot edit it');
+select tests.assert_true(tests.state('s-upd', 'pause') = 'not_permitted', 'nor pause it');
+select tests.act_as('bob');
+select tests.assert_true(public.update_goal_settings(tests.i('home-a'), 'contribute') = 'saved', 'Back to contribute');
+select tests.act_as('carol');
+select tests.assert_true(tests.state('s-upd', 'pause') = 'not_permitted', 'A contributing Member still cannot pause a series');
+
+-- Early purge deletes the series with its periods
+select tests.act_as('alice');
+select tests.assert_true(tests.mko('s-purge', 'home-a', 'completion', 'monthly') = 'created', 'A series to purge');
+select tests.assert_true(tests.periods('s-purge') >= 1, 'It has at least one period before the purge');
+select tests.assert_true(
+  (select outcome = 'deleted' from public.delete_goal_series(tests.i('s-purge'), tests.srev('s-purge'))),
+  'It moves to the trash');
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'purged' from public.purge_trash_entries(
+     array[(select entry_id from public.list_trash(tests.i('home-a'), 'goals') where label = 'S-Purge')])),
+  'A manager purges it early');
+select tests.act_as_owner();
+select tests.assert_true(
+  tests.p($q$select not exists (select 1 from private.goal_series where id = tests.i('s-purge'))
+     and not exists (select 1 from private.goals where series_id = tests.i('s-purge'))$q$),
+  'The series and its periods are gone for good');
 
 -- The background rollover --------------------------------------------------------------------------------
 
