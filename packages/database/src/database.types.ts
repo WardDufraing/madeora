@@ -2727,6 +2727,15 @@ export type Database = {
         Returns: Json;
       };
       is_madeora_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
+      job_batch_failures: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          failing: number;
+          max_attempts: number;
+          oldest_failed_at: string;
+          source: string;
+        }[];
+      };
       job_outbox_stats: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -5039,21 +5048,36 @@ export type Database = {
         Args: { p_action: string; p_id: string; p_quantity?: number; p_reason?: string };
         Returns: Json;
       };
-      update_habit_pause: {
-        Args: {
-          p_action: string;
-          p_dry_run?: boolean;
-          p_expected_revision: number;
-          p_habit_id: string;
-          p_pause_id: string;
-          p_resumes_on?: string;
-        };
-        Returns: {
-          impact: Json;
-          outcome: string;
-          revision: number;
-        }[];
-      };
+      update_habit_pause:
+        | {
+            Args: {
+              p_action: string;
+              p_dry_run?: boolean;
+              p_expected_revision: number;
+              p_habit_id: string;
+              p_pause_id: string;
+              p_resumes_on?: string;
+            };
+            Returns: {
+              impact: Json;
+              outcome: string;
+              revision: number;
+            }[];
+          }
+        | {
+            Args: {
+              p_action: string;
+              p_dry_run?: boolean;
+              p_expected_revision: number;
+              p_pause_id: string;
+              p_resumes_on?: string;
+            };
+            Returns: {
+              impact: Json;
+              outcome: string;
+              revision: number;
+            }[];
+          };
       update_habit_settings: {
         Args: { p_home_id: string; p_member_access: string };
         Returns: string;

@@ -148,6 +148,15 @@ describe("adjustments", () => {
     expect(await response.json()).toMatchObject({ error: "insufficient-points", preview });
   });
 
+  it("answers 409 id-taken when the entry id is already used for something else", async () => {
+    answers({ adjust_personal_points: [{ outcome: "id_taken", preview: null, entry_id: null }] });
+    const response = await adjust(
+      request("/personal-point-adjustments", "POST", { ...body, dryRun: false }),
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "id-taken" });
+  });
+
   it("reverses an entry once, and answers another person's entry as not found", async () => {
     answers({
       reverse_personal_point_entry: [

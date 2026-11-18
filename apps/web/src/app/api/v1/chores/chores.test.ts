@@ -795,6 +795,37 @@ describe("approval", () => {
     expect(future.status).toBe(400);
   });
 
+  it("maps the estimate, and degrades to none when the database lacks the column", async () => {
+    const row = {
+      occurrence_id: OCCURRENCE,
+      chore_id: CHORE,
+      title: "Dishes",
+      category_name: null,
+      category_color: null,
+      scheduled_date: "2026-11-18",
+      due_date: "2026-11-18",
+      late: false,
+      assignee_member_ids: [MEMBER_A],
+      submission_id: ENTRY,
+      attempt: 1,
+      submitted_at: "2026-11-18T10:00:00Z",
+      submitted_by_me: false,
+      submitted_by_member: null,
+      contributor_me: false,
+      contributor_member: null,
+      contributor_current: true,
+      note: null,
+      steps_done: 0,
+      steps_total: 0,
+      revision: 1,
+    };
+    answers({ list_chore_approvals: [{ ...row, estimated_minutes: 15 }, row] });
+    const response = await listApprovals(request(`/chore-approvals?homeId=${HOME}`, "GET"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { approvals: { minutes: number | null }[] };
+    expect(body.approvals.map((approval) => approval.minutes)).toEqual([15, null]);
+  });
+
   it("lists the review queue, or not found for a Home the person is not in", async () => {
     answers({ list_chore_approvals: [] });
     const response = await listApprovals(request(`/chore-approvals?homeId=${HOME}`, "GET"));

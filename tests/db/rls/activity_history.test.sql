@@ -659,8 +659,16 @@ insert into ids values
 create trigger ah_fail_session before insert on private.account_activity_events
   for each row execute function tests.ah_fail_session();
 select tests.act_as_service_role();
-select public.process_sign_in_events(100);
+select tests.assert_true(public.process_sign_in_events(100) = 1,
+  'only the classified sign-in is counted (review MEDIUM-2)');
+select tests.assert_true(
+  (select failing = 1 and max_attempts = 1 from public.job_batch_failures() where source = 'sign_in_events'),
+  'the job sees the failing sign-in');
 select tests.act_as_owner();
+select tests.assert_true(
+  (select classify_attempts = 1 and classify_failed_at is not null from private.account_security_events
+   where session_id = (select id from ids where name = 'ann_broken') and kind = 'signed_in'),
+  'the failure is recorded on the row');
 select tests.assert_true(
   exists (select 1 from private.account_activity_events a where a.session_id = (select id from ids where name = 'ann_fine'))
   and exists (select 1 from private.account_security_events e
@@ -669,7 +677,12 @@ select tests.assert_true(
   'a failing sign-in is left unclassified while the next one is classified (S38-L11)');
 drop trigger ah_fail_session on private.account_activity_events;
 select tests.act_as_service_role();
-select public.process_sign_in_events(100);
+select tests.assert_true(public.process_sign_in_events(100) = 0, 'a run right after leaves it alone: it backs off');
+select tests.act_as_owner();
+update private.account_security_events set classify_failed_at = now() - interval '6 minutes'
+  where session_id = (select id from ids where name = 'ann_broken') and kind = 'signed_in';
+select tests.act_as_service_role();
+select tests.assert_true(public.process_sign_in_events(100) = 1, 'after the pause it is tried again');
 select tests.act_as_owner();
 select tests.assert_true(
   exists (select 1 from private.account_activity_events a where a.session_id = (select id from ids where name = 'ann_broken')),

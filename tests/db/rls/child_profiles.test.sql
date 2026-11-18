@@ -444,6 +444,20 @@ select tests.assert_true(
       where membership_id = tests.ch('m-mia')))) = 'saved',
   'A secondary guardian can switch a capability off'
 );
+select tests.assert_true(
+  (select outcome from public.set_child_access(tests.ch('home-a'), tests.ch('m-mia'),
+     'young_child', '{}', false,
+     (select settings_updated_at from public.home_children(tests.ch('home-a'))
+      where membership_id = tests.ch('m-mia')))) = 'not_permitted',
+  'But cannot remove an "off" override (review LOW-1)'
+);
+select tests.assert_true(
+  (select outcome from public.set_child_access(tests.ch('home-a'), tests.ch('m-mia'),
+     'young_child', '{"viewLeaderboard": false, "viewHomeCalendar": false}', false,
+     (select settings_updated_at from public.home_children(tests.ch('home-a'))
+      where membership_id = tests.ch('m-mia')))) = 'saved',
+  'And can keep it while switching another capability off'
+);
 
 -- Primary guardian presets -------------------------------------------------------------------------
 

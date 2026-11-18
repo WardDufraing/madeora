@@ -50,6 +50,7 @@ const JOB_SERVICE_ROLE_RPCS = [
   "google_sync_calendars",
   "google_sync_finish",
   "google_sync_finish_calendar",
+  "job_batch_failures",
   "job_outbox_stats",
   "process_sign_in_events",
   "purge_account_activity",

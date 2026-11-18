@@ -122,6 +122,8 @@ create temporary table service_role_only on commit drop as
       'public.begin_job_execution(text,text,integer)',
       'public.finish_job_execution(text,text,uuid,text,text)',
       'public.job_outbox_stats()',
+      -- Review follow-up 2: the batches whose rows keep failing.
+      'public.job_batch_failures()',
       -- S14: recovery-ready notice, and the invitation and notification email jobs.
       'public.deliver_recovery_ready(uuid,timestamptz)',
       'public.get_invitation_email(uuid,integer)',

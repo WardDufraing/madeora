@@ -156,7 +156,8 @@ export async function loadChoreWidget(
         assigneeIds: row.assignee_member_ids,
         assignedToMe: row.assigned_to_me,
         mandatoryOpen: row.mandatory_open,
-        minutes: nullable(row.estimated_minutes),
+        // A database without the column (before its migration) degrades to "no estimate".
+        minutes: typeof row.estimated_minutes === "number" ? row.estimated_minutes : null,
         completedAt,
         contributor: completedAt === null ? null : { me: row.contributor_me, member: contributor },
       };

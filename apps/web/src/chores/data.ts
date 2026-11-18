@@ -511,7 +511,8 @@ export async function listChoreApprovals(homeId: string): Promise<Read<readonly 
         note: nullable(row.note),
         stepsDone: row.steps_done,
         stepsTotal: row.steps_total,
-        minutes: nullable(row.estimated_minutes),
+        // A database without the column (before its migration) degrades to "no estimate".
+        minutes: typeof row.estimated_minutes === "number" ? row.estimated_minutes : null,
         revision: row.revision,
       };
     }),
