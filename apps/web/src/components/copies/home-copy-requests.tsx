@@ -98,7 +98,7 @@ export function HomeCopyRequests({
         <ul className="flex flex-col divide-y divide-line" data-testid="copy-requests">
           {rows.map((row) => (
             <li key={row.id} className="flex flex-col gap-2 py-3" data-testid="copy-request">
-              <p className="text-body">
+              <p className="text-body" id={`copy-request-${row.id}`}>
                 <span className="font-semibold">{row.label ?? t(`untitled.${row.itemType}`)}</span>{" "}
                 <span className="text-fg-muted">({t(`type.${row.itemType}`)})</span>
               </p>
@@ -127,7 +127,9 @@ export function HomeCopyRequests({
                       onClick={() => {
                         decide(row.id, true);
                       }}
-                      data-testid="copy-request-confirm"
+                      aria-describedby={`copy-request-${row.id}`}
+                      aria-describedby={`copy-request-${row.id}`}
+                    data-testid="copy-request-confirm"
                     >
                       {t("approveConfirm")}
                     </Button>
@@ -135,6 +137,7 @@ export function HomeCopyRequests({
                       size="sm"
                       variant="ghost"
                       disabled={busy !== null}
+                      aria-describedby={`copy-request-${row.id}`}
                       onClick={() => {
                         setConfirming(null);
                       }}
@@ -151,6 +154,7 @@ export function HomeCopyRequests({
                     onClick={() => {
                       setConfirming(row.id);
                     }}
+                    aria-describedby={`copy-request-${row.id}`}
                     data-testid="copy-request-approve"
                   >
                     {t("approve")}
@@ -163,6 +167,7 @@ export function HomeCopyRequests({
                     onClick={() => {
                       decide(row.id, false);
                     }}
+                    aria-describedby={`copy-request-${row.id}`}
                     data-testid="copy-request-reject"
                   >
                     {t("reject")}

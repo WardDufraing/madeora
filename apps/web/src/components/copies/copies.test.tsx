@@ -146,6 +146,10 @@ describe("MyHomeCopies", () => {
     expect(screen.getByTestId("my-copy-pending")).toHaveTextContent("ends 1 Dec");
     expect(screen.getByTestId("my-copy-failed")).toHaveTextContent("the Home's storage is full");
     expect(screen.getByText("An album that no longer exists")).toBeInTheDocument();
+    // Same visible name on every row; the description says which request it is (S40P2-L7).
+    expect(screen.getByRole("button", { name: "Cancel request" })).toHaveAccessibleDescription(
+      "Soup → Elm",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Cancel request" }));
     await waitFor(() => {
       expect(router.refresh).toHaveBeenCalled();
@@ -183,6 +187,11 @@ describe("HomeCopyRequests", () => {
     const { container } = renderWithIntl(<HomeCopyRequests homeName="Oak" rows={rows} />);
     expect(await axeViolations(container)).toEqual([]);
     expect(screen.getByText(/Asked by Ann on 1 Nov/)).toHaveTextContent("12 photos");
+    // Approve and Reject repeat on every row; each names its request as description (S40P2-L7).
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveAccessibleDescription(
+      /^Summer/,
+    );
+    expect(screen.getByRole("button", { name: "Reject" })).toHaveAccessibleDescription(/^Summer/);
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(screen.getByText(/Oak gets its own copy/)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
