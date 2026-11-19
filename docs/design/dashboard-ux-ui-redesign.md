@@ -347,6 +347,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Preserve Personal/Home context, permission boundaries, user-selected accent, both themes, and the approved restrained motion and context-aware feedback.
 - Ensure the default experience is useful without any mobile-specific customization, and validate common phone widths, zoom, localization and dense widget collections.
 
+## Approved decision 26 — Adaptive mobile bottom navigation and full menu (2026-11-19)
+**Decision: C — Adaptive bottom navigation + full menu.**
+
+- Provide a persistent, touch-friendly **mobile bottom navigation bar** with fast access to core destinations and appropriate user-pinned favorite modules, plus a **More/full-menu** entry for all remaining available modules.
+- Keep the bottom bar concise, with a bounded number of clearly labeled destinations; prioritize Dashboard, Calendar and Tasks in line with the approved context-aware navigation approach, adapting to workspace and user preferences.
+- The full navigation drawer/menu must expose all permitted modules, workspace switching and less-frequent destinations without requiring a return to the dashboard.
+- Reflect the active route and current Personal/Home workspace clearly; preserve navigation consistency within each workspace and avoid revealing unavailable or unauthorized destinations.
+- Respect mobile safe areas, keyboard and screen-reader navigation, one-handed reach, accessible touch targets, translated labels and compact viewport widths.
+- Avoid conflicts with floating Ora controls, bottom sheets, modal dialogs, browser UI and on-screen keyboards; ensure content is not obscured by the persistent bar.
+- Maintain the same information architecture as desktop navigation while using a mobile-appropriate presentation; do not create a separate permission or routing model.
+- Test long labels, many pinned modules, landscape layouts, deep links and switching between Personal and Home contexts.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
