@@ -7649,7 +7649,7 @@
     "stepDown": "Step down as guardian",
     "guardiansSaved": "Guardians updated.",
     "holdWarningLeave": "{count, plural, one {You are the only primary guardian of # child in this Home. If you leave, the child is put on hold and cannot sign in here until the Owner appoints a new primary guardian.} other {You are the only primary guardian of # children in this Home. If you leave, they are put on hold and cannot sign in here until the Owner appoints a new primary guardian.}}",
-    "holdWarningAccount": "You are the only primary guardian of children in these Homes. While your account is deactivated, or once it is deleted, they are put on hold and cannot sign in there until the Owner appoints a new primary guardian. Reactivating a deactivated account restores their access, unless someone else has become primary guardian in the meantime.",
+    "holdWarningAccount": "You are the only primary guardian of children in these Homes. While your account is deactivated, or once it is deleted, they are put on hold and cannot sign in there until the Owner appoints a new primary guardian. Reactivating a deactivated account restores their access, unless someone else has become primary guardian in the meantime. You then become their secondary guardian if that role is free.",
     "holdWarningHome": "{home}: {count, plural, one {# child} other {# children}}",
     "guardianReauthIntro": "Changing a child's guardians needs a fresh confirmation that it's you.",
     "guardianReauthConfirm": "Confirm and continue",

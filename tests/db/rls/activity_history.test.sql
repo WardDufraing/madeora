@@ -506,9 +506,32 @@ select tests.assert_denied(
 select tests.assert_denied(
   $q$select public.request_security_report(current_date - 400, current_date, 'Europe/Brussels')$q$,
   'beyond retention', '22023');
+-- S38-L8 (decision 28): a zone the database does not know falls back to UTC, with one day of slack at
+-- each end for dates picked in the browser's zone.
+create temporary table utc_report on commit drop as
+  select public.request_security_report((now() at time zone 'UTC')::date - 1,
+                                        (now() at time zone 'UTC')::date + 1, 'Mars/Olympus') as id;
+grant select on utc_report to authenticated;
+select tests.assert_true(
+  (select r.timezone = 'UTC' and r.range_to = (now() at time zone 'UTC')::date
+     and r.range_from = (now() at time zone 'UTC')::date - 1
+   from public.list_my_security_reports() r where r.id = (select id from utc_report)),
+  'an unknown timezone falls back to UTC, and the range is clamped to today in UTC');
 select tests.assert_denied(
-  $q$select public.request_security_report(current_date - 1, current_date, 'Mars/Olympus')$q$,
-  'an unknown timezone', '22023');
+  $q$select public.request_security_report((now() at time zone 'UTC')::date + 1,
+                                           (now() at time zone 'UTC')::date + 2, 'Mars/Olympus')$q$,
+  'the UTC fallback still refuses a range that is wholly in the future', '22023');
+select tests.assert_denied(
+  $q$select public.request_security_report(current_date - 400, current_date, 'Mars/Olympus')$q$,
+  'and a range beyond retention', '22023');
+-- This report is only needed here: it would count toward the daily limit tested below.
+select tests.act_as_owner();
+delete from private.security_reports where id = (select id from utc_report);
+delete from private.account_activity_events
+  where user_id = (select id from ids where name = 'ann') and kind = 'security_report_requested';
+delete from private.account_security_events
+  where user_id = (select id from ids where name = 'ann') and kind = 'security_report_requested';
+select tests.act_as_user((select id from ids where name = 'ann'));
 
 create temporary table report on commit drop as
   select public.request_security_report(current_date - 7, (now() at time zone 'Europe/Brussels')::date,

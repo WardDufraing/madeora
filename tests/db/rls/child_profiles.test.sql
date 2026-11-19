@@ -692,8 +692,8 @@ select tests.assert_true(
   'Reactivating restores his role, and with it her access'
 );
 
--- While a primary guardian is deactivated the Owner may appoint another; their return then does not
--- take the role back.
+-- While a primary guardian is deactivated the Owner may appoint another; when they return they are the
+-- child's secondary guardian (decision 26), and the new primary guardian stays primary.
 select tests.act_as('bob');
 insert into ids select 'm-lio', membership_id from public.create_child(
   tests.ch('home-a'), 'Lio', tests.ch('m-bob'), null, '#9333ea', gen_random_uuid());
@@ -715,17 +715,80 @@ select tests.assert_true(
 select tests.act_as_owner();
 select tests.assert_true(not private.child_on_hold(tests.ch('home-a'), tests.ch('lio')),
   'Lio is no longer on hold');
+select tests.assert_true(
+  private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('bob')) is null,
+  'While Bob is still deactivated, his kept row gives him no guardian role'
+);
 delete from private.account_deactivations where user_id = tests.ch('bob');
 select tests.assert_true(
   private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('carol')) = 'primary'
-    and private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('bob')) is null
-    and not exists (select 1 from public.child_guardians g
-      where g.home_id = tests.ch('home-a') and g.child_user_id = tests.ch('lio')
-        and g.guardian_user_id = tests.ch('bob')),
-  'Bob''s return gives him no guardian role at all: the appointment ended his (not even secondary)'
+    and private.child_guardian_role(tests.ch('home-a'), tests.ch('lio'), tests.ch('bob')) = 'secondary',
+  'Bob''s return makes him Lio''s secondary guardian; Carol stays primary'
 );
--- Lio is only needed here; later sections count the children Bob guards.
+select tests.assert_true(not private.child_on_hold(tests.ch('home-a'), tests.ch('lio')),
+  'Lio stays out of hold after Bob''s return');
+select tests.act_as('bob');
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-lio'), tests.ch('m-alice'),
+    'secondary') = 'not_permitted',
+  'As the secondary guardian, Bob cannot name another secondary guardian'
+);
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-lio'), tests.ch('m-alice'),
+    'primary') = 'not_permitted',
+  'Nor hand over the primary role he no longer holds'
+);
+select tests.assert_true(
+  not exists (select 1 from public.my_guardian_hold_warnings()
+              where home_id = tests.ch('home-a') and children > 1),
+  'Lio does not count in Bob''s hold warnings: he is not Lio''s primary guardian'
+);
+select tests.act_as_owner();
+-- Lio and Lou are only needed here; later sections count the children Bob guards.
 delete from auth.users where id = tests.ch('lio');
+
+-- If another secondary guardian holds the place when the Owner appoints a new primary, that guardian
+-- stays secondary and the returning primary guardian gets no role (a child has one secondary guardian).
+select tests.act_as('bob');
+insert into ids select 'm-lou', membership_id from public.create_child(
+  tests.ch('home-a'), 'Lou', tests.ch('m-bob'), null, '#9333ea', gen_random_uuid());
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-lou'), tests.ch('m-alice'),
+    'secondary') = 'offered',
+  'Bob offers Alice the secondary role for Lou'
+);
+select tests.act_as('alice');
+select tests.assert_true(
+  public.answer_child_guardian_offer(tests.ch_offer(tests.ch('m-lou'), tests.ch('alice')), true)
+    = 'accepted',
+  'Alice accepts it'
+);
+select tests.act_as_owner();
+insert into ids select 'lou', m.user_id from private.home_memberships_all m where m.id = tests.ch('m-lou');
+insert into private.account_deactivations (user_id) values (tests.ch('bob'));
+select tests.act_as('alice');
+select tests.assert_true(
+  public.assign_child_guardian(tests.ch('home-a'), tests.ch('m-lou'), tests.ch('m-carol'),
+    'primary') = 'offered',
+  'With Bob deactivated, the Owner offers Lou''s primary role to Carol'
+);
+select tests.act_as('carol');
+select tests.assert_true(
+  public.answer_child_guardian_offer(tests.ch_offer(tests.ch('m-lou'), tests.ch('carol')), true)
+    = 'accepted',
+  'Carol accepts it'
+);
+select tests.act_as_owner();
+delete from private.account_deactivations where user_id = tests.ch('bob');
+select tests.assert_true(
+  private.child_guardian_role(tests.ch('home-a'), tests.ch('lou'), tests.ch('carol')) = 'primary'
+    and private.child_guardian_role(tests.ch('home-a'), tests.ch('lou'), tests.ch('alice')) = 'secondary'
+    and not exists (select 1 from public.child_guardians g
+      where g.home_id = tests.ch('home-a') and g.child_user_id = tests.ch('lou')
+        and g.guardian_user_id = tests.ch('bob')),
+  'Alice stays secondary, and Bob''s return gives him no role for Lou'
+);
+delete from auth.users where id = tests.ch('lou');
 
 -- Mistaken creation and limits --------------------------------------------------------------------
 
