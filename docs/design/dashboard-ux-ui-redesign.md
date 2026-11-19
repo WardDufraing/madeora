@@ -151,6 +151,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Ensure keyboard, screen reader, touch and narrow-screen support.
 - Exact switcher placement, recent-Home persistence and switching transitions remain implementation details.
 
+## Approved decision 12 — Adaptive greeting header (2026-11-19)
+**Decision: C — Adaptive greeting header.**
+
+- Use a compact, welcoming dashboard header with a time-appropriate greeting, local date and concise contextual summary of the day.
+- Adapt header density to viewport size and scroll position, preserving essential controls and reducing vertical space rather than using a permanently oversized hero.
+- Show a small number of useful summary signals (such as upcoming events or actionable tasks) only when supported by available data and active Personal/Home permissions.
+- Avoid repeating extensive information already shown in dashboard widgets; hide irrelevant or empty summary signals gracefully.
+- Express Madeora's **Playful Precision** visual identity with restrained warmth, subtle color and personality, without excessive animation or motivational filler.
+- Respect localization, time zone, accessibility, reduced-motion preferences, loading and error states.
+- Keep the workspace switcher and navigation discoverable independently of header collapse.
+- Exact summary signals, scroll-collapse threshold and greeting personalization remain to be validated in prototypes.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -236,6 +248,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Widget configuration: **DECIDED — hybrid quick settings popover + advanced side panel with preview**; configuration save semantics pending.
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
+- Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
 ## Engineering guardrails
