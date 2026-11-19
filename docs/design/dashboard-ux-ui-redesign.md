@@ -79,6 +79,19 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Validate edge cases for mixed sizes, gaps, adding near grid edges, and responsive breakpoints.
 - Exact collision algorithm, animation, and save semantics are implementation details to prototype and test.
 
+## Approved decision 6 — Hybrid saving with recoverable drafts (2026-11-19)
+**Decision: C — Hybrid saving with recoverable drafts.**
+
+- Dashboard edit mode maintains a draft of layout changes, including moves, resizes, additions and removals, without publishing them to the active dashboard.
+- Draft changes are autosaved for recovery from accidental refresh, tab closure or interrupted sessions; **Done** explicitly commits the draft as the active layout, and **Cancel** discards the draft and restores the last committed layout.
+- Display clear **Saving draft / Draft saved / Save failed / Unsaved changes** feedback as appropriate. Never claim a draft is safely stored until persistence succeeds.
+- On reopening edit mode with a recoverable draft, offer **Resume draft** or **Discard draft**; do not silently replace the committed dashboard.
+- Warn before navigating away when there are changes not safely persisted. Recoverable draft storage must be scoped to account and Personal/Home context, permission-checked, and never leak another context's layout.
+- Provide undo/redo within the edit session where practical. **Done** must handle commit failures without losing the draft or falsely showing success.
+- Define a safe multi-device edit conflict strategy before implementation (version checks and a recovery choice rather than silent last-write-wins).
+- Widget-specific configuration from normal mode is separate from dashboard layout editing; whether it saves immediately or requires confirmation is a later decision.
+- Draft persistence mechanism, expiration/cleanup policy and offline behavior require engineering review; do not assume browser-local storage is appropriate for sensitive metadata.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -91,7 +104,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Clear visual transition: edit toolbar with **Add widget**, **Undo**, **Reset layout**, **Cancel**, **Save**.
 - Visible drag handles and resize controls only in edit mode; precise drop indicators and **approved smart reflow preview**: move only necessary widgets and show all changes before drop.
 - **Approved:** hybrid resizing combines drag handles snapped to grid increments with named size presets; enforce widget-specific size constraints.
-- Unsaved changes must be cancelable. Confirm destructive reset; distinguish removing a widget from deleting underlying data.
+- **Approved:** autosave recoverable editing drafts, with explicit Done to commit and Cancel to discard. Confirm destructive reset; distinguish removing a widget from deleting underlying data.
 - Keyboard-accessible Move up/down/left/right and size controls, plus touch-friendly alternatives to drag.
 - On save, persist per account and dashboard context; show success and restore previous layout on error. Prevent overwriting edits across devices without a conflict strategy.
 
@@ -156,7 +169,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Grid sizing: **DECIDED — hybrid snap-to-grid drag resizing plus named presets**; exact grid geometry pending.
 - Collision behavior: **DECIDED — smart reflow with live preview, minimal necessary movement and undo**.
 - Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
-- Save semantics: explicit Save/Cancel vs autosave with undo (still undecided; hybrid mode does not settle persistence).
+- Save semantics: **DECIDED — autosaved recoverable draft, Done commits, Cancel discards**; normal-mode widget configuration save behavior remains open.
 - Empty widgets: compact vs optionally hidden.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
