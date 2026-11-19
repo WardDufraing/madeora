@@ -210,6 +210,16 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Keep the existing **single user-selected accent** system with derived tones; geometry does not introduce fixed per-module colors.
 - Verify clipping, focus rings, shadow bounds, dense layouts and touch targets across breakpoints. Exact pixel values remain subject to visual and accessibility validation.
 
+## Approved decision 17 — Balanced dashboard spacing (2026-11-19)
+**Decision: B — Balanced spacing.**
+
+- Use comfortable, consistent gaps between dashboard widgets and measured internal padding so pronounced neumorphic elevations remain visually distinct without wasting screen space.
+- Define semantic spacing tokens for the dashboard grid, widget shells, headers, controls, gallery cards and edit-mode affordances; avoid ad hoc values per widget.
+- Keep a useful number of widgets visible on common laptop screens, while retaining adequate text hierarchy, scanability and pointer/touch target sizes.
+- Scale spacing responsively: modestly reduce gaps and padding on narrower viewports without sacrificing accessibility or collapsing interactive targets.
+- Coordinate grid gaps, widget shadows and moderately rounded card geometry so shadows do not collide or clip.
+- Validate dense and sparse layouts, long localized labels, varying widget sizes and light/dark modes before fixing numeric spacing values.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -296,7 +306,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
-- Visual treatment: **DECIDED — Soft Neumorphism with pronounced tactile depth** (raised cards, deeper layered shadows, inset controls), **moderately rounded geometry** (widgets ~12–16px, controls ~6–10px), one user-selected accent and derived tonal variants, no fixed per-module colors.
+- Visual treatment: **DECIDED — Soft Neumorphism with pronounced tactile depth** (raised cards, deeper layered shadows, inset controls), **moderately rounded geometry** (widgets ~12–16px, controls ~6–10px), **balanced responsive spacing**, one user-selected accent and derived tonal variants, no fixed per-module colors.
 - Ora: **DECIDED — optional insights widget plus unobtrusive, hideable global assistant launcher**, with shared context and no duplicate alerts.
 
 ## Engineering guardrails
