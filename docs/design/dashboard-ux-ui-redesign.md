@@ -804,6 +804,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect workspace boundaries and permissions, localization, accessible contrast, reduced-motion preferences and correct date/timezone interpretation.
 - Treat progress numbers and sample streaks as illustrative design content, not fixed product values.
 
+## Approved decision 63 — Adaptive individual habit rows (2026-11-19)
+**Decision: C — Adaptive habit rows.**
+
+- Present daily habits as **compact, consistent rows** that adapt their secondary information and quick actions to the habit's tracking type, rather than forcing every habit into a large card.
+- For **binary habits**, emphasize an accessible one-tap completion control and concise optional context such as current streak or completed-today status.
+- For **measurable habits**, display a restrained progress indicator with clear current-versus-target values and a convenient quick-increment control where appropriate.
+- Keep row alignment, spacing, typography, corner rounding and primary tap targets consistent even when individual rows have different metadata.
+- Use lightweight completion feedback, distinguish pending/partial/completed states without relying on color alone, and respect reduced-motion settings.
+- Offer contextual access to habit details and editing without crowding each row with persistent action icons.
+- Handle long names, localized progress units, varying targets and small screens gracefully; do not imply all habits share a single measurement type.
+- Align with Decision 62's **daily checklist first, compact summaries second** hierarchy and Madeora's Playful Precision visual language.
+- Ensure progress controls and status indicators are keyboard and screen-reader accessible and respect workspace permissions.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
