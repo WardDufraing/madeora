@@ -678,6 +678,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Use consistent meanings across Today, Upcoming, All Tasks, Lists and task details, and maintain a sensible monochrome/print fallback.
 - Preserve the approved adaptive task-row density, completed-task styling and responsive keyboard/touch interactions.
 
+## Approved decision 53 — Adaptive overdue task emphasis (2026-11-19)
+**Decision: C — Adaptive overdue emphasis.**
+
+- Show overdue tasks with a **clearly visible overdue due-date label** and restrained typographic emphasis rather than applying a strong red background to every overdue row.
+- Include a concise, accessible relative indicator such as “Overdue · 3 days” together with the underlying due date where useful; avoid relying on color alone.
+- Reserve stronger visual treatment (for example, a subtle warm tint or additional warning icon) for significantly overdue or genuinely time-critical tasks, without implying that lateness automatically changes the task's user-assigned priority.
+- Keep the **semantic color-coded priority bar** approved in Decision 52 independent from overdue status, so urgency and priority remain distinct signals.
+- Keep due-today and upcoming labels readable and quieter than overdue labels, with consistent presentation across Today, Upcoming, All Tasks, Lists and task details.
+- Avoid overwhelming the interface when many tasks are overdue; retain the compact adaptive row layout, predictable alignment and clear completion controls.
+- Ensure accessible contrast, non-color-only labels, localization of dates, correct timezone handling and parity across light/dark themes and mobile layouts.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
