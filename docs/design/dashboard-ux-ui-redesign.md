@@ -1,9 +1,10 @@
 # Madeora — Dashboard UX/UI Redesign Plan
 
-**Status:** Visual direction approved (Playful Precision); widget UX decisions pending; requires visual review before implementation  
+**Status:** Product-owner UX direction approved through Decision 71; ready for Claude's repository audit and phased implementation planning. Visual baseline and technical feasibility still require validation before UI changes are shipped.  
 **Created:** 2026-11-19  
-**Scope:** Personal and Home dashboards, dashboard editor, widget gallery, responsive shell and visual system.  
-**Not in scope:** Rebuilding completed business logic or changing authorization/privacy rules.
+**Last reviewed:** 2026-11-19  
+**Scope:** Personal and Home dashboards, dashboard editor, widget gallery, responsive navigation and visual system; cross-module creation patterns; Calendar, Tasks, Notes, Habit Tracker and Shopping Lists UX; dedicated wall-display experience.  
+**Not in scope:** Rebuilding completed business logic, weakening authorization/privacy rules, or implementing speculative features that conflict with the binding product specification.
 
 ## Evidence and limitations
 Reviewed the authenticated deployed personal dashboard's browser-readable structure on 2026-11-19, plus the repository README and user-story overview. This is **not** a screenshot-level visual audit: spacing, colors, animations, and the widget-add/edit panel were not directly observed. Treat all editor-specific proposals below as hypotheses until a screenshot or interactive walkthrough is reviewed.
@@ -970,17 +971,33 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Meet WCAG 2.2 AA targets where applicable: keyboard interaction, focus visibility, screen-reader announcements, contrast, drag alternatives, reduced motion, accessible dialogs.
 - Localized Dutch/English copy and long-text handling.
 
+## Claude implementation handoff (read before coding)
+
+**This document is the approved UX intent, not a claim that the repository already implements it.** Decisions 1–71 are approved (Decision 1 is recorded under **Approved visual direction**, while numbered headings begin at Decision 2). No Decision 72 has been approved: contextual inline shopping-item editing is **not** an accepted requirement yet. Do not implement it merely because it was the next proposed question.
+
+1. **Read the binding project context first:** `CLAUDE.md`, `docs/product/Project-entry.md`, `docs/product/Modules.md`, `docs/product/Project-specification.md`, `docs/design/design-decisions.md`, plus relevant existing app code, design tokens, icons, tests and persistence/schema. Resolve discrepancies in favor of the binding specification and existing security guarantees; surface unresolved conflicts for approval rather than guessing.
+2. **Audit before modifying:** identify actual routes, components, shared UI primitives, dashboard grid/layout persistence, permissions, responsive breakpoints, module data models and test coverage. Review real desktop/mobile screenshots and interactive states where available. Earlier observations were limited and should not be treated as a comprehensive visual audit.
+3. **Build an implementation matrix:** map each approved decision to affected routes/components, current behavior, proposed changes, dependencies, data/API impact, accessibility considerations, test cases and acceptance criteria. Group related decisions to avoid duplicate UI patterns and inconsistent implementations.
+4. **Prioritize working end-to-end vertical slices:** design foundations and responsive shell; dashboard customization and widget gallery; shared creation/editing primitives; Calendar; Tasks; Notes; Habit Tracker; Shopping Lists; wall display. Reorder only when repository dependencies warrant it. Avoid a single massive refactor.
+5. **Preserve existing behavior and data:** use current architecture, design tokens, icons, translations, permissions, Home/Personal boundaries and persisted user layouts. Introduce migrations only if justified and documented. Do not replace working business logic with UI mockups or hard-coded sample data.
+6. **Verify each slice:** typecheck, lint, targeted unit/integration tests, accessibility and keyboard/touch checks, light/dark and responsive states, and Playwright coverage where appropriate. Test empty, sparse, populated, loading, error, and permission-restricted states. Use visual regression snapshots for meaningful design changes.
+7. **Communicate deliverables:** provide an audit/implementation checklist, explicitly identify gaps or conflicts, implement in reviewable commits or PRs, and summarize changed files, verified tests, known limitations and remaining decisions. Do not claim a visual audit or completed feature without evidence.
+
+**Specific must-not-miss acceptance points:** Tasks needs a visible **+ New Task** action even when no list exists; Calendar event creation should preserve context in a modal rather than navigating to a standalone creation page; work schedules must be visible in calendar views as approved; Shopping Lists needs adaptive list navigation, fast inline quick-add and collapsible completed items; Habit Tracker needs daily and weekly progress, trends, and progressive creation. These requirements must still be reconciled with existing models and permissions.
+
+**Open engineering choices, not new product-owner decisions:** exact grid dimensions/breakpoints, animation timing, draft conflict resolution, persistence details, widget-specific configuration save semantics and technical chart implementation. Use established project conventions and prototype/test where needed; ask for approval if a choice changes approved UX or product behavior.
+
 ## Implementation workstreams (proposed order)
 | Phase | Priority | Deliverable | Exit criteria |
 |---|---|---|---|
-| 0. Audit | P0 | Screenshots of desktop/mobile, edit mode, gallery, populated and empty widgets; inspect existing code/design tokens | Baseline and constraints recorded |
-| 1. Design direction | P0 | 2–3 visual concepts and selected design system refinements | Owner approves direction |
-| 2. Dashboard shell | P0 | Header, context switcher, hierarchy, sidebar grouping, responsive grid | Personal/Home privacy and navigation regression tests pass |
-| 3. Widget editor | P0 | Edit mode, drag/resize, undo/cancel/save/reset and accessible alternatives | Layout changes persist and revert correctly |
-| 4. Widget gallery | P0 | Search, previews, categories, add states, predictable placement | Add widget in a few obvious actions |
-| 5. Widget content | P1 | Compact/full variants, useful empty states, direct actions, consistent settings | Sparse and populated dashboards both look intentional |
-| 6. Ora integration | P1 | Contextual assistant placement and states | No duplicate competing affordances |
-| 7. Polish and validation | P1 | Theme, motion, mobile, accessibility, visual regression and usability tests | Owner sign-off across screen sizes |
+| 0. Repository and visual audit | P0 | Inventory existing implementation, tokens, constraints, routes and desktop/mobile states; map decisions to code | Baseline, gaps, risks and implementation matrix documented |
+| 1. Shared design foundations | P0 | Playful Precision tokens, neumorphic surfaces, typography, light/dark, responsive shell, navigation and creation patterns | Accessible visual consistency and no Personal/Home regressions |
+| 2. Dashboard and widgets | P0 | Layout editing, recoverable drafts, gallery, resizing/reflow, presets/history, widget states, Ora | Approved flows work with persistence, keyboard/touch and privacy tests |
+| 3. Calendar and Tasks | P0 | Modal event creation, work-schedule visualization, event previews; task creation, rows, details and progress | End-to-end creation/editing works, including empty states |
+| 4. Notes and Habit Tracker | P1 | Adaptive Notes browsing/editing; daily habits, weekly strip, trends and progressive editor | Responsive, accessible and data-backed module flows |
+| 5. Shopping Lists | P1 | Adaptive workspace and list switcher, inline quick-add, collapsible completed items | Fast mobile interaction, safe completion/undo and shared-list access |
+| 6. Dedicated wall display | P1 | Home-bound dashboard, ambient mode, PIN sessions and expandable navigation | No unauthorized personal content or sensitive actions |
+| 7. Polish and release validation | P1 | Theme/motion refinement, localization, accessibility, visual regression and usability review | Tests pass, owner reviews visuals, known gaps recorded |
 
 ## Suggested acceptance scenarios
 - A new user understands the dashboard without configuring anything.
@@ -993,9 +1010,9 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Changes survive reload and work across desktop/mobile without overlapping cards.
 - Dark/light themes, NL/EN text, loading/error/offline states are reviewed.
 
-## Decisions to make with the product owner
+## Decision register and remaining implementation questions
 - Visual direction: **DECIDED — Playful Precision (polished productivity + friendly/playful)**.
-- Sidebar: persistent grouped navigation vs compact rail + expandable drawer.
+- Sidebar: **DECIDED — hybrid floating desktop sidebar** (Decision 41), with context-aware navigation (Decision 10); verify responsive implementation.
 - Grid sizing: **DECIDED — hybrid snap-to-grid drag resizing plus named presets**; exact grid geometry pending.
 - Collision behavior: **DECIDED — smart reflow with live preview, minimal necessary movement and undo**.
 - Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
@@ -1014,4 +1031,4 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 Read `docs/product/Project-entry.md`, `docs/product/Modules.md`, `docs/product/Project-specification.md`, `docs/design/design-decisions.md`, `CLAUDE.md`, and current dashboard/widget implementation before coding. Binding product specification is read-only; this document is a proposed redesign plan, not authorization to contradict it. Reuse `packages/design-tokens`, `packages/icons`, and existing dashboard persistence where possible. Avoid breaking existing user layouts; plan migration/versioning if widget geometry or schema changes. Add Playwright interaction tests and visual snapshots, plus RLS/privacy checks where data access is touched.
 
 ## Next action
-Obtain screenshots or a live interactive review of **normal dashboard**, **edit dashboard**, **widget gallery**, and **widget configuration** at desktop and mobile widths. Refine this plan based on actual visuals and implementation details before starting code.
+Claude should start with the **repository and visual audit** in the handoff above, then produce a decision-to-component implementation matrix and a phased, testable execution plan. Obtain screenshots or an interactive review of normal dashboard, edit dashboard, widget gallery and configuration at desktop/mobile widths, plus representative module screens. Once gaps and conflicts are identified, proceed in reviewable vertical slices; request clarification only for material product-spec conflicts or unapproved UX changes.
