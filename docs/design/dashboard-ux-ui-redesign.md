@@ -67,6 +67,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Preserve responsive behavior and saved layouts across screen sizes; mobile may map desktop dimensions to supported single-column variants.
 - Exact grid column count, snap increments and collision/reflow rules remain implementation decisions to validate in prototypes.
 
+## Approved decision 5 — Smart reflow with preview (2026-11-19)
+**Decision: C — Smart reflow with preview.**
+
+- During drag, resize, or add-at-position interactions, show a live placement preview indicating the proposed positions of all affected widgets before commit.
+- Reflow only widgets that must move to resolve collisions; preserve other positions wherever feasible.
+- Never overlap widgets, silently discard them, or cause unexpected global rearrangement.
+- Support undo of a placement change during the edit session; Cancel restores the previously saved layout.
+- Use deterministic placement and collision rules so the same action produces the same result.
+- Make the preview legible for pointer, keyboard and touch interactions; provide non-drag alternatives.
+- Validate edge cases for mixed sizes, gaps, adding near grid edges, and responsive breakpoints.
+- Exact collision algorithm, animation, and save semantics are implementation details to prototype and test.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -77,7 +89,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 ### Edit mode
 - **Approved:** adding, removing, rearranging and resizing widgets happens in a dedicated edit mode.
 - Clear visual transition: edit toolbar with **Add widget**, **Undo**, **Reset layout**, **Cancel**, **Save**.
-- Visible drag handles and resize controls only in edit mode; precise drop indicators, collision feedback, no surprising reshuffles.
+- Visible drag handles and resize controls only in edit mode; precise drop indicators and **approved smart reflow preview**: move only necessary widgets and show all changes before drop.
 - **Approved:** hybrid resizing combines drag handles snapped to grid increments with named size presets; enforce widget-specific size constraints.
 - Unsaved changes must be cancelable. Confirm destructive reset; distinguish removing a widget from deleting underlying data.
 - Keyboard-accessible Move up/down/left/right and size controls, plus touch-friendly alternatives to drag.
@@ -141,7 +153,8 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 ## Decisions to make with the product owner
 - Visual direction: **DECIDED — Playful Precision (polished productivity + friendly/playful)**.
 - Sidebar: persistent grouped navigation vs compact rail + expandable drawer.
-- Grid sizing: **DECIDED — hybrid snap-to-grid drag resizing plus named presets**; exact grid geometry and collision rules pending.
+- Grid sizing: **DECIDED — hybrid snap-to-grid drag resizing plus named presets**; exact grid geometry pending.
+- Collision behavior: **DECIDED — smart reflow with live preview, minimal necessary movement and undo**.
 - Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
 - Save semantics: explicit Save/Cancel vs autosave with undo (still undecided; hybrid mode does not settle persistence).
 - Empty widgets: compact vs optionally hidden.
