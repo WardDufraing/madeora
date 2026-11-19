@@ -200,6 +200,16 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Honor high-contrast and reduced-motion settings, with simplified surface treatment where necessary for accessibility or performance.
 - Test realistic dense layouts, mobile screens, the widget gallery, side panels, empty states and dark mode before finalizing elevation values.
 
+## Approved decision 16 — Moderately rounded geometry (2026-11-19)
+**Decision: A — Moderately rounded.**
+
+- Use approximately **12–16px** corner radii for standard dashboard widget cards and approximately **6–10px** for buttons, inputs, menus and smaller controls.
+- Allow larger overlay panels or special components slightly larger radii when justified by scale, but avoid a pervasive pill-shaped or extra-rounded appearance.
+- Pair the moderate radius scale with the approved **pronounced tactile neumorphic depth**: visibly elevated cards and inset controls should feel refined, structured and approachable rather than inflated.
+- Define a consistent semantic radius token scale and apply it across widgets, navigation, gallery, editor, dialogs and mobile.
+- Keep the existing **single user-selected accent** system with derived tones; geometry does not introduce fixed per-module colors.
+- Verify clipping, focus rings, shadow bounds, dense layouts and touch targets across breakpoints. Exact pixel values remain subject to visual and accessibility validation.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -286,7 +296,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
-- Visual treatment: **DECIDED — Soft Neumorphism with pronounced tactile depth** (raised cards, deeper layered shadows, inset controls, generous radii), one user-selected accent and derived tonal variants, no fixed per-module colors.
+- Visual treatment: **DECIDED — Soft Neumorphism with pronounced tactile depth** (raised cards, deeper layered shadows, inset controls), **moderately rounded geometry** (widgets ~12–16px, controls ~6–10px), one user-selected accent and derived tonal variants, no fixed per-module colors.
 - Ora: **DECIDED — optional insights widget plus unobtrusive, hideable global assistant launcher**, with shared context and no duplicate alerts.
 
 ## Engineering guardrails
