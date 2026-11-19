@@ -156,4 +156,5 @@ Review process note: one full review for this plan is complete. Corrections abov
 ## 8. Ward's answers
 
 - 2026-11-19, weather in ambient mode: **add a free weather provider.** UX8 must first check the provider's current free-tier terms, quotas and card requirements, record them in `docs/provider-cost-register.md`, and ask Ward to approve the specific provider before integrating (€0 rule). Weather stays server-fetched and cached, and ambient mode must still work when weather is unavailable.
-- Other decisions (spec supersession, Notes and work schedules, Decision 37): pending; defaults in sections 2 and 7 apply.
+- 2026-11-19, Decision 37: **protected actions only.** A member's PIN opens a 5-minute session for protected actions; the privacy lock still needs a manager's own signed-in session (S44 rule unchanged). UX8 must fit it with the no-lockout rule (display tries never count toward a member's PIN lock).
+- Other decisions (spec supersession, Notes and work schedules): pending; defaults in sections 2 and 7 apply.
