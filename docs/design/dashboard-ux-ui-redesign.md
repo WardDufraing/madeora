@@ -139,6 +139,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Avoid duplicate or competing navigation controls. Keep context switch, favorites, and All Modules consistent across desktop and mobile.
 - The exact placement of pinned items, mobile navigation pattern, and per-context favorite persistence remain to be decided.
 
+## Approved decision 11 — Smart workspace switcher (2026-11-19)
+**Decision: C — Smart workspace switcher.**
+
+- Prominently identify the active **Personal** or named **Home** space in the app shell with its name, type and an accessible switcher affordance.
+- Provide one-step quick switching between Personal and the most recently used Home, while making every other authorized Home available through the workspace selector.
+- The selected Home is user-specific and must not imply shared access to personal-only content. Always enforce context boundaries and permissions during switching, loading, deep linking and cache transitions.
+- Give each space a subtle recognizable identity (e.g. icon, label or restrained accent) without replacing the user's chosen overall theme or causing disorienting full-app restyling.
+- Preserve relevant module navigation where appropriate when switching contexts; otherwise route to a safe dashboard destination with clear feedback.
+- Handle removed memberships, unavailable Homes, loading and errors gracefully; never show stale data from the previous workspace.
+- Ensure keyboard, screen reader, touch and narrow-screen support.
+- Exact switcher placement, recent-Home persistence and switching transitions remain implementation details.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -222,7 +234,8 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Save semantics: **DECIDED — autosaved recoverable draft, Done commits, Cancel discards**; normal-mode widget configuration save behavior remains open.
 - Empty widgets: **DECIDED — user-selectable Full / Compact / Hide when empty**; temporary hidden-widget gap policy pending.
 - Widget configuration: **DECIDED — hybrid quick settings popover + advanced side panel with preview**; configuration save semantics pending.
-- Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, Personal/Home switch, pinned favorites and All Modules.
+- Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
+- Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
 ## Engineering guardrails
