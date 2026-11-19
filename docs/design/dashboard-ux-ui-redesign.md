@@ -254,6 +254,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep deep links and any existing standalone creation route functional where needed for backward compatibility, but make the modal the default in-context creation experience.
 - Acceptance: a user can create or cancel an event without losing their place in the Calendar page.
 
+## Approved cross-module creation UX — Adaptive creation (2026-11-19)
+**Decision: B — Adaptive creation.**
+
+- Use a consistent, context-preserving creation pattern across Madeora modules, including Tasks, Calendar, Shopping, Habits and other applicable modules.
+- **Quick additions** open compact accessible modal dialogs for a small number of essential fields; prioritize fast completion and sensible prefilled context.
+- **Complex creation** uses a larger responsive dialog or drawer when extra fields, previews, multi-step input or contextual reference material is necessary.
+- Reserve **full-page creation** for genuinely complex workflows that require dedicated workspace, without making it the default.
+- Preserve underlying route, scroll position, selected filters, dates and Personal/Home context on open, cancel and successful creation; return focus to the trigger.
+- Use consistent Save/Cancel placement, validation, error feedback, unsaved-change protection, focus handling, keyboard controls and responsive mobile behavior.
+- Respect permissions and accessibility, and preserve deep-linkable routes where appropriate. Avoid nested dialogs where a single expandable surface suffices.
+- The Tasks **+ New Task** action and Calendar event creation modal are the first explicitly identified applications of this pattern.
+- This cross-module decision does **not** resolve the still-open **dashboard decision 19** about how much interaction happens inside widgets.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
