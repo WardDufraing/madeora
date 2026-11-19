@@ -643,6 +643,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect task permissions, workspace context, light/dark theme contrast and reduced-motion preferences.
 - Match the approved adaptive task-row styling and Playful Precision aesthetic without unnecessary nested card depth.
 
+## Approved decision 50 — Subtle satisfying task completion feedback (2026-11-19)
+**Decision: B — Subtle satisfying animation.**
+
+- Completing a task immediately updates its checkbox and completed state, accompanied by a **brief, restrained checkbox transition and gentle highlight**.
+- Show a short, unobtrusive completion acknowledgment where appropriate; avoid persistent celebratory banners, confetti or excessive movement for routine completions.
+- Keep task completion responsive and allow users to undo or reopen a task without losing their place in the current Tasks view.
+- Use accessible non-color-only completed styling, maintain readable task titles and avoid layout shifts that make subsequent tasks difficult to select.
+- For repeated or bulk completions, reduce redundant visual effects and avoid stacking feedback.
+- Honor reduced-motion settings by using instant state changes or non-animated emphasis while retaining clear confirmation.
+- Apply the same restrained interaction language to subtasks, keeping their progress count and progress bar synchronized.
+- Match Madeora's Playful Precision design language and the previously approved subtle, purposeful motion and contextual feedback patterns.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
