@@ -56,6 +56,17 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - After adding, show the new widget clearly and avoid unexpected reshuffling. Exact placement and collision behavior remain to be decided.
 - Do not crowd normal dashboard mode with permanent empty-slot buttons; inline placement affordances appear in edit mode.
 
+## Approved decision 4 — Hybrid widget resizing (2026-11-19)
+**Decision: C — Hybrid resizing.**
+
+- In dashboard edit mode, users may drag resize handles; width and height snap to supported grid increments rather than arbitrary pixels.
+- The widget menu also offers named size presets, so resizing does not depend on precise pointer input.
+- Each widget type defines supported minimum/maximum dimensions and sensible presets based on content.
+- The grid shows a clear resize preview and collision behavior; never silently overlap widgets or lose content.
+- Provide keyboard and touch-accessible size selection. Hide resize handles in normal mode.
+- Preserve responsive behavior and saved layouts across screen sizes; mobile may map desktop dimensions to supported single-column variants.
+- Exact grid column count, snap increments and collision/reflow rules remain implementation decisions to validate in prototypes.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -67,7 +78,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - **Approved:** adding, removing, rearranging and resizing widgets happens in a dedicated edit mode.
 - Clear visual transition: edit toolbar with **Add widget**, **Undo**, **Reset layout**, **Cancel**, **Save**.
 - Visible drag handles and resize controls only in edit mode; precise drop indicators, collision feedback, no surprising reshuffles.
-- Use a predictable responsive grid; support fixed widget size presets (small, medium, large) rather than unrestricted resizing initially.
+- **Approved:** hybrid resizing combines drag handles snapped to grid increments with named size presets; enforce widget-specific size constraints.
 - Unsaved changes must be cancelable. Confirm destructive reset; distinguish removing a widget from deleting underlying data.
 - Keyboard-accessible Move up/down/left/right and size controls, plus touch-friendly alternatives to drag.
 - On save, persist per account and dashboard context; show success and restore previous layout on error. Prevent overwriting edits across devices without a conflict strategy.
@@ -130,7 +141,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 ## Decisions to make with the product owner
 - Visual direction: **DECIDED — Playful Precision (polished productivity + friendly/playful)**.
 - Sidebar: persistent grouped navigation vs compact rail + expandable drawer.
-- Grid: fixed presets vs fully freeform placement.
+- Grid sizing: **DECIDED — hybrid snap-to-grid drag resizing plus named presets**; exact grid geometry and collision rules pending.
 - Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
 - Save semantics: explicit Save/Cancel vs autosave with undo (still undecided; hybrid mode does not settle persistence).
 - Empty widgets: compact vs optionally hidden.
