@@ -10,6 +10,17 @@ import type { ObjectStore } from "@madeora/storage";
 
 export type EmailLanguage = "en" | "nl";
 
+/**
+ * One batch whose rows keep failing (`job_batch_failures`): rows that failed are retried with a
+ * growing back-off and are never counted as done, so the job reports them at error level.
+ */
+export interface JobBatchFailure {
+  readonly source: string;
+  readonly failing: number;
+  readonly maxAttempts: number;
+  readonly oldestFailedAt: string | null;
+}
+
 /** What an email job reads about one notification, re-checked by the database at send time. */
 export type NotificationEmailRead =
   | {
@@ -179,6 +190,11 @@ export interface JobDataPort {
    * routine sign-in alerts (re-authentication sign-ins are left out); how many it classified.
    */
   processSignInEvents(limit: number): Promise<number>;
+  /**
+   * task-reminder-advance: the batches (sign-in classification, goal series rollover) with rows
+   * that failed and wait for their back-off; the job logs them at error level.
+   */
+  jobBatchFailures(): Promise<readonly JobBatchFailure[]>;
   /** task-reminder-advance (S38): removes activity history past retention; how many entries. */
   purgeAccountActivity(): Promise<number>;
   /**

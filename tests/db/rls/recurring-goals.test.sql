@@ -593,7 +593,7 @@ create function tests.rg_fail_series() returns trigger
   language plpgsql
   as $$
   begin
-    if new.id = tests.i('s-week') then
+    if new.id = tests.i('s-week') and new.next_roll_at is distinct from old.next_roll_at then
       raise exception 'simulated failure';
     end if;
     return new;
@@ -608,9 +608,29 @@ select tests.assert_true(
   (select next_roll_at > now() from private.goal_series where id = tests.i('s-run'))
   and (select next_roll_at < now() from private.goal_series where id = tests.i('s-week')),
   'A failing series stays due while the rest of the batch rolls');
+select tests.assert_true(
+  (select roll_attempts = 1 and roll_failed_at is not null from private.goal_series where id = tests.i('s-week')),
+  'The failure is recorded on the series (review MEDIUM-2)');
+select tests.act_as_service_role();
+select tests.assert_true(
+  (select failing = 1 and max_attempts = 1 from public.job_batch_failures() where source = 'goal_series'),
+  'The job sees one failing series');
+select public.roll_goal_periods();
+select tests.act_as_owner();
+select tests.assert_true((select roll_attempts = 1 and next_roll_at < now() from private.goal_series where id = tests.i('s-week')),
+  'A run right after does not try it again: it backs off');
 drop trigger rg_fail_series on private.goal_series;
+update private.goal_series set roll_failed_at = now() - interval '6 minutes' where id = tests.i('s-week');
 select tests.act_as_service_role();
 select public.roll_goal_periods();
 select tests.act_as_owner();
-select tests.assert_true((select next_roll_at is null or next_roll_at > now() from private.goal_series where id = tests.i('s-week')),
-  'The next run rolls it');
+select tests.assert_true(
+  (select (next_roll_at is null or next_roll_at > now()) and roll_attempts = 0 and roll_failed_at is null
+   from private.goal_series where id = tests.i('s-week')),
+  'After the pause the next run rolls it and clears the failure');
+select tests.act_as_service_role();
+select tests.assert_true(
+  (select failing = 0 from public.job_batch_failures() where source = 'goal_series'),
+  'Nothing is failing any more');
+select tests.act_as('alice');
+select tests.assert_denied('select * from public.job_batch_failures()', 'Only the job reads failures');

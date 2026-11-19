@@ -11,6 +11,15 @@ Do not run both paths. Do not paste the consolidated SQL into a database that al
 
 The hosted projects in the current owner workflow are migrated by pasting SQL in Supabase SQL Editor; this does not necessarily create rows in Supabase CLI's migration history. The reset block below checks for a history table and removes only these migration versions if present.
 
+## Release order for changed function signatures
+
+`20261216090000_review_low_db_followup.sql` changed three function signatures, and `20261217090000_review_low_db_followup_2.sql` adds a compatibility path:
+
+- `list_chore_widget` and `list_chore_approvals` return a new column, `estimated_minutes`. A web build older than the migration ignores it. The current web build treats a missing column as "no estimate", so it also works against a database without the migration.
+- `update_habit_pause` takes the habit id as a new first argument. `20261217090000` adds back the old five-argument form (`p_pause_id, p_expected_revision, p_action, p_resumes_on, p_dry_run`) for one release: it looks up the pause's habit and calls the new form, with the same permission checks. Pause changes from the web build deployed before the release therefore keep working between the migration and the web deploy.
+- If `20261216090000` is applied without `20261217090000`, apply both before the web release, back to back, or expect habit pause changes to fail with a server error until the web deploy lands.
+- A later migration drops the old five-argument `update_habit_pause`, once the web build that passes `p_habit_id` is in production.
+
 ## Individual migrations
 
 Each link opens one standalone migration file. Apply each file once, oldest first, and check for a successful result before continuing.

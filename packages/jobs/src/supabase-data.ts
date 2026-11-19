@@ -381,6 +381,17 @@ export function createSupabaseJobData(client: JobsSupabaseClient): JobDataPort {
       return data;
     },
 
+    async jobBatchFailures() {
+      const { data, error } = await client.rpc("job_batch_failures");
+      if (error) throw new JobStoreError("job_batch_failures", error.code);
+      return data.map((row) => ({
+        source: row.source,
+        failing: row.failing,
+        maxAttempts: row.max_attempts,
+        oldestFailedAt: row.oldest_failed_at,
+      }));
+    },
+
     async purgeAccountActivity() {
       const { data, error } = await client.rpc("purge_account_activity");
       if (error) throw new JobStoreError("purge_account_activity", error.code);

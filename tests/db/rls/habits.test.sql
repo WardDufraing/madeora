@@ -452,6 +452,12 @@ select tests.assert_true(
      tests.i('h-streak'), tests.pause('h-daily'), 1, 'resume', null, false)),
   'A pause is not changed through another habit''s path (S28-L2)');
 select tests.assert_true(
+  (select outcome = 'not_found' from public.update_habit_pause(gen_random_uuid(), 1, 'resume', null, false)),
+  'The one-release compatibility overload answers not_found for an unknown pause');
+select tests.assert_true(
+  (select outcome <> 'not_found' from public.update_habit_pause(tests.pause('h-daily'), 1, 'resume', null, true)),
+  'The compatibility overload still reaches the pause through its own habit (dry run)');
+select tests.assert_true(
   (select outcome = 'saved' and (impact ->> 'vacationToday')::boolean from public.update_habit_pause(
      tests.i('h-daily'), tests.pause('h-daily'), 1, 'resume', null, false)),
   'Bob resumes the manual pause while the vacation still applies');

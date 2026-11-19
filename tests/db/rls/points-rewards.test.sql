@@ -724,6 +724,10 @@ select tests.assert_denied(format('select public.list_rewards(%L)', tests.i('hom
 select tests.assert_true(
   (select outcome = 'not_found' from public.redeem_reward(tests.i('red-b'), tests.i('r-ice'), 20)),
   'and cannot redeem them');
+select tests.assert_true(
+  (select outcome = 'not_found' from public.archive_reward(tests.i('r-ice'), 1, true))
+  and (select outcome = 'not_found' from public.update_reward(tests.i('r-ice'), 1, 'Mine now', 1)),
+  'nor change or archive them (S23-L8: and take no lock on them)');
 
 -- The cached totals always equal what the ledger and the pending requests say.
 select set_config('role', 'postgres', true);

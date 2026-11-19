@@ -10,6 +10,7 @@ import type { Database } from "@madeora/database";
 import { parseGoogleCalendarEnv } from "@madeora/google-calendar";
 import { parseStorageEnv } from "@madeora/storage";
 
+import { reportBatchFailures } from "../batch-failures.ts";
 import type { AnyJobDefinition } from "../definition.ts";
 import { DISPATCH_BATCH_SIZE } from "../dispatcher.ts";
 import { choreClaimRelease, choreReminder, vacationReminder } from "../jobs/chores.ts";
@@ -138,6 +139,9 @@ export const taskReminderAdvance = schedules.task({
     const deletions = await services.data.purgeDueDeletions(DELETION_PURGE_BATCH);
     // S40 part 2: copy requests past their 30 days, stuck copies, requests whose requester left.
     const homeCopies = await services.data.sweepHomeCopies(REMINDER_ADVANCE_BATCH);
+    // Rows the goal rollover and sign-in classification skipped: retried with back-off, logged as
+    // errors here (never counted as done above).
+    const batchRowsFailing = await reportBatchFailures(services.data, logger);
     logger.info("jobs.task_reminder_advance.done", {
       created,
       habits,
@@ -150,6 +154,7 @@ export const taskReminderAdvance = schedules.task({
       accountsPurged: deletions.accounts,
       purgesFailed: deletions.failed,
       homeCopies,
+      batchRowsFailing,
     });
     return {
       created,
@@ -161,6 +166,7 @@ export const taskReminderAdvance = schedules.task({
       dataExports,
       deletions,
       homeCopies,
+      batchRowsFailing,
     };
   },
 });

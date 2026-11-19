@@ -267,6 +267,23 @@ describe("Supabase job data", () => {
     ]);
   });
 
+  it("reads the batches with failing rows", async () => {
+    const { client, calls } = fakeClient({
+      job_batch_failures: ok([
+        {
+          source: "goal_series",
+          failing: 1,
+          max_attempts: 2,
+          oldest_failed_at: "2026-11-18T09:00:00Z",
+        },
+      ]),
+    });
+    await expect(createSupabaseJobData(client).jobBatchFailures()).resolves.toEqual([
+      { source: "goal_series", failing: 1, maxAttempts: 2, oldestFailedAt: "2026-11-18T09:00:00Z" },
+    ]);
+    expect(calls).toEqual([{ fn: "job_batch_failures", args: undefined }]);
+  });
+
   it("delivers calendar event reminders and refuses an unknown answer", async () => {
     const { client, calls } = fakeClient({ deliver_calendar_reminder: ok("stale") });
     const data = createSupabaseJobData(client);

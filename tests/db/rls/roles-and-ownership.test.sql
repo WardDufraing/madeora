@@ -694,14 +694,22 @@ select tests.assert_true(
 
 -- Expiry.
 select tests.act_as('alice');
+insert into ids select 'transfer-request-3', gen_random_uuid();
 insert into ids
   select 'transfer-3', transfer_id from public.start_ownership_transfer(
     (select id from ids where name = 'home-a'), (select id from ids where name = 'm-erin-a'),
-    gen_random_uuid());
+    (select id from ids where name = 'transfer-request-3'));
 select tests.act_as_owner();
 update private.home_ownership_transfers set created_at = now() - interval '8 days',
   expires_at = now() - interval '1 day'
   where id = (select id from ids where name = 'transfer-3');
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome from public.start_ownership_transfer(
+    (select id from ids where name = 'home-a'), (select id from ids where name = 'm-erin-a'),
+    (select id from ids where name = 'transfer-request-3'))) = 'expired',
+  'Replaying the start of a transfer past its expiry answers expired, even before the sweep (review LOW-2)'
+);
 select tests.act_as('erin');
 select tests.assert_true(
   public.respond_to_ownership_transfer((select id from ids where name = 'home-a'),

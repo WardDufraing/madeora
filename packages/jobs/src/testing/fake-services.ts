@@ -21,6 +21,7 @@ import type {
   HabitSnoozeOutcome,
   EmailRecordStatus,
   InvitationEmailRead,
+  JobBatchFailure,
   JobDataPort,
   JobServices,
   NotificationEmailRead,
@@ -106,6 +107,8 @@ export class FakeJobData implements JobDataPort {
   /** S38: sign-in classification and activity purge calls. */
   readonly signInCalls: number[] = [];
   signInsClassified = 0;
+  /** Rows the batches could not process (`job_batch_failures`). */
+  batchFailures: JobBatchFailure[] = [];
   activityPurges = 0;
   readonly inactivityCalls: number[] = [];
   readonly googleSync: SyncStore = {
@@ -134,6 +137,11 @@ export class FakeJobData implements JobDataPort {
     this.check();
     this.signInCalls.push(limit);
     return Promise.resolve(this.signInsClassified);
+  }
+
+  jobBatchFailures(): Promise<readonly JobBatchFailure[]> {
+    this.check();
+    return Promise.resolve(this.batchFailures);
   }
 
   purgeAccountActivity(): Promise<number> {
