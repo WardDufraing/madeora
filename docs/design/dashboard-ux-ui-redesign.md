@@ -570,6 +570,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep work schedules filterable and compatible with recurring shifts, exceptions, privacy/visibility rules and calendar synchronization safeguards described in the work-schedule UX requirement.
 - Ensure printed or exported calendar views remain understandable without depending on subtle background colors.
 
+## Approved decision 44 — Minimal borderless calendar visual design (2026-11-19)
+**Decision: C — Minimal borderless calendar.**
+
+- Present Madeora's calendar as an **airy, minimal, largely borderless interface** rather than a traditional heavy grid or individually raised day-cell cards.
+- Use whitespace, alignment, restrained dividers where needed, and clear typography to communicate day/week/month structure; keep event scanning effortless.
+- Distinguish **today, selected dates, weekends and days with events** through accessible text emphasis, subtle tonal highlighting and concise event indicators rather than thick outlines.
+- Keep event chips/blocks readable and interactive when many events are present, with sensible overflow indicators and drill-down affordances for dense days.
+- Apply the approved **subtle background time-block treatment for work schedules** in day/week views, with compact representations in month/mobile views.
+- Preserve keyboard navigation, visible focus states, adequate touch targets, contrast, localization, light/dark theme parity and accessible non-color-only status cues.
+- Retain the app-wide Playful Precision aesthetic and user-selectable accent, but intentionally use **less card depth and fewer visible borders within the calendar grid** than in surrounding dashboard surfaces.
+- Ensure event creation continues to open in an adaptive modal/drawer rather than unexpectedly navigating away from the calendar.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
