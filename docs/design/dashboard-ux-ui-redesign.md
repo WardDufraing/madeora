@@ -335,6 +335,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect accessibility: announce important status changes via appropriate live regions, ensure keyboard-operable actions and avoid relying solely on color or motion.
 - Distinguish transient action feedback from persistent notifications/reminders and from Ora suggestions, preventing duplicate messages.
 
+## Approved decision 25 — Smart responsive mobile layout with optional customization (2026-11-19)
+**Decision: C — Smart responsive layout with optional mobile customization.**
+
+- Automatically derive a useful mobile-friendly dashboard from the desktop layout, preserving widget membership and sensible reading order without requiring a second setup.
+- Adapt the grid to narrower screens and use the approved **adaptive widget content hierarchy** so each widget displays an appropriate compact or mobile-specific content variant instead of shrinking desktop UI.
+- Allow users to **optionally customize mobile widget order and supported sizes/arrangement** in the dedicated Edit Dashboard experience without changing the desktop layout.
+- Keep desktop and mobile arrangements synchronized at the widget-membership level: adding or removing a widget should be reflected in both, while deliberate mobile ordering remains intact where possible.
+- Define predictable fallback/reflow rules for newly added widgets, changed sizes, viewport transitions and invalid saved layouts; avoid duplicate widgets and inaccessible off-screen content.
+- Make drag/reorder controls touch- and keyboard-accessible, with explicit edit mode to prevent accidental changes during everyday use.
+- Preserve Personal/Home context, permission boundaries, user-selected accent, both themes, and the approved restrained motion and context-aware feedback.
+- Ensure the default experience is useful without any mobile-specific customization, and validate common phone widths, zoom, localization and dense widget collections.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
