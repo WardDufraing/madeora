@@ -36,13 +36,25 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 6. **Navigation:** group sidebar items by intent (Today, Plan, Home, Personal, Other); keep key destinations visible, secondary destinations collapsible. Test before replacing the current navigation.
 7. **Home vs Personal:** retain independent layouts and settings; make switching easy and recognizable; Home widgets respect membership and permissions.
 
+## Approved decision 2 — Hybrid widget customization (2026-11-19)
+**Decision: C — Hybrid customization.**
+
+- In normal dashboard mode, each widget may expose a subtle overflow menu for widget-specific settings, without entering dashboard edit mode.
+- A dedicated **Edit dashboard** mode handles adding, removing, rearranging and resizing widgets.
+- Normal mode keeps widget positions locked, preventing accidental movement, particularly on touch devices.
+- Widget configuration and dashboard geometry are separate interaction concerns. Configuration changes must not silently reposition widgets.
+- The exact save/cancel semantics for widget settings versus layout edits remain to be decided.
+- Widget menus must be keyboard-accessible and must respect permissions and context.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
+- **Approved:** each widget has a discreet configuration menu usable without entering dashboard edit mode.
 - Visible **Edit dashboard** entry in header; unobtrusive **Add widget** entry or empty-slot affordance where relevant.
 - Widget content supports direct actions where permissions allow; widget title opens the full module.
 
 ### Edit mode
+- **Approved:** adding, removing, rearranging and resizing widgets happens in a dedicated edit mode.
 - Clear visual transition: edit toolbar with **Add widget**, **Undo**, **Reset layout**, **Cancel**, **Save**.
 - Visible drag handles and resize controls only in edit mode; precise drop indicators, collision feedback, no surprising reshuffles.
 - Use a predictable responsive grid; support fixed widget size presets (small, medium, large) rather than unrestricted resizing initially.
@@ -109,7 +121,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Sidebar: persistent grouped navigation vs compact rail + expandable drawer.
 - Grid: fixed presets vs fully freeform placement.
 - Add flow: gallery side panel vs modal, and default placement behavior.
-- Save semantics: explicit Save/Cancel vs autosave with undo.
+- Save semantics: explicit Save/Cancel vs autosave with undo (still undecided; hybrid mode does not settle persistence).
 - Empty widgets: compact vs optionally hidden.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
