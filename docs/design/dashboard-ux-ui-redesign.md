@@ -233,6 +233,27 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Validate keyboard navigation, touch targets, screen reader reading order, localization and zoom at every supported size.
 - Define widget-by-widget content priority and size variants during the component audit, with reusable primitives rather than one rigid universal body template.
 
+## Confirmed usability fixes — Tasks creation and Calendar modal (2026-11-19)
+
+These are user-reported issues/requirements, separate from the still-open dashboard decision 19.
+
+### Tasks: visible primary creation action
+- **Observed in the current Tasks page:** there is no visible **Add Task** action in the page content. When no task lists exist, the page directs users to **Lists and Labels** first, and the empty state says to add a task without offering a direct creation control.
+- Add a prominent, consistently placed **+ New Task** primary action in the Tasks page header, and an equivalent action in the empty state. Ensure keyboard, mobile and screen-reader accessibility.
+- Clicking **New Task** should launch a lightweight task-creation flow rather than requiring navigation to list management.
+- If a task list is required and none exists, offer inline list creation or a guided first-task setup in the same flow. Do not silently assume a list or create one without appropriate confirmation.
+- Respect Personal/Home context and task-list permissions, and show meaningful feedback on creation success/failure.
+- Acceptance: a first-time user with zero task lists can discover **New Task** and complete the necessary setup without manually finding the Lists and Labels page.
+
+### Calendar: create events in a modal
+- Replace navigation to a separate event-creation page with an accessible modal dialog launched from the Calendar page's create action and applicable calendar-grid interactions.
+- Keep the underlying calendar view, selected date, filters and scroll position intact. Closing or cancelling returns to the same view.
+- Prepopulate date/time from the calendar interaction when available; provide appropriate calendar and Personal/Home context selection.
+- Support sufficiently complex event fields in a spacious responsive dialog (full-screen dialog on narrow devices if needed), without making ordinary creation require full-page navigation.
+- Provide clear Save/Cancel actions, validation, loading/error feedback, keyboard focus trapping and restoration, and unsaved-change protection.
+- Keep deep links and any existing standalone creation route functional where needed for backward compatibility, but make the modal the default in-context creation experience.
+- Acceptance: a user can create or cancel an event without losing their place in the Calendar page.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
