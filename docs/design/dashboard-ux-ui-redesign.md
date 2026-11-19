@@ -279,6 +279,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Ensure keyboard and screen-reader accessibility, touch-friendly targets, visible focus, loading/disabled states and no conflicts with drag/resize behavior in Edit Dashboard mode.
 - Avoid turning widgets into complete miniature applications; use progressive disclosure and full modules for dense workflows.
 
+## Approved decision 20 — Minimal widget headers with overflow menus (2026-11-19)
+**Decision: B — Minimal header with overflow menu.**
+
+- Use a consistent, visually restrained widget header containing the widget title and a discoverable **three-dot overflow menu** for widget-level actions; avoid always-visible rows of header action icons.
+- Put widget configuration, opening the full module, refresh (where applicable), and other secondary widget-level actions in the overflow menu, with context- and permission-aware visibility.
+- Preserve **decision 19 contextual inline interaction**: everyday actions such as completing tasks, checking off groceries or adding an entry can remain clearly accessible **within widget content**, rather than being forced into the header menu.
+- Keep removal and layout changes governed by the approved dedicated **Edit Dashboard** experience, preventing accidental destructive actions during normal use; show relevant edit actions in edit mode as appropriate.
+- Ensure the overflow trigger is keyboard and touch accessible, has a descriptive accessible name, clear focus styling, and remains visible on touch devices (not hover-only).
+- On small widgets, protect title truncation and menu access; support translated labels and light/dark contrast.
+- Use consistent menu ordering and placement across modules while showing only actions that are meaningful for the current widget and user permissions.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
