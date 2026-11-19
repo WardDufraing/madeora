@@ -323,6 +323,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Honor OS/browser reduced-motion preferences with minimal or immediate state changes, preserving clarity and functional feedback.
 - Ensure motion does not conflict with drag-and-drop, resizing, focus management, keyboard interaction, touch input or responsive performance; validate in light and dark modes.
 
+## Approved decision 24 — Context-aware action feedback (2026-11-19)
+**Decision: C — Context-aware feedback.**
+
+- Use **inline, in-context confirmation** for routine, low-risk actions such as completing a task, checking off a shopping item or marking a habit, primarily through changed states, concise labels and restrained motion.
+- Use **toasts or contextual banners** for important outcomes, failures, actions whose affected element disappears, and reversible changes; include a clear **Undo** action where supported and appropriate.
+- Avoid showing success toasts for every small action; prioritize calm, low-noise interaction while ensuring outcomes remain discoverable.
+- Surface validation errors near their relevant inputs, and provide clear retry or recovery paths for failed saves and connectivity problems.
+- Do not imply an action succeeded before the server or relevant persistence layer confirms it; handle optimistic updates with visible rollback/recovery if a request fails.
+- Keep notification wording, placement, timing and dismissal consistent across dashboard widgets, Tasks, Calendar and other modules.
+- Respect accessibility: announce important status changes via appropriate live regions, ensure keyboard-operable actions and avoid relying solely on color or motion.
+- Distinguish transient action feedback from persistent notifications/reminders and from Ora suggestions, preventing duplicate messages.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
