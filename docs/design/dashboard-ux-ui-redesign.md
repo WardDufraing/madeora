@@ -104,6 +104,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - The approved combined gallery + inline add-at-position workflow remains unchanged.
 - Recommendation ordering, category taxonomy, duplicate-instance policy and exact preview format remain to be refined.
 
+## Approved decision 8 — Hybrid widget settings (2026-11-19)
+**Decision: C — Hybrid widget settings.**
+
+- Every configurable widget exposes a consistent, unobtrusive settings entry in its overflow menu, including in normal dashboard mode where permissions allow.
+- Simple, frequently changed options open in a compact anchored popover, without requiring dashboard edit mode.
+- Complex settings open in a dedicated side panel with a live preview; on narrow screens use an accessible full-screen sheet.
+- Use consistent field labels, grouping, help text, validation, loading/error feedback, and keyboard/focus behavior across widget types.
+- Advanced configuration respects active Personal/Home context, available calendars, widget filters, time zones, and permissions. Never expose unauthorized data in preview.
+- Configuration changes must not silently alter widget geometry or reposition other widgets.
+- Whether changes save immediately or use Apply/Cancel is a separate decision; unsaved widget settings must not be confused with recoverable dashboard layout drafts.
+- Decide which settings qualify as quick versus advanced during the widget-by-widget audit.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -132,6 +144,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Empty widget slots may offer **Add widget here** in edit mode.
 
 ### Widget configuration
+- **Approved:** hybrid configuration — compact popovers for simple settings, dedicated side panel with live preview for advanced settings.
 - Consistent overflow menu: Configure, Resize, Move, Remove.
 - Prefer simple inline settings; use a side sheet for advanced options with live preview.
 - Respect widget-specific filters, time zones, Home permissions, and data visibility.
@@ -185,6 +198,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Gallery presentation: **DECIDED — smart visual gallery with contextual recommendations and preview cards**.
 - Save semantics: **DECIDED — autosaved recoverable draft, Done commits, Cancel discards**; normal-mode widget configuration save behavior remains open.
 - Empty widgets: compact vs optionally hidden.
+- Widget configuration: **DECIDED — hybrid quick settings popover + advanced side panel with preview**; configuration save semantics pending.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
 ## Engineering guardrails
