@@ -894,6 +894,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect Personal/Home workspace boundaries, permissions and localization; support accessible labels, screen readers and reduced-motion preferences.
 - Match Decision 68's adaptive shopping workspace and Madeora's Playful Precision visual language.
 
+## Approved decision 70 — Adaptive completed shopping-item handling (2026-11-19)
+**Decision: C — Adaptive completed-item handling.**
+
+- When an item is checked off, show **immediate, subtle completion feedback** and briefly keep it in place so the user can verify the action without the list jumping.
+- After that brief confirmation, move the item into a **collapsible Completed section** while keeping outstanding shopping items prominent and easy to scan.
+- Display a clear **Completed count** and allow users to expand the section to review purchased items, undo completion or mark an item as needed again.
+- Preserve the user's scroll position and focus; avoid abrupt reordering while someone is actively tapping through a shopping list.
+- When category grouping is enabled, keep the relationship between item categories and completed items understandable without cluttering the main list.
+- Use non-color-only completion cues, readable muted text and accessible controls; do not rely solely on strikethrough or color.
+- Provide sensible empty/all-completed states, including a straightforward path to add another item.
+- Keep behavior consistent across desktop/mobile and respect reduced-motion preferences, Personal/Home permissions and Madeora's Playful Precision visual style.
+- Follow Decision 68's adaptive shopping workspace and Decision 69's fast inline item-entry pattern.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
