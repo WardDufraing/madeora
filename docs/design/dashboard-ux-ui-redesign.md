@@ -606,6 +606,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Maintain the approved Playful Precision aesthetic, responsive spacing, subtle depth and user-selected accent while avoiding excessive card nesting or visual clutter.
 - Make navigation among views and task creation responsive and keyboard/touch accessible, preserving current view and filters after task editing.
 
+## Approved decision 47 — Adaptive individual task rows (2026-11-19)
+**Decision: C — Adaptive task rows.**
+
+- Render individual tasks as **compact, lightly separated rows** within clearly labeled groups, rather than permanently elevated standalone cards or completely unstructured text.
+- Show the completion control and task title consistently; reveal supplementary information such as due date, priority, list or workspace only when relevant and useful for scanning.
+- Use subtle hover, focus, selected and active states to distinguish interactive rows, with touch-accessible actions and an overflow menu for less frequent operations.
+- Let section headings such as Today and Upcoming organize task density; use subtle surface treatments or grouping instead of deep nested cards.
+- Provide contextual **Add a task** affordances inside task groups while retaining the prominent global **+ New Task** action in the Tasks page header.
+- Maintain clear completed-task styling, sufficient contrast, keyboard and screen-reader accessibility, and sensible text wrapping for long or localized titles.
+- Respect the approved adaptive creation/edit dialogs, task permissions, Personal/Home context and responsive mobile layout.
+- Match the app's Playful Precision visual system while keeping long task lists compact and efficient.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
