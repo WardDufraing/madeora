@@ -455,6 +455,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Scope suggestions to the current Home and the member's permissions, with appropriate behavior for removed widgets, obsolete suggestions, multiple updates and mobile/desktop layouts.
 - Keep notifications lightweight and accessible, consistent with the approved context-aware feedback design.
 
+## Approved decision 35 — Dedicated Home wall-display dashboard layout (2026-11-19)
+**Decision: B — Dedicated wall-display layout.**
+
+- Each Home has **one dedicated wall-display dashboard layout**, separate from its shared default Home dashboard and members' personal Home-view overrides.
+- Optimize the wall layout for mounted touchscreens and at-a-distance viewing: larger typography and touch targets, simplified controls, legible contrast, clear information hierarchy and responsive landscape/portrait support.
+- Let authorized Home members configure wall-display widget selection, arrangement and supported settings without modifying regular Home or Personal layouts.
+- Provide a useful initial wall-display template drawn from permitted household information, with an accessible customization and preview workflow consistent with approved dashboard editing principles.
+- Respect wall-display privacy boundaries: do not expose sensitive Personal or restricted Home information; require the established PIN or appropriate authentication before opening protected areas or actions.
+- Coordinate with display-specific navigation, idle behavior, safe areas and touch ergonomics; avoid tiny desktop-style controls and intrusive transient overlays.
+- Keep wall-display configuration scoped to its Home and handle membership, permission and widget-availability changes safely.
+- Multiple independently named wall-display profiles per Home are not included in this initial redesign; they may be considered later.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
