@@ -175,6 +175,19 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Provide accessible focus handling, keyboard support, reduced-motion behavior and clear loading/error states.
 - Launcher positioning, visibility defaults and widget insight density remain to be prototyped.
 
+## Approved decision 14 — Soft Neumorphism with one custom accent (2026-11-19)
+**Decision: B — Soft Neumorphism.**
+
+- Establish a restrained, tactile design language: gently elevated widget cards, subtle inset controls where appropriate, rounded corners, soft layered shadows and calm neutral surfaces.
+- Preserve the approved **Playful Precision** personality through friendly details, disciplined spacing and legible hierarchy; avoid exaggerated skeuomorphism or low-contrast decoration.
+- **Single user-selectable accent color:** honor Madeora's existing custom color picker as the sole user-chosen accent. Derive accessible tonal variations (lighter/darker, translucent tints, hover/pressed/focus states) algorithmically from that selection, rather than assigning fixed colors to modules or widget categories.
+- Keep semantic success, warning, error and informational indicators distinct when necessary for meaning and accessibility; these are not additional decorative module accents.
+- Use semantic design tokens for surfaces, borders, elevations, shadows and accent roles. Ensure both light and dark themes work with arbitrary supported accent colors, including extreme light/dark selections.
+- Do not rely on shadows, hue or subtle inset depth alone to communicate state: provide visible borders, labels, focus rings and adequate text/icon contrast.
+- Respect reduced-motion and high-contrast preferences, performance constraints and responsive density. Avoid heavy blur or complex shadows that degrade scrolling on low-powered devices.
+- Validate the visual direction in realistic dashboard prototypes with dense widgets, empty states, editor overlays and custom accent selections.
+- Exact elevation scale, radius scale, token names and color derivation algorithm remain implementation details.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -261,6 +274,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
+- Visual treatment: **DECIDED — restrained Soft Neumorphism, with one user-selected accent and derived tonal variants, no fixed per-module colors**.
 - Ora: **DECIDED — optional insights widget plus unobtrusive, hideable global assistant launcher**, with shared context and no duplicate alerts.
 
 ## Engineering guardrails
