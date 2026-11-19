@@ -370,6 +370,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Maintain safe-area padding and correct content inset as the bar appears/disappears, without jarring content jumps.
 - Apply the same behavior consistently across mobile dashboard and module pages, with explicit exceptions for full-screen flows where the bar should not be present.
 
+## Approved decision 28 — Mobile workspace switcher in the top bar (2026-11-19)
+**Decision: B — Workspace switcher in the top bar.**
+
+- Keep the active **Personal or Home workspace** clearly identified in the mobile top bar, including an accessible switcher affordance.
+- Tapping the switcher opens a compact, touch-friendly workspace selector with fast access to Personal, recently used Homes and the remaining available Homes, consistent with the approved smart workspace-switcher pattern.
+- Clearly distinguish private Personal context from shared Home context through names and restrained context indicators; do not rely solely on accent colors or icons.
+- Preserve navigation continuity when switching contexts where possible, but never retain or expose data from a workspace the user cannot access.
+- Respect membership and permissions; show only available Homes and handle removed access or unavailable destinations gracefully.
+- Ensure the selector works with the approved mobile bottom navigation, safe areas, keyboard/screen-reader navigation, long localized Home names and small screens.
+- Avoid horizontal swipe gestures for workspace switching, which could conflict with calendars and widget interactions.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
