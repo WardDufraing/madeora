@@ -702,6 +702,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect Personal/Home workspace boundaries and list visibility permissions; retain the approved Today, Upcoming, All Tasks and Lists top-level views.
 - Follow the Playful Precision visual language and compact adaptive task-row design without introducing an additional persistent navigation column.
 
+## Approved decision 55 — Hybrid quick-add task creation (2026-11-19)
+**Decision: C — Hybrid quick-add experience.**
+
+- Provide a discoverable **inline Add a task field** in task groups that expands into a compact editor when activated, enabling rapid entry without leaving the current list or view.
+- In the expanded quick-add state, offer lightweight controls for **due date, priority and destination list**, with an obvious **More options** action to open the full adaptive task editor for descriptions, subtasks, recurrence, attachments and advanced settings.
+- Make the persistent page-header **+ New Task** button open the same compact, context-aware creation experience, using a suitable dialog or sheet when an inline insertion point is not available.
+- Support creating the very first task **without requiring a pre-existing list**, with sensible Personal/Home defaults and an optional first-list flow.
+- Preserve the current Tasks view, selected list, search/filter state and scroll position after creating a task; offer clear success feedback and a convenient way to add another.
+- Ensure keyboard-first submission, accessible labels and focus management, touch-friendly controls, validation and unsaved-input safeguards.
+- Respect workspace context and permissions; never silently assign tasks to an inaccessible list or expose private task data.
+- Match the approved adaptive task rows, minimal visual clutter and adaptive task detail/editing experience.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
