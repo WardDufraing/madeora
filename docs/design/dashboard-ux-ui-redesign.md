@@ -116,6 +116,17 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Whether changes save immediately or use Apply/Cancel is a separate decision; unsaved widget settings must not be confused with recoverable dashboard layout drafts.
 - Decide which settings qualify as quick versus advanced during the widget-by-widget audit.
 
+## Approved decision 9 — Smart empty states with user control (2026-11-19)
+**Decision: C — Smart empty states with user control.**
+
+- Each eligible widget supports three empty-state presentation preferences: **Full**, **Compact**, or **Hide when empty**. Use sensible widget-specific defaults and make the preference discoverable in widget settings.
+- Full shows a purposeful, friendly empty state with a relevant action when permitted. Compact shows a brief summary and optional action within the widget's allocated grid area, without resizing its saved geometry.
+- Hide when empty removes the widget from the rendered dashboard temporarily, **not** from the saved widget configuration. It returns automatically when eligible content appears.
+- Avoid unexpected layout jumping: retain stable saved positions, and prototype a predictable policy for temporary hidden-widget gaps versus visual compaction before implementation. Never silently mutate the saved layout as data changes.
+- In edit mode, always display hidden-when-empty widgets with an explicit hidden-state indicator so they remain configurable and removable.
+- Distinguish genuinely empty, loading, failed, offline, filtered-out and permission-restricted states; never mistake an API failure for an empty widget.
+- Respect Personal/Home context and permissions for both visibility and action affordances. Keep screen-reader announcements and reduced-motion behavior accessible.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -152,7 +163,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 
 ## Empty-state and content improvements
 - Replace repetitive empty cards with compact, useful prompts: 'No events today' + Add event, or a subtle collapsed summary.
-- Hide or shrink low-value empty widgets according to explicit user preference; never silently remove a configured widget.
+- **Approved:** Full / Compact / Hide when empty per-widget preferences; preserve saved geometry and never silently remove a configured widget.
 - Prioritize due-soon items, not every possible metric.
 - Replace navigation-only Quick Actions with actual creation actions (task, event, shopping item), using existing safe flows.
 - Provide sensible curated default layouts for Personal and Home, plus a lightweight **Choose your own** starting option.
@@ -197,7 +208,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
 - Gallery presentation: **DECIDED — smart visual gallery with contextual recommendations and preview cards**.
 - Save semantics: **DECIDED — autosaved recoverable draft, Done commits, Cancel discards**; normal-mode widget configuration save behavior remains open.
-- Empty widgets: compact vs optionally hidden.
+- Empty widgets: **DECIDED — user-selectable Full / Compact / Hide when empty**; temporary hidden-widget gap policy pending.
 - Widget configuration: **DECIDED — hybrid quick settings popover + advanced side panel with preview**; configuration save semantics pending.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
