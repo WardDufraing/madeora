@@ -220,6 +220,19 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Coordinate grid gaps, widget shadows and moderately rounded card geometry so shadows do not collide or clip.
 - Validate dense and sparse layouts, long localized labels, varying widget sizes and light/dark modes before fixing numeric spacing values.
 
+## Approved decision 18 — Adaptive widget content hierarchy (2026-11-19)
+**Decision: C — Adaptive widget hierarchy.**
+
+- All widgets use a consistent, accessible header and action pattern (title, optional icon/status, overflow/configuration affordance) while tailoring their main content to the module's purpose.
+- Content adapts meaningfully to the widget's **supported snapped grid size**, not merely by scaling text or stretching identical information.
+- Small widgets prioritize a useful at-a-glance summary; medium widgets add the most relevant details; larger widgets can expose richer lists, context and direct actions where permissions permit.
+- Maintain core information and action priority across sizes; progressively disclose secondary information rather than truncating essential status or leaving dead space.
+- Keep widget-specific minimum/maximum dimensions and responsive mobile variants consistent with approved hybrid resizing.
+- Provide predictable loading, error, empty and permission-restricted states at each supported size, honoring the approved Full/Compact/Hide-when-empty preference.
+- Do not expose private Personal data in Home context or enable actions without appropriate permissions.
+- Validate keyboard navigation, touch targets, screen reader reading order, localization and zoom at every supported size.
+- Define widget-by-widget content priority and size variants during the component audit, with reusable primitives rather than one rigid universal body template.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -306,6 +319,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
+- Widget content: **DECIDED — adaptive hierarchy with consistent headers, summary-first small sizes and richer actionable large sizes**.
 - Visual treatment: **DECIDED — Soft Neumorphism with pronounced tactile depth** (raised cards, deeper layered shadows, inset controls), **moderately rounded geometry** (widgets ~12–16px, controls ~6–10px), **balanced responsive spacing**, one user-selected accent and derived tonal variants, no fixed per-module colors.
 - Ora: **DECIDED — optional insights widget plus unobtrusive, hideable global assistant launcher**, with shared context and no duplicate alerts.
 
