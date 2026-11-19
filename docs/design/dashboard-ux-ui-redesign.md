@@ -842,6 +842,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Use Madeora's Playful Precision visual language and the existing contextual feedback patterns approved for tasks and dashboard interactions.
 - Keep milestone feedback optional and unobtrusive across mobile, desktop, light and dark themes.
 
+## Approved decision 66 — Hybrid habit insights and calendar history (2026-11-19)
+**Decision: C — Hybrid insights and calendar history.**
+
+- Design the Habit Tracker's optional **View trends** experience around a balanced hierarchy of **compact summary metrics**, a **calendar-style activity history**, and progressively disclosed **per-habit detail charts**.
+- Surface a small set of immediately understandable measures such as consistency and streaks, with clear labels and time-range context; avoid a dense analytics dashboard by default.
+- Use a calendar heatmap/history grid to reveal day-by-day patterns, with distinct visual states for completed, partial, missed, not scheduled and future days, without relying on color alone.
+- Let users inspect an individual habit for richer historical detail appropriate to its tracking type, including measurable progress where relevant, without forcing those charts into the overview.
+- Provide an accessible time-range selector and readable legends/tooltips or equivalent text descriptions; honor localized dates, week starts and timezones.
+- Keep the daily checklist approved in Decision 62 as the primary habit workflow, with trends as a clearly accessible secondary view.
+- Ensure responsive chart layouts, accessible data alternatives, keyboard/touch navigation and readable light/dark contrast.
+- Apply Madeora's Playful Precision visual language, user-selected accent and restrained motion; avoid making ordinary missed days feel punitive.
+- Treat illustrated metrics and history values as examples, not fixed product targets or analytics definitions.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
