@@ -830,6 +830,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep deeper historical analysis in the optional **View trends** experience approved in Decision 62, while preserving the checklist as the page's primary focus.
 - Respect workspace permissions, correct timezone/date handling and reduced-motion preferences.
 
+## Approved decision 65 — Adaptive habit completion micro-celebrations (2026-11-19)
+**Decision: C — Adaptive micro-celebrations.**
+
+- For **routine habit completion**, provide immediate, subtle feedback through a brief checkbox/checkmark transition, restrained highlight or similar satisfying micro-animation, without disrupting the habit list.
+- For **meaningful milestones** such as completing all scheduled habits for the day, allow a slightly more celebratory but still compact moment (for example, a small sparkle or inline milestone message), not a full-screen interruption.
+- Distinguish **partial progress** on measurable habits from reaching the actual daily target; reserve completion feedback for the appropriate state transition.
+- Avoid repetitive confetti, excessive praise or attention-grabbing motion for each ordinary action, especially when completing many habits in succession.
+- Preserve the user's position in the daily checklist, keep controls responsive, and provide clear Undo/correction feedback where appropriate.
+- Respect **reduced-motion preferences** by replacing motion with instant, accessible state changes; ensure status is understandable without color, animation or sound.
+- Use Madeora's Playful Precision visual language and the existing contextual feedback patterns approved for tasks and dashboard interactions.
+- Keep milestone feedback optional and unobtrusive across mobile, desktop, light and dark themes.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
