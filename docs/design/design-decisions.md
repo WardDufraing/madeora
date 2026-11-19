@@ -32,3 +32,6 @@ identity sections), these notes win. The Initial Documentation files themselves 
 ## Open
 - Ora's fixed appearance and the Madeora brand mark (logo) need their own colour that does not
   follow the user accent. Not yet chosen.
+
+## Redesign supersession (Ward, 2026-11-19)
+`docs/design/dashboard-ux-ui-redesign.md` (Decisions 1-71) supersedes these spec statements and the styling reference above where they differ: "flat or very subtle elevation" and card/control radius 14-18 / 9-12 px (now pronounced tactile depth, radius 12-16 / 6-10 px); "Home dashboard layout is shared" (now a shared default plus optional per-member overrides); per-display wall layouts (now one wall layout per Home). Unchanged: gradient only on the page background, single user accent, the S44 privacy lock (a manager's own session unlocks the display; a member PIN opens only a 5-minute protected-actions session). Weather in ambient mode needs an approved free provider first. Notes stays deferred; work periods are flagged native recurring events. Plan: `plans/steps/UX00-redesign-plan-brief.md`.
