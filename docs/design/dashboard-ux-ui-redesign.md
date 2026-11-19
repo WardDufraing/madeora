@@ -817,6 +817,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Align with Decision 62's **daily checklist first, compact summaries second** hierarchy and Madeora's Playful Precision visual language.
 - Ensure progress controls and status indicators are keyboard and screen-reader accessible and respect workspace permissions.
 
+## Approved decision 64 — Adaptive weekly habit progress strip (2026-11-19)
+**Decision: C — Adaptive weekly progress strip.**
+
+- Use a **consistent seven-day progress strip** to visualize weekly habit consistency, preserving a recognizable day-by-day rhythm across habit types.
+- For **binary habits**, display distinct completion checkmarks or equivalent non-color-only status indicators in the corresponding day cells.
+- For **measurable habits**, display proportional fills representing each day's progress toward its configured target, with accessible numeric details on interaction or in adjacent text.
+- Clearly distinguish **completed, partially completed, missed, not scheduled and future days** without implying that future days are failures; do not rely on color alone.
+- Use restrained accent tones and subtle tactile cells consistent with Madeora's Playful Precision style, avoiding visually heavy charts in the daily tracker.
+- Make the strip responsive, with readable weekday labels, adequate touch targets, sensible narrow-screen behavior and support for localized week starts and dates.
+- Provide accessible descriptions for each day's status and progress, with keyboard navigation where day cells are interactive.
+- Keep deeper historical analysis in the optional **View trends** experience approved in Decision 62, while preserving the checklist as the page's primary focus.
+- Respect workspace permissions, correct timezone/date handling and reduced-motion preferences.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
