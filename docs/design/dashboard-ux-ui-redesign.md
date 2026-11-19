@@ -766,6 +766,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect Personal/Home workspace boundaries and note/folder permissions; avoid exposing inaccessible folders or note previews.
 - Align with Decision 56's grid/list Notes workspace and Decision 57's focused editor without adding a second permanent sidebar.
 
+## Approved decision 60 — Adaptive content-aware note preview cards (2026-11-19)
+**Decision: C — Adaptive content-aware cards.**
+
+- In the Notes workspace grid, show **compact, text-first previews** for ordinary text notes, emphasizing a clear title, concise excerpt and restrained relevant metadata.
+- For notes containing supported images or structured content, offer **richer content-aware previews** (such as a modest image thumbnail or recognizable structured excerpt) without forcing every note into a large media card.
+- Maintain a **balanced, orderly grid** using controlled card heights, consistent padding, image aspect ratios and sensible text truncation; avoid uncontrolled masonry-like variation that hurts scanning.
+- Make pinned/favorited states recognizable through small accessible icons or labels rather than large decorative treatments; keep card actions contextual and unobtrusive.
+- Ensure preview content is permission-aware, excludes sensitive/private information from unauthorized contexts, and falls back gracefully when images are missing or unavailable.
+- In the approved list view, use compact title-and-metadata rows rather than forcing rich card layouts into narrow space.
+- Preserve strong text contrast, keyboard/touch access, accessible image alternatives and readable results in light/dark modes and across responsive widths.
+- Follow Madeora's Playful Precision style, restrained accent use, moderate rounding and subtle tactile depth.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
