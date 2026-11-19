@@ -491,6 +491,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Implement server-side authorization and expiration checks, rate-limit PIN attempts and handle failed/expired sessions safely; never rely solely on hiding UI controls.
 - Support touch accessibility, reduced motion, and appropriate focus handling when locking or unlocking.
 
+## Approved decision 38 — Dashboard-first wall-display navigation with expandable menu (2026-11-19)
+**Decision: C — Dashboard-first with expandable navigation.**
+
+- Open the dedicated Home wall-display experience on its dashboard, keeping household information and interactive widgets as the primary surface.
+- Provide a compact, clearly identifiable and **always-accessible navigation control** that opens a spacious, touch-friendly menu with the available Home modules and relevant destinations.
+- Use large touch targets, readable labels, clear active-state indicators, and accessible focus/keyboard/screen-reader behavior suitable for wall-mounted tablets.
+- Let users open a permitted module directly from the menu, then return easily to the dashboard with an obvious Home/Dashboard action.
+- Respect Home permissions, wall-display privacy restrictions and the approved temporary PIN unlock flow for protected destinations or actions; never expose restricted content in menu previews.
+- Coordinate expanded navigation with ambient mode, overlays, display orientation, safe areas and the wall-display's dedicated layout; close the menu appropriately when entering ambient mode or locking.
+- Avoid a permanently expanded sidebar that consumes dashboard space, and do not require a module to have a widget before it can be reached.
+- Keep this navigation independent of the mobile phone's scroll-aware bottom navigation while sharing consistent module naming and information architecture.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
