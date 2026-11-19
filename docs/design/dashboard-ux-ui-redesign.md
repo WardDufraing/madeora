@@ -714,6 +714,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect workspace context and permissions; never silently assign tasks to an inaccessible list or expose private task data.
 - Match the approved adaptive task rows, minimal visual clutter and adaptive task detail/editing experience.
 
+## Approved decision 56 — Adaptive Notes workspace (2026-11-19)
+**Decision: C — Adaptive notes workspace.**
+
+- Structure the Notes page as a flexible workspace with **grid and list presentation modes**, letting users browse visually rich note previews or compact, efficient rows.
+- Provide discoverable **search, Favorites and Folders** navigation alongside All Notes, adapting the controls to available screen width without crowding the page.
+- In grid mode, show legible note titles, restrained excerpts and useful context such as modified date; keep card heights and content truncation balanced for scannability.
+- In list mode, prioritize titles, concise metadata and fast scanning, with subtle row separation and contextual actions rather than excessive card depth.
+- Make the active view and filter obvious, preserve user view preference and maintain context when opening or returning from a note.
+- Keep a prominent **+ New Note** action visible, including helpful empty states for first notes, empty folders and search results.
+- Respect Personal/Home workspace boundaries, permissions and privacy when displaying note previews or folder contents.
+- Ensure responsive mobile behavior, keyboard navigation, accessible labels, long localized titles and consistent light/dark contrast.
+- Apply Madeora's Playful Precision, moderate rounding, balanced spacing and user-selected accent without sacrificing readability.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
