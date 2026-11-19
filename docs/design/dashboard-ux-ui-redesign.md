@@ -558,6 +558,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Include work-schedule visibility in relevant calendar views and filters; do not silently replace or duplicate events imported from connected calendars.
 - Treat detailed scheduling workflow, templates and synchronization specifics as follow-up UX/product decisions rather than assuming them here.
 
+## Approved decision 43 — Work schedules as subtle calendar background blocks (2026-11-19)
+**Decision: B — Subtle background time blocks.**
+
+- Display scheduled working periods as **lightly tinted, low-emphasis background time blocks** in the calendar, visually distinct from ordinary foreground events.
+- In day and week time-grid views, position work blocks behind regular appointments and meetings so events remain legible and interactive.
+- Label work periods with an accessible **Work** indicator and their start/end times; use patterns, icons or text in addition to tonal differences rather than relying on color alone.
+- Support overlapping foreground events without obscuring event text or hit targets; provide a deliberate interaction target to inspect or edit a work shift.
+- Adapt the presentation for compact month and mobile views with a concise indicator or summary rather than forcing a dense background time grid.
+- Respect the approved user-selectable accent system, light/dark parity, contrast requirements and reduced-motion preferences; avoid introducing a fixed work-module color.
+- Keep work schedules filterable and compatible with recurring shifts, exceptions, privacy/visibility rules and calendar synchronization safeguards described in the work-schedule UX requirement.
+- Ensure printed or exported calendar views remain understandable without depending on subtle background colors.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
