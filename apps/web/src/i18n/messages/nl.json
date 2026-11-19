@@ -7649,7 +7649,7 @@
     "stepDown": "Stoppen als voogd",
     "guardiansSaved": "Voogden bijgewerkt.",
     "holdWarningLeave": "{count, plural, one {Je bent de enige hoofdvoogd van # kind in dit Home. Als je vertrekt, wordt het kind in de wacht gezet en kan het hier niet meer aanmelden tot de Eigenaar een nieuwe hoofdvoogd aanstelt.} other {Je bent de enige hoofdvoogd van # kinderen in dit Home. Als je vertrekt, worden ze in de wacht gezet en kunnen ze hier niet meer aanmelden tot de Eigenaar een nieuwe hoofdvoogd aanstelt.}}",
-    "holdWarningAccount": "Je bent de enige hoofdvoogd van kinderen in deze Homes. Zolang je account gedeactiveerd is, of zodra het verwijderd is, worden ze in de wacht gezet en kunnen ze daar niet aanmelden tot de Eigenaar een nieuwe hoofdvoogd aanstelt. Als je een gedeactiveerd account opnieuw activeert, krijgen ze weer toegang, tenzij intussen iemand anders hoofdvoogd is geworden.",
+    "holdWarningAccount": "Je bent de enige hoofdvoogd van kinderen in deze Homes. Zolang je account gedeactiveerd is, of zodra het verwijderd is, worden ze in de wacht gezet en kunnen ze daar niet aanmelden tot de Eigenaar een nieuwe hoofdvoogd aanstelt. Als je een gedeactiveerd account opnieuw activeert, krijgen ze weer toegang, tenzij intussen iemand anders hoofdvoogd is geworden. Je wordt dan hun tweede voogd als die rol vrij is.",
     "holdWarningHome": "{home}: {count, plural, one {# kind} other {# kinderen}}",
     "guardianReauthIntro": "Om de voogden van een kind te wijzigen, bevestig je eerst opnieuw dat jij het bent.",
     "guardianReauthConfirm": "Bevestigen en doorgaan",
