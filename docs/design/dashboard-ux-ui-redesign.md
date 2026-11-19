@@ -290,6 +290,16 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - On small widgets, protect title truncation and menu access; support translated labels and light/dark contrast.
 - Use consistent menu ordering and placement across modules while showing only actions that are meaningful for the current widget and user permissions.
 
+## Approved decision 21 — Soft tonal gradient dashboard background (2026-11-19)
+**Decision: B — Soft tonal gradient.**
+
+- Use a restrained, low-contrast **neutral tonal gradient** as the dashboard canvas behind the pronounced neumorphic widget surfaces, adding gentle atmosphere without distracting from content.
+- Adapt gradient stops and direction for both light and dark themes; preserve coherent highlight and shadow relationships so raised widgets remain distinct and legible.
+- Keep the gradient **neutral**, not a second accent system: Madeora retains the **single user-selectable accent color** with derived tonal variants and no fixed per-module accent colors.
+- Prefer stable, subtle transitions over animated gradients or decorative shapes; avoid unnecessary rendering costs and visual noise in dense dashboards.
+- Provide a solid-color fallback for high-contrast or constrained rendering environments, and maintain sufficient text, control, border and focus-state contrast.
+- Validate appearance at common viewport sizes, in sparse/dense layouts, on mobile, and in wall-display mode.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
