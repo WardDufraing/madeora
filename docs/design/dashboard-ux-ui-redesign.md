@@ -515,6 +515,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep server-side authorization and device-to-Home binding authoritative; a wall-display PIN alone must not authorize cross-Home reassignment.
 - Provide an auditable indication of reassignment to authorized Home administrators where activity logging is available.
 
+## Approved decision 40 — Editorial desktop dashboard hero header (2026-11-19)
+**Decision: C — Editorial hero header.**
+
+- Use a distinctive **editorial-style hero header** on desktop dashboards: expressive, prominent typography; a warm, context-aware greeting or headline; and a concise supporting line such as the current date or daily context.
+- Include one carefully selected, permission-aware **contextual highlight** (for example, the next upcoming event), rather than a dense row of competing statistics or controls.
+- Preserve the previously approved **collapsible greeting/header** behavior, with a compact state that prioritizes dashboard widgets and avoids excessive vertical space.
+- Maintain Madeora's **Playful Precision** visual language, soft tonal gradient background, pronounced tactile depth, moderately rounded geometry, restrained animations and user-selected accent.
+- Ensure long localized text, small desktop widths, reduced motion, light/dark themes and empty or unavailable contextual data all have polished fallbacks.
+- Avoid exposing private Personal information in a shared Home header; scope greetings and contextual highlights to the active workspace and permissions.
+- Treat this as a visual presentation choice for the desktop dashboard, not a change to navigation, permissions, or underlying module functionality.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
