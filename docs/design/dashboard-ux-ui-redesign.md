@@ -381,6 +381,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Ensure the selector works with the approved mobile bottom navigation, safe areas, keyboard/screen-reader navigation, long localized Home names and small screens.
 - Avoid horizontal swipe gestures for workspace switching, which could conflict with calendars and widget interactions.
 
+## Approved decision 29 — Hybrid contextual creation on mobile (2026-11-19)
+**Decision: C — Hybrid contextual creation.**
+
+- Keep a prominent, discoverable **Add/New** action within each relevant module and appropriate contextual actions inside interactive dashboard widgets.
+- Include a central **+ Create** action in the mobile bottom navigation; activating it opens a compact, accessible quick-create menu with common entry types (such as task, calendar event, shopping item and other permitted options).
+- Prioritize creation options relevant to the current Personal/Home workspace and user context, while allowing access to other available module types without unnecessary navigation.
+- Use the approved **adaptive creation** behavior: compact modal for simple entries, larger dialog/drawer for more complex forms, and a full page only for genuinely workspace-intensive workflows.
+- Preserve the current page, scroll position, filters, date selection and workspace context when creation is opened or cancelled; restore focus to the originating action.
+- Do not add a second persistent floating + button that competes with the existing Ora launcher or mobile navigation.
+- Coordinate the central Create control with the scroll-aware bottom bar: ensure the action is discoverable, does not disappear during an open creation menu, and remains keyboard/touch accessible.
+- Enforce role-based permissions and privacy boundaries; show only actions the user can perform and make the destination workspace clear before saving.
+- Ensure consistent labels, validation, feedback, responsive safe-area handling and screen-reader support.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
