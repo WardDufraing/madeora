@@ -689,6 +689,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Avoid overwhelming the interface when many tasks are overdue; retain the compact adaptive row layout, predictable alignment and clear completion controls.
 - Ensure accessible contrast, non-color-only labels, localization of dates, correct timezone handling and parity across light/dark themes and mobile layouts.
 
+## Approved decision 54 — Adaptive task list navigation (2026-11-19)
+**Decision: C — Adaptive list navigation.**
+
+- In the Tasks workspace's **Lists** view, display a small number of frequently used lists as compact, clearly labeled **tabs or chips**, enabling quick switching without a second permanent sidebar.
+- When the list count grows or the available width shrinks, transition to an accessible **searchable list selector** instead of wrapping into cluttered rows.
+- On mobile, use a compact, touch-friendly list picker that preserves room for task content and the prominent **+ New Task** action.
+- Provide a discoverable **+ New List** affordance in both tab/chip and selector presentations, including empty states.
+- Keep the selected list visually obvious through typography, shape and restrained accent emphasis; do not rely on color alone.
+- Preserve list context, search/filter state and scroll position when users inspect tasks or return from task details.
+- Handle long localized list names, large numbers of lists, keyboard navigation and screen-reader semantics gracefully.
+- Respect Personal/Home workspace boundaries and list visibility permissions; retain the approved Today, Upcoming, All Tasks and Lists top-level views.
+- Follow the Playful Precision visual language and compact adaptive task-row design without introducing an additional persistent navigation column.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
