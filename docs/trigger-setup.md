@@ -15,7 +15,7 @@ What the owner does once to run Madeora's background jobs in a hosted environmen
 
 ## 2. A Supabase secret key for the jobs
 
-Do this for each Supabase project that will run jobs (`madeora-production` now; `madeora-preview` only if the Free plan includes a staging environment, see step 3).
+Do this on `madeora-production` for the production Trigger.dev project. The preview Trigger.dev project needs its own key on `madeora-preview` ([Preview of main](#preview-of-main)); that database already has its migrations if you applied them with [`supabase-migrations.md`](supabase-migrations.md), so create the key only.
 
 1. In <https://supabase.com/dashboard>, open the project → **Project Settings** → **API Keys**.
 2. Under **Secret keys**, create a new secret key named `trigger-dev`, and copy it (`sb_secret_…`). Use it only in Trigger.dev, never in Vercel or `.env.example`.
@@ -31,8 +31,8 @@ Do this for each Supabase project that will run jobs (`madeora-production` now; 
    - `SUPABASE_URL` = the `madeora-production` API URL (`https://<project-ref>.supabase.co`, from Supabase → Project Settings → Data API)
    - `SUPABASE_SERVICE_ROLE_KEY` = the `trigger-dev` secret key from step 2
    - For email (S14), also `EMAIL_TRANSPORT` = `resend`, `EMAIL_FROM` = `Madeora <no-reply@mail.madeora.studio>`, `RESEND_API_KEY` = the `madeora-production-app` key and `APP_URL` = the production address (`https://…`, no path). Creating the Resend key is `docs/email-setup.md`, step 5. Without them the jobs still run and record emails as "not configured"; in-app notifications are unaffected.
-3. If the environment list also shows **Staging** on the Free plan, you may set it up the same way with `APP_ENV` = `preview` and the `madeora-preview` project. If it is not there, previews run no jobs; nothing in the app needs them yet.
-4. Do not add a Trigger.dev key or the Supabase secret key to Vercel. The web app needs no Trigger.dev key yet: emails go out on the 5-minute schedule. (Vercel only gets the flag `EMAIL_TRANSPORT`, `docs/email-setup.md` step 6.)
+3. Preview jobs do not use a Staging environment of this project. They run in a separate free Trigger.dev project ([Preview of main](#preview-of-main)).
+4. Do not add a Trigger.dev key or the Supabase secret key to Vercel. Vercel needs no Trigger.dev variables. The web app needs no Trigger.dev key: emails go out on the 5-minute schedule. (Vercel only gets the flag `EMAIL_TRANSPORT`, `docs/email-setup.md` step 6.)
 
 **Check:** the variables are listed under Production with their values hidden.
 
@@ -42,11 +42,34 @@ From a clone of the repository on your computer, with `main` checked out and `pn
 
 1. `cd packages/jobs`
 2. `pnpm dlx trigger.dev@4.6.4 login` and approve the login in the browser.
-3. `pnpm dlx trigger.dev@4.6.4 deploy --env prod`. The project ref is the default in `packages/jobs/trigger.config.ts` because the remote build does not see your shell environment; to use another Trigger.dev project, change that default in a PR.
+3. If `packages/jobs/.env` exists from local `trigger.dev dev`, move it aside before the next command. The CLI reads that file and, when `TRIGGER_PROJECT_REF` there is non-blank, deploys to that project instead of the production one.
+4. `pnpm dlx trigger.dev@4.6.4 deploy --env prod`. Leave `TRIGGER_PROJECT_REF` unset. The production project ref in `packages/jobs/trigger.config.ts` is used, including on the remote build, which does not see your shell. The preview project is a different command ([Preview of main](#preview-of-main)).
 
 Without a browser, `TRIGGER_ACCESS_TOKEN=tr_pat_…` (a personal access token from Trigger.dev → Account → Personal Access Tokens) replaces step 2. Never commit the token or paste it into chat; revoke it afterwards.
 
 **Check:** Trigger.dev → **Tasks** lists `sample-ping`, `outbox-dispatch`, `task-reminder`, `task-reminder-advance`, `chore-claim-release`, `chore-reminder`, `chore-digest`, `vacation-reminder`, `habit-reminder`, `habit-reminder-snooze` and `habit-pause-end` (among the other jobs), and **Schedules** shows `outbox-dispatch` every 5 minutes, `task-reminder-advance` every hour (S19b) and `chore-digest` every hour (S21).
+
+## Preview of main
+
+Google Calendar sync and the other jobs for the Vercel preview of `main` run in a **second** Trigger.dev project on the Free plan. Production stays the `madeora` project from section 1, deployed only by section 4. Vercel gets no Trigger.dev variables.
+
+1. In the same organization, create a project (for example `madeora-preview`). If you are asked for a payment card, a billing address or a paid plan, stop. Open **Project settings** and copy the **Project ref** (`proj_…`). It is not a secret. Do not put the ref in the repository, in Vercel, or in chat.
+2. On Supabase project `madeora-preview`, create a new secret key named `trigger-dev` (section 2, the key steps only). Use it only in this preview Trigger.dev project, never in Vercel and never in the production Trigger.dev project.
+3. In the new Trigger.dev project, open **Environment Variables** and add these on the **Prod** environment (Trigger.dev's production environment for this project, which serves the Vercel preview):
+   - `APP_ENV` = `preview`
+   - `SUPABASE_URL` = the `madeora-preview` API URL (`https://<project-ref>.supabase.co`)
+   - `SUPABASE_SERVICE_ROLE_KEY` = the dedicated `madeora-preview` secret key from step 2
+   - `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` and `GOOGLE_CALENDAR_TOKEN_KEY` = the same three values as Vercel **Preview** (`docs/google-calendar-setup.md`)
+   - The preview email variables from `docs/email-setup.md` step 6, on this same Prod environment
+4. From `packages/jobs`, with `main` checked out:
+
+   ```sh
+   TRIGGER_PROJECT_REF=<preview ref> pnpm dlx trigger.dev@4.6.4 deploy
+   ```
+
+   Paste the preview project ref in place of `<preview ref>`. If `packages/jobs/.env` sets `TRIGGER_PROJECT_REF`, move that file aside first: the CLI prefers that file over the variable on the command. Put `.env` back before `trigger.dev dev`. Never commit it.
+
+**Check:** the preview project's **Prod** environment lists those variables with hidden values, and **Tasks** includes `google-calendar-sync`. The production project's variables and deployment are unchanged. Vercel → **Settings** → **Environment Variables** has no `TRIGGER_` name.
 
 ## 5. Smoke test
 
@@ -77,4 +100,4 @@ If the Free plan offers alerts (project → **Alerts**), add an email alert for 
 
 ## Removing it again
 
-Delete the Trigger.dev project, then the `trigger-dev` secret key in Supabase. Jobs then wait in the outbox, and nothing is lost.
+Delete the Trigger.dev project (and the preview project, if you created one), then the matching `trigger-dev` secret key in Supabase. Jobs then wait in the outbox, and nothing is lost.

@@ -2,6 +2,8 @@
 
 How Madeora runs work outside a request (S13, [ADR 0017](adr/0017-background-jobs.md), architecture §11). Setting up Trigger.dev itself: [`trigger-setup.md`](trigger-setup.md).
 
+The Vercel preview of `main` runs jobs, including Google Calendar sync, in a separate free Trigger.dev project. Its Prod environment holds the preview settings (`APP_ENV=preview`, the `madeora-preview` Supabase URL and a dedicated secret key, and `GOOGLE_CALENDAR_*` matching Vercel Preview). Deploy from `packages/jobs` with `TRIGGER_PROJECT_REF=<preview ref> pnpm dlx trigger.dev@4.6.4 deploy`. If `packages/jobs/.env` sets `TRIGGER_PROJECT_REF`, move that file aside first (the CLI prefers it). Vercel needs no Trigger.dev variables. Production stays on `pnpm dlx trigger.dev@4.6.4 deploy --env prod` with `TRIGGER_PROJECT_REF` unset. Full steps: [`trigger-setup.md`](trigger-setup.md), Preview of main.
+
 ## How it fits together
 
 1. A business function changes data **and** calls `private.enqueue_job(...)` in the same transaction. The job exists exactly when the change committed.

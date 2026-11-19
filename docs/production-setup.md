@@ -92,7 +92,7 @@ Follow [Google Calendar setup](google-calendar-setup.md). This is separate from 
 2. Add exactly the `calendar.calendarlist.readonly` and `calendar.events` scopes. During testing, add the permitted accounts as test users; do not publish the OAuth app until Google verification for the sensitive scopes is complete.
 3. Create a Web application OAuth client with the production callback `https://www.madeora.studio/api/v1/integrations/google-calendar/callback`. Do not add a JavaScript origin.
 4. Generate a production-only 32-byte base64 token-encryption key using `openssl rand -base64 32`. Changing this key later makes every stored connection unreadable and requires users to reconnect.
-5. Put `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_TOKEN_KEY` in both Vercel Production and Trigger.dev Production. The web app and jobs must use the same three production values; Preview/Staging uses separate values.
+5. Put `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_TOKEN_KEY` in both Vercel Production and Trigger.dev Production. The web app and jobs must use the same three production values. The Vercel preview uses separate values in the preview Trigger.dev project's Prod environment (`docs/trigger-setup.md`, Preview of main).
 6. Apply both Google Calendar migrations in chronological order with the other production migrations before enabling the integration.
 
 Check: the Google project has no billing account, the callback exactly matches the canonical production URL, all three variables are present and secret in both runtimes, and Trigger.dev lists `google-calendar-sync`. If the integration is not enabled for the release, leave all three variables unset.

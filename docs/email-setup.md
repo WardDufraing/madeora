@@ -101,9 +101,9 @@ Since S14 the app queues each email in the database and a Trigger.dev job sends 
    | `RESEND_API_KEY`  | the `madeora-production-app` key from step 5            |
    | `APP_URL`         | the production address, `https://` and no trailing path |
 
-3. If the environment list also has **Staging** on the free plan, add the same four with the `madeora-preview-app` key, `Madeora Preview <no-reply@mail.madeora.studio>` and the address of a preview you want links to open. If it has not, previews queue emails that no job sends: the invitation shows **Sending** and stays so. Nothing else breaks.
+3. On the separate preview Trigger.dev project ([`trigger-setup.md`](trigger-setup.md), Preview of main), add the same four to that project's **Prod** environment: the `madeora-preview-app` key, `Madeora Preview <no-reply@mail.madeora.studio>`, and the address of a preview you want links to open. Vercel still gets no Resend key.
 4. In Vercel (https://vercel.com/dashboard, **madeora**, **Settings**, **Environment Variables**), set `EMAIL_TRANSPORT` = `resend` for **Preview** and for **Production**. **Delete** `EMAIL_FROM` and `RESEND_API_KEY` from Vercel if they are there from S10: the web app no longer reads them, and a key that nothing uses should not be in Vercel. New values apply to new deployments; for production open **Deployments**, click **⋯** next to the newest Production deployment, then **Redeploy**.
-5. Re-deploy the jobs so they carry the email code: `docs/trigger-setup.md`, step 4.
+5. Re-deploy the jobs so they carry the email code: `docs/trigger-setup.md`, step 4 for production, and the preview command in that guide for the preview project.
 
 Check: Trigger.dev lists the four variables under Production, Vercel lists only `EMAIL_TRANSPORT` for email, and `RESEND_API_KEY` appears nowhere in Vercel. If a job run fails at once with a message naming `APP_URL`, `EMAIL_FROM` or `RESEND_API_KEY`, one value is missing or mistyped; the message names the variable but never shows its value.
 
