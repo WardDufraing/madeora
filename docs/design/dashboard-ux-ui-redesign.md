@@ -631,6 +631,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Provide keyboard focus management, Escape/close behavior, screen-reader labeling, comfortable touch targets and responsive handling for long localized text.
 - Maintain the approved adaptive task-row styling and app-wide Playful Precision visual language without excessive nested cards.
 
+## Approved decision 49 — Progress-focused subtask checklist (2026-11-19)
+**Decision: B — Progress-focused checklist.**
+
+- Show subtasks inside the adaptive task detail view as a **compact, clearly labeled checklist** rather than separate elevated cards.
+- Include a **subtle progress bar** and explicit completion count (for example, “2 of 5 completed”) so progress is understandable without relying on color alone.
+- Update the progress indicator immediately when a subtask is checked or unchecked, with restrained, purposeful feedback and no distracting animation.
+- Distinguish completed subtasks using accessible checkbox states and restrained typography, preserving legibility and the ability to review or reopen completed items.
+- Provide a discoverable **Add subtask** affordance at the end of the list and maintain efficient keyboard and touch interactions.
+- Keep the section compact and readable for tasks with many subtasks, with appropriate wrapping and responsive behavior in desktop side panels and mobile sheets.
+- Respect task permissions, workspace context, light/dark theme contrast and reduced-motion preferences.
+- Match the approved adaptive task-row styling and Playful Precision aesthetic without unnecessary nested card depth.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
