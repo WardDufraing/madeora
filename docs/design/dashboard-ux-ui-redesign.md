@@ -127,6 +127,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Distinguish genuinely empty, loading, failed, offline, filtered-out and permission-restricted states; never mistake an API failure for an empty widget.
 - Respect Personal/Home context and permissions for both visibility and action affordances. Keep screen-reader announcements and reduced-motion behavior accessible.
 
+## Approved decision 10 — Context-aware hybrid navigation (2026-11-19)
+**Decision: C — Context-aware hybrid navigation.**
+
+- Keep **Dashboard**, **Calendar**, and **Tasks** prominent as core navigation destinations, with clear active states and readable labels.
+- Make the active **Personal/Home context** highly visible and easy to switch, without confusing navigation with data-sharing permissions.
+- Surface a small set of relevant shortcuts for the active context. Provide an organized, searchable **All Modules** destination for the full module catalog.
+- Let users pin/unpin favorite modules to primary navigation, respecting available permissions and module eligibility.
+- Adapt navigation on narrow screens without hiding critical context or creating inaccessible icon-only controls.
+- Preserve the user's current context when navigating between modules where appropriate, and explain unavailable destinations instead of showing unauthorized data.
+- Avoid duplicate or competing navigation controls. Keep context switch, favorites, and All Modules consistent across desktop and mobile.
+- The exact placement of pinned items, mobile navigation pattern, and per-context favorite persistence remain to be decided.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -210,6 +222,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Save semantics: **DECIDED — autosaved recoverable draft, Done commits, Cancel discards**; normal-mode widget configuration save behavior remains open.
 - Empty widgets: **DECIDED — user-selectable Full / Compact / Hide when empty**; temporary hidden-widget gap policy pending.
 - Widget configuration: **DECIDED — hybrid quick settings popover + advanced side panel with preview**; configuration save semantics pending.
+- Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, Personal/Home switch, pinned favorites and All Modules.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
 
 ## Engineering guardrails
