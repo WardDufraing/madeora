@@ -312,6 +312,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Validate all widgets, modals/drawers, navigation, edit mode, empty/loading/error states, mobile and wall-display layouts in both themes.
 - Keep high-contrast and reduced-motion accommodations available where appropriate.
 
+## Approved decision 23 — Subtle, purposeful motion (2026-11-19)
+**Decision: B — Subtle, purposeful motion.**
+
+- Use restrained, intentional animations to reinforce Madeora's tactile neumorphic visual language without making the dashboard feel busy or slow.
+- Provide gentle hover, focus and press feedback for interactive controls; use smooth but short modal/drawer entrances and exits, meaningful completion-state feedback, and clear widget movement/reflow previews during dashboard editing.
+- Prioritize responsiveness: state changes and essential actions must not wait for decorative animations, and motion should communicate cause/effect rather than attract attention for its own sake.
+- Define shared motion tokens (duration, easing, displacement and spring behavior where appropriate) and use consistent patterns across modules and widget sizes.
+- Avoid continuous ambient animation, unnecessary bounce, large parallax effects, and excessive motion when many widgets update simultaneously.
+- Honor OS/browser reduced-motion preferences with minimal or immediate state changes, preserving clarity and functional feedback.
+- Ensure motion does not conflict with drag-and-drop, resizing, focus management, keyboard interaction, touch input or responsive performance; validate in light and dark modes.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
