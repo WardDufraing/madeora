@@ -727,6 +727,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Ensure responsive mobile behavior, keyboard navigation, accessible labels, long localized titles and consistent light/dark contrast.
 - Apply Madeora's Playful Precision, moderate rounding, balanced spacing and user-selected accent without sacrificing readability.
 
+## Approved decision 57 — Adaptive focused note editor (2026-11-19)
+**Decision: C — Adaptive focused note editor.**
+
+- Open notes in a **clean, focused reading and editing experience** with prominent note title, uncluttered content area, concise metadata and contextual navigation back to the Notes workspace.
+- On wider desktop layouts, allow the notes list or browsing context to remain visible beside the editor when space permits, supporting quick switching between notes.
+- On smaller screens, prioritize a comfortable single-column writing surface with a clear, accessible return path to the previous collection, folder, filter or search.
+- Offer an optional **distraction-free focus mode** that temporarily reduces surrounding navigation and secondary controls while keeping essential save/status and exit actions accessible.
+- Place frequent actions such as favorite, formatting and relevant sharing controls within easy reach, with lower-frequency operations in a restrained overflow menu.
+- Preserve the selected note, browsing context, scroll position and unsaved edits when switching between responsive layouts or entering/exiting focus mode.
+- Use readable typography, sensible line length, clear paragraph spacing and keyboard/touch-friendly editing controls, including accessible focus states and long-content handling.
+- Respect Personal/Home visibility and editing permissions, with clear read-only presentation when appropriate.
+- Follow the approved adaptive Notes grid/list workspace and Madeora's Playful Precision visual style without excessive editor chrome.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
