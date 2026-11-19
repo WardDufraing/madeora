@@ -907,6 +907,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep behavior consistent across desktop/mobile and respect reduced-motion preferences, Personal/Home permissions and Madeora's Playful Precision visual style.
 - Follow Decision 68's adaptive shopping workspace and Decision 69's fast inline item-entry pattern.
 
+## Approved decision 71 — Adaptive shopping-list navigation (2026-11-19)
+**Decision: C — Adaptive list switcher.**
+
+- For a small number of shopping lists, show **frequently used lists as compact tabs or chips** near the Shopping Lists workspace header, with a clear active-list state.
+- When the collection grows, progressively switch to a **searchable list picker** rather than overcrowding the header with horizontally scrolling labels.
+- On mobile, use a **compact, touch-friendly list selector** that preserves space for the shopping checklist and quick-add field.
+- Keep **+ New List** discoverable from both compact and expanded navigation states, including the first-list empty state.
+- Show concise supporting context such as remaining-item counts where useful, without overwhelming navigation labels.
+- Preserve list context and minimize unnecessary page transitions when switching lists; make keyboard and screen-reader navigation predictable.
+- Clearly distinguish Personal and Home lists with subtle, accessible workspace context where both are available, respecting sharing permissions.
+- Match the adaptive list-navigation patterns already approved for Tasks and Notes and the adaptive shopping workspace in Decision 68.
+- Ensure responsive behavior, localized labels, user-selected accent, and light/dark contrast consistent with Madeora's Playful Precision design.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
