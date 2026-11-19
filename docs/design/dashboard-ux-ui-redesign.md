@@ -163,6 +163,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Keep the workspace switcher and navigation discoverable independently of header collapse.
 - Exact summary signals, scroll-collapse threshold and greeting personalization remain to be validated in prototypes.
 
+## Approved decision 13 — Ora widget and global assistant launcher (2026-11-19)
+**Decision: C — Optional dashboard widget + global assistant launcher.**
+
+- Provide an optional, configurable **Ora dashboard widget** for permission-aware contextual insights, proactive suggestions and useful reminders.
+- Provide a compact **global Ora launcher** across Madeora that opens the full contextual assistant panel without requiring navigation back to the dashboard.
+- Both entry points share assistant state and context, respecting the active Personal/Home workspace, assistant permissions, proactive mode and notification preferences.
+- Separate responsibilities: widget surfaces insights; launcher opens interaction. Avoid duplicated notifications, competing prompts or inconsistent unread counts.
+- Keep the launcher unobtrusive and accessible on mobile, avoid overlapping navigation/content, and allow users to hide it in favor of another discoverable Ora entry point.
+- Preserve existing product boundaries: Ora is contextual rather than an unrestricted general AI assistant, and multi-step actions require appropriate confirmation.
+- Provide accessible focus handling, keyboard support, reduced-motion behavior and clear loading/error states.
+- Launcher positioning, visibility defaults and widget insight density remain to be prototyped.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -249,7 +261,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
-- Ora: inline summary vs floating launcher vs both with clearly distinct roles.
+- Ora: **DECIDED — optional insights widget plus unobtrusive, hideable global assistant launcher**, with shared context and no duplicate alerts.
 
 ## Engineering guardrails
 Read `docs/product/Project-entry.md`, `docs/product/Modules.md`, `docs/product/Project-specification.md`, `docs/design/design-decisions.md`, `CLAUDE.md`, and current dashboard/widget implementation before coding. Binding product specification is read-only; this document is a proposed redesign plan, not authorization to contradict it. Reuse `packages/design-tokens`, `packages/icons`, and existing dashboard persistence where possible. Avoid breaking existing user layouts; plan migration/versioning if widget geometry or schema changes. Add Playwright interaction tests and visual snapshots, plus RLS/privacy checks where data access is touched.
