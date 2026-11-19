@@ -394,6 +394,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Enforce role-based permissions and privacy boundaries; show only actions the user can perform and make the destination workspace clear before saving.
 - Ensure consistent labels, validation, feedback, responsive safe-area handling and screen-reader support.
 
+## Approved decision 30 — Hybrid visual and list-based mobile dashboard editing (2026-11-19)
+**Decision: C — Hybrid visual and list editing.**
+
+- In dedicated **Edit Dashboard** mode on mobile, offer **visual drag-and-drop** to rearrange widgets directly in the dashboard preview, with touch-friendly drag handles and clear placement previews.
+- Also provide an **alternative list-based editing view** with explicit move-up/move-down or reorder controls and supported widget-size selectors for precision and accessibility.
+- Both editing methods operate on the **same recoverable mobile layout draft**, keeping changes synchronized and following the previously approved Done-to-commit / Cancel-to-discard workflow.
+- Never enable widget dragging or resizing during normal dashboard use; avoid interference with inline widget interactions and page scrolling.
+- Respect the approved **smart responsive mobile layout with optional customization**: changing mobile order/size must not unexpectedly alter desktop arrangement, while widget membership stays coherent.
+- Support keyboard and screen-reader operation, accessible touch targets, clear selection/focus states, undo where practical, and reliable reflow previews.
+- Preserve user permissions, workspace context, widget-specific size limits and responsive behavior; test narrow screens and long localized labels.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
