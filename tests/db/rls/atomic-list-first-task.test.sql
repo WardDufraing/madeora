@@ -39,6 +39,9 @@ select tests.assert_true(
     'Buy milk', null, null, null, null, '{}', '{}', tests.i('home-a'))),
   'A retry returns the same pair');
 select tests.assert_true(
+  tests.lists_in_a() = 1 and (select count(*) = 1 from private.tasks where id = tests.i('t1')),
+  'And makes nothing new');
+select tests.assert_true(
   (select outcome = 'list_id_taken' from public.create_task_list_with_task(tests.i('l1'), 'Errands',
     tests.i('t2'), 'Other', null, null, null, null, '{}', '{}', tests.i('home-a'))),
   'An existing list id is refused when the task is not the earlier one');
@@ -67,11 +70,18 @@ select tests.assert_true(
   (select outcome = 'invalid_assignee' from public.create_task_list_with_task(tests.i('l3'), 'Garden',
     tests.i('t3'), 'Water', null, null, null, null, '{}', array[gen_random_uuid()], tests.i('home-a'))),
   'An unknown assignee is refused');
+select tests.assert_true(
+  (select outcome = 'task_id_taken' from public.create_task_list_with_task(tests.i('l5'), 'Other',
+    tests.i('t1'), 'Again', null, null, null, null, '{}', '{}', tests.i('home-a'))),
+  'Reusing the own task id with a new list is refused, not reported as success');
+select tests.assert_true(
+  (select count(*) = 0 from private.task_lists where id = tests.i('l5')),
+  'And leaves no list');
 select tests.assert_true(tests.lists_in_a() = 1, 'Still only the first list in the Home');
 select tests.assert_denied(
   $$select * from public.create_task_list_with_task(gen_random_uuid(), 'Bad', gen_random_uuid(), ' ',
     null, null, null, null, '{}', '{}', tests.i('home-a'))$$,
-  'An invalid title is refused with an error');
+  'An invalid title is refused with an error', '22023');
 select tests.assert_true(tests.lists_in_a() = 1, 'And creates no list');
 select tests.act_as_owner();
 select tests.assert_true(

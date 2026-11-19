@@ -82,6 +82,29 @@ describe("POST /api/v1/task-lists/with-first-task", () => {
     });
   });
 
+  it("forwards optional fields, and omits the Home for the personal space", async () => {
+    answer({ outcome: "created", list_revision: 1, task_revision: 1 });
+    await POST(
+      post({
+        ...body,
+        homeId: null,
+        task: {
+          ...body.task,
+          description: "Two litres",
+          startDate: "2026-10-19",
+          priority: "high",
+        },
+      }),
+    );
+    const args = state.rpc.mock.calls[0]?.[1] ?? {};
+    expect(args).toMatchObject({
+      p_description: "Two litres",
+      p_start_date: "2026-10-19",
+      p_priority: "high",
+    });
+    expect(args).not.toHaveProperty("p_home_id");
+  });
+
   it("answers a retry with 200", async () => {
     answer({ outcome: "exists", list_revision: 1, task_revision: 1 });
     expect((await POST(post(body))).status).toBe(200);

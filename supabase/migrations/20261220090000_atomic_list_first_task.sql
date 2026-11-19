@@ -35,7 +35,8 @@ create function public.create_task_list_with_task(
       if v_list_outcome = 'exists' then
         -- A retry only when the first call also made this task, in this list.
         select * into v_task from private.tasks t
-          where t.id = p_task_id and t.created_by = v_user_id and t.list_id = p_list_id;
+          where t.id = p_task_id and t.created_by = v_user_id and t.list_id = p_list_id
+            and t.deleted_at is null;
         if found then
           return query select 'exists', v_list_revision, v_task.revision;
         else
@@ -55,11 +56,16 @@ create function public.create_task_list_with_task(
           p_task_id, p_list_id, p_title, p_description, p_start_date, p_due_date, p_priority,
           p_label_ids, p_assignee_ids, p_home_id) t;
       if v_task_outcome <> 'created' then
+        -- create_task answers 'exists' for the caller's own task id (it ignores the list), which
+        -- here means the id is taken by a task that is not in this new list.
+        if v_task_outcome not in ('exists', 'id_taken', 'invalid_label', 'invalid_assignee', 'not_permitted') then
+          raise exception 'unexpected create_task outcome' using errcode = 'XX000';
+        end if;
         -- Undo the list (and its audit entry) created a moment ago in this call.
         raise exception 'first task refused' using errcode = 'MD001';
       end if;
     exception when sqlstate 'MD001' then
-      return query select case v_task_outcome when 'id_taken' then 'task_id_taken' else v_task_outcome end,
+      return query select case when v_task_outcome in ('exists', 'id_taken') then 'task_id_taken' else v_task_outcome end,
         null::integer, null::integer;
       return;
     end;
