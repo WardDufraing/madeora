@@ -442,6 +442,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - When the shared default changes, members without overrides receive the new layout; existing personal overrides remain intact where possible, with safe handling of removed or unavailable widgets.
 - The shared default also provides a predictable foundation for household displays, subject to the separate wall-display mode and its privacy controls.
 
+## Approved decision 34 — Smart shared Home dashboard updates with member approval (2026-11-19)
+**Decision: C — Smart updates with member approval.**
+
+- When authorized Home members update the shared default dashboard, members **without personal overrides** continue to receive the updated shared default automatically.
+- Members **with personal dashboard overrides** keep their existing widget order, sizes and layout rather than having shared-default changes silently merged into their custom arrangements.
+- When the shared default introduces new widgets, show affected members a subtle, dismissible suggestion identifying the additions, with a preview and explicit **Add to my dashboard** action.
+- Let members accept suggested widgets selectively and place them through the approved smart-reflow/editing workflow without unexpected rearrangement; preserve a recoverable edit draft and allow cancellation.
+- Avoid repeated or intrusive prompts for dismissed suggestions; make pending shared additions discoverable from dashboard customization.
+- Changes to shared-default widget placement or sizing do not automatically override a personalized layout; provide a voluntary review/reset path for members who want to adopt the latest shared default.
+- **Permission, membership and data-access changes take effect immediately**, irrespective of approval or dismissal; inaccessible widgets must be hidden or safely disabled without leaking private data.
+- Scope suggestions to the current Home and the member's permissions, with appropriate behavior for removed widgets, obsolete suggestions, multiple updates and mobile/desktop layouts.
+- Keep notifications lightweight and accessible, consistent with the approved context-aware feedback design.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
