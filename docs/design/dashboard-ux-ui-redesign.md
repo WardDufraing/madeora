@@ -359,6 +359,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Maintain the same information architecture as desktop navigation while using a mobile-appropriate presentation; do not create a separate permission or routing model.
 - Test long labels, many pinned modules, landscape layouts, deep links and switching between Personal and Home contexts.
 
+## Approved decision 27 — Scroll-aware mobile bottom navigation (2026-11-19)
+**Decision: B — Hide on scroll down, show on scroll up.**
+
+- On mobile, smoothly hide the persistent bottom navigation bar during intentional downward scrolling and reveal it when the user scrolls upward, giving longer dashboards and module views more usable space.
+- Use direction thresholds, scroll-distance hysteresis and sensible animation timing to avoid flicker from small movements, elastic scrolling or minor layout shifts.
+- Keep navigation visible at the top of a page, when focus moves into its controls, during keyboard or assistive-technology navigation, and when relevant navigation menus or overlays are open.
+- Avoid hiding while a user interacts with controls near the bottom edge, and ensure it never obscures content, floating Ora controls, bottom sheets or the on-screen keyboard.
+- Honor reduced-motion preferences by minimizing or eliminating slide animation; preserve discoverability and accessible touch targets.
+- Maintain safe-area padding and correct content inset as the bar appears/disappears, without jarring content jumps.
+- Apply the same behavior consistently across mobile dashboard and module pages, with explicit exceptions for full-screen flows where the bar should not be present.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
