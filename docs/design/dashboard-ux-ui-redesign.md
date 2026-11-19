@@ -417,6 +417,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Support clear names, duplicate-name handling, and accessible preset management without introducing a new top-level dashboard-switching navigation concept.
 - Multiple concurrently switchable dashboards remain a possible later enhancement, not part of this redesign decision.
 
+## Approved decision 32 — Limited automatic dashboard layout history (2026-11-19)
+**Decision: B — Limited automatic version history.**
+
+- Automatically retain the **10 most recent committed dashboard layout configurations per workspace**, separate from explicitly named, saved layout presets.
+- Record a version on meaningful saved layout changes (including applying a preset), not on every drag movement, autosaved draft update or transient editing action.
+- Allow authorized users to browse versions with a clear timestamp and contextual summary, **preview** the desktop/mobile arrangement, and **restore** a chosen configuration after confirmation.
+- Restoring an earlier version creates a new committed version so the layout that was replaced remains recoverable within the rolling history limit.
+- Keep saved presets independent of automatic history rotation; never silently delete a named preset when an old automatic version is removed.
+- Maintain the existing recoverable edit draft, Done/Cancel semantics, workspace scoping and Home permissions; protect private Personal widget content when reviewing shared Home layouts.
+- Handle obsolete, missing or newly restricted widgets safely in previews and restores, with clear messaging rather than exposing inaccessible data.
+- Keep the history interface lightweight and accessible; full unlimited version history is out of scope.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
