@@ -21,7 +21,7 @@ import { GOOGLE_CONNECT_ENDPOINT } from "@/google-calendar/api";
 import { readGoogleConnection } from "@/google-calendar/data";
 import { connectNotice, type ConnectNotice } from "@/google-calendar/schema";
 import { getGoogleCalendarServer } from "@/google-calendar/server";
-import type { GoogleConnection } from "@/google-calendar/shapes";
+import { syncNotStarted, type GoogleConnection } from "@/google-calendar/shapes";
 import { pageTitle } from "@/i18n/page-title";
 import { formatDateTime, type DateTimeFormats } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
@@ -95,7 +95,12 @@ export default async function GoogleCalendarSettingsPage({
             <ConnectForm label={t("connect")} />
           </Card>
         ) : (
-          <Connected connection={result.value} formats={formats} t={t} />
+          <Connected
+            connection={result.value}
+            formats={formats}
+            t={t}
+            notStarted={syncNotStarted(result.value, new Date())}
+          />
         )}
       </div>
     </>
@@ -122,10 +127,12 @@ function Connected({
   connection,
   formats,
   t,
+  notStarted,
 }: {
   readonly connection: GoogleConnection;
   readonly formats: DateTimeFormats;
   readonly t: Translate;
+  readonly notStarted: boolean;
 }) {
   const expired = connection.status === "authorization_expired";
   const synced = connection.calendars.filter((c) => c.sync).length;
@@ -141,11 +148,13 @@ function Connected({
             {t("connectedAs")} <bdi className="font-medium">{connection.account}</bdi>
           </p>
           <p className="text-body text-fg-muted" data-testid="google-last-sync">
-            {connection.syncQueued
-              ? t("syncing")
-              : connection.lastSyncedAt
-                ? t("lastSynced", { when: formatDateTime(connection.lastSyncedAt, formats) })
-                : t("neverSynced")}
+            {notStarted
+              ? t("syncNotStarted")
+              : connection.syncQueued
+                ? t("syncing")
+                : connection.lastSyncedAt
+                  ? t("lastSynced", { when: formatDateTime(connection.lastSyncedAt, formats) })
+                  : t("neverSynced")}
           </p>
           {expired ? (
             <div data-testid="google-expired">

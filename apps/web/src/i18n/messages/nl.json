@@ -6222,6 +6222,7 @@
     "syncing": "Bezig met synchroniseren…",
     "lastSynced": "Laatst gesynchroniseerd op {when}.",
     "neverSynced": "Nog niet gesynchroniseerd.",
+    "syncNotStarted": "De eerste synchronisatie is nog niet gestart. Achtergrondtaken staan mogelijk uit in deze omgeving. Probeer Nu synchroniseren en vraag de Madeora-eigenaar ze te controleren als er niets verandert.",
     "expired": "Madeora kan dit Google-account niet meer bereiken. Je afspraken blijven zichtbaar maar worden niet bijgewerkt. Koppel opnieuw om verder te synchroniseren.",
     "lastSyncFailed": "De laatste synchronisatie is niet afgerond. Madeora probeert het automatisch opnieuw.",
     "reconnect": "Opnieuw koppelen",
