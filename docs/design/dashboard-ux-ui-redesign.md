@@ -752,6 +752,20 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Support localization, responsive layouts and Madeora's Playful Precision visual language with restrained shadows, rounding and user-accent highlights.
 - Treat this as a visual/interaction design decision; the exact supported rich-text feature set and storage format remain separate implementation concerns.
 
+## Approved decision 59 — Adaptive Notes folder navigation (2026-11-19)
+**Decision: C — Adaptive folder navigation.**
+
+- Show a manageable number of **frequently used folders as compact tabs or chips** in the Notes workspace for immediate, low-friction navigation.
+- When the number of folders exceeds available space, replace or supplement the chips with an accessible **searchable folder picker** rather than introducing cluttered multi-row navigation.
+- On mobile, default to a **compact, touch-friendly folder picker** that leaves ample room for note previews and the prominent **+ New Note** action.
+- Keep **All Notes** and **Favorites** discoverable alongside folder navigation, with clear selection states and predictable behavior when switching folders.
+- Provide a visible **+ New Folder** affordance in both compact and expanded navigation states, including empty collections.
+- Use restrained user-accent emphasis, typography and shape to indicate the active folder; do not rely on color alone.
+- Handle long localized folder names, keyboard and screen-reader navigation, large folder collections and responsive resizing gracefully.
+- Preserve search/filter context, selected folder and scroll position when opening notes or returning from the adaptive focused editor.
+- Respect Personal/Home workspace boundaries and note/folder permissions; avoid exposing inaccessible folders or note previews.
+- Align with Decision 56's grid/list Notes workspace and Decision 57's focused editor without adding a second permanent sidebar.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
