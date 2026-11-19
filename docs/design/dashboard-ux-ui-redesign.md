@@ -405,6 +405,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Support keyboard and screen-reader operation, accessible touch targets, clear selection/focus states, undo where practical, and reliable reflow previews.
 - Preserve user permissions, workspace context, widget-specific size limits and responsive behavior; test narrow screens and long localized labels.
 
+## Approved decision 31 — Saved dashboard layout presets (2026-11-19)
+**Decision: B — Saved layout presets.**
+
+- Maintain **one active dashboard per Personal or Home workspace**, rather than adding multiple simultaneously switchable dashboards to the primary navigation.
+- Let authorized users **save, name, duplicate and restore dashboard layout presets**, enabling safe experimentation and recovery of preferred arrangements.
+- A preset captures widget membership, widget settings relevant to layout, desktop positions and sizes, and the corresponding responsive/mobile arrangement including any explicit mobile overrides.
+- Restoring a preset updates the active layout through the established dashboard editing workflow, with a preview and clear confirmation; preserve the previous active layout as a recoverable state where feasible.
+- Keep presets scoped to their workspace and enforce applicable Home permissions; never copy private Personal content or data access into a shared Home through a layout preset.
+- Provide a sensible default preset/reset path and handle missing, disabled or permission-restricted widgets gracefully when applying an older preset.
+- Support clear names, duplicate-name handling, and accessible preset management without introducing a new top-level dashboard-switching navigation concept.
+- Multiple concurrently switchable dashboards remain a possible later enhancement, not part of this redesign decision.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
