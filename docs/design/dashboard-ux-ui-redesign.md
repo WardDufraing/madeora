@@ -594,6 +594,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Support keyboard and screen-reader focus management, escape/dismiss behavior, long localized content and event overlap; avoid hiding other event controls behind the preview.
 - Keep styling consistent with the minimal borderless calendar and the approved adaptive creation/edit dialogs.
 
+## Approved decision 46 — Hybrid Tasks productivity workspace (2026-11-19)
+**Decision: C — Hybrid productivity workspace.**
+
+- Structure the Tasks page as a clean unified workspace with easily discoverable **Today, Upcoming, All Tasks and Lists** views, using a lightweight view switcher that adapts to desktop and mobile.
+- Make **Today** the intuitive daily starting point, emphasizing immediate priorities without hiding future or list-organized work.
+- Keep a prominent, clearly labeled **+ New Task** action in the page header across all views, including empty states and before any lists have been created.
+- Allow users to create their first task without requiring a pre-existing list; provide a welcoming first-task/first-list path and sensible destination defaults.
+- Keep task rows scannable, with accessible completion controls, useful due-date/priority context and uncluttered inline quick actions; use deeper dialogs/drawers only when appropriate.
+- Preserve workspace and permission context, search/filter capabilities and clear distinctions between Personal and Home tasks.
+- Maintain the approved Playful Precision aesthetic, responsive spacing, subtle depth and user-selected accent while avoiding excessive card nesting or visual clutter.
+- Make navigation among views and task creation responsive and keyboard/touch accessible, preserving current view and filters after task editing.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
