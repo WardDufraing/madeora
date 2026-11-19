@@ -582,6 +582,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Retain the app-wide Playful Precision aesthetic and user-selectable accent, but intentionally use **less card depth and fewer visible borders within the calendar grid** than in surrounding dashboard surfaces.
 - Ensure event creation continues to open in an adaptive modal/drawer rather than unexpectedly navigating away from the calendar.
 
+## Approved decision 45 — Adaptive calendar event preview (2026-11-19)
+**Decision: C — Adaptive event preview.**
+
+- Selecting an existing calendar event opens a **compact, contextual preview** showing its title, date/time, relevant location or calendar context, and primary actions such as Edit and More details.
+- On desktop, anchor the preview near the selected event where space permits; reposition or use an appropriate dialog/panel on narrow viewports to prevent clipping.
+- On mobile, present the quick preview as a **touch-friendly bottom sheet** with clear dismissal, drag/scroll handling and accessible controls.
+- Provide a **More details** action that expands into a richer panel or dialog for descriptions, recurrence, attendees, connected-calendar metadata and other advanced information without navigating away unnecessarily.
+- Keep the underlying calendar visible and preserve the current date, view, scroll position and filters on opening and closing the preview.
+- Respect event visibility, workspace privacy, ownership and permissions; show only permitted fields and actions, with appropriate handling of read-only synced events.
+- Support keyboard and screen-reader focus management, escape/dismiss behavior, long localized content and event overlap; avoid hiding other event controls behind the preview.
+- Keep styling consistent with the minimal borderless calendar and the approved adaptive creation/edit dialogs.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
