@@ -92,6 +92,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Widget-specific configuration from normal mode is separate from dashboard layout editing; whether it saves immediately or requires confirmation is a later decision.
 - Draft persistence mechanism, expiration/cleanup policy and offline behavior require engineering review; do not assume browser-local storage is appropriate for sensitive metadata.
 
+## Approved decision 7 — Smart visual widget gallery (2026-11-19)
+**Decision: C — Smart visual gallery.**
+
+- The widget gallery presents visual preview cards, not merely a text list. Each card explains the widget's purpose and offers a clear Add action.
+- Provide search, meaningful categories, a contextual **Recommended** section, and a clear **Already added** state.
+- Recommendations use the active Personal/Home context, eligibility, available permissions and useful defaults; avoid intrusive behavioral tracking.
+- Show ineligible widgets only when useful for discovery, with a clear explanation; never offer actions the user cannot perform.
+- Preview data should be synthetic or permission-safe and visibly distinguishable from real user data.
+- Support keyboard and screen-reader navigation, responsive card layouts, and efficient rendering for large catalogs.
+- The approved combined gallery + inline add-at-position workflow remains unchanged.
+- Recommendation ordering, category taxonomy, duplicate-instance policy and exact preview format remain to be refined.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -109,6 +121,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - On save, persist per account and dashboard context; show success and restore previous layout on error. Prevent overwriting edits across devices without a conflict strategy.
 
 ### Widget gallery
+- **Approved:** smart visual gallery with previews, categories, search, contextual recommendations and already-added indicators.
 - **Approved:** combined gallery and inline add-at-position workflow in edit mode.
 - Open as a desktop side panel and mobile full-screen sheet.
 - Search; category filters (Today, Planning, Home, Personal, Lifestyle); contextual eligibility and permission messaging.
@@ -169,6 +182,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Grid sizing: **DECIDED — hybrid snap-to-grid drag resizing plus named presets**; exact grid geometry pending.
 - Collision behavior: **DECIDED — smart reflow with live preview, minimal necessary movement and undo**.
 - Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
+- Gallery presentation: **DECIDED — smart visual gallery with contextual recommendations and preview cards**.
 - Save semantics: **DECIDED — autosaved recoverable draft, Done commits, Cancel discards**; normal-mode widget configuration save behavior remains open.
 - Empty widgets: compact vs optionally hidden.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
