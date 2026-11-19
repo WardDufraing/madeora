@@ -1,6 +1,6 @@
 # Madeora — Dashboard UX/UI Redesign Plan
 
-**Status:** Proposed; requires product-owner visual review before implementation  
+**Status:** Visual direction approved (Playful Precision); widget UX decisions pending; requires visual review before implementation  
 **Created:** 2026-11-19  
 **Scope:** Personal and Home dashboards, dashboard editor, widget gallery, responsive shell and visual system.  
 **Not in scope:** Rebuilding completed business logic or changing authorization/privacy rules.
@@ -13,8 +13,13 @@ Visible page includes a large module sidebar (Dashboard, Calendar, Tasks, Chores
 ## Product experience goal
 **Madeora should feel like a calm, personal daily command center, not a collection of administrative modules.** In 5 seconds, users should know what matters today, what they can do next, and where to go. Customization must be discoverable but never required for a useful default dashboard.
 
+## Approved visual direction — Playful Precision (2026-11-19)
+The product owner selected **C: Polished Productivity** combined with **B: Friendly & Playful**. This is the guiding design identity, not a mandate to copy any inspiration image. The foundation is structured, efficient and precise; personality appears through restrained pastel accents, friendly iconography, subtle motion, warm copy and thoughtful empty states. Avoid both corporate analytics aesthetics and childish decoration.
+
+**Design principles:** hierarchy before decoration; useful at a glance; customization without complexity; coherent across modules; delightful but never distracting. Retain accessibility, light/dark support, and personal/Home privacy boundaries.
+
 ## Proposed visual direction
-- Warm, minimal, modern, quietly premium; approachable rather than corporate analytics.
+- Approved direction: **Playful Precision** — polished productivity with a friendly, lightly playful character.
 - Strong hierarchy: compact greeting + date, one primary daily-focus region, then useful widgets.
 - Clear type scale, consistent card radii, spacing, elevation and icon treatments through existing design tokens. No arbitrary one-off colors.
 - Light and dark themes with accessible contrast, subtle accent use and restrained motion; support reduced-motion.
@@ -100,7 +105,7 @@ Visible page includes a large module sidebar (Dashboard, Calendar, Tasks, Chores
 - Dark/light themes, NL/EN text, loading/error/offline states are reviewed.
 
 ## Decisions to make with the product owner
-- Visual direction: calm editorial / playful friendly / polished productivity.
+- Visual direction: **DECIDED — Playful Precision (polished productivity + friendly/playful)**.
 - Sidebar: persistent grouped navigation vs compact rail + expandable drawer.
 - Grid: fixed presets vs fully freeform placement.
 - Add flow: gallery side panel vs modal, and default placement behavior.
