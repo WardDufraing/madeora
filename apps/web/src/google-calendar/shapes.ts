@@ -155,3 +155,22 @@ export const googleEventSchema = z.object({
   change: googleChangeSchema.nullable().default(null),
 });
 export type GoogleEvent = z.output<typeof googleEventSchema>;
+
+/** Minutes after connecting with no sync at all before the page says the background sync is not running. */
+export const SYNC_NOT_STARTED_MINUTES = 15;
+
+/**
+ * True when an account connected a while ago and has never synced: the background sync should have run
+ * by now (the dispatcher queues it every 5 minutes), so "Syncing…" would no longer be honest.
+ */
+export function syncNotStarted(
+  connection: Pick<GoogleConnection, "status" | "connectedAt" | "lastSyncedAt" | "errorCode">,
+  now: Date,
+): boolean {
+  if (connection.status !== "connected" || connection.lastSyncedAt !== null || connection.errorCode)
+    return false;
+  const connected = Date.parse(connection.connectedAt);
+  return (
+    Number.isFinite(connected) && now.getTime() - connected > SYNC_NOT_STARTED_MINUTES * 60_000
+  );
+}

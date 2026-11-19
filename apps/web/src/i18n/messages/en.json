@@ -6222,6 +6222,7 @@
     "syncing": "Syncing…",
     "lastSynced": "Last synced {when}.",
     "neverSynced": "Not synced yet.",
+    "syncNotStarted": "The first sync has not started yet. Background jobs may be switched off in this environment. Try Sync now, and if nothing changes, ask the Madeora owner to check them.",
     "expired": "Madeora can no longer reach this Google account. Your events stay visible but are not updated. Reconnect to continue syncing.",
     "lastSyncFailed": "The last sync did not finish. Madeora tries again automatically.",
     "reconnect": "Reconnect",

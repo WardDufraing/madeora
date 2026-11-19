@@ -97,3 +97,7 @@ Check: the three variables are listed with hidden values, and the Trigger.dev **
 7. To share a calendar with a Home, tick that Home under the calendar and click **Save**; another member of that Home then sees its events (except ones marked private in Google).
 
 If the page says "This connect attempt expired or did not match", start again from the page (do not reuse an old Google tab). If it says "Google did not give Madeora access to your calendars", connect again and leave both permissions ticked. If Google shows `redirect_uri_mismatch`, compare the redirect URI in step 4 with the address in your browser, character for character.
+
+## Troubleshooting: "Syncing…" or "The first sync has not started yet" on a preview
+
+Syncing runs as a Trigger.dev job. A Vercel preview runs no jobs unless Trigger.dev has a **Staging** environment for the preview Supabase project ([`trigger-setup.md`](trigger-setup.md) step 3) with `APP_ENV`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the three `GOOGLE_CALENDAR_*` values of the preview, and the tasks are deployed to it (`deploy --env staging`). Without it the connection stays queued; the settings page says the first sync has not started after 15 minutes.
