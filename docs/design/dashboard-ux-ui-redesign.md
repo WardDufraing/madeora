@@ -503,6 +503,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Avoid a permanently expanded sidebar that consumes dashboard space, and do not require a module to have a widget before it can be reached.
 - Keep this navigation independent of the mobile phone's scroll-aware bottom navigation while sharing consistent module naming and information architecture.
 
+## Approved decision 39 — Home-bound wall displays with protected reassignment (2026-11-19)
+**Decision: C — Home-bound with protected reassignment.**
+
+- Assign each wall-display device to **one specific Home** during setup; normal wall-display navigation, dashboard widgets and ambient mode remain scoped to that Home.
+- Do not expose the Personal/Home workspace switcher or a list of other Homes in the wall-display's everyday interface.
+- Allow an **authorized administrator** to reassign the device to a different eligible Home through an explicit protected settings flow, with fresh authorization and clear confirmation of the source and destination Home.
+- Reassignment must revoke or invalidate the previous Home's wall-display session and unlock state, and securely clear device-local cached data, offline content and any previous Home-specific credentials before activating the new Home.
+- Reinitialize the wall display with the destination Home's dedicated wall layout, privacy settings and permitted widgets; do not carry private data or device-specific permissions across Homes.
+- Handle interrupted reassignment, revoked Home membership, lost authorization and network failures safely, leaving the display locked or in setup rather than showing stale household data.
+- Keep server-side authorization and device-to-Home binding authoritative; a wall-display PIN alone must not authorize cross-Home reassignment.
+- Provide an auditable indication of reassignment to authorized Home administrators where activity logging is available.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
