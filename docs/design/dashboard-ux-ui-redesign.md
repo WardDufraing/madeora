@@ -467,6 +467,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep wall-display configuration scoped to its Home and handle membership, permission and widget-availability changes safely.
 - Multiple independently named wall-display profiles per Home are not included in this initial redesign; they may be considered later.
 
+## Approved decision 36 — Automatic ambient mode for wall displays (2026-11-19)
+**Decision: B — Automatic ambient mode.**
+
+- After a configurable period without touch interaction, transition the Home wall display from its dedicated dashboard into a simplified **ambient view**.
+- Show the **time, date, weather and selected privacy-safe household information** in an at-a-glance presentation, with large legible typography and minimal clutter.
+- Restore the dashboard on a deliberate screen tap, without requiring navigation through menus; continue to enforce PIN/authentication for protected areas and actions.
+- Never reveal sensitive Personal information or restricted Home content in ambient mode; provide safe defaults and only include household details approved for ambient visibility.
+- Use restrained, low-motion transitions and subtle visual variation/position changes where appropriate to mitigate static-image persistence; respect reduced-motion preferences.
+- Keep ambient-mode timing configurable for the Home, with sensible defaults and consistent handling of touch activity, overlays, active interactions and screen wake.
+- Avoid claiming control over device-level brightness, sleep or hardware burn-in prevention where the browser or operating system does not expose those capabilities.
+- Keep the behavior scoped to the wall-display experience; regular mobile and desktop dashboards are unaffected.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
