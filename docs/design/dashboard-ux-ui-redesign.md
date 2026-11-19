@@ -479,6 +479,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Avoid claiming control over device-level brightness, sleep or hardware burn-in prevention where the browser or operating system does not expose those capabilities.
 - Keep the behavior scoped to the wall-display experience; regular mobile and desktop dashboards are unaffected.
 
+## Approved decision 37 — Temporary PIN unlock session on wall displays (2026-11-19)
+**Decision: B — Temporary unlock session.**
+
+- Protected wall-display actions require the established wall-display PIN; a successful PIN entry opens a **short-lived five-minute unlock session** rather than prompting for every action.
+- Relock automatically when the unlock window expires, the display enters ambient mode, the wall-display session ends, or access is revoked; never keep sensitive information visible after relocking.
+- The unlock grants access only to actions already permitted for the authenticated wall-display context and relevant Home; **PIN entry must not bypass membership, roles, or item-level authorization**.
+- Keep routine privacy-safe household interactions available without a PIN where permitted; gate protected settings, restricted data and sensitive operations appropriately.
+- Particularly destructive or consequential actions still require explicit confirmation and may require fresh authentication if risk warrants it.
+- Provide a clear, unobtrusive unlocked-state indicator and an immediately accessible **Lock now** control; avoid displaying the PIN or sensitive details in notifications or ambient mode.
+- Implement server-side authorization and expiration checks, rate-limit PIN attempts and handle failed/expired sessions safely; never rely solely on hiding UI controls.
+- Support touch accessibility, reduced motion, and appropriate focus handling when locking or unlocking.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
