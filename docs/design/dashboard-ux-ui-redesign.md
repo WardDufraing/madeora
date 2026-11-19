@@ -429,6 +429,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Handle obsolete, missing or newly restricted widgets safely in previews and restores, with clear messaging rather than exposing inaccessible data.
 - Keep the history interface lightweight and accessible; full unlimited version history is out of scope.
 
+## Approved decision 33 — Shared Home dashboard default with personal overrides (2026-11-19)
+**Decision: C — Shared default with personal overrides.**
+
+- Each Home has an authoritative **shared default dashboard layout**, editable only by members granted the relevant Home dashboard-management permission.
+- Each Home member can optionally create a **personal view override** for that Home, including their own widget arrangement and supported presentation preferences, without modifying the shared default or other members' views.
+- New members and members without an override see the shared default, filtered to widgets and data they are permitted to access.
+- Clearly label whether the user is editing **My Home view** or the **Shared Home default**; require appropriate permissions for the latter and avoid accidental shared edits.
+- Provide an explicit way to return to the shared default or reset personal overrides, with preview and confirmation where changes would be lost.
+- Personal overrides must not grant access to otherwise restricted widgets, underlying data or actions; enforce Home membership and item-level permissions at all times.
+- Preserve responsive desktop/mobile layout behavior, the approved edit-draft workflow, saved presets and limited version history with appropriate scope and ownership for shared defaults versus personal overrides.
+- When the shared default changes, members without overrides receive the new layout; existing personal overrides remain intact where possible, with safe handling of removed or unavailable widgets.
+- The shared default also provides a predictable foundation for household displays, subject to the separate wall-display mode and its privacy controls.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
