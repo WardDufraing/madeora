@@ -740,6 +740,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect Personal/Home visibility and editing permissions, with clear read-only presentation when appropriate.
 - Follow the approved adaptive Notes grid/list workspace and Madeora's Playful Precision visual style without excessive editor chrome.
 
+## Approved decision 58 — Hybrid contextual note formatting (2026-11-19)
+**Decision: C — Hybrid contextual formatting.**
+
+- Keep a **compact, always-available formatting toolbar** for common block-level actions such as headings, bulleted/numbered lists and inserting supported content, with an overflow menu for less-frequent commands.
+- Show a **contextual text-formatting toolbar** when text is selected, offering appropriate inline actions such as bold, italic, underline and links without permanently occupying the writing surface.
+- Ensure toolbar positioning never obscures selected text, active input or the on-screen keyboard; adapt to a touch-friendly selection menu or bottom toolbar on mobile.
+- In the approved **distraction-free focus mode**, minimize persistent chrome while keeping formatting accessible through selection, keyboard shortcuts and a clear reveal action.
+- Use predictable active states, accessible names and tooltips, keyboard navigation, visible focus indicators and non-color-only feedback.
+- Preserve selection, cursor position, undo/redo behavior and unsaved edits when invoking formatting controls.
+- Support localization, responsive layouts and Madeora's Playful Precision visual language with restrained shadows, rounding and user-accent highlights.
+- Treat this as a visual/interaction design decision; the exact supported rich-text feature set and storage format remain separate implementation concerns.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
