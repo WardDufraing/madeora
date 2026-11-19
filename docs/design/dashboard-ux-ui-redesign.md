@@ -618,6 +618,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect the approved adaptive creation/edit dialogs, task permissions, Personal/Home context and responsive mobile layout.
 - Match the app's Playful Precision visual system while keeping long task lists compact and efficient.
 
+## Approved decision 48 — Adaptive task details and editing (2026-11-19)
+**Decision: C — Adaptive task detail experience.**
+
+- Selecting a task opens a **lightweight detail experience** that progressively reveals more information and editing controls as needed, instead of always opening a large modal or navigating to a separate page.
+- On desktop, use a responsive **task details side panel** that keeps the underlying task list visible and lets users switch between tasks efficiently.
+- On mobile, start with a touch-friendly **bottom sheet** for quick viewing and simple edits, expanding to a larger sheet or full-screen editor for complex tasks, lengthy descriptions, subtasks and attachments.
+- Show the task title, completion state and most relevant metadata immediately; progressively disclose descriptions, subtasks, attachments, recurrence and other advanced fields.
+- Keep quick changes such as completion, title, due date and priority efficient, while ensuring destructive actions have appropriate confirmation or recovery.
+- Preserve the active Tasks view, search/filter state, scroll position and selected workspace when opening, switching or dismissing task details.
+- Respect task ownership, Personal/Home privacy and edit permissions, with accessible read-only states where appropriate.
+- Provide keyboard focus management, Escape/close behavior, screen-reader labeling, comfortable touch targets and responsive handling for long localized text.
+- Maintain the approved adaptive task-row styling and app-wide Playful Precision visual language without excessive nested cards.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
