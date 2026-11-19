@@ -868,6 +868,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect Personal/Home workspace context and permissions, localization, and Madeora's Playful Precision style.
 - Keep the daily checklist and progress visualization decisions unchanged; this decision defines the setup/editing interaction, not the underlying habit scheduling rules.
 
+## Approved decision 68 — Adaptive Shopping Lists workspace (2026-11-19)
+**Decision: C — Adaptive shopping workspace.**
+
+- Design Shopping Lists around a **fast, touch-friendly checklist** that works well for quick errands and in-store use.
+- Offer **optional category grouping** for longer lists, with clear, compact section headings and efficient scanning; allow users to switch to a **simple ungrouped list** when categories add unnecessary complexity.
+- Show a restrained **remaining/total item progress indicator** near the list header, without making completion statistics dominate the experience.
+- Keep **+ Add Item** prominent and accessible, including on empty lists and small screens; preserve context while adding and checking off items.
+- Make completion controls large and easy to tap, with immediate non-color-only checked states, lightweight feedback and clear Undo where appropriate.
+- Use responsive spacing and typography suitable for one-handed mobile shopping, while retaining comfortable desktop layouts.
+- Keep completed items visually quieter than outstanding items, with predictable placement and accessible status text.
+- Respect Personal/Home workspace boundaries, sharing permissions, localization and light/dark contrast.
+- Follow Madeora's Playful Precision style, user-selected accent, moderate rounding and restrained tactile depth; avoid decorative elements that slow down real-world shopping.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
