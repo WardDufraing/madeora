@@ -46,6 +46,16 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - The exact save/cancel semantics for widget settings versus layout edits remain to be decided.
 - Widget menus must be keyboard-accessible and must respect permissions and context.
 
+## Approved decision 3 — Combined widget adding (2026-11-19)
+**Decision: D — Combined approach.**
+
+- In dashboard edit mode, **Add widget** opens a searchable, categorized slide-out gallery with previews, eligibility states, and clear add actions.
+- Inline **Add widget here** affordances in available grid positions let users place widgets intentionally; these may invoke the same gallery scoped to a target position.
+- Both entry points use the same widget catalog, permission checks, configuration rules, and placement logic.
+- Desktop uses a side panel keeping the grid visible; mobile may use a full-screen sheet to preserve usable space.
+- After adding, show the new widget clearly and avoid unexpected reshuffling. Exact placement and collision behavior remain to be decided.
+- Do not crowd normal dashboard mode with permanent empty-slot buttons; inline placement affordances appear in edit mode.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -63,6 +73,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - On save, persist per account and dashboard context; show success and restore previous layout on error. Prevent overwriting edits across devices without a conflict strategy.
 
 ### Widget gallery
+- **Approved:** combined gallery and inline add-at-position workflow in edit mode.
 - Open as a desktop side panel and mobile full-screen sheet.
 - Search; category filters (Today, Planning, Home, Personal, Lifestyle); contextual eligibility and permission messaging.
 - Each widget gets a meaningful preview with sample content, concise description, size options, and clear **Add** action.
@@ -120,7 +131,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Visual direction: **DECIDED — Playful Precision (polished productivity + friendly/playful)**.
 - Sidebar: persistent grouped navigation vs compact rail + expandable drawer.
 - Grid: fixed presets vs fully freeform placement.
-- Add flow: gallery side panel vs modal, and default placement behavior.
+- Add flow: **DECIDED — combined slide-out gallery and inline add-at-position affordances**; exact placement behavior remains undecided.
 - Save semantics: explicit Save/Cancel vs autosave with undo (still undecided; hybrid mode does not settle persistence).
 - Empty widgets: compact vs optionally hidden.
 - Ora: inline summary vs floating launcher vs both with clearly distinct roles.
