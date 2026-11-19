@@ -81,8 +81,8 @@ It prints 44 characters ending in `=`. This key encrypts the stored Google token
 The sync job runs in Trigger.dev and needs the same three values as the web app of that environment (the **same** token key, or it cannot read the tokens).
 
 1. Open https://cloud.trigger.dev, project **madeora**, **Environment Variables**.
-2. For **Production**, add `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` and `GOOGLE_CALENDAR_TOKEN_KEY` with the production values. If you set up **Staging** for previews ([`trigger-setup.md`](trigger-setup.md) step 3), add the preview values there.
-3. Deploy the tasks again so the new job is included: [`trigger-setup.md`](trigger-setup.md) step 4 (`pnpm dlx trigger.dev@4.6.4 deploy --env prod` from `packages/jobs`).
+2. For **Production** on the production project `madeora`, add `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` and `GOOGLE_CALENDAR_TOKEN_KEY` with the production values. On the separate preview Trigger.dev project, add the Vercel **Preview** values to that project's **Prod** environment ([`trigger-setup.md`](trigger-setup.md), Preview of main).
+3. Deploy the tasks again so the new job is included: [`trigger-setup.md`](trigger-setup.md) step 4 (`pnpm dlx trigger.dev@4.6.4 deploy --env prod` from `packages/jobs`) for production, and the preview command in that same guide for the preview project.
 
 Check: the three variables are listed with hidden values, and the Trigger.dev **Tasks** page lists `google-calendar-sync`.
 
@@ -100,4 +100,4 @@ If the page says "This connect attempt expired or did not match", start again fr
 
 ## Troubleshooting: "Syncing…" or "The first sync has not started yet" on a preview
 
-Syncing runs as a Trigger.dev job. A Vercel preview runs no jobs unless Trigger.dev has a **Staging** environment for the preview Supabase project ([`trigger-setup.md`](trigger-setup.md) step 3) with `APP_ENV`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the three `GOOGLE_CALENDAR_*` values of the preview, and the tasks are deployed to it (`deploy --env staging`). Without it the connection stays queued; the settings page says the first sync has not started after 15 minutes.
+Syncing runs as a Trigger.dev job. The Vercel preview of `main` uses a separate free Trigger.dev project, not the production project and not a Staging environment ([`trigger-setup.md`](trigger-setup.md), Preview of main). That project's **Prod** environment needs `APP_ENV=preview`, the `madeora-preview` `SUPABASE_URL`, a dedicated Supabase secret key, and the three `GOOGLE_CALENDAR_*` values that match Vercel Preview. Deploy it with `TRIGGER_PROJECT_REF=<preview ref> pnpm dlx trigger.dev@4.6.4 deploy` from `packages/jobs`. If `packages/jobs/.env` sets `TRIGGER_PROJECT_REF`, move that file aside first (the CLI prefers it). Vercel needs no Trigger.dev variables. Without that project the connection stays queued; the settings page says the first sync has not started after 15 minutes.

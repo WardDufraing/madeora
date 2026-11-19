@@ -1,17 +1,17 @@
 // Trigger.dev project configuration (S13, ADR 0017). Read by the Trigger.dev CLI only, run from
 // this folder at the same version as @trigger.dev/sdk (the CLI is not a dependency of the repo):
 //   pnpm dlx trigger.dev@4.6.4 dev                   (local, Dev environment)
-//   pnpm dlx trigger.dev@4.6.4 deploy --env prod     (owner, docs/trigger-setup.md)
-// The project ref is not a secret. Trigger.dev's remote build server loads this file without our
-// shell environment, so the Madeora project ref is the default; TRIGGER_PROJECT_REF overrides it.
+//   pnpm dlx trigger.dev@4.6.4 deploy --env prod     (owner, production project)
+//   TRIGGER_PROJECT_REF=<preview ref> pnpm dlx trigger.dev@4.6.4 deploy
+//                                                    (owner, preview project; docs/trigger-setup.md)
+// The project ref is not a secret. Unset or blank TRIGGER_PROJECT_REF keeps the production
+// project, including on the remote build, which does not see the deploy shell. A non-blank
+// value selects another project; the CLI passes that resolved ref into the image build.
 import { defineConfig } from "@trigger.dev/sdk";
 
-const project = process.env.TRIGGER_PROJECT_REF ?? "proj_yhkmlscenxkikqvgfnvs";
-if (!/^proj_[a-z0-9]{10,40}$/.test(project)) {
-  throw new Error(
-    "TRIGGER_PROJECT_REF must be a Trigger.dev project ref (proj_...), see docs/trigger-setup.md",
-  );
-}
+import { resolveTriggerProjectRef } from "./src/trigger-project-ref.ts";
+
+const project = resolveTriggerProjectRef(process.env.TRIGGER_PROJECT_REF);
 
 export default defineConfig({
   project,
