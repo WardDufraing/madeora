@@ -791,6 +791,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Keep the initial capture surface lightweight; avoid overwhelming it with advanced formatting controls until users expand the editor.
 - Follow the established Playful Precision design, contextual creation principles and adaptive note editor patterns.
 
+## Approved decision 62 — Hybrid daily Habit Tracker and progress dashboard (2026-11-19)
+**Decision: C — Hybrid daily tracker and progress dashboard.**
+
+- Make the Habit Tracker page's primary content a **fast, approachable daily checklist** with obvious completion controls and readable habit names.
+- Place **compact progress summaries** above or near the checklist, such as completed-today count and relevant streak/consistency information, without overwhelming the daily workflow.
+- Provide a clearly discoverable **View trends** action for deeper historical progress and visual statistics rather than making charts dominate the default screen.
+- Use Madeora's restrained Playful Precision visual style, tactile cards, consistent spacing, subtle completion animations and user-selected accent.
+- Keep the habit list usable when there are many habits, with clear completed/pending states, touch-friendly controls and accessible non-color cues.
+- Show a helpful empty state and prominent **+ New Habit** action for first-time users; avoid blank dashboards.
+- Adapt summaries and checklist to mobile screens, with responsive stacking and legible progress metrics.
+- Respect workspace boundaries and permissions, localization, accessible contrast, reduced-motion preferences and correct date/timezone interpretation.
+- Treat progress numbers and sample streaks as illustrative design content, not fixed product values.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
