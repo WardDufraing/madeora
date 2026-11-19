@@ -655,6 +655,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Apply the same restrained interaction language to subtasks, keeping their progress count and progress bar synchronized.
 - Match Madeora's Playful Precision design language and the previously approved subtle, purposeful motion and contextual feedback patterns.
 
+## Approved decision 51 — Adaptive completed-task display (2026-11-19)
+**Decision: C — Adaptive completion behavior.**
+
+- After task completion, **briefly retain the completed row in place** so the approved subtle completion feedback remains perceptible and users can easily undo the action.
+- Then move the completed task to a **collapsed Completed section** within the relevant task view or group, keeping active tasks visually prominent without losing access to finished work.
+- Display a concise Completed label and count, with a clear expand/collapse affordance; expanded completed tasks remain readable, with muted styling and accessible completion indicators.
+- Allow users to **undo or reopen** completed tasks and return them to the appropriate active grouping without losing task details or workspace context.
+- Offer a discoverable display preference for completed tasks, such as keeping them visible or automatically grouping them, without adding persistent clutter to the primary Tasks page.
+- Avoid unexpected row movement during rapid or bulk completions, keyboard interaction, drag operations or while a task detail panel is open; preserve focus and scroll position.
+- Ensure behavior remains understandable with reduced motion, screen readers and keyboard navigation, and consistent across Today, Upcoming, All Tasks and Lists.
+- Maintain the approved adaptive task-row appearance, contextual feedback and permission-aware Personal/Home task handling.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
