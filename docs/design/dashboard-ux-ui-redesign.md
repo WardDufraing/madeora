@@ -667,6 +667,17 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Ensure behavior remains understandable with reduced motion, screen readers and keyboard navigation, and consistent across Today, Upcoming, All Tasks and Lists.
 - Maintain the approved adaptive task-row appearance, contextual feedback and permission-aware Personal/Home task handling.
 
+## Approved decision 52 — Colored task priority indicators (2026-11-19)
+**Decision: A — Colored priority indicators.**
+
+- Display a **slim, unobtrusive color-coded priority bar** alongside task rows so high-, medium- and low-priority items can be distinguished quickly without turning each row into a large card.
+- Establish a consistent semantic priority palette (for example, urgent/high in a warm red family, medium in amber and low in a muted green/neutral family), with accessible contrast in both light and dark themes.
+- Treat these colors as a **narrow semantic exception** to Madeora's single user-selected accent rule: the accent continues to drive general interface styling, while priority hues communicate task importance only.
+- Never rely on color alone: provide accessible priority names, tooltips or icons where needed, including screen-reader labels and clear detail-view descriptions.
+- Keep normal/unprioritized tasks visually quiet, without unnecessary bars or badges; ensure color indicators do not compete with due dates, completion controls or workspace labels.
+- Use consistent meanings across Today, Upcoming, All Tasks, Lists and task details, and maintain a sensible monochrome/print fallback.
+- Preserve the approved adaptive task-row density, completed-task styling and responsive keyboard/touch interactions.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
