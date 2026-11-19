@@ -526,6 +526,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Avoid exposing private Personal information in a shared Home header; scope greetings and contextual highlights to the active workspace and permissions.
 - Treat this as a visual presentation choice for the desktop dashboard, not a change to navigation, permissions, or underlying module functionality.
 
+## Approved decision 41 — Hybrid floating desktop sidebar navigation (2026-11-19)
+**Decision: C — Hybrid floating navigation.**
+
+- Style the desktop sidebar as a **softly elevated, rounded, floating-feeling navigation surface**, visually distinct from the dashboard content while remaining part of the stable application shell.
+- Include Madeora branding, a prominent and clearly labeled **Personal/Home workspace selector**, and a concise hierarchy of primary destinations, favorites/contextual shortcuts and All Modules.
+- Use rounded, tactile active-route treatments, readable icon-and-text labels, restrained accent usage and subtle hover/focus feedback; preserve the approved one-user-accent color system.
+- Support an accessible **collapsed navigation state** that frees horizontal space while preserving recognizable destinations, tooltips/labels, keyboard access and an obvious expand control.
+- Keep lower-frequency actions such as Settings available without crowding the main navigation, and preserve clear separation between workspace context and route selection.
+- Apply the approved Playful Precision, pronounced tactile depth, moderate rounding, balanced spacing, soft neutral background, light/dark parity and purposeful motion.
+- Ensure the sidebar adapts gracefully to narrower desktop/tablet widths and long localized labels, without obscuring content or duplicating the mobile bottom-navigation system.
+- Honor permissions and active workspace context; never expose restricted modules or private Home/Personal information through sidebar previews.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
