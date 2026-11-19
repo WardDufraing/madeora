@@ -188,6 +188,18 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Validate the visual direction in realistic dashboard prototypes with dense widgets, empty states, editor overlays and custom accent selections.
 - Exact elevation scale, radius scale, token names and color derivation algorithm remain implementation details.
 
+## Approved decision 15 — Pronounced tactile neumorphic depth (2026-11-19)
+**Decision: C — Pronounced tactile depth.**
+
+- Make neumorphic depth a clearly recognizable part of Madeora's interface: visibly raised widget cards, deeper but controlled layered shadows, generous corner radii and prominent inset surfaces for appropriate controls.
+- Define distinct elevation roles for dashboard background, raised widget, elevated overlay, pressed/inset control and focused/selected state, using reusable semantic tokens rather than arbitrary per-widget shadows.
+- Adapt highlight and shadow strength to light and dark themes; maintain sufficient contrast, legibility and separation even when the user selects a very light or dark custom accent.
+- Keep the **single user-selectable accent** with derived tonal variants; do not introduce fixed decorative per-module colors.
+- Preserve a clear content hierarchy and usable density even with many widgets. Avoid visual clutter, excessively soft text, expensive blur and excessive stacking of shadows.
+- Use explicit borders, labels, focus indicators and state changes where needed: depth alone must never be the only sign of interaction or selection.
+- Honor high-contrast and reduced-motion settings, with simplified surface treatment where necessary for accessibility or performance.
+- Test realistic dense layouts, mobile screens, the widget gallery, side panels, empty states and dark mode before finalizing elevation values.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
@@ -274,7 +286,7 @@ The product owner selected **C: Polished Productivity** combined with **B: Frien
 - Navigation: **DECIDED — context-aware hybrid navigation** with Dashboard/Calendar/Tasks, pinned favorites and All Modules.
 - Workspace switching: **DECIDED — prominent active-space selector, quick Personal/most-recent-Home switching, other Homes in menu**.
 - Dashboard header: **DECIDED — compact adaptive greeting with date and permission-aware daily summary**.
-- Visual treatment: **DECIDED — restrained Soft Neumorphism, with one user-selected accent and derived tonal variants, no fixed per-module colors**.
+- Visual treatment: **DECIDED — Soft Neumorphism with pronounced tactile depth** (raised cards, deeper layered shadows, inset controls, generous radii), one user-selected accent and derived tonal variants, no fixed per-module colors.
 - Ora: **DECIDED — optional insights widget plus unobtrusive, hideable global assistant launcher**, with shared context and no duplicate alerts.
 
 ## Engineering guardrails
