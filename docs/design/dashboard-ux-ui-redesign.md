@@ -881,6 +881,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Respect Personal/Home workspace boundaries, sharing permissions, localization and light/dark contrast.
 - Follow Madeora's Playful Precision style, user-selected accent, moderate rounding and restrained tactile depth; avoid decorative elements that slow down real-world shopping.
 
+## Approved decision 69 — Smart inline shopping-item quick-add (2026-11-19)
+**Decision: C — Smart inline quick-add.**
+
+- Provide a prominent **inline Add an item field** within the Shopping Lists workspace; typing an item name and pressing Enter should add it immediately without opening a separate dialog.
+- Offer optional **quantity, unit, category and additional item details** through lightweight inline controls when needed, keeping the default entry flow fast and uncluttered.
+- After a successful addition, **keep the input ready for the next item**, preserving focus and keyboard accessibility so users can build a list rapidly.
+- Make the same quick-add interaction accessible on mobile with large touch targets, keyboard-safe positioning and a clear Add action for users without a physical Enter key.
+- Use sensible defaults and current list/category context without making quantity or category mandatory for a simple item.
+- Provide immediate, unobtrusive success feedback; handle validation and duplicate names clearly without silently discarding entries.
+- Preserve list scroll position and the user's current category/simple-list presentation while items are added.
+- Respect Personal/Home workspace boundaries, permissions and localization; support accessible labels, screen readers and reduced-motion preferences.
+- Match Decision 68's adaptive shopping workspace and Madeora's Playful Precision visual language.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
