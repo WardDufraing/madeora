@@ -538,6 +538,26 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Ensure the sidebar adapts gracefully to narrower desktop/tablet widths and long localized labels, without obscuring content or duplicating the mobile bottom-navigation system.
 - Honor permissions and active workspace context; never expose restricted modules or private Home/Personal information through sidebar previews.
 
+## Approved decision 42 — Adaptive spacious main content canvas (2026-11-19)
+**Decision: C — Adaptive spacious canvas.**
+
+- Make the desktop dashboard content canvas expand responsively with available viewport width, rather than forcing a narrow fixed maximum width or stretching widgets edge-to-edge.
+- Maintain generous, responsive outer margins and balanced gutters between the floating sidebar, editorial hero header and widget grid.
+- Apply sensible minimum/maximum widget widths and responsive grid columns so ultrawide displays remain readable and smaller laptop screens remain useful.
+- Preserve the approved smart widget reflow, snapping, layout presets and desktop/mobile-specific layout behavior.
+- Maintain the Playful Precision design language, tactile surfaces, neutral gradient backdrop and consistent spacing across module pages as appropriate.
+- Prevent horizontal overflow, awkward empty columns and unreadably wide text; respect browser zoom and localization.
+
+## Additional calendar UX requirement — Visible work schedule (2026-11-19)
+
+- Provide a clear, discoverable way for users to **add their work schedule to Madeora's calendar** and see scheduled working periods alongside other calendar events.
+- Support recurring work patterns, varying shifts/start and end times, and exceptions such as days off or changes to a specific shift.
+- Make work periods visually distinguishable from ordinary events without requiring a fixed module color, consistent with Madeora's user-selected accent and accessible calendar styling.
+- Let users choose the appropriate Personal or permitted Home visibility/calendar destination, respecting existing calendar-sharing and privacy rules.
+- Provide an intuitive entry/edit flow compatible with the approved adaptive calendar creation dialogs, and handle time zones and recurrence reliably.
+- Include work-schedule visibility in relevant calendar views and filters; do not silently replace or duplicate events imported from connected calendars.
+- Treat detailed scheduling workflow, templates and synchronization specifics as follow-up UX/product decisions rather than assuming them here.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
