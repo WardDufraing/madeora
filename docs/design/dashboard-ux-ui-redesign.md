@@ -300,6 +300,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Provide a solid-color fallback for high-contrast or constrained rendering environments, and maintain sufficient text, control, border and focus-state contrast.
 - Validate appearance at common viewport sizes, in sparse/dense layouts, on mobile, and in wall-display mode.
 
+## Approved decision 22 — Equal-quality light and dark themes (2026-11-19)
+**Decision: B — Equal-quality light and dark modes.**
+
+- Treat light and dark mode as equally polished, first-class design targets; neither is a simplified or visually inferior adaptation of the other.
+- Define theme-specific semantic tokens for canvas gradients, raised surfaces, layered highlights/shadows, inset controls, borders, text, overlays and interactive states rather than simply inverting colors.
+- Preserve the approved **pronounced tactile neumorphic depth**, **moderately rounded geometry**, **balanced spacing** and **subtle neutral tonal gradient** in both themes, tuning elevation and contrast independently for each.
+- Maintain a **single user-selectable accent color**; derive accessible tonal variants for each theme without fixed per-module accent colors or an unrelated second palette.
+- Meet accessibility expectations for text contrast, keyboard focus, form states and discernible component boundaries; never rely on shadows alone to convey state.
+- Respect system theme preferences and user overrides as implemented, avoiding flashes of the wrong theme during load and transitions.
+- Validate all widgets, modals/drawers, navigation, edit mode, empty/loading/error states, mobile and wall-display layouts in both themes.
+- Keep high-contrast and reduced-motion accommodations available where appropriate.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
