@@ -778,6 +778,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Preserve strong text contrast, keyboard/touch access, accessible image alternatives and readable results in light/dark modes and across responsive widths.
 - Follow Madeora's Playful Precision style, restrained accent use, moderate rounding and subtle tactile depth.
 
+## Approved decision 61 — Hybrid quick capture and full note editor (2026-11-19)
+**Decision: C — Hybrid quick capture and full editor.**
+
+- Make the prominent **+ New Note** action open a **compact, context-aware quick-capture editor** for entering an optional title and note body without navigating away from the Notes collection.
+- Provide a clear **Expand editor** action that transitions into the approved adaptive focused note editor for longer writing, formatting, supported attachments and richer content.
+- Preserve all typed content, title, cursor/selection state and intended destination when expanding or returning from the full editor; never discard a draft during the transition.
+- Preselect the current Personal/Home workspace and folder when appropriate, while allowing an accessible destination change and respecting permissions.
+- On desktop, use a comfortably sized dialog or anchored panel; on mobile, use a touch-friendly sheet or equivalent layout with keyboard-safe spacing.
+- Offer clear save/create and cancel behavior, draft protection for accidental dismissal, useful validation and accessible focus management.
+- Preserve Notes view mode, active folder, filters, search and scroll position after capture, with context-aware success feedback.
+- Keep the initial capture surface lightweight; avoid overwhelming it with advanced formatting controls until users expand the editor.
+- Follow the established Playful Precision design, contextual creation principles and adaptive note editor patterns.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
