@@ -855,6 +855,19 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - Apply Madeora's Playful Precision visual language, user-selected accent and restrained motion; avoid making ordinary missed days feel punitive.
 - Treat illustrated metrics and history values as examples, not fixed product targets or analytics definitions.
 
+## Approved decision 67 — Progressive habit creation and editing (2026-11-19)
+**Decision: C — Progressive habit editor.**
+
+- Make **+ New Habit** open a lightweight, context-aware editor that initially prioritizes the **habit name** and clear, sensible defaults for frequency and tracking type.
+- Present common settings such as **binary versus measurable tracking, schedule/frequency and target** through compact, understandable controls; reveal only the relevant fields for the selected habit type.
+- Place **reminders and advanced options** behind a clearly labeled expandable section rather than showing every configuration field upfront.
+- Reuse the same progressive layout for **editing existing habits**, prepopulated with current values, without requiring a multi-step wizard for ordinary changes.
+- Use a comfortable dialog/drawer on desktop and a mobile-friendly sheet or expanded editor as needed; preserve the current Habit Tracker view and scroll position.
+- Provide clear primary Save/Create and Cancel actions, accessible validation and focus management, and protection against accidental loss of unsaved edits.
+- Explain tracking and frequency options with concise, plain-language helper text where necessary; maintain keyboard and screen-reader access.
+- Respect Personal/Home workspace context and permissions, localization, and Madeora's Playful Precision style.
+- Keep the daily checklist and progress visualization decisions unchanged; this decision defines the setup/editing interaction, not the underlying habit scheduling rules.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
