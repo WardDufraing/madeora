@@ -267,6 +267,18 @@ These are user-reported issues/requirements, separate from the still-open dashbo
 - The Tasks **+ New Task** action and Calendar event creation modal are the first explicitly identified applications of this pattern.
 - This cross-module decision does **not** resolve the still-open **dashboard decision 19** about how much interaction happens inside widgets.
 
+## Approved decision 19 — Contextual inline widget interaction (2026-11-19)
+**Decision: C — Contextual inline interaction.**
+
+- Enable frequent, low-friction actions directly inside dashboard widgets when their size, module and permissions allow: e.g., complete a task, check off a shopping item, mark a habit done, or add a simple entry.
+- Use the approved **adaptive creation** pattern for more complex interactions: compact modal for quick entry, larger dialog or drawer for advanced details, and full module navigation only when a dedicated workspace is genuinely needed.
+- Keep a consistent separation between clicking an item to view its details and interacting with a checkbox, quick-action button or overflow menu; prevent accidental navigation or changes.
+- Match the approved **adaptive widget hierarchy**: smaller widgets prioritize summaries and only essential controls, while larger sizes reveal additional useful interactions.
+- Preserve dashboard position, selected Personal/Home context and widget state when opening or closing a dialog; update widget content promptly after successful actions and show clear errors if they fail.
+- Respect role-based permissions, private-versus-shared data boundaries, and confirmations for destructive or sensitive operations; support undo where practical for reversible actions.
+- Ensure keyboard and screen-reader accessibility, touch-friendly targets, visible focus, loading/disabled states and no conflicts with drag/resize behavior in Edit Dashboard mode.
+- Avoid turning widgets into complete miniature applications; use progressive disclosure and full modules for dense workflows.
+
 ## Highest-priority redesign: widget customization
 ### Normal mode
 - Widgets cannot accidentally move.
