@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–10 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–11 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -114,8 +114,19 @@ Use this exact supporting paragraph beneath the hero headline:
 - Reuse the canonical `@madeora/design-tokens` package rather than hardcoding a parallel color system.
 - The current default accent is purple `#8057f5` (`packages/design-tokens/src/palette.ts`); apply accessible derived accent variants via `deriveAccent`.
 - Current light-theme neutrals (`packages/design-tokens/src/neutral.ts`): page `#f7f8fc`, surfaces `#ffffff`, primary text `#151a29`, muted text `#667085`, borders `#e6e9f1`.
-- Support dark mode consistently if selected in a later decision; do not assume the marketing site must have a theme switch.
+- Both light and dark modes with a visitor-controlled toggle are confirmed in Decision 11.
 - Treat repository tokens as authoritative if their values change. Preserve the warm, human tone through imagery, spacing, typography, and composition rather than introducing an unrelated color palette.
+
+### Decision 11 — Marketing website theme modes (CONFIRMED)
+
+**Selection: C — Light and dark modes with a theme toggle.**
+
+- Support both light and dark themes using Madeora's existing design tokens; do not create a separate marketing theme palette.
+- On an initial visit without a saved preference, use the visitor's operating-system `prefers-color-scheme` preference.
+- Provide a clearly discoverable, accessible light/dark toggle; persist the visitor's explicit selection across visits.
+- Ensure the entire marketing website, hero product previews, and interactive elements work in both modes, with accessible contrast and no theme flash where practical.
+- Use light mode as the primary design/reference presentation, while treating dark mode as a fully supported equivalent.
+- The exact toggle placement and visual control treatment remain to be decided.
 
 ## Implementation principles for Claude Code
 
@@ -153,6 +164,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 08 | Hero widget selection | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
 | 09 | Hero animation style | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D) | Confirmed |
 | 10 | Marketing colors | Reuse Madeora's default design tokens and purple accent | Confirmed |
+| 11 | Marketing themes | Both light and dark, system preference initially, manual toggle (C) | Confirmed |
 
 ## Update protocol
 
