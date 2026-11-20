@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–04 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–05 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -52,6 +52,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Preserve the distinction between personal and shared use; do not imply a Home is required.
 - Final responsive line wrapping and visual styling may adapt to the design, but do not silently rewrite the approved wording.
 
+### Decision 05 — Hero calls to action (CONFIRMED)
+
+**Selection: B — Signup + exploration.**
+
+- Primary CTA label: **Get started for free**. Intended action: enter the signup/onboarding flow when available; verify the destination and actual free offering before launch.
+- Secondary CTA label: **Explore features**. Intended action: lead to the marketing site's feature explanation, either a homepage section or a dedicated feature page (destination to be decided).
+- Present a clear primary/secondary hierarchy, with both actions accessible on desktop and mobile.
+- Do not add a separate product demo or replace these labels without a later decision.
+- Do not claim signup or a free plan is live until verified.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -65,7 +75,7 @@ Use this exact supporting paragraph beneath the hero headline:
 
 ## Open decisions (NOT YET APPROVED)
 
-- Hero CTA wording/behavior (headline and supporting copy confirmed).
+- Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
 - Primary navigation and page architecture.
 - Brand colors, typography, illustration/photography strategy, and Ora's role.
 - Product showcase interaction model, animation intensity, and mobile presentation.
@@ -82,6 +92,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 02 | Homepage hero | Interactive product showcase + editorial split (C + D) | Confirmed |
 | 03 | Hero headline | Everything in life, finally in sync. (B) | Confirmed |
 | 04 | Hero supporting copy | Balanced and benefit-driven (D) | Confirmed |
+| 05 | Hero calls to action | Get started for free + Explore features (B) | Confirmed |
 
 ## Update protocol
 
