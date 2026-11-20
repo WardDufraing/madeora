@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–07 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–08 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -84,6 +84,17 @@ Use this exact supporting paragraph beneath the hero headline:
 - Keep transitions gentle, readable, and non-disruptive; avoid layout shifts and protect the clarity of the headline and CTAs.
 - Exact autoplay interval, transition duration/easing, and pause behavior for hover/focus are not yet specified and should be resolved during interaction design.
 
+### Decision 08 — Hero widget selection (CONFIRMED)
+
+**Selection: C — Context-aware widgets.**
+
+- **Personal dashboard:** feature tasks, habits, calendar, and goals.
+- **Home dashboard:** feature chores, shared calendar, shopping lists, and meal planning.
+- Transition between these distinct sets when switching Personal/Home; the change should communicate genuine differences in use cases, not just a cosmetic theme change.
+- Keep the composition uncluttered and visually hierarchical: a recognizable dashboard anchors the scene while a small number of highlighted widgets can float beyond it.
+- Use realistic, synthetic example content; never expose real user data or suggest that private personal items automatically become shared.
+- Exact arrangement, priority of featured cards, and mobile simplification remain to be decided.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -100,7 +111,7 @@ Use this exact supporting paragraph beneath the hero headline:
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
 - Primary navigation and page architecture.
 - Brand colors, typography, illustration/photography strategy, and Ora's role.
-- Product showcase autoplay timing, animation intensity, widget selection, and mobile presentation (automatic/manual transition confirmed).
+- Product showcase autoplay timing, animation intensity, exact widget arrangement, and mobile presentation (context-aware Personal/Home widget sets confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
 - Social proof, trust/privacy messaging, FAQ, and footer.
 - Pricing and plans presentation, if appropriate.
@@ -117,6 +128,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 05 | Hero calls to action | Get started for free + Explore features (B) | Confirmed |
 | 06 | Hero product showcase | Dashboard + floating widgets with Personal/Home transition (C + D) | Confirmed |
 | 07 | Personal/Home transition interaction | Automatic switching + manual toggle (C) | Confirmed |
+| 08 | Hero widget selection | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
 
 ## Update protocol
 
