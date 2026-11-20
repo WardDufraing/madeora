@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–08 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–09 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -95,6 +95,18 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use realistic, synthetic example content; never expose real user data or suggest that private personal items automatically become shared.
 - Exact arrangement, priority of featured cards, and mobile simplification remain to be decided.
 
+### Decision 09 — Hero showcase animation style (CONFIRMED)
+
+**Selection: D — Balanced premium motion.**
+
+- Use refined, smooth transitions between Personal and Home dashboard states.
+- Introduce changing widgets with gentle, staggered fade/slide entrances; avoid theatrical or prolonged sequences.
+- Convey subtle depth through layering and restrained shadows, with little to no perpetual floating movement.
+- Keep the headline, supporting copy, and CTAs stable while the showcase animates.
+- Ensure transitions remain readable and responsive; avoid distracting motion, layout shift, and performance-heavy effects.
+- Respect reduced-motion preferences and the previously confirmed manual toggle/auto-transition behavior.
+- Exact durations, easing, stagger offsets, and autoplay interval remain implementation details to validate later.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -111,7 +123,7 @@ Use this exact supporting paragraph beneath the hero headline:
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
 - Primary navigation and page architecture.
 - Brand colors, typography, illustration/photography strategy, and Ora's role.
-- Product showcase autoplay timing, animation intensity, exact widget arrangement, and mobile presentation (context-aware Personal/Home widget sets confirmed).
+- Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
 - Social proof, trust/privacy messaging, FAQ, and footer.
 - Pricing and plans presentation, if appropriate.
@@ -129,6 +141,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 06 | Hero product showcase | Dashboard + floating widgets with Personal/Home transition (C + D) | Confirmed |
 | 07 | Personal/Home transition interaction | Automatic switching + manual toggle (C) | Confirmed |
 | 08 | Hero widget selection | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
+| 09 | Hero animation style | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D) | Confirmed |
 
 ## Update protocol
 
