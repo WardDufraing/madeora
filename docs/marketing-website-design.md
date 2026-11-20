@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–09 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–10 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -107,6 +107,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Respect reduced-motion preferences and the previously confirmed manual toggle/auto-transition behavior.
 - Exact durations, easing, stagger offsets, and autoplay interval remain implementation details to validate later.
 
+### Decision 10 — Marketing color identity (CONFIRMED)
+
+**Selection: Use Madeora's existing default colors, not a new marketing-specific palette.**
+
+- Reuse the canonical `@madeora/design-tokens` package rather than hardcoding a parallel color system.
+- The current default accent is purple `#8057f5` (`packages/design-tokens/src/palette.ts`); apply accessible derived accent variants via `deriveAccent`.
+- Current light-theme neutrals (`packages/design-tokens/src/neutral.ts`): page `#f7f8fc`, surfaces `#ffffff`, primary text `#151a29`, muted text `#667085`, borders `#e6e9f1`.
+- Support dark mode consistently if selected in a later decision; do not assume the marketing site must have a theme switch.
+- Treat repository tokens as authoritative if their values change. Preserve the warm, human tone through imagery, spacing, typography, and composition rather than introducing an unrelated color palette.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -122,7 +132,7 @@ Use this exact supporting paragraph beneath the hero headline:
 
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
 - Primary navigation and page architecture.
-- Brand colors, typography, illustration/photography strategy, and Ora's role.
+- Typography, illustration/photography strategy, and Ora's role (brand colors confirmed as existing Madeora defaults).
 - Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
 - Social proof, trust/privacy messaging, FAQ, and footer.
@@ -142,6 +152,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 07 | Personal/Home transition interaction | Automatic switching + manual toggle (C) | Confirmed |
 | 08 | Hero widget selection | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
 | 09 | Hero animation style | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D) | Confirmed |
+| 10 | Marketing colors | Reuse Madeora's default design tokens and purple accent | Confirmed |
 
 ## Update protocol
 
