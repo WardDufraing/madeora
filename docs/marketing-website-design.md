@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–02 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–03 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -33,6 +33,14 @@ The website must not resemble an enterprise productivity dashboard or imply that
 - On smaller screens, adapt to a readable stacked layout with an effective visible CTA and appropriately scaled product preview.
 - Headline examples discussed (not approved final copy): “Everything in life, finally in sync.” and “One beautiful place for everyday life.”
 
+### Decision 03 — Hero headline (CONFIRMED)
+
+**Selection: B — “Everything in life, finally in sync.”**
+
+- Use this exact sentence as the primary homepage hero headline, unless the user explicitly revises it.
+- The supporting copy should clarify that Madeora brings personal and shared everyday organization together; final supporting copy is still undecided.
+- Preserve legibility and natural line breaks across responsive sizes.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -46,7 +54,7 @@ The website must not resemble an enterprise productivity dashboard or imply that
 
 ## Open decisions (NOT YET APPROVED)
 
-- Final hero headline, supporting copy, and CTA wording/behavior.
+- Hero supporting copy and CTA wording/behavior (headline confirmed).
 - Primary navigation and page architecture.
 - Brand colors, typography, illustration/photography strategy, and Ora's role.
 - Product showcase interaction model, animation intensity, and mobile presentation.
@@ -61,6 +69,7 @@ The website must not resemble an enterprise productivity dashboard or imply that
 | --- | --- | --- | --- |
 | 01 | Overall first impression | Calm + warm/human + premium polish (A + D + C) | Confirmed |
 | 02 | Homepage hero | Interactive product showcase + editorial split (C + D) | Confirmed |
+| 03 | Hero headline | Everything in life, finally in sync. (B) | Confirmed |
 
 ## Update protocol
 
