@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–11 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–12 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -128,6 +128,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use light mode as the primary design/reference presentation, while treating dark mode as a fully supported equivalent.
 - The exact toggle placement and visual control treatment remain to be decided.
 
+### Decision 12 — Marketing typography (CONFIRMED)
+
+**Selection: D — Existing Madeora fonts with editorial styling.**
+
+- Reuse the existing font families defined in `@madeora/design-tokens`; do not introduce a separate marketing font identity without explicit approval.
+- Give the marketing website more expressive headline sizes, refined letter spacing, and stronger editorial hierarchy than ordinary application screens.
+- Maintain comfortable line lengths, readable body typography, and responsive type scaling across devices.
+- Keep typography coherent with the Madeora application and the calm, warm, premium design direction.
+- Specific font sizes, weights, and responsive scale are implementation details to validate against existing tokens and accessibility requirements.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -143,7 +153,7 @@ Use this exact supporting paragraph beneath the hero headline:
 
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
 - Primary navigation and page architecture.
-- Typography, illustration/photography strategy, and Ora's role (brand colors confirmed as existing Madeora defaults).
+- Illustration/photography strategy and Ora's role (brand colors and font families confirmed as existing Madeora defaults; editorial headline treatment confirmed).
 - Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
 - Social proof, trust/privacy messaging, FAQ, and footer.
@@ -165,6 +175,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 09 | Hero animation style | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D) | Confirmed |
 | 10 | Marketing colors | Reuse Madeora's default design tokens and purple accent | Confirmed |
 | 11 | Marketing themes | Both light and dark, system preference initially, manual toggle (C) | Confirmed |
+| 12 | Marketing typography | Existing Madeora fonts with editorial headline styling (D) | Confirmed |
 
 ## Update protocol
 
