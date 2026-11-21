@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–12 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–13 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -138,6 +138,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Keep typography coherent with the Madeora application and the calm, warm, premium design direction.
 - Specific font sizes, weights, and responsive scale are implementation details to validate against existing tokens and accessibility requirements.
 
+### Decision 13 — Homepage navigation structure (CONFIRMED)
+
+**Selection: D — Balanced navigation.**
+
+- Primary marketing navigation: **Features**, **Solutions**, **How it works**, and **Pricing**.
+- Include **Log in** and a visually prominent **Get started** action, with clear distinction between account access and signup.
+- **Solutions** should be designed to accommodate audience-specific use cases such as individuals, couples, families, and housemates; exact dropdown entries, destination pages, and interaction behavior are not yet approved.
+- Keep the desktop header visually restrained despite the broader information architecture; provide a usable, accessible compact navigation on smaller screens.
+- Exact page routes, whether some items link to homepage sections, and the details of the pricing offering remain open decisions. Do not imply that paid plans or pricing are live without verification.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -152,7 +162,7 @@ Use this exact supporting paragraph beneath the hero headline:
 ## Open decisions (NOT YET APPROVED)
 
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
-- Primary navigation and page architecture.
+- Exact navigation destinations, Solutions menu structure, and page architecture (top-level navigation confirmed).
 - Illustration/photography strategy and Ora's role (brand colors and font families confirmed as existing Madeora defaults; editorial headline treatment confirmed).
 - Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
@@ -176,6 +186,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 10 | Marketing colors | Reuse Madeora's default design tokens and purple accent | Confirmed |
 | 11 | Marketing themes | Both light and dark, system preference initially, manual toggle (C) | Confirmed |
 | 12 | Marketing typography | Existing Madeora fonts with editorial headline styling (D) | Confirmed |
+| 13 | Homepage navigation | Features, Solutions, How it works, Pricing, Log in, Get started (D) | Confirmed |
 
 ## Update protocol
 
