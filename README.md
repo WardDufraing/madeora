@@ -45,7 +45,7 @@ The repository currently contains working code for the application shell and the
 - Personal and Home photo libraries with processed private images and derivatives, multi-album membership, cross-Home album sharing and contribution, impact-reviewed deletion, trash recovery and configurable photo widgets.
 - Private personal points ledgers and self-defined rewards, with previewed adjustments, one-time reversals, redemption limits, fulfillment outcomes and a personal-only dashboard widget, kept separate from every Home ledger.
 - Paired household displays with manager-reviewed, single-use device pairing; independent clock, chore and shopping layouts; privacy/party locking; optional member chore actions; display-scoped sessions; offline-safe fallbacks; and rename, revoke and reset controls.
-- Ora as a persistent Personal/Home assistant surface with private proactive-frequency, category and quiet-hour controls, per-Home colours, permission-filtered navigation and daily/weekly overviews, dismissible suggestions with factual explanations, seven-day interaction history, consent-based remembered list choices, chore-point celebrations, and explicitly confirmed task/shopping-item creation with a five-minute safe undo window. Household displays may add a separate, settings-free Ora summary widget that uses only display-safe counts and has no personal content or actions.
+- Ora as a persistent Personal/Home assistant surface with private proactive-frequency, category and quiet-hour controls, per-Home colours, permission-filtered navigation and daily/weekly overviews, dismissible suggestions with factual explanations, seven-day interaction history, consent-based remembered list choices, chore-point celebrations, and explicitly confirmed task/shopping-item creation, task completion and task due-date changes with a five-minute locking Undo window. Household displays may add a separate, settings-free Ora summary widget that uses only display-safe counts and has no personal content or actions.
 - Notifications and notification preferences.
 - Private file storage, trash and recovery.
 
@@ -59,9 +59,9 @@ This list describes feature areas present in the repository; it does not certify
 - [User stories](docs/user-stories.md): implemented workflow map and acceptance checks, kept separate from the binding requirements.
 - [Architecture](architecture.md): technical source of truth for stack, data model, security and operations.
 - [Contributor instructions](CLAUDE.md): required workflow and rules for contributors and agents.
-- [Design decisions](docs/design/design-decisions.md): owner design decisions that supplement the product specification, with the [styling reference mockup](docs/design/mockups/household-dashboard-light-dark.png).
+- [Design decisions](docs/design/design-decisions.md): owner design decisions that supplement the product specification, with the [dashboard UX/UI redesign plan](docs/design/dashboard-ux-ui-redesign.md) and [marketing-site design plan](docs/marketing-website-design.md). These plans describe approved direction, not necessarily implemented UI.
 - [Development guide](docs/development.md): how to install, run and check the code locally.
-- [Production setup](docs/production-setup.md) and [production migrations](docs/production-migrations.md): production environment setup and database migration reference.
+- [Production setup](docs/production-setup.md), [release readiness](docs/release-readiness.md) and [production migrations](docs/production-migrations.md): production configuration, release/data gates and database migration reference.
 - [Provider cost register](docs/provider-cost-register.md): free-tier checks for external services.
 - [Architecture decision records](docs/adr/): accepted technical decisions.
 - [Step roadmap](plans/roadmap.md): current implementation order and links to the repository's step briefs.
