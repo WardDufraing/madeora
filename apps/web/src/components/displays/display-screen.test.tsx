@@ -7,7 +7,7 @@ import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
 
 import { DisplayConfigEditor, type DisplayConfigView } from "./display-config-editor";
-import { DisplayScreen, IDLE_RESET_MS, OFFLINE_KEEP_MS } from "./display-screen";
+import { DisplayScreen, formatCountdown, IDLE_RESET_MS, OFFLINE_KEEP_MS } from "./display-screen";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -66,6 +66,7 @@ const base = {
   timeZone: "Europe/Brussels",
   preferences: defaultDisplayPreferences,
   signalVersion: 3,
+  ambientAfterSeconds: 300,
 };
 
 const board: DisplayBoard = {
@@ -114,6 +115,7 @@ const board: DisplayBoard = {
       ],
     },
   ],
+  unlock: null,
 };
 
 const locked: DisplayBoard = { ...base, locked: true, lockMessage: "Welkom!" };
@@ -321,6 +323,181 @@ const config: DisplayConfigView = {
   applied: true,
   shoppingLists: [{ id: LIST, name: "Groceries" }],
 };
+
+describe("DisplayScreen protected sessions and ambient view (UX8a)", () => {
+  const unlockedForBob: DisplayBoard = {
+    ...board,
+    requirePin: true,
+    unlock: { membershipId: BOB, secondsLeft: 125 },
+  };
+  const unlockedForAlice: DisplayBoard = {
+    ...board,
+    unlock: { membershipId: ALICE, secondsLeft: 200 },
+  };
+
+  it("formats the countdown as minutes and seconds", () => {
+    expect(formatCountdown(125)).toBe("2:05");
+    expect(formatCountdown(59.2)).toBe("1:00");
+    expect(formatCountdown(-3)).toBe("0:00");
+  });
+
+  it("shows who is unlocked and for how long, accessibly, and counts down", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { container } = renderWithQuery(<DisplayScreen initialBoard={unlockedForBob} />);
+    const indicator = screen.getByTestId("display-unlocked");
+    expect(indicator).toHaveTextContent("Unlocked for Bob · 2:05 left");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(indicator).toHaveTextContent("2:00 left");
+    vi.useRealTimers();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("Lock now ends the session on the server and hides the indicator", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockReturnValueOnce(answer(200, {}))
+      .mockReturnValueOnce(answer(200, { board: { ...unlockedForBob, unlock: null } }));
+    renderWithQuery(<DisplayScreen initialBoard={unlockedForBob} />);
+    await user.click(screen.getByRole("button", { name: "Lock now" }));
+    expect(screen.queryByTestId("display-unlocked")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    await waitFor(() => {
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/display/unlock/end");
+    });
+  });
+
+  it("relocks by itself when the time is up", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fetchMock.mockReturnValue(answer(200, { board: { ...unlockedForBob, unlock: null } }));
+    renderWithQuery(
+      <DisplayScreen
+        initialBoard={{ ...unlockedForBob, unlock: { membershipId: BOB, secondsLeft: 3 } }}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_100);
+    });
+    expect(screen.queryByTestId("display-unlocked")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/display/unlock/end");
+  });
+
+  it("does not ask the unlocked member for their PIN again", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockReturnValueOnce(
+        answer(200, { outcome: "completed", actionId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0051" }),
+      )
+      .mockReturnValueOnce(answer(200, { board: unlockedForBob }));
+    renderWithQuery(<DisplayScreen initialBoard={unlockedForBob} />);
+    await user.click(screen.getByRole("button", { name: /Dishes/ }));
+    await user.click(screen.getByRole("button", { name: "Bob" }));
+    expect(screen.getByTestId("household-chore-in-session")).toHaveTextContent(
+      "Bob is unlocked on this display, so no PIN is needed.",
+    );
+    expect(screen.queryByLabelText("PIN for Bob")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/display/chores/complete");
+    });
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({
+      occurrenceId: OCCURRENCE,
+      membershipId: BOB,
+      pin: null,
+    });
+  });
+
+  it("asks for the PIN after all when the server says the session is gone", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockReturnValueOnce(answer(409, { error: "pin-required" }));
+    renderWithQuery(<DisplayScreen initialBoard={unlockedForBob} />);
+    await user.click(screen.getByRole("button", { name: /Dishes/ }));
+    await user.click(screen.getByRole("button", { name: "Bob" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(await screen.findByLabelText("PIN for Bob")).toBeInTheDocument();
+  });
+
+  it("lets an unlocked manager turn on privacy mode without typing their PIN", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockReturnValueOnce(answer(200, {}))
+      .mockReturnValueOnce(answer(200, { board: locked }));
+    renderWithQuery(<DisplayScreen initialBoard={unlockedForAlice} />);
+    await user.click(screen.getByRole("button", { name: "Privacy lock" }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Alice" }));
+    expect(within(dialog).getByTestId("display-lock-in-session")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("PIN of Alice")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Turn on privacy mode" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("display-locked")).toBeInTheDocument();
+    });
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ membershipId: ALICE, pin: null });
+  });
+
+  it("goes ambient after the Home's timing, ends the session, and a tap brings the board back", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    let ended = false;
+    fetchMock.mockImplementation((url) => {
+      if (url === "/api/v1/display/unlock/end") {
+        ended = true;
+        return answer(200, {});
+      }
+      return answer(200, {
+        board: {
+          ...unlockedForBob,
+          ambientAfterSeconds: 120,
+          unlock: ended ? null : { membershipId: BOB, secondsLeft: 200 },
+        },
+      });
+    });
+    renderWithQuery(
+      <DisplayScreen
+        initialBoard={{
+          ...unlockedForBob,
+          ambientAfterSeconds: 120,
+          unlock: { membershipId: BOB, secondsLeft: 290 },
+        }}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(119_000);
+    });
+    expect(screen.getByTestId("display-board")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    const ambient = screen.getByTestId("display-ambient");
+    expect(ambient).toHaveTextContent("Tap anywhere to show the dashboard.");
+    expect(ambient).not.toHaveTextContent("Dishes");
+    expect(ambient).not.toHaveTextContent("Bob");
+    expect(ended).toBe(true);
+    await user.click(ambient);
+    expect(await screen.findByTestId("display-board")).toBeInTheDocument();
+    expect(screen.queryByTestId("display-unlocked")).not.toBeInTheDocument();
+  });
+
+  it("keeps the board while it is being touched", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    fetchMock.mockReturnValue(answer(200, { board: { ...board, ambientAfterSeconds: 60 } }));
+    renderWithQuery(<DisplayScreen initialBoard={{ ...board, ambientAfterSeconds: 60 }} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50_000);
+    });
+    await user.click(screen.getByRole("heading", { level: 1 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50_000);
+    });
+    expect(screen.queryByTestId("display-ambient")).not.toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11_000);
+    });
+    expect(screen.getByTestId("display-ambient")).toBeInTheDocument();
+  });
+});
 
 describe("DisplayConfigEditor", () => {
   const render = (view: DisplayConfigView = config) =>

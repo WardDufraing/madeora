@@ -2199,6 +2199,7 @@ export type Database = {
           outcome: string;
         }[];
       };
+      display_end_unlock: { Args: { p_display_id: string }; Returns: string };
       display_lock_attempt: {
         Args: { p_client_key: string; p_display_id: string; p_membership_id: string };
         Returns: {
@@ -2207,6 +2208,10 @@ export type Database = {
           outcome: string;
           pin_hash: string;
         }[];
+      };
+      display_lock_by_session: {
+        Args: { p_display_id: string; p_membership_id: string };
+        Returns: string;
       };
       display_lock_verified: {
         Args: { p_check_id: string; p_display_id: string };
@@ -2251,6 +2256,14 @@ export type Database = {
         Returns: {
           expires_at: string;
           status: string;
+        }[];
+      };
+      display_session_state: {
+        Args: { p_display_id: string };
+        Returns: {
+          ambient_after_seconds: number;
+          unlock_seconds_left: number;
+          unlocked_membership_id: string;
         }[];
       };
       edit_meal_occurrence: {
@@ -2639,6 +2652,7 @@ export type Database = {
           role: string;
         }[];
       };
+      home_display_settings: { Args: { p_home_id: string }; Returns: Json };
       home_household_devices: {
         Args: { p_current_hash: string; p_home_id: string };
         Returns: {
@@ -4183,6 +4197,10 @@ export type Database = {
       };
       save_google_calendar_connection: {
         Args: { p_account: string; p_scopes: string[]; p_token: string };
+        Returns: string;
+      };
+      save_home_display_settings: {
+        Args: { p_ambient_after_seconds: number; p_home_id: string };
         Returns: string;
       };
       save_household_display_config: {

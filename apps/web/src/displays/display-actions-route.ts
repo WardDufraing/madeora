@@ -14,7 +14,11 @@ export const displayCompleteSchema = z.strictObject({
   pin: enteredPinSchema.nullable(),
 });
 export const displayUndoSchema = z.strictObject({ actionId: z.uuid() });
-export const displayLockSchema = z.strictObject({ membershipId: z.uuid(), pin: enteredPinSchema });
+/** `pin: null`: the manager's open protected-actions session stands in for the PIN (UX8a). */
+export const displayLockSchema = z.strictObject({
+  membershipId: z.uuid(),
+  pin: enteredPinSchema.nullable(),
+});
 
 /** The HTTP answer for a chore completed on a display. */
 export function displayChoreResponse(result: DisplayChoreResult): Response {
@@ -45,7 +49,9 @@ export function displayChoreResponse(result: DisplayChoreResult): Response {
 }
 
 /** The HTTP answer for locking a display on the display. */
-export function displayLockResponse(result: DisplayLockResult): Response {
+export function displayLockResponse(
+  result: DisplayLockResult | { readonly kind: "pin-required" },
+): Response {
   switch (result.kind) {
     case "locked-now":
     case "already-locked":
@@ -57,7 +63,8 @@ export function displayLockResponse(result: DisplayLockResult): Response {
     case "not-paired":
       return displayJson(401, { error: "not-paired" });
     case "pin-not-set":
-      return displayJson(409, { error: "pin-not-set" });
+    case "pin-required":
+      return displayJson(409, { error: result.kind });
     case "not-permitted":
       return displayJson(403, { error: "not-permitted" });
     case "rate-limited":

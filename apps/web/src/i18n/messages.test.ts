@@ -227,6 +227,7 @@ describe("message dictionaries", () => {
           "invalidPin",
           "pinLocked",
           "pinNotSet",
+          "pinRequired",
           "notPermitted",
           "rateLimited",
           "network",

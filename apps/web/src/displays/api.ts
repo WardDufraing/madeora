@@ -11,6 +11,7 @@ import type {
   ApproveDisplayInput,
   CheckCodeInput,
   DisplayLockStateInput,
+  HomeDisplaySettingsInput,
   RenameDisplayInput,
 } from "./schema";
 
@@ -41,6 +42,12 @@ import type {
  *   `403 not-permitted`, `429 rate-limited`, `503 unavailable`.
  *
  * Home managers (Owner, or Administrator with manageHomeSettings; the database decides again):
+ * - `POST /api/v1/display/lock` with `pin: null` (UX8a): the manager's open protected-actions session
+ *   on this display stands in for the PIN; `409 pin-required` when there is none.
+ * - `POST /api/v1/display/unlock/end` `{}` (UX8a, Lock now) → `200 {}`: ends this display's
+ *   protected-actions session, if any.
+ * - `POST /api/v1/homes/{homeId}/displays/settings` `{ ambientAfterSeconds }` (UX8a) → `200 {}`;
+ *   `403 not-permitted`, `404 not-found`.
  * - `POST /api/v1/homes/{homeId}/displays/check` `{ code }` → `200 { request: { id, deviceKind,
  *   browser, platform, requestedAt, expiresAt } }`; `404 invalid-code`, `409 expired`,
  *   `409 already-used`, `429 rate-limited`
@@ -186,6 +193,7 @@ export const DISPLAY_BOARD_ENDPOINT = "/api/v1/display/board";
 export const DISPLAY_CHORE_COMPLETE_ENDPOINT = "/api/v1/display/chores/complete";
 export const DISPLAY_CHORE_UNDO_ENDPOINT = "/api/v1/display/chores/undo";
 export const DISPLAY_LOCK_ENDPOINT = "/api/v1/display/lock";
+export const DISPLAY_UNLOCK_END_ENDPOINT = "/api/v1/display/unlock/end";
 
 export type BoardReadResult =
   | { readonly kind: "ok"; readonly board: DisplayBoard }
@@ -258,26 +266,43 @@ export async function undoChoreOnDisplay(actionId: string): Promise<boolean> {
 }
 
 export type DisplayLockFailure =
-  "invalidPin" | "pinLocked" | "pinNotSet" | "notPermitted" | "rateLimited" | "network" | "failed";
+  | "invalidPin"
+  | "pinLocked"
+  | "pinNotSet"
+  | "pinRequired"
+  | "notPermitted"
+  | "rateLimited"
+  | "network"
+  | "failed";
 
 const lockFailureByCode: Record<string, DisplayLockFailure> = {
   "invalid-pin": "invalidPin",
   locked: "pinLocked",
   "pin-not-set": "pinNotSet",
+  "pin-required": "pinRequired",
   "not-permitted": "notPermitted",
   "rate-limited": "rateLimited",
 };
 
-/** A manager locks this display with their own PIN; `null` when it is locked now. */
+/**
+ * A manager locks this display with their own PIN, or (`pin: null`) in their open protected-actions
+ * session on it; `null` when it is locked now.
+ */
 export async function lockThisDisplay(input: {
   readonly membershipId: string;
-  readonly pin: string;
+  readonly pin: string | null;
 }): Promise<DisplayLockFailure | null> {
   const response = await post(DISPLAY_LOCK_ENDPOINT, input);
   if (!response) return "network";
   if (response.ok) return null;
   const parsed = errorBodySchema.safeParse(await response.json().catch(() => ({})));
   return (parsed.success ? lockFailureByCode[parsed.data.error] : undefined) ?? "failed";
+}
+
+/** Lock now (UX8a): ends this display's protected-actions session. `true` when the server did. */
+export async function endUnlockHere(): Promise<boolean> {
+  const response = await post(DISPLAY_UNLOCK_END_ENDPOINT, {});
+  return response?.ok ?? false;
 }
 
 // A display's configuration, for Home managers (S44) ---------------------------------------------
@@ -336,4 +361,12 @@ export async function setDisplayLock(
     `${displaysEndpoint(homeId)}/${encodeURIComponent(displayId)}/lock`,
     input,
   );
+}
+
+/** Saves the Home's display settings (UX8a); throws a `MemberActionError` when refused. */
+export async function saveHomeDisplaySettings(
+  homeId: string,
+  input: HomeDisplaySettingsInput,
+): Promise<void> {
+  await sendMemberRequest("POST", `${displaysEndpoint(homeId)}/settings`, input);
 }

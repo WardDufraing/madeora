@@ -2,6 +2,7 @@ import { POST as board } from "./board/route";
 import { POST as complete } from "./chores/complete/route";
 import { POST as undo } from "./chores/undo/route";
 import { POST as lock } from "./lock/route";
+import { POST as endUnlock } from "./unlock/end/route";
 
 /**
  * The paired display's routes (S44): same-origin JSON only, the display identified from its own
@@ -21,6 +22,8 @@ const state = vi.hoisted((): State => ({
 const completeChore = vi.fn();
 const undoChore = vi.fn();
 const lockDisplay = vi.fn();
+const lockBySession = vi.fn();
+const endSession = vi.fn();
 
 vi.mock("@/auth/identity", () => ({
   getAuthState: () => Promise.resolve({ kind: state.kind }),
@@ -46,6 +49,8 @@ vi.mock("@/displays/display-actions", () => ({
   completeChoreOnDisplay: (...args: unknown[]) => Promise.resolve(completeChore(...args)),
   undoChoreOnDisplay: (...args: unknown[]) => Promise.resolve(undoChore(...args)),
   lockOnDisplay: (...args: unknown[]) => Promise.resolve(lockDisplay(...args)),
+  lockOnDisplayBySession: (...args: unknown[]) => Promise.resolve(lockBySession(...args)),
+  endDisplayUnlock: (...args: unknown[]) => Promise.resolve(endSession(...args)),
 }));
 vi.mock("@madeora/config/env/public", () => ({
   getPublicEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://madeora.example" }),
@@ -82,6 +87,8 @@ beforeEach(() => {
   completeChore.mockReset().mockReturnValue({ kind: "completed", actionId: ACTION });
   undoChore.mockReset().mockReturnValue("undone");
   lockDisplay.mockReset().mockReturnValue({ kind: "locked-now" });
+  lockBySession.mockReset().mockReturnValue({ kind: "locked-now" });
+  endSession.mockReset().mockReturnValue("ended");
 });
 
 describe("POST /api/v1/display/board", () => {
@@ -190,5 +197,58 @@ describe("POST /api/v1/display/lock", () => {
     lockDisplay.mockReturnValueOnce({ kind: "invalid-pin" });
     expect((await post(lock, "lock", { membershipId: MEMBER, pin: "1234" })).status).toBe(401);
     expect((await post(lock, "lock", { membershipId: MEMBER, pin: "12" })).status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/display/lock in a protected-actions session (UX8a)", () => {
+  it("locks with the manager's session when no PIN is sent", async () => {
+    expect((await post(lock, "lock", { membershipId: MEMBER, pin: null })).status).toBe(200);
+    expect(lockBySession).toHaveBeenCalledWith("display-from-session", MEMBER);
+    expect(lockDisplay).not.toHaveBeenCalled();
+  });
+
+  it("asks for the PIN when there is no session of theirs", async () => {
+    lockBySession.mockReturnValueOnce({ kind: "pin-required" });
+    const response = await post(lock, "lock", { membershipId: MEMBER, pin: null });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "pin-required" });
+    lockBySession.mockReturnValueOnce({ kind: "not-permitted" });
+    expect((await post(lock, "lock", { membershipId: MEMBER, pin: null })).status).toBe(403);
+  });
+
+  it("refuses a revoked display before acting", async () => {
+    state.session = { kind: "refused" };
+    expect((await post(lock, "lock", { membershipId: MEMBER, pin: null })).status).toBe(401);
+    expect(lockBySession).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/v1/display/unlock/end (UX8a Lock now)", () => {
+  it("ends the session of the display named by its session", async () => {
+    expect((await post(endUnlock, "unlock/end", {})).status).toBe(200);
+    expect(endSession).toHaveBeenCalledWith("display-from-session");
+  });
+
+  it("refuses a body, a member, a revoked display and a cross-site request", async () => {
+    expect((await post(endUnlock, "unlock/end", { a: 1 })).status).toBe(400);
+    state.kind = "member";
+    expect((await post(endUnlock, "unlock/end", {})).status).toBe(401);
+    state.kind = "display";
+    state.session = { kind: "refused" };
+    expect((await post(endUnlock, "unlock/end", {})).status).toBe(401);
+    state.session = { kind: "ok" };
+    const crossSite = await post(
+      endUnlock,
+      "unlock/end",
+      {},
+      { ...sameOrigin, origin: "https://evil.example" },
+    );
+    expect(crossSite.status).toBe(403);
+    expect(endSession).not.toHaveBeenCalled();
+  });
+
+  it("says when the server could not end it", async () => {
+    endSession.mockReturnValueOnce("unavailable");
+    expect((await post(endUnlock, "unlock/end", {})).status).toBe(503);
   });
 });

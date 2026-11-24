@@ -95,6 +95,25 @@ export const displayLockStateSchema = z.strictObject({
 export type DisplayLockStateInput = z.input<typeof displayLockStateSchema>;
 
 /**
+ * UX8a: how long a Home's displays wait without a touch before the ambient view, in seconds (the
+ * same choices the database accepts). Five minutes by default.
+ */
+export const AMBIENT_AFTER_CHOICES = [60, 120, 300, 600, 900, 1800] as const;
+export type AmbientAfterSeconds = (typeof AMBIENT_AFTER_CHOICES)[number];
+export const DEFAULT_AMBIENT_AFTER: AmbientAfterSeconds = 300;
+
+export function isAmbientAfter(value: number): value is AmbientAfterSeconds {
+  return (AMBIENT_AFTER_CHOICES as readonly number[]).includes(value);
+}
+
+export const homeDisplaySettingsSchema = z.strictObject({
+  ambientAfterSeconds: z
+    .int()
+    .refine((value) => isAmbientAfter(value), { message: "ambientInvalid" }),
+});
+export type HomeDisplaySettingsInput = z.input<typeof homeDisplaySettingsSchema>;
+
+/**
  * The address a tablet opens to reach its pairing screen, as people type it: this deployment's host
  * (and port) plus the display path, without the scheme (S43-L5: previews and local runs differ).
  */

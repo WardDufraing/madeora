@@ -63,6 +63,7 @@ export function HouseholdChores({
   chores,
   actions = deviceActions,
   onChanged,
+  unlockedMembershipId = null,
 }: {
   readonly requirePin: boolean;
   readonly members: readonly HouseholdChoreMember[];
@@ -70,6 +71,12 @@ export function HouseholdChores({
   readonly actions?: HouseholdChoreActions;
   /** Called after a change instead of refreshing the page (a display re-reads its board). */
   readonly onChanged?: () => void;
+  /**
+   * UX8a, displays only: the member whose protected-actions session is open on this display. Their
+   * PIN is not asked again while it lasts; the server decides, and asks for it when the session is
+   * gone.
+   */
+  readonly unlockedMembershipId?: string | null;
 }) {
   const t = useTranslations("HouseholdChores");
   const router = useRouter();
@@ -82,6 +89,7 @@ export function HouseholdChores({
   const [failure, setFailure] = useState<DeviceChoreFailure | null>(null);
   const [done, setDone] = useState<(DeviceChoreDone & { readonly chore: string }) | null>(null);
   const [undone, setUndone] = useState(false);
+  const [sessionRefused, setSessionRefused] = useState(false);
   const pinRef = useRef<HTMLInputElement>(null);
   const changed = () => {
     if (onChanged) onChanged();
@@ -105,6 +113,7 @@ export function HouseholdChores({
     setUsePin(false);
     setPin("");
     setFailure(null);
+    setSessionRefused(false);
   };
 
   const nameOf = (person: HouseholdChoreMember) => person.name ?? t("unnamed");
@@ -232,9 +241,12 @@ export function HouseholdChores({
     );
   }
 
-  // The stricter rule wins: the Home's, this person's or this chore's (spec).
-  const pinRequired = requirePin || member.requiresPin || chore.requiresPin;
-  const pinNeeded = pinRequired || usePin;
+  // The stricter rule wins: the Home's, this person's or this chore's (spec). An open session of
+  // this member on this display stands in for the PIN until the server says otherwise (UX8a).
+  const pinRule = requirePin || member.requiresPin || chore.requiresPin;
+  const inSession = !sessionRefused && unlockedMembershipId === member.membershipId;
+  const pinRequired = pinRule && !inSession;
+  const pinNeeded = pinRequired || (usePin && !inSession);
   const failureText = (value: DeviceChoreFailure): string => {
     switch (value.kind) {
       case "locked":
@@ -295,6 +307,7 @@ export function HouseholdChores({
               changed();
               return;
             }
+            if (result.kind === "pinRequired" && inSession) setSessionRefused(true);
             setFailure(result);
             pinRef.current?.focus();
           });
@@ -311,7 +324,11 @@ export function HouseholdChores({
       {chore.requiresApproval ? (
         <p className="text-helper text-fg-muted">{t("needsApproval")}</p>
       ) : null}
-      {pinRequired ? (
+      {inSession && pinRule ? (
+        <p className="text-helper text-fg-muted" data-testid="household-chore-in-session">
+          {t("inSession", { name: nameOf(member) })}
+        </p>
+      ) : pinRequired ? (
         <p className="text-helper text-fg-muted">
           {requirePin
             ? t("pinRequiredHere")
@@ -319,7 +336,7 @@ export function HouseholdChores({
               ? t("pinRequiredChore")
               : t("pinRequiredMember", { name: nameOf(member) })}
         </p>
-      ) : member.hasPin ? (
+      ) : member.hasPin && !inSession ? (
         <Checkbox
           label={t("confirmWithPin")}
           checked={usePin}
@@ -362,6 +379,7 @@ export function HouseholdChores({
           onClick={() => {
             setPin("");
             setFailure(null);
+            setSessionRefused(false);
             setMember(null);
           }}
         >

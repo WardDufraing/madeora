@@ -19,18 +19,22 @@ export interface DisplayLockManager {
 
 /**
  * Locking the display into privacy/party mode on the display itself (S44): one of the Home's
- * managers picks themselves and confirms with their own household-device PIN. Nothing here
- * unlocks: that needs a manager's own session. The PIN is cleared after every try and when the
+ * managers picks themselves and confirms with their own household-device PIN, or (UX8a) in their
+ * open protected-actions session on this display without typing it again. Nothing here unlocks:
+ * that needs a manager's own signed-in session. The PIN is cleared after every try and when the
  * dialog closes.
  */
 export function DisplayLockDialog({
   open,
   managers,
+  unlockedMembershipId = null,
   onClose,
   onLocked,
 }: {
   readonly open: boolean;
   readonly managers: readonly DisplayLockManager[];
+  /** UX8a: the member whose protected-actions session is open on this display. */
+  readonly unlockedMembershipId?: string | null;
   readonly onClose: () => void;
   readonly onLocked: () => void;
 }) {
@@ -39,11 +43,15 @@ export function DisplayLockDialog({
   const [pin, setPin] = useState("");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<DisplayLockFailure | null>(null);
+  const [sessionRefused, setSessionRefused] = useState(false);
+  const inSession =
+    manager !== null && !sessionRefused && manager.membershipId === unlockedMembershipId;
 
   const close = () => {
     setManager(null);
     setPin("");
     setFailure(null);
+    setSessionRefused(false);
     onClose();
   };
   const nameOf = (person: DisplayLockManager) => person.name ?? t("unnamed");
@@ -87,13 +95,16 @@ export function DisplayLockDialog({
           onSubmit={(event) => {
             event.preventDefault();
             if (pending) return;
-            if (!/^\d{4,8}$/.test(pin)) {
+            if (!inSession && !/^\d{4,8}$/.test(pin)) {
               setFailure("invalidPin");
               return;
             }
             setPending(true);
             setFailure(null);
-            void lockThisDisplay({ membershipId: manager.membershipId, pin }).then((result) => {
+            void lockThisDisplay({
+              membershipId: manager.membershipId,
+              pin: inSession ? null : pin,
+            }).then((result) => {
               setPin("");
               setPending(false);
               if (result === null) {
@@ -101,22 +112,30 @@ export function DisplayLockDialog({
                 onLocked();
                 return;
               }
+              // The session ended meanwhile: ask for the PIN after all.
+              if (result === "pinRequired") setSessionRefused(true);
               setFailure(result);
             });
           }}
         >
-          <TextField
-            ref={focusOnMount}
-            label={t("pinLabel", { name: nameOf(manager) })}
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={PIN_MAX_LENGTH}
-            value={pin}
-            onChange={(event) => {
-              setPin(event.target.value.replace(/\D/g, ""));
-            }}
-          />
+          {inSession ? (
+            <p className="text-body text-fg" data-testid="display-lock-in-session">
+              {t("lockInSession", { name: nameOf(manager) })}
+            </p>
+          ) : (
+            <TextField
+              ref={focusOnMount}
+              label={t("pinLabel", { name: nameOf(manager) })}
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={PIN_MAX_LENGTH}
+              value={pin}
+              onChange={(event) => {
+                setPin(event.target.value.replace(/\D/g, ""));
+              }}
+            />
+          )}
           {failure ? (
             <FormAlert tone="error" announce>
               {t(`lockFail.${failure}`)}
@@ -133,6 +152,7 @@ export function DisplayLockDialog({
               onClick={() => {
                 setPin("");
                 setFailure(null);
+                setSessionRefused(false);
                 setManager(null);
               }}
             >
