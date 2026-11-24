@@ -132,11 +132,14 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         board.lockManagers.find((member) => member.membershipId === unlockedId) ??
         null);
 
-  // Ends the session here and on the server (best effort: the server also ends it at expiry).
+  // Lock now: ends the session on the server (one retry), then shows what the server says, so a
+  // session that could not be ended shows again rather than staying open unseen.
   const relock = useCallback(() => {
     unlockLeftRef.current = null;
     setUnlockLeft(null);
-    void endUnlockHere().then(() => refresh());
+    void endUnlockHere()
+      .then((ended) => ended || endUnlockHere())
+      .then(() => refresh());
   }, [refresh]);
 
   // The countdown, once a second while a session is open; at zero it relocks.
@@ -147,7 +150,11 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
       const left = unlockLeftRef.current;
       if (left === null) return;
       if (left <= 1) {
-        relock();
+        // The server has expired it too; it is not ended from here, so a session someone else
+        // opened meanwhile stays.
+        unlockLeftRef.current = null;
+        setUnlockLeft(null);
+        void refresh();
         return;
       }
       unlockLeftRef.current = left - 1;
@@ -156,7 +163,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     return () => {
       clearInterval(timer);
     };
-  }, [counting, relock]);
+  }, [counting, refresh]);
 
   // Every minute, and when the tablet wakes up or comes back online.
   useEffect(() => {
@@ -249,7 +256,8 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     setAmbient(true);
     setResetKey((key) => key + 1);
     setLockOpen(false);
-    if (unlockLeftRef.current !== null) void endUnlockHere();
+    // Always asked, also when this screen has not heard of a session yet.
+    void endUnlockHere();
     unlockLeftRef.current = null;
     setUnlockLeft(null);
   }, []);
@@ -466,7 +474,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
               <Button
                 type="button"
                 variant="secondary"
-                size="sm"
+                className="min-h-12"
                 onClick={() => {
                   relock();
                   headingRef.current?.focus();

@@ -394,3 +394,58 @@ select tests.assert_true(
   (select ambient_after_seconds = 600 from public.display_session_state(tests.ps('kitchen')))
   and (select ambient_after_seconds = 300 from public.display_session_state(tests.ps('hall-b'))),
   'Home A''s displays wait ten minutes, Home B''s keep the default');
+
+select tests.act_as('alice');
+select tests.assert_true(
+  public.set_administrator_capabilities(tests.ps('home-a'), tests.ps('m-carol'),
+                                        array['manageHomeSettings']) = 'ok',
+  'Alice grants Carol manageHomeSettings');
+select tests.act_as('carol');
+select tests.assert_true(
+  (public.home_display_settings(tests.ps('home-a')) ->> 'ambient_after_seconds')::int = 600
+  and public.save_home_display_settings(tests.ps('home-a'), 900) = 'saved',
+  'An Administrator with manageHomeSettings reads and changes the timing');
+
+-- A child's session, and PINs removed or locked ---------------------------------------------------------------
+
+select tests.act_as('alice');
+insert into ids values
+  ('o-mia-2', tests.ps_chore(tests.ps('home-a'), 'Tidy room', tests.ps('m-mia'))),
+  ('o-mia-3', tests.ps_chore(tests.ps('home-a'), 'Make bed', tests.ps('m-mia'))),
+  ('o-mia-4', tests.ps_chore(tests.ps('home-a'), 'Pack bag', tests.ps('m-mia'))),
+  ('o-8', tests.ps_chore(tests.ps('home-a'), 'Mop', null)),
+  ('o-9', tests.ps_chore(tests.ps('home-a'), 'Iron', null)),
+  ('o-10', tests.ps_chore(tests.ps('home-a'), 'Fold', null));
+select tests.act_as_service_role();
+select tests.assert_true(
+  tests.ps_pin_complete(tests.ps('kitchen'), tests.ps('o-mia-2'), tests.ps('m-mia')) = 'completed',
+  'Mia completes her chore with her Home PIN');
+select tests.assert_true(tests.ps_try(tests.ps('kitchen'), tests.ps('o-mia-3'), tests.ps('m-mia'))
+  = 'completed', 'In her session, her next chore needs no PIN');
+select tests.assert_true(tests.ps_try(tests.ps('kitchen'), tests.ps('o-8'), tests.ps('m-mia'))
+  = 'not_eligible', 'Her session never lets her complete a chore that is not hers');
+select tests.act_as('alice');
+select public.clear_child_credential(tests.ps('home-a'), tests.ps('m-mia'), 'pin');
+select tests.act_as_service_role();
+select tests.assert_true(tests.ps_try(tests.ps('kitchen'), tests.ps('o-mia-4'), tests.ps('m-mia'))
+  = 'pin_required', 'Once her guardian removes her PIN, her session no longer counts');
+
+select tests.assert_true(
+  tests.ps_pin_complete(tests.ps('kitchen'), tests.ps('o-8'), tests.ps('m-alice')) = 'completed',
+  'Alice opens a session on the kitchen');
+select tests.act_as_owner();
+update private.member_device_pins set pin_locked_until = now() + interval '15 minutes'
+  where user_id = tests.ps('alice');
+select tests.act_as_service_role();
+select tests.assert_true(tests.ps_try(tests.ps('kitchen'), tests.ps('o-9'), tests.ps('m-alice'))
+  = 'pin_required', 'A PIN locked elsewhere ends the session''s effect');
+select tests.act_as_owner();
+update private.member_device_pins set pin_locked_until = null where user_id = tests.ps('alice');
+select tests.act_as_service_role();
+select tests.assert_true(tests.ps_try(tests.ps('kitchen'), tests.ps('o-9'), tests.ps('m-alice'))
+  = 'completed', 'Lifted again, the still-running session counts');
+select tests.act_as_owner();
+delete from private.member_device_pins where user_id = tests.ps('alice');
+select tests.act_as_service_role();
+select tests.assert_true(tests.ps_try(tests.ps('kitchen'), tests.ps('o-10'), tests.ps('m-alice'))
+  = 'pin_required', 'A removed PIN ends it');

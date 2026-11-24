@@ -142,7 +142,7 @@ export function DisplayLockDialog({
             </FormAlert>
           ) : null}
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" loading={pending}>
+            <Button type="submit" loading={pending} {...(inSession ? { ref: focusOnMount } : {})}>
               {t("lockConfirm")}
             </Button>
             <Button

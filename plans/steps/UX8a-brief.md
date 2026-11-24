@@ -51,7 +51,7 @@ Out (later slices): weather (waits for Ward's approval of a provider, €0 rule)
 
 ## 7. Independent review
 
-See `reviews/steps/UX8a-review.md` (one review; BLOCKER/HIGH fixes verified by the author).
+`reviews/steps/UX8a-review.md`: **PASS**, 0 BLOCKER, 0 HIGH, 3 MEDIUM, 7 LOW. All MEDIUMs and L1, L3 fixed and verified locally (display DB tests, 43 display component tests, tsc, lint). Accepted LOWs: L2 ambient view markup, L4 out-of-order refresh, L5 narrow PIN-change window, L6 no screen-reader announcement on open/end, L7 one extra DB call per board read. Rollback order: roll the app back first, then the migration (header notes).
 
 ## 8. PR
 

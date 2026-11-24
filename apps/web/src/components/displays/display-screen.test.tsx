@@ -380,7 +380,9 @@ describe("DisplayScreen protected sessions and ambient view (UX8a)", () => {
       await vi.advanceTimersByTimeAsync(3_100);
     });
     expect(screen.queryByTestId("display-unlocked")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/display/unlock/end");
+    // It re-reads the board; it does not end a session someone may have opened meanwhile.
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/display/board");
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/display/unlock/end")).toBe(false);
   });
 
   it("does not ask the unlocked member for their PIN again", async () => {
