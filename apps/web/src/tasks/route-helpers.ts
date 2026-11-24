@@ -138,6 +138,8 @@ export function outcomeAnswer(
     case "ended":
       return failure(409, "schedule-ended");
     case "id_taken":
+    case "list_id_taken":
+    case "task_id_taken":
       return failure(409, "id-taken");
     case "in_past":
       return failure(409, "in-past");

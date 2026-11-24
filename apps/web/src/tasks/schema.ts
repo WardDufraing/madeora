@@ -328,6 +328,36 @@ export const updateCommentSchema = z.strictObject({
 });
 
 export const createListSchema = z.strictObject({ id, homeId: contextSchema, name: listNameSchema });
+/**
+ * UX4a: a new list and its first task, created together after the person confirmed the list name.
+ * Only plain tasks: no recurrence. The database checks everything again.
+ */
+export const createListWithFirstTaskSchema = z
+  .strictObject({
+    homeId: contextSchema,
+    list: z.strictObject({ id, name: listNameSchema }),
+    task: z.strictObject({
+      id,
+      title: taskTitleSchema,
+      description: descriptionSchema.nullable(),
+      startDate: optionalDate,
+      dueDate: optionalDate,
+      priority: z.enum(taskPriorities).nullable(),
+      labelIds: z.array(id).max(TASK_LIMITS.labelsPerTask),
+      assigneeIds: z.array(id).max(TASK_LIMITS.assigneesPerTask),
+    }),
+  })
+  .refine(
+    ({ task }) =>
+      task.startDate === null || task.dueDate === null || task.startDate <= task.dueDate,
+    { message: "dateOrder", path: ["task", "dueDate"] },
+  )
+  .refine(({ homeId, task }) => homeId !== null || task.assigneeIds.length === 0, {
+    message: "invalid",
+    path: ["task", "assigneeIds"],
+  });
+export type CreateListWithFirstTaskInput = z.output<typeof createListWithFirstTaskSchema>;
+
 export const updateListSchema = z.strictObject({
   expectedRevision: z.int().min(1),
   name: listNameSchema,
