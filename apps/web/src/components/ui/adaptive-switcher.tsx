@@ -117,6 +117,7 @@ export function AdaptiveSwitcher({
     <div className={cx("flex flex-wrap items-center gap-2", className)}>
       <Popover
         label={pickerLabel}
+        {...(selected && { triggerName: `${pickerLabel}: ${selected.label}` })}
         trigger={
           <span className="max-w-48 truncate font-semibold">{selected?.label ?? label}</span>
         }

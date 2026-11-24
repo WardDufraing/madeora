@@ -14,7 +14,8 @@ export interface DialogProps {
   readonly description?: string;
   /** Accessible name of the close button (translated by the caller). */
   readonly closeLabel: string;
-  readonly children?: ReactNode;
+  /** A function receives `requestClose`, which honours the unsaved-changes question. */
+  readonly children?: ReactNode | ((requestClose: () => void) => ReactNode);
   /** Actions at the bottom, such as Cancel and Confirm buttons. */
   readonly footer?: ReactNode;
   readonly className?: string;
@@ -175,7 +176,7 @@ export function Dialog({
             <CloseIcon />
           </button>
         </div>
-        {children}
+        {typeof children === "function" ? children(requestClose) : children}
         {confirming && discardPrompt ? (
           <div
             role="alertdialog"

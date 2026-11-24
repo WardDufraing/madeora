@@ -103,6 +103,14 @@ describe("CreateDialog", () => {
     expect(screen.getByLabelText("Title")).toHaveValue("Buy milk");
   });
 
+  it("asks before discarding input when Cancel is pressed too", async () => {
+    render(<Harness />);
+    await openDialog();
+    await userEvent.type(screen.getByLabelText("Title"), "Buy milk");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("alertdialog", { name: "Discard changes?" })).toBeInTheDocument();
+  });
+
   it("discards input only after confirmation", async () => {
     render(<Harness />);
     await openDialog();

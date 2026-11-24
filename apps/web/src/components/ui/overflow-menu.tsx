@@ -61,6 +61,7 @@ export function OverflowMenu({ label, items, align = "end", className }: Overflo
 
   function onMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const list = enabledItems();
+    if (list.length === 0) return;
     const index = list.indexOf(document.activeElement as HTMLButtonElement);
     let next: HTMLButtonElement | undefined;
     switch (event.key) {

@@ -68,7 +68,7 @@ describe("AdaptiveSwitcher", () => {
     render(<Harness count={12} onCreate={onCreate} />);
     expect(screen.queryByRole("group", { name: "Task lists" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Choose list" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Choose list/ }));
     expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(1);
 
     await userEvent.type(screen.getByRole("searchbox", { name: "Search lists" }), "List 11");
@@ -77,7 +77,7 @@ describe("AdaptiveSwitcher", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "List 11" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose list" })).toHaveTextContent("List 11");
+    expect(screen.getByRole("button", { name: /^Choose list/ })).toHaveTextContent("List 11");
 
     // + New list stays available in picker mode.
     expect(screen.getByRole("button", { name: "New list" })).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("AdaptiveSwitcher", () => {
 
   it("says when the search finds nothing", async () => {
     render(<Harness count={9} />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose list" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Choose list/ }));
     await userEvent.type(screen.getByRole("searchbox"), "zzz");
     expect(screen.getByRole("status")).toHaveTextContent("No lists found");
   });
@@ -96,7 +96,7 @@ describe("AdaptiveSwitcher", () => {
     chips.unmount();
 
     const picker = render(<Harness count={9} />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose list" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Choose list/ }));
     expect(await axeViolations(picker.container)).toEqual([]);
   });
 });

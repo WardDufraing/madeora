@@ -66,22 +66,24 @@ export function CreateDialog({
       {...(dirty !== undefined && { dirty })}
       {...(discardPrompt !== undefined && { discardPrompt })}
     >
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        {children}
-        {error ? (
-          <p role="alert" className="text-body text-danger">
-            {error}
-          </p>
-        ) : null}
-        <div className="flex flex-wrap justify-end gap-3">
-          <Button variant="ghost" onClick={onClose} disabled={submitting}>
-            {cancelLabel}
-          </Button>
-          <Button type="submit" loading={submitting}>
-            {submitLabel}
-          </Button>
-        </div>
-      </form>
+      {(requestClose) => (
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+          {children}
+          {error ? (
+            <p role="alert" className="text-body text-danger">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button variant="ghost" onClick={requestClose} disabled={submitting}>
+              {cancelLabel}
+            </Button>
+            <Button type="submit" loading={submitting}>
+              {submitLabel}
+            </Button>
+          </div>
+        </form>
+      )}
     </Dialog>
   );
 }

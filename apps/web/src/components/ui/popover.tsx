@@ -7,6 +7,8 @@ import { cx } from "./cx";
 export interface PopoverProps {
   /** Accessible name of both the trigger button and the panel (translated by the caller). */
   readonly label: string;
+  /** Trigger name when the trigger shows changing text; it must contain that text (WCAG 2.5.3). */
+  readonly triggerName?: string;
   /** What the trigger button shows: text and/or a decorative icon. */
   readonly trigger: ReactNode;
   /** Which edge of the trigger the panel lines up with (logical, so it follows RTL). */
@@ -25,6 +27,7 @@ export interface PopoverProps {
  */
 export function Popover({
   label,
+  triggerName,
   trigger,
   align = "start",
   children,
@@ -87,7 +90,7 @@ export function Popover({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        aria-label={label}
+        aria-label={triggerName ?? label}
         onClick={() => {
           setOpen((value) => !value);
         }}
