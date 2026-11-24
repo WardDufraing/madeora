@@ -121,3 +121,26 @@ describe("requests", () => {
     });
   });
 });
+
+describe("work periods (UX3a)", () => {
+  const body = { ...timed, workPeriod: true };
+  it("are personal events that are never shared", () => {
+    expect(createEventSchema.safeParse({ id: EVENT, homeId: null, event: body }).success).toBe(
+      true,
+    );
+    expect(createEventSchema.safeParse({ id: EVENT, homeId: HOME, event: body }).success).toBe(
+      false,
+    );
+    expect(
+      createEventSchema.safeParse({ id: EVENT, homeId: null, event: { ...body, shares: [HOME] } })
+        .success,
+    ).toBe(false);
+    expect(
+      createEventSchema.safeParse({
+        id: EVENT,
+        homeId: HOME,
+        event: { ...timed, workPeriod: false },
+      }).success,
+    ).toBe(true);
+  });
+});

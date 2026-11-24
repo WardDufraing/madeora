@@ -32,6 +32,8 @@ export const occurrenceSchema = z.object({
   recurring: z.boolean(),
   changed: z.boolean(),
   participants: z.array(z.uuid()),
+  /** UX3a: a work period, drawn as a background block; always the viewer's own personal event. */
+  workPeriod: z.boolean().default(false),
   /** Where it comes from (S33): a Madeora event, or a read-only event synced from Google Calendar. */
   source: z.enum(["madeora", "google"]).default("madeora"),
   /** A Google event's calendar name; null for Madeora events. */

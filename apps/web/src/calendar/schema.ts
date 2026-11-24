@@ -101,6 +101,8 @@ export const eventFieldsSchema = z
     reminder: z.literal(calendarReminders).nullable().optional(),
     /** Home events: membership ids of current members. */
     participants: z.array(id).max(CALENDAR_LIMITS.participants).optional(),
+    /** A work period (UX3a): a personal event drawn as a background block; fixed at creation, never shared. */
+    workPeriod: z.boolean().optional(),
     /** Personal events: the person's Homes to share it with. */
     shares: z.array(id).max(CALENDAR_LIMITS.shares).optional(),
   })
@@ -152,11 +154,22 @@ export type EventFields = z.output<typeof eventFieldsSchema>;
 export const eventScopes = ["only", "following", "all"] as const;
 export type EventScope = (typeof eventScopes)[number];
 
-export const createEventSchema = z.strictObject({
-  id,
-  homeId: id.nullable(),
-  event: eventFieldsSchema,
-});
+export const createEventSchema = z
+  .strictObject({
+    id,
+    homeId: id.nullable(),
+    event: eventFieldsSchema,
+  })
+  .superRefine((input, context) => {
+    const event = input.event;
+    if (event.workPeriod === true && (input.homeId !== null || (event.shares?.length ?? 0) > 0)) {
+      context.addIssue({
+        code: "custom",
+        message: "workPeriodPersonal",
+        path: ["event", "workPeriod"],
+      });
+    }
+  });
 
 export const updateEventSchema = z.strictObject({
   revision: z.int().min(1),

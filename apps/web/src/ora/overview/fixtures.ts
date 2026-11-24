@@ -31,6 +31,7 @@ export function occurrence(overrides: Partial<Occurrence> = {}): Occurrence {
     participants: [],
     source: "madeora",
     calendar: null,
+    workPeriod: false,
     googleState: null,
     ...overrides,
   };
