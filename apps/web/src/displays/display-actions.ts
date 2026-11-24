@@ -1,7 +1,11 @@
 import "server-only";
 
+import { z } from "zod";
+
 import { householdClientKey, householdService } from "@/child-sign-in/service";
 import { verifyChildSecret } from "@/child-sign-in/secret-hash";
+
+import { DEFAULT_AMBIENT_AFTER, isAmbientAfter } from "./schema";
 
 /**
  * Actions on a paired display (S44; spec "Confirmed Household Display member-only actions"): a
@@ -203,4 +207,91 @@ export async function lockOnDisplay(
     default:
       return { kind: "unavailable" };
   }
+}
+
+/**
+ * Locks the display on the display itself with the manager's open protected-actions session (UX8a)
+ * instead of their PIN. `pin-required` when they have no session on this display now.
+ */
+export async function lockOnDisplayBySession(
+  displayId: string,
+  membershipId: string,
+): Promise<DisplayLockResult | { readonly kind: "pin-required" }> {
+  const client = householdService();
+  if (!client) return { kind: "unavailable" };
+  const { data, error } = await client.rpc("display_lock_by_session", {
+    p_display_id: displayId,
+    p_membership_id: membershipId,
+  });
+  if (error) {
+    log("display_lock.session_failed", error.code);
+    return { kind: "unavailable" };
+  }
+  switch (data) {
+    case "saved":
+      return { kind: "locked-now" };
+    case "unchanged":
+      return { kind: "already-locked" };
+    case "not_permitted":
+      return { kind: "not-permitted" };
+    case "pin_required":
+      return { kind: "pin-required" };
+    case "display_not_active":
+      return { kind: "not-paired" };
+    default:
+      return { kind: "unavailable" };
+  }
+}
+
+/** The display's ambient timing and open protected-actions session (UX8a). */
+export interface DisplaySessionState {
+  readonly ambientAfterSeconds: number;
+  readonly unlock: { readonly membershipId: string; readonly secondsLeft: number } | null;
+}
+
+const sessionStateSchema = z.object({
+  ambient_after_seconds: z.number().int().positive(),
+  unlocked_membership_id: z.uuid().nullable(),
+  unlock_seconds_left: z.number().int().nullable(),
+});
+
+/**
+ * Reads the display's session state. When it cannot be read, the screen gets the default timing
+ * and no session: it then asks for PINs, which is the safe side (the server decides either way).
+ */
+export async function readDisplaySessionState(displayId: string): Promise<DisplaySessionState> {
+  const fallback: DisplaySessionState = {
+    ambientAfterSeconds: DEFAULT_AMBIENT_AFTER,
+    unlock: null,
+  };
+  const client = householdService();
+  if (!client) return fallback;
+  const { data, error } = await client.rpc("display_session_state", { p_display_id: displayId });
+  if (error) {
+    log("display_session.state_failed", error.code);
+    return fallback;
+  }
+  const row = sessionStateSchema.safeParse(data[0]);
+  if (!row.success) return fallback;
+  const { ambient_after_seconds: ambient, unlocked_membership_id: membershipId } = row.data;
+  const secondsLeft = row.data.unlock_seconds_left;
+  return {
+    ambientAfterSeconds: isAmbientAfter(ambient) ? ambient : DEFAULT_AMBIENT_AFTER,
+    unlock:
+      membershipId !== null && secondsLeft !== null && secondsLeft > 0
+        ? { membershipId, secondsLeft }
+        : null,
+  };
+}
+
+/** Lock now: ends the display's protected-actions session (UX8a). */
+export async function endDisplayUnlock(displayId: string): Promise<"ended" | "unavailable"> {
+  const client = householdService();
+  if (!client) return "unavailable";
+  const { error } = await client.rpc("display_end_unlock", { p_display_id: displayId });
+  if (error) {
+    log("display_session.end_failed", error.code);
+    return "unavailable";
+  }
+  return "ended";
 }

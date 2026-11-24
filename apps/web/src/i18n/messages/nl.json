@@ -7909,7 +7909,8 @@
     "confirm": "Bevestigen",
     "notMe": "Dat ben ik niet",
     "pinRequiredChore": "Deze taak vraagt een PIN.",
-    "pinRequiredMember": "{name} bevestigt taken met een PIN."
+    "pinRequiredMember": "{name} bevestigt taken met een PIN.",
+    "inSession": "{name} is ontgrendeld op dit scherm, dus er is geen PIN nodig."
   },
   "ChildTransition": {
     "guardianTitle": "Eigen account",
@@ -8039,7 +8040,13 @@
     "pairingUnavailable": "Koppelen is nu niet mogelijk. Dit scherm probeert het vanzelf opnieuw.",
     "pairingNewCode": "Nieuwe code vragen",
     "configure": "Indeling en vergrendeling",
-    "configureNamed": "Indeling en privacyvergrendeling van {name}"
+    "configureNamed": "Indeling en privacyvergrendeling van {name}",
+    "ambientTitle": "Rustscherm",
+    "ambientLabel": "Toon het rustscherm na",
+    "ambientIntro": "Na zo lang zonder aanraking tonen de schermen van dit Home alleen de tijd en de datum. Eén tik brengt het dashboard terug.",
+    "ambientOption": "{minutes, plural, one {# minuut} other {# minuten}}",
+    "ambientSave": "Opslaan",
+    "ambientSaved": "Rustscherm opgeslagen."
   },
   "DisplayBoard": {
     "widget": {
@@ -8082,8 +8089,14 @@
       "notPermitted": "Alleen een beheerder van het Home kan privacymodus aanzetten.",
       "rateLimited": "Te veel pogingen op dit scherm. Wacht een paar minuten.",
       "network": "Madeora is nu niet bereikbaar. Er is niets veranderd.",
-      "failed": "Privacymodus kon niet worden aangezet. Probeer het opnieuw."
-    }
+      "failed": "Privacymodus kon niet worden aangezet. Probeer het opnieuw.",
+      "pinRequired": "Je ontgrendeling op dit scherm is voorbij. Vul je PIN in."
+    },
+    "unlockedFor": "Ontgrendeld voor {name} · nog {time}",
+    "lockNow": "Nu vergrendelen",
+    "lockInSession": "Je bent ontgrendeld op dit scherm, dus er is geen PIN nodig.",
+    "ambientTitle": "Rustscherm",
+    "ambientHint": "Tik ergens om het dashboard te tonen."
   },
   "DisplayConfig": {
     "title": "Gezinsscherm",

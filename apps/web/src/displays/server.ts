@@ -7,6 +7,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { homeIdSchema } from "@/homes/schema";
 
+import { DEFAULT_AMBIENT_AFTER, isAmbientAfter, type AmbientAfterSeconds } from "./schema";
 import {
   displayClockFormats,
   displayDensities,
@@ -175,5 +176,33 @@ export const getHouseholdDisplayConfig = cache(
       applied: row.applied,
       shoppingLists: row.shopping_lists.map((list) => ({ id: list.list_id, name: list.name })),
     };
+  },
+);
+
+/** A Home's display settings (UX8a), for its managers. */
+export interface HomeDisplaySettings {
+  readonly ambientAfterSeconds: AmbientAfterSeconds;
+}
+
+const homeDisplaySettingsRowSchema = z.object({ ambient_after_seconds: z.number().int() });
+
+/** The Home's display settings for its managers; `null` for anyone else or when unreadable. */
+export const getHomeDisplaySettings = cache(
+  async (homeId: string): Promise<HomeDisplaySettings | null> => {
+    if (!homeIdSchema.safeParse(homeId).success) return null;
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("home_display_settings", { p_home_id: homeId });
+    if (error) {
+      if (error.code !== "42501") {
+        console.error(
+          JSON.stringify({ event: "home_display_settings.read_failed", code: error.code }),
+        );
+      }
+      return null;
+    }
+    const row = homeDisplaySettingsRowSchema.safeParse(data);
+    if (!row.success) return null;
+    const seconds = row.data.ambient_after_seconds;
+    return { ambientAfterSeconds: isAmbientAfter(seconds) ? seconds : DEFAULT_AMBIENT_AFTER };
   },
 );

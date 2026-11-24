@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { requireIdentity } from "@/auth/identity";
 import { DISPLAY_PATH } from "@/auth/redirects";
+import { DisplayAmbientSetting } from "@/components/displays/display-ambient-setting";
 import { HouseholdDisplaysManager } from "@/components/displays/household-displays-manager";
 import { loadHomeForPage } from "@/components/homes/home-page";
 import { RememberContext } from "@/components/homes/remember-context";
@@ -12,7 +13,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { displayPairingAddress } from "@/displays/schema";
-import { getHouseholdDisplays } from "@/displays/server";
+import { getHomeDisplaySettings, getHouseholdDisplays } from "@/displays/server";
 import { getHomeContext } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { formatDateTime } from "@/invitations/format";
@@ -70,9 +71,13 @@ export default async function HomeDisplaysPage({ params }: HomeDisplaysPageProps
   }
   const { home, permissions } = context;
   const manager = permissions["home.updateSettings"];
-  const [displays, directory] = manager
-    ? await Promise.all([getHouseholdDisplays(home.id), getHomeDirectory(home.id)])
-    : [null, null];
+  const [displays, directory, settings] = manager
+    ? await Promise.all([
+        getHouseholdDisplays(home.id),
+        getHomeDirectory(home.id),
+        getHomeDisplaySettings(home.id),
+      ])
+    : [null, null, null];
 
   const words = {
     kind: Object.fromEntries(KINDS.map((key) => [key, tSecurity(`kind.${key}`)])),
@@ -126,6 +131,15 @@ export default async function HomeDisplaysPage({ params }: HomeDisplaysPageProps
           />
         </Card>
       )}
+      {manager && displays !== null && settings !== null ? (
+        <Card className="mt-6 max-w-2xl">
+          <h2 className="mb-4 text-section-title font-semibold text-fg">{t("ambientTitle")}</h2>
+          <DisplayAmbientSetting
+            homeId={home.id}
+            ambientAfterSeconds={settings.ambientAfterSeconds}
+          />
+        </Card>
+      ) : null}
     </>
   );
 }

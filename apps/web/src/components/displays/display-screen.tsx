@@ -10,6 +10,7 @@ import { HouseholdChores } from "@/components/child-sign-in/household-chores";
 import { Button } from "@/components/ui/button";
 import {
   completeChoreOnDisplay,
+  endUnlockHere,
   readDisplayBoard,
   resetDisplay,
   undoChoreOnDisplay,
@@ -28,8 +29,17 @@ const SIGNAL_DELAY_MS = 300;
 export const OFFLINE_KEEP_MS = 10 * 60_000;
 /** Inactivity after which a member's selection and typed PIN are cleared. */
 export const IDLE_RESET_MS = 60_000;
+/** How often the ambient view moves its clock a little (static-image persistence). */
+const AMBIENT_SHIFT_MS = 60_000;
+const AMBIENT_SHIFTS = ["0px, 0px", "12px, -8px", "-10px, 10px", "8px, 12px"] as const;
 
 const choreActions = { complete: completeChoreOnDisplay, undo: undoChoreOnDisplay };
+
+/** `m:ss` for a countdown. */
+export function formatCountdown(seconds: number): string {
+  const whole = Math.max(0, Math.ceil(seconds));
+  return `${String(Math.floor(whole / 60))}:${String(whole % 60).padStart(2, "0")}`;
+}
 
 function usePortrait(): boolean {
   const [portrait, setPortrait] = useState(false);
@@ -61,6 +71,13 @@ function usePortrait(): boolean {
  * - Offline: the last board stays, read-only and marked, for ten minutes; then only the time. It is
  *   never written to browser storage, and no action claims success while offline.
  * - Revoked or its Home closed: it clears the screen at once and returns to the pairing screen.
+ * - Protected-actions session (UX8a, decision 37): a member's matched PIN opens five minutes in
+ *   which that member's PIN is not asked again on this display. The screen shows who is unlocked
+ *   and for how long, with Lock now. It relocks when the time is up, on Lock now and when the
+ *   display goes ambient; the server keeps the real expiry and checks every action.
+ * - Ambient view (UX8a, decision 36): after the Home's ambient timing without a touch or key, only
+ *   the time and date; a tap brings the dashboard back. Any selection, dialog and session are
+ *   cleared on the way in.
  */
 export function DisplayScreen({ initialBoard }: { readonly initialBoard: DisplayBoard }) {
   const t = useTranslations("DisplayBoard");
@@ -71,7 +88,16 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
   const [stale, setStale] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+  const [ambient, setAmbient] = useState(false);
+  const [ambientShift, setAmbientShift] = useState(0);
+  // Seconds left of the open protected-actions session, as the server last said (so the tablet's
+  // clock does not matter), counted down here; null: none.
+  const initialUnlockLeft = initialBoard.locked ? null : (initialBoard.unlock?.secondsLeft ?? null);
+  const [unlockLeft, setUnlockLeft] = useState<number | null>(initialUnlockLeft);
+  const unlockLeftRef = useRef<number | null>(initialUnlockLeft);
   const shownVersion = useRef(initialBoard.signalVersion);
+  const lastActivity = useRef(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const devicePortrait = usePortrait();
 
   const refresh = useCallback(async () => {
@@ -89,10 +115,55 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     }
     shownVersion.current = result.board.signalVersion;
     setBoard(result.board);
+    const left = result.board.locked ? null : (result.board.unlock?.secondsLeft ?? null);
+    unlockLeftRef.current = left;
+    setUnlockLeft(left);
     setConnection("online");
     setOfflineSince(null);
     setStale(false);
   }, []);
+
+  const unlockedId =
+    !board.locked && unlockLeft !== null ? (board.unlock?.membershipId ?? null) : null;
+  const unlockedMember =
+    unlockedId === null || board.locked
+      ? null
+      : (board.members.find((member) => member.membershipId === unlockedId) ??
+        board.lockManagers.find((member) => member.membershipId === unlockedId) ??
+        null);
+
+  // Lock now: ends the session on the server (one retry), then shows what the server says, so a
+  // session that could not be ended shows again rather than staying open unseen.
+  const relock = useCallback(() => {
+    unlockLeftRef.current = null;
+    setUnlockLeft(null);
+    void endUnlockHere()
+      .then((ended) => ended || endUnlockHere())
+      .then(() => refresh());
+  }, [refresh]);
+
+  // The countdown, once a second while a session is open; at zero it relocks.
+  const counting = unlockLeft !== null;
+  useEffect(() => {
+    if (!counting) return;
+    const timer = setInterval(() => {
+      const left = unlockLeftRef.current;
+      if (left === null) return;
+      if (left <= 1) {
+        // The server has expired it too; it is not ended from here, so a session someone else
+        // opened meanwhile stays.
+        unlockLeftRef.current = null;
+        setUnlockLeft(null);
+        void refresh();
+        return;
+      }
+      unlockLeftRef.current = left - 1;
+      setUnlockLeft(left - 1);
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [counting, refresh]);
 
   // Every minute, and when the tablet wakes up or comes back online.
   useEffect(() => {
@@ -178,6 +249,56 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     };
   }, []);
 
+  // The ambient view after the Home's timing without a touch or key (also checked when the tablet
+  // wakes up, since timers sleep with it). Going ambient clears selections, dialogs and the session.
+  const ambientMs = board.ambientAfterSeconds * 1000;
+  const enterAmbient = useCallback(() => {
+    setAmbient(true);
+    setResetKey((key) => key + 1);
+    setLockOpen(false);
+    // Always asked, also when this screen has not heard of a session yet.
+    void endUnlockHere();
+    unlockLeftRef.current = null;
+    setUnlockLeft(null);
+  }, []);
+  useEffect(() => {
+    if (ambient) return;
+    if (lastActivity.current === 0) lastActivity.current = Date.now();
+    let timer = setTimeout(
+      enterAmbient,
+      Math.max(0, lastActivity.current + ambientMs - Date.now()),
+    );
+    const touch = () => {
+      lastActivity.current = Date.now();
+      clearTimeout(timer);
+      timer = setTimeout(enterAmbient, ambientMs);
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastActivity.current >= ambientMs) enterAmbient();
+    };
+    window.addEventListener("pointerdown", touch);
+    window.addEventListener("keydown", touch);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("pointerdown", touch);
+      window.removeEventListener("keydown", touch);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [ambient, ambientMs, enterAmbient]);
+
+  // In the ambient view the clock moves a little every minute, without animation.
+  useEffect(() => {
+    if (!ambient) return;
+    const timer = setInterval(() => {
+      setAmbientShift((shift) => (shift + 1) % AMBIENT_SHIFTS.length);
+    }, AMBIENT_SHIFT_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [ambient]);
+
   // The display's own theme, independent of anyone's preference on this browser.
   const theme = board.preferences.theme;
   useEffect(() => {
@@ -224,6 +345,31 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         ) : null}
         {status}
       </div>
+    );
+  }
+
+  if (ambient) {
+    return (
+      <button
+        type="button"
+        className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        data-testid="display-ambient"
+        onClick={() => {
+          lastActivity.current = Date.now();
+          setAmbient(false);
+          void refresh();
+        }}
+      >
+        <span className="sr-only">{t("ambientTitle")}</span>
+        <span
+          className="flex flex-col items-center gap-6"
+          style={{ transform: `translate(${AMBIENT_SHIFTS[ambientShift] ?? "0px, 0px"})` }}
+        >
+          <DisplayClock timeZone={board.timeZone} clockFormat={clockFormat} />
+        </span>
+        <span className="text-helper text-fg-muted">{t("ambientHint")}</span>
+        {status}
+      </button>
     );
   }
 
@@ -276,6 +422,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
             }))}
             actions={choreActions}
             onChanged={() => void refresh()}
+            unlockedMembershipId={unlockedId}
           />
         ) : (
           <DisplayChoreList chores={board.chores} count={widget.config.count} dueLabel={dueLabel} />
@@ -308,11 +455,35 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
       data-orientation={orientation}
     >
       <header className="flex flex-wrap items-center justify-between gap-3 text-start">
-        <h1 className="text-page-title font-semibold text-fg">
+        <h1 ref={headingRef} tabIndex={-1} className="text-page-title font-semibold text-fg">
           <bdi>{board.homeName}</bdi>
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {status}
+          {unlockedId !== null && unlockLeft !== null ? (
+            <div
+              className="flex items-center gap-3 rounded-control border border-line bg-accent-subtle px-3 py-1"
+              data-testid="display-unlocked"
+            >
+              <p className="text-helper text-fg">
+                {t("unlockedFor", {
+                  name: unlockedMember?.name ?? t("unnamed"),
+                  time: formatCountdown(unlockLeft),
+                })}
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-12"
+                onClick={() => {
+                  relock();
+                  headingRef.current?.focus();
+                }}
+              >
+                {t("lockNow")}
+              </Button>
+            </div>
+          ) : null}
           {board.lockManagers.length > 0 && !offline ? (
             <Button
               type="button"
@@ -361,6 +532,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         key={resetKey}
         open={lockOpen}
         managers={board.lockManagers}
+        unlockedMembershipId={unlockedId}
         onClose={() => {
           setLockOpen(false);
         }}

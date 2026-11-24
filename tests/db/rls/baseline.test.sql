@@ -223,7 +223,11 @@ create temporary table service_role_only on commit drop as
       'public.display_chore_verified(uuid,uuid)',
       'public.display_chore_undo(uuid,uuid)',
       'public.display_lock_attempt(uuid,uuid,text)',
-      'public.display_lock_verified(uuid,uuid)'
+      'public.display_lock_verified(uuid,uuid)',
+      -- UX8a: the display's protected-actions session (state, Lock now, privacy lock in a session).
+      'public.display_session_state(uuid)',
+      'public.display_end_unlock(uuid)',
+      'public.display_lock_by_session(uuid,uuid)'
     ]::regprocedure[]) as s(signature);
 
 select tests.assert_true(

@@ -6,6 +6,8 @@ import { isShoppingUnit, type ShoppingUnit } from "@madeora/domain/shopping";
 
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 
+import { readDisplaySessionState } from "./display-actions";
+
 import {
   readDisplayLayout,
   type DisplayLayout,
@@ -15,6 +17,7 @@ import {
   displayOrientations,
   displayThemes,
 } from "./layout";
+import { DEFAULT_AMBIENT_AFTER } from "./schema";
 
 /**
  * What a paired display shows (S44), read with the display's own session through
@@ -128,6 +131,14 @@ interface BoardBase {
   readonly preferences: DisplayPreferences;
   /** The display's signal version when this was read (Realtime tells it when to read again). */
   readonly signalVersion: number;
+  /** UX8a: seconds without a touch before the ambient view (the Home's setting). */
+  readonly ambientAfterSeconds: number;
+}
+
+/** UX8a: the member whose protected-actions session is open on this display, and for how long. */
+export interface DisplayUnlock {
+  readonly membershipId: string;
+  readonly secondsLeft: number;
 }
 
 export type DisplayBoard =
@@ -147,6 +158,7 @@ export type DisplayBoard =
       }[];
       readonly chores: readonly DisplayBoardChore[];
       readonly shopping: readonly DisplayBoardList[];
+      readonly unlock: DisplayUnlock | null;
     });
 
 /**
@@ -179,6 +191,7 @@ export function toDisplayBoard(data: unknown): DisplayBoard | null {
       clockFormat: row.clock_format,
     },
     signalVersion: row.signal_version,
+    ambientAfterSeconds: DEFAULT_AMBIENT_AFTER,
   };
   if (row.locked) return { ...base, locked: true, lockMessage: row.lock_message };
   return {
@@ -223,6 +236,7 @@ export function toDisplayBoard(data: unknown): DisplayBoard | null {
         unit: isShoppingUnit(item.unit) ? item.unit : null,
       })),
     })),
+    unlock: null,
   };
 }
 
@@ -242,5 +256,12 @@ export async function getDisplayBoard(): Promise<DisplayBoardResult> {
     log("display_board.shape");
     return { kind: "unavailable" };
   }
-  return { kind: "ok", board };
+  // The Home's ambient timing and the open protected-actions session (UX8a), for this display only.
+  const state = await readDisplaySessionState(board.displayId);
+  return {
+    kind: "ok",
+    board: board.locked
+      ? { ...board, ambientAfterSeconds: state.ambientAfterSeconds }
+      : { ...board, ambientAfterSeconds: state.ambientAfterSeconds, unlock: state.unlock },
+  };
 }

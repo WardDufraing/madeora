@@ -7909,7 +7909,8 @@
     "confirm": "Confirm",
     "notMe": "That's not me",
     "pinRequiredChore": "This chore needs a PIN.",
-    "pinRequiredMember": "{name} confirms chores with their PIN."
+    "pinRequiredMember": "{name} confirms chores with their PIN.",
+    "inSession": "{name} is unlocked on this display, so no PIN is needed."
   },
   "ChildTransition": {
     "guardianTitle": "Own account",
@@ -8039,7 +8040,13 @@
     "pairingUnavailable": "Pairing is not available right now. This screen tries again by itself.",
     "pairingNewCode": "Get a new code",
     "configure": "Layout and lock",
-    "configureNamed": "Layout and privacy lock of {name}"
+    "configureNamed": "Layout and privacy lock of {name}",
+    "ambientTitle": "Ambient mode",
+    "ambientLabel": "Show the ambient view after",
+    "ambientIntro": "After this long without a touch, this Home's displays show only the time and date. A tap brings the dashboard back.",
+    "ambientOption": "{minutes, plural, one {# minute} other {# minutes}}",
+    "ambientSave": "Save",
+    "ambientSaved": "Ambient mode saved."
   },
   "DisplayBoard": {
     "widget": {
@@ -8082,8 +8089,14 @@
       "notPermitted": "Only a Home manager can turn on privacy mode.",
       "rateLimited": "Too many tries on this display. Wait a few minutes.",
       "network": "Madeora cannot be reached right now. Nothing was changed.",
-      "failed": "Privacy mode could not be turned on. Try again."
-    }
+      "failed": "Privacy mode could not be turned on. Try again.",
+      "pinRequired": "Your unlock on this display has ended. Enter your PIN."
+    },
+    "unlockedFor": "Unlocked for {name} · {time} left",
+    "lockNow": "Lock now",
+    "lockInSession": "You are unlocked on this display, so no PIN is needed.",
+    "ambientTitle": "Ambient view",
+    "ambientHint": "Tap anywhere to show the dashboard."
   },
   "DisplayConfig": {
     "title": "Household Display",

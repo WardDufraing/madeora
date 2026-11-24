@@ -1,7 +1,14 @@
-import { toDisplayBoard } from "./board";
+import { getDisplayBoard, toDisplayBoard } from "./board";
 
+const rpc = vi.hoisted(() => vi.fn());
+const sessionState = vi.hoisted(() => vi.fn());
 vi.mock("server-only", () => ({}));
-vi.mock("@/auth/supabase-server", () => ({ createSupabaseServerClient: vi.fn() }));
+vi.mock("@/auth/supabase-server", () => ({
+  createSupabaseServerClient: () => Promise.resolve({ rpc }),
+}));
+vi.mock("./display-actions", () => ({
+  readDisplaySessionState: (...args: unknown[]) => Promise.resolve(sessionState(...args)),
+}));
 
 const base = {
   display_id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0071",
@@ -27,6 +34,7 @@ describe("toDisplayBoard", () => {
         clockFormat: "24h",
       },
       signalVersion: 7,
+      ambientAfterSeconds: 300,
       locked: true,
       lockMessage: "Welkom!",
     });
@@ -68,10 +76,60 @@ describe("toDisplayBoard", () => {
       "shopping",
     ]);
     expect(board.shopping[0]?.items[0]?.unit).toBeNull();
+    expect(board.unlock).toBeNull();
   });
 
   it("refuses an unexpected shape", () => {
     expect(toDisplayBoard({ ...base, locked: "yes" })).toBeNull();
     expect(toDisplayBoard(null)).toBeNull();
+  });
+});
+
+describe("getDisplayBoard (UX8a)", () => {
+  const unlockedRow = {
+    ...base,
+    locked: false,
+    display_name: "Keuken",
+    home_name: "Thuis",
+    layout: null,
+    actions: true,
+    require_pin: false,
+    members: [],
+    lock_managers: [],
+    chores: [],
+    shopping: [],
+  };
+
+  it("adds the Home's ambient timing and the open session for this display", async () => {
+    rpc.mockResolvedValueOnce({ data: unlockedRow, error: null, status: 200 });
+    sessionState.mockReturnValueOnce({
+      ambientAfterSeconds: 600,
+      unlock: { membershipId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0011", secondsLeft: 90 },
+    });
+    const result = await getDisplayBoard();
+    expect(sessionState).toHaveBeenCalledWith(base.display_id);
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok" || result.board.locked) throw new Error("unexpected board");
+    expect(result.board.ambientAfterSeconds).toBe(600);
+    expect(result.board.unlock).toEqual({
+      membershipId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0011",
+      secondsLeft: 90,
+    });
+  });
+
+  it("never sends a session with a locked board", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...base, locked: true, lock_message: null },
+      error: null,
+      status: 200,
+    });
+    sessionState.mockReturnValueOnce({
+      ambientAfterSeconds: 120,
+      unlock: { membershipId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0011", secondsLeft: 90 },
+    });
+    const result = await getDisplayBoard();
+    if (result.kind !== "ok") throw new Error("unexpected result");
+    expect(result.board).not.toHaveProperty("unlock");
+    expect(result.board.ambientAfterSeconds).toBe(120);
   });
 });

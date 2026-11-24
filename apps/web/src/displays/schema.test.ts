@@ -1,5 +1,9 @@
 import {
+  AMBIENT_AFTER_CHOICES,
   approveDisplaySchema,
+  DEFAULT_AMBIENT_AFTER,
+  homeDisplaySettingsSchema,
+  isAmbientAfter,
   displayNameSchema,
   displayPairingAddress,
   formatPairingCode,
@@ -63,5 +67,17 @@ describe("display pairing address (S43-L5)", () => {
     expect(displayPairingAddress("https://madeora-git-x.vercel.app/app", "/display")).toBe(
       "madeora-git-x.vercel.app/display",
     );
+  });
+});
+
+describe("ambient timing (UX8a)", () => {
+  it("offers one to thirty minutes, five by default", () => {
+    expect(AMBIENT_AFTER_CHOICES).toEqual([60, 120, 300, 600, 900, 1800]);
+    expect(DEFAULT_AMBIENT_AFTER).toBe(300);
+    expect(isAmbientAfter(600)).toBe(true);
+    expect(isAmbientAfter(45)).toBe(false);
+    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 900 }).success).toBe(true);
+    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 301 }).success).toBe(false);
+    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: "300" }).success).toBe(false);
   });
 });
