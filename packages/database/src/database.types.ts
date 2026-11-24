@@ -1887,6 +1887,26 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_task_list_with_task: {
+        Args: {
+          p_assignee_ids?: string[];
+          p_description?: string;
+          p_due_date?: string;
+          p_home_id?: string;
+          p_label_ids?: string[];
+          p_list_id: string;
+          p_list_name: string;
+          p_priority?: string;
+          p_start_date?: string;
+          p_task_id: string;
+          p_title: string;
+        };
+        Returns: {
+          list_revision: number;
+          outcome: string;
+          task_revision: number;
+        }[];
+      };
       create_task_series: {
         Args: {
           p_assignee_ids?: string[];
