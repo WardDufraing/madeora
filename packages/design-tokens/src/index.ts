@@ -13,17 +13,25 @@ export { neutral, overlay, themes, type NeutralTokens, type Theme } from "./neut
 export { accentPalette, type PaletteId } from "./palette.ts";
 export { semantic, tones, type Tone, type ToneTokens } from "./semantic.ts";
 export {
-  atmosphere,
+  canvas,
+  canvasMaxWidth,
   duration,
   easing,
   elevation,
   fontFamily,
   fontSize,
   iconSize,
+  motion,
+  motionReduced,
+  priorities,
   radius,
   shell,
+  space,
+  spaceCompact,
   spacingUnitPx,
+  type ElevationRole,
   type IconSize,
+  type Priority,
 } from "./scale.ts";
 export {
   colourNames,

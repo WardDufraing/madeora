@@ -23,7 +23,7 @@ export default async function AuthLayout({ children }: Readonly<{ children: Reac
           </span>
           <span className="text-section-title font-semibold text-fg">Madeora</span>
         </div>
-        <div className="rounded-card border border-line bg-surface p-5 text-fg shadow-card sm:p-8">
+        <div className="rounded-card border border-line bg-surface p-5 text-fg shadow-raised sm:p-8">
           {children}
         </div>
       </main>

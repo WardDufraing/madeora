@@ -17,9 +17,9 @@ describe("renderAccentCss", () => {
     expect(css).toContain(`--md-color-accent-fg: ${dark.accentFg};`);
     expect(css).toContain(`--md-color-focus: ${light.focusRing};`);
     expect(css).toContain(`--md-color-accent-edge: ${dark.accentEdge};`);
-    // Only accent tokens: the neutral palette and the atmosphere stay as they are.
+    // Only accent tokens: the neutral palette and the canvas stay as they are.
     expect(css).not.toContain("--md-color-page");
-    expect(css).not.toContain("--md-atmosphere");
+    expect(css).not.toContain("--md-canvas");
   });
 
   it("can recolour one element only, for a preview", () => {

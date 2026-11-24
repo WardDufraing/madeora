@@ -43,4 +43,7 @@ All icons were drawn for Madeora on 13 October 2026 (S04 and S05; `chevron-down.
 | `SidebarCollapseIcon` | `sidebar-collapse.svg` | Collapse the sidebar (mirrored in right-to-left layouts)        |
 | `SidebarExpandIcon`   | `sidebar-expand.svg`   | Expand the sidebar (mirrored in right-to-left layouts)          |
 | `DragHandleIcon`      | `drag-handle.svg`      | Drag handle of a dashboard widget in edit mode (S17)            |
+| `MoreVerticalIcon`    | `more-vertical.svg`    | Overflow (three-dot) menu trigger                               |
+| `SearchIcon`          | `search.svg`           | Search fields and searchable pickers                            |
+| `PlusIcon`            | `plus.svg`             | Create actions such as + New Task                               |
 | `RepeatIcon`          | `repeat.svg`           | Marks an occurrence of a recurring task (S19)                   |

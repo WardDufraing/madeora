@@ -21,27 +21,71 @@ export const fontSize = {
 /** 4px grid (spec). Values in px for platform-neutral use; the web app uses Tailwind's 4px spacing. */
 export const spacingUnitPx = 4;
 
-/** Spec: card radius 14–18px, control radius 9–12px; avoid pill-shaped controls everywhere. */
+/**
+ * Moderately rounded geometry (redesign decision 16): about 12-16px for cards and 6-10px for
+ * controls. Overlay panels (dialogs, sheets, side panels) get a slightly larger radius.
+ */
 export const radius = {
-  control: "0.625rem",
-  card: "1rem",
+  control: "0.5rem",
+  card: "0.875rem",
+  overlay: "1.25rem",
   /** The 20px checkbox box: a control radius would make it look round. */
   checkbox: "0.375rem",
 } as const;
 
-/** Restrained depth (spec: flat or very subtle elevation, no heavy glassmorphism). */
-export const elevation: Readonly<
-  Record<Theme, { readonly card: string; readonly overlay: string }>
-> = {
+export type ElevationRole = "raised" | "overlay" | "inset" | "selected";
+
+/**
+ * Pronounced tactile depth (redesign decisions 14, 15, 22), as one role per surface purpose:
+ * `raised` for widget cards, `overlay` for dialogs, menus and sheets, `inset` for pressed and
+ * recessed controls, `selected` for the chosen item (add a border or ring in the accent edge colour: depth is not a state signal). Each pairs a soft highlight with a layered
+ * shadow, tuned separately per theme. Only two shadow layers and no blur filters, to keep scrolling
+ * cheap. Depth never carries state alone: components keep borders, labels and focus rings.
+ */
+export const elevation: Readonly<Record<Theme, Readonly<Record<ElevationRole, string>>>> = {
   light: {
-    card: "0 1px 2px rgb(21 26 41 / 0.04), 0 4px 16px rgb(21 26 41 / 0.04)",
-    overlay: "0 4px 12px rgb(21 26 41 / 0.08), 0 16px 40px rgb(21 26 41 / 0.12)",
+    raised:
+      "inset 0 1px 0 rgb(255 255 255 / 0.9), 0 2px 4px rgb(21 26 41 / 0.06), 0 8px 24px rgb(21 26 41 / 0.1)",
+    overlay:
+      "inset 0 1px 0 rgb(255 255 255 / 0.9), 0 6px 16px rgb(21 26 41 / 0.12), 0 24px 56px rgb(21 26 41 / 0.18)",
+    inset: "inset 0 2px 4px rgb(21 26 41 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.8)",
+    selected: "inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 3px rgb(21 26 41 / 0.1)",
   },
   dark: {
-    card: "0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.2)",
-    overlay: "0 4px 12px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.45)",
+    raised:
+      "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.35)",
+    overlay:
+      "inset 0 1px 0 rgb(255 255 255 / 0.09), 0 6px 16px rgb(0 0 0 / 0.5), 0 24px 56px rgb(0 0 0 / 0.55)",
+    inset: "inset 0 2px 5px rgb(0 0 0 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.05)",
+    selected: "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 3px rgb(0 0 0 / 0.4)",
   },
 };
+
+/**
+ * Balanced spacing (redesign decision 17): semantic gaps and paddings for the dashboard grid,
+ * widget shells, panels and controls. `tokens.css` lowers the roomy ones on narrow viewports;
+ * touch targets are never reduced.
+ */
+export const space = {
+  "grid-gap": "1.25rem",
+  "widget-padding": "1.25rem",
+  "widget-header-gap": "0.75rem",
+  "panel-padding": "1.5rem",
+  "control-gap": "0.5rem",
+  /** Page gutter of the main content canvas. */
+  "canvas-gutter": "1.5rem",
+} as const;
+
+/** Narrow viewports (below 40rem): the roomy spacing tokens shrink a step. */
+export const spaceCompact: Readonly<Partial<Record<keyof typeof space, string>>> = {
+  "grid-gap": "0.75rem",
+  "widget-padding": "1rem",
+  "panel-padding": "1.25rem",
+  "canvas-gutter": "1rem",
+};
+
+/** Readable width of the main content canvas on ultrawide screens (redesign decision 42). */
+export const canvasMaxWidth = "96rem";
 
 /**
  * App shell (spec: persistent desktop sidebar, expanded approximately 240px, collapsed
@@ -57,8 +101,9 @@ export const iconSize = { sm: 16, md: 20, lg: 24 } as const;
 export type IconSize = keyof typeof iconSize;
 
 /**
- * Motion (spec: purposeful and subtle; sidebar ~200–250ms). Durations become 0ms when the user
- * prefers reduced motion, so every transition built on them stops moving.
+ * Motion (redesign decision 23: subtle, purposeful; sidebar ~200-250ms). Durations and
+ * displacements become 0 when the user prefers reduced motion, so every transition built on them
+ * stops moving while state changes stay visible.
  */
 export const duration = {
   fast: "120ms",
@@ -72,17 +117,36 @@ export const easing = {
   exit: "cubic-bezier(0.3, 0, 1, 1)",
 } as const;
 
-/**
- * The page-only atmospheric background (spec): a very low-opacity radial wash that fades into the
- * page colour. It is built from the accent and a cool blue, so it follows the accent instead of
- * hard-coding purple. It is switched off for reduced transparency and forced colours.
- */
-export const atmosphere: Readonly<
-  Record<
-    Theme,
-    { readonly cool: Hex; readonly accentStrength: string; readonly coolStrength: string }
-  >
-> = {
-  light: { cool: "#5b8def", accentStrength: "10%", coolStrength: "8%" },
-  dark: { cool: "#3d6fe0", accentStrength: "18%", coolStrength: "12%" },
+/** Distances an element travels while entering, and the press feedback scale. */
+export const motion = {
+  "shift-sm": "0.25rem",
+  "shift-md": "0.75rem",
+  "press-scale": "0.98",
+} as const;
+
+/** What `motion` becomes under reduced motion: no travel, no scale. */
+export const motionReduced: Readonly<Record<keyof typeof motion, string>> = {
+  "shift-sm": "0rem",
+  "shift-md": "0rem",
+  "press-scale": "1",
 };
+
+/**
+ * The dashboard canvas (redesign decision 21): a restrained, neutral tonal gradient behind the
+ * raised surfaces, on the page background only. It is deliberately not built from the accent, so
+ * the single user accent never becomes a second palette. Primary and muted text meet 4.5:1 on
+ * both stops (tested). Solid `page` colour is the fallback for forced colours and reduced
+ * transparency.
+ */
+export const canvas: Readonly<Record<Theme, { readonly from: Hex; readonly to: Hex }>> = {
+  light: { from: "#fbfcff", to: "#f3f5fa" },
+  dark: { from: "#151a26", to: "#0d1017" },
+};
+
+/**
+ * Task priority hues (redesign decision 52): a narrow semantic exception to the single accent.
+ * They reuse the status tones, so contrast is already validated; the UI always pairs them with a
+ * name or icon.
+ */
+export type Priority = "high" | "medium" | "low";
+export const priorities: readonly Priority[] = ["high", "medium", "low"];

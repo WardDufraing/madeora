@@ -136,11 +136,11 @@ test("follows the operating system's dark mode when no theme is forced", async (
   await expect(page.locator("body")).toHaveCSS("background-color", rgb("#f7f8fc"));
 });
 
-test("the atmospheric background is on the page only and disappears with forced colours", async ({
+test("the canvas gradient is on the page only and disappears with forced colours", async ({
   page,
 }) => {
   await page.goto("/dev/components");
-  await expect(page.locator("body")).toHaveCSS("background-image", /radial-gradient/);
+  await expect(page.locator("body")).toHaveCSS("background-image", /linear-gradient/);
   const gradients = await page.evaluate(
     () =>
       [...document.querySelectorAll("body *")].filter(
@@ -153,7 +153,7 @@ test("the atmospheric background is on the page only and disappears with forced 
   await expect(page.locator("body")).toHaveCSS("background-image", "none");
 });
 
-test("the atmospheric background disappears with reduced transparency", async ({ page }) => {
+test("the canvas gradient disappears with reduced transparency", async ({ page }) => {
   // Playwright has no option for this media feature yet, so it is emulated through Chromium.
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setEmulatedMedia", {

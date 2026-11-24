@@ -6,7 +6,7 @@ import { CONTRAST } from "./accent.ts";
 import { contrastRatio, isHex, type Hex } from "./color.ts";
 import { colourNames, renderTailwindCss, renderTokensCss, themeVariables } from "./css.ts";
 import { neutral, themes } from "./neutral.ts";
-import { shell } from "./scale.ts";
+import { canvas, elevation, radius, shell, space } from "./scale.ts";
 import { semantic, tones } from "./semantic.ts";
 
 describe("neutral and semantic colours", () => {
@@ -91,12 +91,70 @@ describe("generated CSS", () => {
     expect(renderTailwindCss()).toContain("--color-*: initial;");
   });
 
-  it("builds the atmospheric background from tokens only, never a hard-coded colour", () => {
+  it("builds the canvas gradient from neutral stops only, never the accent", () => {
     const line = renderTokensCss()
       .split("\n")
-      .find((l) => l.includes("--md-atmosphere:"));
+      .find((l) => l.includes("--md-canvas:"));
     expect(line).toBeDefined();
     expect(line).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i);
-    expect(line).toContain("var(--md-color-accent)");
+    expect(line).not.toContain("accent");
+  });
+
+  it("keeps primary and muted text readable on both canvas stops", () => {
+    for (const theme of themes) {
+      for (const stop of [canvas[theme].from, canvas[theme].to]) {
+        expect(contrastRatio(neutral[theme].fg, stop)).toBeGreaterThanOrEqual(CONTRAST.text);
+        expect(contrastRatio(neutral[theme].fgMuted, stop)).toBeGreaterThanOrEqual(CONTRAST.text);
+      }
+    }
+  });
+
+  it("uses the moderately rounded radii of redesign decision 16", () => {
+    const px = (rem: string) => Number.parseFloat(rem) * 16;
+    expect(px(radius.card)).toBeGreaterThanOrEqual(12);
+    expect(px(radius.card)).toBeLessThanOrEqual(16);
+    expect(px(radius.control)).toBeGreaterThanOrEqual(6);
+    expect(px(radius.control)).toBeLessThanOrEqual(10);
+    expect(px(radius.overlay)).toBeGreaterThan(px(radius.card));
+  });
+
+  it("defines every elevation role per theme, and a distinct shadow for each role", () => {
+    for (const theme of themes) {
+      const roles = Object.values(elevation[theme]);
+      expect(new Set(roles).size).toBe(4);
+      for (const role of ["raised", "overlay", "inset", "selected"] as const) {
+        expect(renderTokensCss()).toContain(`--md-shadow-${role}: ${elevation[theme][role]};`);
+      }
+    }
+  });
+
+  it("zeroes motion travel and press scale for reduced motion", () => {
+    const css = renderTokensCss();
+    const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toContain("--md-motion-shift-sm: 0rem;");
+    expect(reduced).toContain("--md-motion-press-scale: 1;");
+  });
+
+  it("shrinks the roomy spacing tokens on narrow viewports only", () => {
+    const css = renderTokensCss();
+    const narrow = css.slice(css.indexOf("@media (max-width: 40rem)"));
+    expect(narrow).toContain("--md-space-grid-gap: 0.75rem;");
+    expect(css).toContain(`--md-space-grid-gap: ${space["grid-gap"]};`);
+  });
+
+  it("exposes priority colours that stay visible against surfaces in both themes", () => {
+    for (const theme of themes) {
+      const vars = new Map(themeVariables(theme));
+      for (const priority of ["high", "medium", "low"]) {
+        const colour = vars.get(`--md-color-priority-${priority}`);
+        expect(colour).toBeDefined();
+        expect(isHex(colour ?? "")).toBe(true);
+        // A bar is a graphical object: 3:1 against the raised surface (WCAG 1.4.11).
+        expect(contrastRatio(colour as Hex, neutral[theme].surface)).toBeGreaterThanOrEqual(
+          CONTRAST.ui,
+        );
+      }
+    }
+    expect(colourNames()).toContain("priority-high");
   });
 });

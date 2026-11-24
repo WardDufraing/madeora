@@ -2,17 +2,25 @@ import { defaultAccent, deriveAccent, type AccentTokens } from "./accent.ts";
 import { neutral, overlay, type NeutralTokens, type Theme } from "./neutral.ts";
 import { accentPalette } from "./palette.ts";
 import {
-  atmosphere,
+  canvas,
+  canvasMaxWidth,
   duration,
   easing,
   elevation,
   fontFamily,
   fontSize,
   iconSize,
+  motion,
+  motionReduced,
+  priorities,
   radius,
   shell,
+  space,
+  spaceCompact,
+  type ElevationRole,
+  type Priority,
 } from "./scale.ts";
-import { semantic, tones } from "./semantic.ts";
+import { semantic, tones, type Tone } from "./semantic.ts";
 
 /**
  * Renders the tokens as CSS custom properties (`tokens.css`) and the Tailwind CSS v4 theme that
@@ -46,8 +54,18 @@ export function colourNames(): string[] {
     ...accentKeys.map((key) => (key === "focusRing" ? "focus" : kebab(key))),
     ...tones.flatMap((tone) => [tone, `${tone}-subtle`, `${tone}-solid`, `on-${tone}`]),
     "overlay",
+    ...priorities.map((priority) => `priority-${priority}`),
   ];
 }
+
+const elevationRoles: readonly ElevationRole[] = ["raised", "overlay", "inset", "selected"];
+
+/** Priority hues reuse the status tones (redesign decision 52). */
+const priorityTone: Readonly<Record<Priority, Tone>> = {
+  high: "danger",
+  medium: "warning",
+  low: "success",
+};
 
 /** The theme-dependent custom properties, as `[name, value]` pairs. */
 export function themeVariables(theme: Theme): [string, string][] {
@@ -65,18 +83,15 @@ export function themeVariables(theme: Theme): [string, string][] {
     vars.push([`--md-color-on-${tone}`, t.onSolid]);
   }
   vars.push(["--md-color-overlay", overlay[theme]]);
-  vars.push(["--md-shadow-card", elevation[theme].card]);
-  vars.push(["--md-shadow-overlay", elevation[theme].overlay]);
-  vars.push(["--md-atmosphere-cool", atmosphere[theme].cool]);
-  vars.push(["--md-atmosphere-accent-strength", atmosphere[theme].accentStrength]);
-  vars.push(["--md-atmosphere-cool-strength", atmosphere[theme].coolStrength]);
+  for (const priority of priorities) {
+    vars.push([`--md-color-priority-${priority}`, semantic[theme][priorityTone[priority]].fg]);
+  }
+  for (const role of elevationRoles) vars.push([`--md-shadow-${role}`, elevation[theme][role]]);
+  vars.push(["--md-canvas-from", canvas[theme].from]);
+  vars.push(["--md-canvas-to", canvas[theme].to]);
   // Declared in every theme block, because custom properties resolve where they are declared:
   // an element that forces a theme gets a background built from its own values.
-  vars.push([
-    "--md-atmosphere",
-    "radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), " +
-      "radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%)",
-  ]);
+  vars.push(["--md-canvas", "linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to))"]);
   return vars;
 }
 
@@ -127,6 +142,9 @@ function staticVariables(): [string, string][] {
     vars.push([`--md-text-${name}-line-height`, value.lineHeight]);
   }
   for (const [name, value] of Object.entries(radius)) vars.push([`--md-radius-${name}`, value]);
+  for (const [name, value] of Object.entries(space)) vars.push([`--md-space-${name}`, value]);
+  vars.push(["--md-canvas-max-width", canvasMaxWidth]);
+  for (const [name, value] of Object.entries(motion)) vars.push([`--md-motion-${name}`, value]);
   for (const [name, value] of Object.entries(shell)) vars.push([`--md-shell-${name}`, value]);
   for (const [name, value] of Object.entries(iconSize))
     vars.push([`--md-icon-${name}`, `${String(value)}px`]);
@@ -151,6 +169,15 @@ export function renderTokensCss(): string {
     "0ms",
   ]);
 
+  const reducedMotion = Object.entries(motionReduced).map(([name, value]): [string, string] => [
+    `--md-motion-${name}`,
+    value,
+  ]);
+  const compactSpace = Object.entries(spaceCompact).map(([name, value]): [string, string] => [
+    `--md-space-${name}`,
+    value,
+  ]);
+
   return [
     HEADER,
     "",
@@ -168,7 +195,12 @@ export function renderTokensCss(): string {
     "",
     "/* Reduced motion: every transition and animation built on the duration tokens stops moving. */",
     "@media (prefers-reduced-motion: reduce) {",
-    block(":root", zeroDurations, "  "),
+    block(":root", [...zeroDurations, ...reducedMotion], "  "),
+    "}",
+    "",
+    "/* Narrow viewports: roomy spacing shrinks a step; touch targets do not. */",
+    "@media (max-width: 40rem) {",
+    block(":root", compactSpace, "  "),
     "}",
     "",
   ].join("\n");
@@ -203,8 +235,14 @@ export function renderTailwindCss(): string {
       ["--font-sans", "var(--md-font-sans)"],
       ...text,
       ...radii,
-      ["--shadow-card", "var(--md-shadow-card)"],
-      ["--shadow-overlay", "var(--md-shadow-overlay)"],
+      ...elevationRoles.map((role): [string, string] => [
+        `--shadow-${role}`,
+        `var(--md-shadow-${role})`,
+      ]),
+      ...Object.keys(space).map((name): [string, string] => [
+        `--spacing-${name}`,
+        `var(--md-space-${name})`,
+      ]),
       ...easings,
     ]),
     "",

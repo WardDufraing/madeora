@@ -281,7 +281,7 @@ function OwnTemplate({
   return (
     <article
       aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5 text-fg shadow-card"
+      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5 text-fg shadow-raised"
       data-testid="template"
     >
       <h3 id={headingId} className="text-body font-semibold break-words">
@@ -399,7 +399,7 @@ function SharedTemplate({
   return (
     <article
       aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5 text-fg shadow-card"
+      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5 text-fg shadow-raised"
       data-testid="shared-template"
     >
       <h3 id={headingId} className="text-body font-semibold break-words">
