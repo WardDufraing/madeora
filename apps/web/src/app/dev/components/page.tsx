@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { TextField } from "@/components/ui/text-field";
 
-import { InteractiveDemo } from "./interactive-demo";
+import { FoundationsDemo, InteractiveDemo } from "./interactive-demo";
 
 export const metadata: Metadata = {
   title: "Component preview · Madeora",
@@ -142,6 +142,7 @@ export default async function ComponentPreviewPage() {
       </Card>
 
       <InteractiveDemo />
+      <FoundationsDemo />
 
       <Card title="Icons">
         <ul id="icons" className="flex flex-wrap gap-6">

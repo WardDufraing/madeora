@@ -13,8 +13,8 @@
   body {
     background-color: var(--color-page);
     color: var(--color-fg);
-    /* The page-only atmospheric background (spec: the only gradient allowed anywhere). */
-    background-image: var(--md-atmosphere);
+    /* The page-only neutral tonal canvas (redesign decision 21): the only gradient anywhere. */
+    background-image: var(--md-canvas);
     background-repeat: no-repeat;
   }
 
@@ -36,12 +36,46 @@
 @keyframes md-enter {
   from {
     opacity: 0;
-    transform: translateY(0.25rem) scale(0.98);
+    transform: translateY(var(--md-motion-shift-sm)) scale(var(--md-motion-press-scale));
+  }
+}
+
+/* Side panels slide in from the inline end, bottom sheets rise from the bottom edge. The travel is
+   a token, so it is 0 under reduced motion and only the fade remains. */
+@keyframes md-slide-end {
+  from {
+    opacity: 0;
+    transform: translateX(var(--md-motion-shift-md));
+  }
+}
+
+@keyframes md-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--md-motion-shift-md));
   }
 }
 
 @utility animate-enter {
   animation: md-enter var(--md-duration-base) var(--md-ease-enter);
+}
+
+@utility animate-slide-end {
+  animation: md-slide-end var(--md-duration-base) var(--md-ease-enter);
+}
+
+@utility animate-slide-up {
+  animation: md-slide-up var(--md-duration-base) var(--md-ease-enter);
+}
+
+/* Gentle press feedback for controls (redesign decision 23); scale is 1 under reduced motion. */
+@utility press-feedback {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: var(--md-duration-fast);
+  transition-timing-function: var(--md-ease-standard);
+  &:active:not(:disabled, [aria-disabled="true"]) {
+    transform: scale(var(--md-motion-press-scale));
+  }
 }
 
 /* Dashboard edit mode (S17): the layout mechanics React Grid Layout needs, in Madeora's own styles

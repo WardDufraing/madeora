@@ -58,7 +58,7 @@ export function SelectField({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cx(
-          "min-h-10 rounded-control border bg-surface px-3 text-body text-fg",
+          "min-h-10 rounded-control border bg-surface px-3 text-body text-fg shadow-inset",
           "transition-colors duration-(--md-duration-fast) ease-standard",
           "disabled:cursor-not-allowed disabled:opacity-60",
           error ? "border-danger" : "border-line-control",

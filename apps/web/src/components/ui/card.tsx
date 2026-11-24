@@ -15,8 +15,9 @@ export interface CardProps {
 }
 
 /**
- * A surface for grouped content (spec: flat or very subtle elevation, restrained borders,
- * 14–18px radius, no glassmorphism, solid background — never a gradient).
+ * A raised surface for grouped content (redesign decisions 14–17: tactile `raised` depth, 14px
+ * radius, balanced padding, solid background — never a gradient). It keeps a visible border, so
+ * depth is never the only cue that the card is a distinct surface.
  */
 export function Card({
   title,
@@ -34,7 +35,7 @@ export function Card({
     <Root
       aria-labelledby={title ? titleId : undefined}
       className={cx(
-        "rounded-card border border-line bg-surface p-5 text-fg shadow-card sm:p-6",
+        "rounded-card border border-line bg-surface p-widget-padding text-fg shadow-raised",
         className,
       )}
     >

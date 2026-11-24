@@ -98,7 +98,7 @@ export function WidgetFrame({
     <article
       aria-label={widget.title}
       className={cx(
-        "flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface text-fg shadow-card",
+        "flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface text-fg shadow-raised",
         className,
       )}
     >

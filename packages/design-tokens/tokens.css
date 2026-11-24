@@ -11,9 +11,20 @@
   --md-text-body-line-height: 1.5rem;
   --md-text-helper: 0.8125rem;
   --md-text-helper-line-height: 1.25rem;
-  --md-radius-control: 0.625rem;
-  --md-radius-card: 1rem;
+  --md-radius-control: 0.5rem;
+  --md-radius-card: 0.875rem;
+  --md-radius-overlay: 1.25rem;
   --md-radius-checkbox: 0.375rem;
+  --md-space-grid-gap: 1.25rem;
+  --md-space-widget-padding: 1.25rem;
+  --md-space-widget-header-gap: 0.75rem;
+  --md-space-panel-padding: 1.5rem;
+  --md-space-control-gap: 0.5rem;
+  --md-space-canvas-gutter: 1.5rem;
+  --md-canvas-max-width: 96rem;
+  --md-motion-shift-sm: 0.25rem;
+  --md-motion-shift-md: 0.75rem;
+  --md-motion-press-scale: 0.98;
   --md-shell-sidebar-expanded: 15rem;
   --md-shell-sidebar-collapsed: 4.5rem;
   --md-icon-sm: 16px;
@@ -75,12 +86,16 @@
   --md-color-info-solid: #175cd3;
   --md-color-on-info: #ffffff;
   --md-color-overlay: rgb(21 26 41 / 0.45);
-  --md-shadow-card: 0 1px 2px rgb(21 26 41 / 0.04), 0 4px 16px rgb(21 26 41 / 0.04);
-  --md-shadow-overlay: 0 4px 12px rgb(21 26 41 / 0.08), 0 16px 40px rgb(21 26 41 / 0.12);
-  --md-atmosphere-cool: #5b8def;
-  --md-atmosphere-accent-strength: 10%;
-  --md-atmosphere-cool-strength: 8%;
-  --md-atmosphere: radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%);
+  --md-color-priority-high: #b42318;
+  --md-color-priority-medium: #b54708;
+  --md-color-priority-low: #067647;
+  --md-shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 2px 4px rgb(21 26 41 / 0.06), 0 8px 24px rgb(21 26 41 / 0.1);
+  --md-shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 6px 16px rgb(21 26 41 / 0.12), 0 24px 56px rgb(21 26 41 / 0.18);
+  --md-shadow-inset: inset 0 2px 4px rgb(21 26 41 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.8);
+  --md-shadow-selected: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 3px rgb(21 26 41 / 0.1);
+  --md-canvas-from: #fbfcff;
+  --md-canvas-to: #f3f5fa;
+  --md-canvas: linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
 }
 
 /* With no explicit choice, follow the operating system. */
@@ -120,12 +135,16 @@
     --md-color-info-solid: #53b1fd;
     --md-color-on-info: #10141d;
     --md-color-overlay: rgb(0 0 0 / 0.6);
-    --md-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.2);
-    --md-shadow-overlay: 0 4px 12px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.45);
-    --md-atmosphere-cool: #3d6fe0;
-    --md-atmosphere-accent-strength: 18%;
-    --md-atmosphere-cool-strength: 12%;
-    --md-atmosphere: radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%);
+    --md-color-priority-high: #f97066;
+    --md-color-priority-medium: #fdb022;
+    --md-color-priority-low: #47cd89;
+    --md-shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.35);
+    --md-shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 6px 16px rgb(0 0 0 / 0.5), 0 24px 56px rgb(0 0 0 / 0.55);
+    --md-shadow-inset: inset 0 2px 5px rgb(0 0 0 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.05);
+    --md-shadow-selected: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 3px rgb(0 0 0 / 0.4);
+    --md-canvas-from: #151a26;
+    --md-canvas-to: #0d1017;
+    --md-canvas: linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
   }
 }
 
@@ -164,12 +183,16 @@
   --md-color-info-solid: #53b1fd;
   --md-color-on-info: #10141d;
   --md-color-overlay: rgb(0 0 0 / 0.6);
-  --md-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.2);
-  --md-shadow-overlay: 0 4px 12px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.45);
-  --md-atmosphere-cool: #3d6fe0;
-  --md-atmosphere-accent-strength: 18%;
-  --md-atmosphere-cool-strength: 12%;
-  --md-atmosphere: radial-gradient(60rem 36rem at 12% -12%, color-mix(in srgb, var(--md-color-accent) var(--md-atmosphere-accent-strength), transparent), transparent 70%), radial-gradient(52rem 32rem at 92% -8%, color-mix(in srgb, var(--md-atmosphere-cool) var(--md-atmosphere-cool-strength), transparent), transparent 70%);
+  --md-color-priority-high: #f97066;
+  --md-color-priority-medium: #fdb022;
+  --md-color-priority-low: #47cd89;
+  --md-shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.35);
+  --md-shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 6px 16px rgb(0 0 0 / 0.5), 0 24px 56px rgb(0 0 0 / 0.55);
+  --md-shadow-inset: inset 0 2px 5px rgb(0 0 0 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.05);
+  --md-shadow-selected: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 3px rgb(0 0 0 / 0.4);
+  --md-canvas-from: #151a26;
+  --md-canvas-to: #0d1017;
+  --md-canvas: linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
 }
 
 /* Reduced motion: every transition and animation built on the duration tokens stops moving. */
@@ -178,5 +201,18 @@
     --md-duration-fast: 0ms;
     --md-duration-base: 0ms;
     --md-duration-slow: 0ms;
+    --md-motion-shift-sm: 0rem;
+    --md-motion-shift-md: 0rem;
+    --md-motion-press-scale: 1;
+  }
+}
+
+/* Narrow viewports: roomy spacing shrinks a step; touch targets do not. */
+@media (max-width: 40rem) {
+  :root {
+    --md-space-grid-gap: 0.75rem;
+    --md-space-widget-padding: 1rem;
+    --md-space-panel-padding: 1.25rem;
+    --md-space-canvas-gutter: 1rem;
   }
 }
