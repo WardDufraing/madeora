@@ -10,7 +10,8 @@
 -- cannot be shared with a Home, so it never reaches another member, not even as a busy block.
 --
 -- Rollback: drop the two triggers and the `work_period` column, then restore
--- private.calendar_values and private.calendar_occurrence_json from 20261118090000_calendar.sql.
+-- private.calendar_values and private.calendar_occurrence_json from 20261118090000_calendar.sql, and
+-- private.copy_item_eligible from 20261128090000_category_deletion_home_copies.sql.
 -- Rows flagged as work periods turn into ordinary personal events.
 
 alter table private.calendar_events
@@ -149,4 +150,17 @@ create or replace function private.calendar_values(p_body jsonb, p_with_repeat b
     v.work_period := coalesce(private.pet_json_bool(p_body, 'workPeriod'), false);
     return v;
   end
+  $$;
+
+-- A work period is never copied into a Home (the copy would be an ordinary event every member sees).
+create or replace function private.copy_item_eligible(p_item_type text, p_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and coalesce(case p_item_type
+    when 'recipe' then exists (select 1 from private.recipes r
+      where r.id = p_id and r.owner_user_id = p_user_id and r.deleted_at is null and r.status = 'published')
+    when 'calendar_event' then exists (select 1 from private.calendar_events e
+      where e.id = p_id and e.owner_user_id = p_user_id and e.deleted_at is null and not e.work_period)
+    when 'photo_album' then exists (select 1 from private.photo_albums a
+      where a.id = p_id and a.owner_user_id = p_user_id and a.deleted_at is null)
+  end, false);
   $$;

@@ -111,3 +111,14 @@ select tests.assert_true(public.update_calendar_event((select id from made where
     'following', date '2027-04-12', false, gen_random_uuid()) ->> 'outcome' = 'saved',
   'A later change can start a new series');
 select tests.assert_true(tests.work_series_count() = 2, 'The new series is also a work period');
+
+-- Never copied into a Home -----------------------------------------------------------------------------
+select tests.act_as_owner();
+create function tests.copy_ok(p_event text) returns boolean language sql security definer as $$
+  select private.copy_item_eligible('calendar_event', p_event::uuid, tests.user_id('alice')); $$;
+grant execute on function tests.copy_ok(text) to authenticated, service_role;
+select tests.act_as('alice');
+select tests.assert_true(tests.copy_ok((select id::text from made where name = 'plain')),
+  'A plain personal event can still be copied');
+select tests.assert_true(not tests.copy_ok((select id::text from made where name = 'shift')),
+  'A work period cannot be copied into a Home');

@@ -11,6 +11,9 @@ Source: `plans/steps/UX00-redesign-plan-brief.md` (Ward's answer 2026-11-19: wor
 - Upcoming widget and list reads still return work periods (flagged); the UI slice decides how to show or filter them.
 - Web contract: `eventFieldsSchema.workPeriod` (optional), `createEventSchema` refuses work period with a Home or shares, `occurrenceSchema.workPeriod` (default false).
 
+- **Never copied into a Home** (review HIGH-1): `copy_item_eligible` redefined with `and not e.work_period`.
+- Known gaps for later slices: the UI must send `workPeriod` on a "this and following" change (a body without it starts the later series as a plain event, personal only, no privacy effect); the privacy export and Google outbound RPCs ignore the flag (no leak: export is the owner's own data).
+
 ## Rollback
 Drop the two triggers, the constraint and the column; restore `calendar_values` and `calendar_occurrence_json` from `20261118090000_calendar.sql`. Flagged rows become ordinary personal events.
 
