@@ -172,21 +172,21 @@ Use this exact supporting paragraph beneath the hero headline:
 
 ## Decision log
 
-| ID | Topic | Selection | Status |
-| --- | --- | --- | --- |
-| 01 | Overall first impression | Calm + warm/human + premium polish (A + D + C) | Confirmed |
-| 02 | Homepage hero | Interactive product showcase + editorial split (C + D) | Confirmed |
-| 03 | Hero headline | Everything in life, finally in sync. (B) | Confirmed |
-| 04 | Hero supporting copy | Balanced and benefit-driven (D) | Confirmed |
-| 05 | Hero calls to action | Get started for free + Explore features (B) | Confirmed |
-| 06 | Hero product showcase | Dashboard + floating widgets with Personal/Home transition (C + D) | Confirmed |
-| 07 | Personal/Home transition interaction | Automatic switching + manual toggle (C) | Confirmed |
-| 08 | Hero widget selection | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
-| 09 | Hero animation style | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D) | Confirmed |
-| 10 | Marketing colors | Reuse Madeora's default design tokens and purple accent | Confirmed |
-| 11 | Marketing themes | Both light and dark, system preference initially, manual toggle (C) | Confirmed |
-| 12 | Marketing typography | Existing Madeora fonts with editorial headline styling (D) | Confirmed |
-| 13 | Homepage navigation | Features, Solutions, How it works, Pricing, Log in, Get started (D) | Confirmed |
+| ID  | Topic                                | Selection                                                                                                   | Status    |
+| --- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------- |
+| 01  | Overall first impression             | Calm + warm/human + premium polish (A + D + C)                                                              | Confirmed |
+| 02  | Homepage hero                        | Interactive product showcase + editorial split (C + D)                                                      | Confirmed |
+| 03  | Hero headline                        | Everything in life, finally in sync. (B)                                                                    | Confirmed |
+| 04  | Hero supporting copy                 | Balanced and benefit-driven (D)                                                                             | Confirmed |
+| 05  | Hero calls to action                 | Get started for free + Explore features (B)                                                                 | Confirmed |
+| 06  | Hero product showcase                | Dashboard + floating widgets with Personal/Home transition (C + D)                                          | Confirmed |
+| 07  | Personal/Home transition interaction | Automatic switching + manual toggle (C)                                                                     | Confirmed |
+| 08  | Hero widget selection                | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
+| 09  | Hero animation style                 | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D)                      | Confirmed |
+| 10  | Marketing colors                     | Reuse Madeora's default design tokens and purple accent                                                     | Confirmed |
+| 11  | Marketing themes                     | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
+| 12  | Marketing typography                 | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
+| 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
 
 ## Update protocol
 
