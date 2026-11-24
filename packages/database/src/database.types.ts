@@ -1887,6 +1887,26 @@ export type Database = {
           revision: number;
         }[];
       };
+      create_task_list_with_task: {
+        Args: {
+          p_assignee_ids?: string[];
+          p_description?: string;
+          p_due_date?: string;
+          p_home_id?: string;
+          p_label_ids?: string[];
+          p_list_id: string;
+          p_list_name: string;
+          p_priority?: string;
+          p_start_date?: string;
+          p_task_id: string;
+          p_title: string;
+        };
+        Returns: {
+          list_revision: number;
+          outcome: string;
+          task_revision: number;
+        }[];
+      };
       create_task_series: {
         Args: {
           p_assignee_ids?: string[];
@@ -2171,9 +2191,14 @@ export type Database = {
         Args: { p_days: number; p_starts_on: string; p_vacation_id: string };
         Returns: string;
       };
+      discard_dashboard_draft: { Args: { p_home_id?: string; p_target?: string }; Returns: string };
       discard_google_calendar_change: { Args: { p_change_id: string }; Returns: string };
       discard_security_report: { Args: { p_report_id: string }; Returns: boolean };
       disconnect_google_calendar: { Args: Record<PropertyKey, never>; Returns: string };
+      dismiss_dashboard_suggestions: {
+        Args: { p_home_id: string; p_widget_ids: string[] };
+        Returns: string;
+      };
       display_board: { Args: Record<PropertyKey, never>; Returns: Json };
       display_chore_attempt: {
         Args: {
@@ -2384,12 +2409,25 @@ export type Database = {
       get_chore_volunteer_state: { Args: { p_occurrence_id: string }; Returns: Json };
       get_copy_origin: { Args: { p_item_id: string; p_item_type: string }; Returns: string };
       get_dashboard: {
-        Args: { p_home_id?: string };
+        Args: { p_home_id?: string; p_target?: string };
         Returns: {
           can_edit: boolean;
           can_undo: boolean;
+          has_draft: boolean;
+          has_override: boolean;
           layout: Json;
           revision: number;
+          target: string;
+          updated_at: string;
+        }[];
+      };
+      get_dashboard_draft: {
+        Args: { p_home_id?: string; p_target?: string };
+        Returns: {
+          base_revision: number;
+          current_revision: number;
+          expires_at: string;
+          layout: Json;
           updated_at: string;
         }[];
       };
@@ -3014,6 +3052,13 @@ export type Database = {
         }[];
       };
       list_copy_destinations: { Args: { p_item_id: string; p_item_type: string }; Returns: Json };
+      list_dashboard_suggestions: {
+        Args: { p_home_id: string };
+        Returns: {
+          widget: Json;
+          widget_id: string;
+        }[];
+      };
       list_dashboard_templates: {
         Args: { p_home_id?: string };
         Returns: {
@@ -3024,6 +3069,18 @@ export type Database = {
           shared_home_ids: string[];
           template_id: string;
           updated_at: string;
+        }[];
+      };
+      list_dashboard_versions: {
+        Args: { p_home_id?: string; p_target?: string };
+        Returns: {
+          created_at: string;
+          is_current: boolean;
+          layout: Json;
+          reason: string;
+          revision: number;
+          saved_by_me: boolean;
+          version_id: string;
         }[];
       };
       list_home_calendar_access: { Args: { p_home_id: string }; Returns: Json };
@@ -4012,6 +4069,7 @@ export type Database = {
           outcome: string;
         }[];
       };
+      reset_dashboard_override: { Args: { p_home_id: string }; Returns: string };
       reset_notification_preference: {
         Args: { p_category: string; p_channel: string; p_home_id?: string };
         Returns: boolean;
@@ -4061,6 +4119,13 @@ export type Database = {
         Returns: string;
       };
       respond_to_sign_in: { Args: { p_event_id: string; p_response: string }; Returns: string };
+      restore_dashboard_version: {
+        Args: { p_expected_revision: number; p_version_id: string };
+        Returns: {
+          outcome: string;
+          revision: number;
+        }[];
+      };
       restore_google_calendar_event: { Args: { p_exclusion_id: string }; Returns: string };
       restore_home: { Args: { p_home_id: string }; Returns: undefined };
       restore_meal_occurrence: {
@@ -4185,14 +4250,23 @@ export type Database = {
       };
       save_dashboard: {
         Args: {
+          p_commit_draft?: boolean;
           p_expected_revision: number;
           p_home_id?: string;
           p_layout: Json;
           p_previous?: Json;
+          p_target?: string;
         };
         Returns: {
           outcome: string;
           revision: number;
+        }[];
+      };
+      save_dashboard_draft: {
+        Args: { p_base_revision: number; p_home_id?: string; p_layout: Json; p_target?: string };
+        Returns: {
+          outcome: string;
+          updated_at: string;
         }[];
       };
       save_google_calendar_connection: {
@@ -4865,7 +4939,7 @@ export type Database = {
         Returns: string;
       };
       undo_dashboard_change: {
-        Args: { p_expected_revision: number; p_home_id?: string };
+        Args: { p_expected_revision: number; p_home_id?: string; p_target?: string };
         Returns: {
           outcome: string;
           revision: number;
