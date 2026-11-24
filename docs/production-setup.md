@@ -10,10 +10,11 @@ Production deploys from the `production` branch only. Pull requests and `main` d
 - Production web deploy: Vercel project `madeora`, Production branch `production`.
 - Production database: a separate Supabase project named `madeora-production` in EU (Frankfurt).
 - Production uses separate credentials from previews. Never copy production secrets into GitHub, the repository, local development, Preview, or chat.
-- Use synthetic/demo accounts and data until the release-readiness/privacy decision permits real household data.
+- Use synthetic/demo accounts and data until every item in the [release-readiness real-data gate](release-readiness.md#real-data-gate) is complete and recorded. The current no-backup/free-plan decision does not permit real household or outside-tester data.
 - Keep new user sign-up closed until production email delivery works and the product/privacy decision has been approved. The owner can then enable it using [email setup, step 8](email-setup.md#8-open-production-sign-up).
 - The GitHub repository and Vercel Hobby plan have non-commercial limits; review [provider costs](provider-cost-register.md) before production is used commercially.
 - Make sure the free Supabase project capacity is available. Supabase Free permits two active projects per organization; pause an unused project if needed. Do not upgrade or add billing without the owner's decision.
+- There is no hosted staging environment under the current release-readiness decision. Rehearse locally and on the protected Vercel preview using `madeora-preview`; preview jobs run in their own free Trigger.dev project as described in [Trigger.dev setup](trigger-setup.md#preview-of-main).
 
 Keep these values handy during setup: production URL, Supabase project URL and publishable key, Turnstile site key, R2 credentials, production Resend keys, Trigger.dev project ref, and—when Google Calendar is enabled—the separate Calendar OAuth client and token-encryption key. Store secrets directly in their provider's secret settings.
 
@@ -134,7 +135,7 @@ Follow [Trigger.dev setup](trigger-setup.md). Create/use the Madeora project and
 | `GOOGLE_CALENDAR_CLIENT_SECRET`  | production Calendar OAuth client secret, when enabled |
 | `GOOGLE_CALENDAR_TOKEN_KEY`      | production token key; identical to Vercel Production  |
 
-Deploy the jobs from `packages/jobs` at the same commit as the production app. Confirm the expected tasks and schedules appear in Trigger.dev, including `security-email`, `account-recovery-ready`, `privacy-export-build` and `home-copy-files` when their migrations are released. The hourly maintenance run must remain active so expired/stalled exports and Home-copy requests are swept and due account/Home closures are purged. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
+Deploy the jobs from `packages/jobs` at the same commit as the production app with `TRIGGER_PROJECT_REF` unset. If `packages/jobs/.env` contains that variable, move the file aside first so the production project configured in `trigger.config.ts` cannot be overridden. Confirm the expected tasks and schedules appear in Trigger.dev, including `security-email`, `account-recovery-ready`, `privacy-export-build` and `home-copy-files` when their migrations are released. The hourly maintenance run must remain active so expired/stalled exports and Home-copy requests are swept and due account/Home closures are purged. If the email or storage provider is not enabled for the release, follow the feature guide and leave its transport/driver off; do not enter placeholder credentials.
 
 ## 10. Vercel Production environment variables
 
@@ -169,12 +170,13 @@ Check the verification queries in [Supabase migrations](supabase-migrations.md) 
 
 ## 12. First release to Production
 
-1. Confirm the required Supabase migrations have been applied and the database verification checks pass.
-2. Confirm Turnstile, domain, environment variables and any enabled Google sign-in, Google Calendar, email, storage and job integrations are configured.
-3. Open the release PR from `main` into `production` using [the release procedure](github-setup.md#d-how-a-release-works-production-deploys-since-s06b-adr-0008).
-4. Review the exact diff and commits, wait for every check including **Release source**, then merge the PR.
-5. In Vercel → **Deployments**, confirm the `production` deployment is **Ready** and **Current**.
-6. Deploy Trigger.dev jobs from the same commit (if not already deployed).
+1. Complete the applicable [release-readiness checklist](release-readiness.md), including the demo-only/real-data gate, provider limits and migration/back-up decision.
+2. Confirm the required Supabase migrations have been applied and the database verification checks pass.
+3. Confirm Turnstile, domain, environment variables and any enabled Google sign-in, Google Calendar, email, storage and job integrations are configured.
+4. Open the release PR from `main` into `production` using [the release procedure](github-setup.md#d-how-a-release-works-production-deploys-since-s06b-adr-0008).
+5. Review the exact diff and commits, wait for every check including **Release source**, then merge the PR.
+6. In Vercel → **Deployments**, confirm the `production` deployment is **Ready** and **Current**.
+7. Deploy Trigger.dev jobs from the same commit (if not already deployed).
 
 ## 13. Production smoke checks
 
@@ -193,7 +195,7 @@ Use a private browser window and the canonical production URL.
 - Exercise account/Home lifecycle safeguards with disposable test records: verify sole-Owner and open-copy blockers, close and restore a test Home within its recovery period, and confirm normal access ends while closure is pending. Do not wait for or force the destructive 30-day purge during a smoke test.
 - Create a test child profile and accepted guardian relationship, verify cross-Home isolation, approve a household device, and test restricted child password/PIN sign-in plus an attributed chore completion. Revoke the device/session afterwards; never reuse a real child's data for this check.
 - Pair a disposable tablet/browser as a Household Display in a test Home. Verify its independent layout, privacy/party lock, member chore action and PIN handling, offline read-only fallback, and revocation/reset. Confirm the display cannot open member pages or reveal another Home, and unlock it only from a manager's separate session.
-- Open Ora in Personal space and a test Home. Verify its enabled, frequency, category and quiet-hour controls; daily/weekly overview; permission-filtered destinations; suggestion explanation/dismissal; and teaser behavior. Explicitly remember then forget a test destination, confirm one test task or shopping item, exercise Undo within five minutes, inspect and clear the seven-day history, and confirm a disallowed destination/action is unavailable without exposing another Home.
+- Open Ora in Personal space and a test Home. Verify its enabled, frequency, category and quiet-hour controls; daily/weekly overview; permission-filtered destinations; suggestion explanation/dismissal; and teaser behavior. Explicitly remember then forget a test destination, confirm a test task and shopping item creation, complete a task and change a non-repeating task's due date. Exercise each five-minute Undo, then change the record concurrently and confirm the locking Undo refuses to overwrite it. Inspect and clear the seven-day history, and confirm disallowed or cross-Home actions reveal nothing.
 - Award chore points to the production test account and verify one personal celebration appears at most once across refreshes/tabs, respects Quiet/category/quiet-hour controls and does not alter the ledger. Add the display-only Ora widget to a test Household Display and confirm it shows only display-safe chore/shopping counts with no personal history, controls, celebrations or actions.
 - If background jobs are enabled, run the `sample-ping` smoke test and check the outbox status.
 - Preview deployments must still require Vercel Authentication and must point only at `madeora-preview`.
@@ -205,11 +207,12 @@ Use a private browser window and the canonical production URL.
 - **Rollbacks:** use Vercel Instant Rollback for an urgent rollback, then fix source and release through Git. A rollback does not reverse a database migration; migrations are forward-only. Never run the destructive reset section in [production migrations](production-migrations.md) as a rollback.
 - **Secrets:** rotate credentials in their provider, update only the intended environment, then redeploy the app/jobs. Keep preview and production credentials separate.
 - **Privacy exports:** monitor `privacy-export-build` failures and the hourly sweep. Ready archives expire after seven days; the sweep expires or times out stale work and queues private R2 objects for removal. Investigate repeated partial exports, storage failures or stalled preparations using the [background-jobs runbook](background-jobs.md).
+- **Batch failures:** monitor hourly `jobs.batch.row_failures` errors and `batchRowsFailing` for sign-in classification and recurring-goal rollover. Use the private-row queries in [background jobs](background-jobs.md) to investigate repeated failures; keep the built-in retry/back-off rather than manually marking rows complete.
 - **Deletion and Home copies:** monitor `home-copy-files` plus the hourly `purge_due_deletions` and `sweep_home_copies` work. Review recorded purge/copy errors and retry through the documented job recovery flow; never manually delete source objects or bypass the 30-day account/Home recovery period.
 - **Household Displays:** review last-seen status for shared devices, revoke lost or replaced displays promptly, and confirm privacy lock and action settings after layout changes. A display is a restricted device identity, not a Home member.
 - **Ora:** recheck permission-filtered overviews, guided-action confirmation/undo, remembered destinations and celebration claims after module or permission changes. The seven-day interaction history is hidden by age and purged on later writes; celebration claims are ledger-based and membership-scoped. Ora has no separate external AI provider, scheduler or secret in the current implementation.
 - **Costs and limits:** review [provider cost register](provider-cost-register.md), including Vercel commercial-use limits, Supabase quotas, Resend email quotas, Trigger.dev usage and Cloudflare R2 billing.
-- **Service-specific runbooks:** [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), [Google Calendar](google-calendar-setup.md), and [adult account security](adult-security-setup.md).
+- **Release and service runbooks:** [release readiness](release-readiness.md), [email](email-setup.md), [file storage](file-storage.md), [background jobs](background-jobs.md), [staff operations](staff-operations.md), [Google sign-in](google-sign-in-setup.md), [Google Calendar](google-calendar-setup.md), and [adult account security](adult-security-setup.md).
 
 ## Never put these in Git, chat or browser-visible variables
 
