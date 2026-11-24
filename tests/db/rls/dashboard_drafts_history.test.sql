@@ -222,6 +222,30 @@ update public.home_memberships set role = 'administrator'
 insert into private.home_admin_capabilities (home_id, user_id, capability)
   values (tests.i('home-a'), tests.user_id('bob'), 'manageHomeDashboard');
 
+-- Handing over ownership: the former Owner becomes an Administrator without the grant.
+select tests.act_as('alice');
+select public.save_dashboard_draft(tests.lay(), 0, tests.i('home-a'));
+select public.save_dashboard_draft(tests.lay(), 0, tests.i('home-a'), 'mine');
+select tests.act_as_owner();
+update public.home_memberships set role = 'administrator'
+  where home_id = tests.i('home-a') and user_id = tests.user_id('alice');
+update public.home_memberships set role = 'owner'
+  where home_id = tests.i('home-a') and user_id = tests.user_id('bob');
+select tests.assert_true(
+  not exists (select 1 from private.dashboard_drafts
+    where user_id = tests.user_id('alice') and home_id = tests.i('home-a') and target = 'default')
+  and exists (select 1 from private.dashboard_drafts
+    where user_id = tests.user_id('alice') and home_id = tests.i('home-a') and target = 'mine'),
+  'A former Owner loses her shared-default draft but keeps her Home-view draft');
+update public.home_memberships set role = 'administrator'
+  where home_id = tests.i('home-a') and user_id = tests.user_id('bob');
+update public.home_memberships set role = 'owner'
+  where home_id = tests.i('home-a') and user_id = tests.user_id('alice');
+insert into private.home_admin_capabilities (home_id, user_id, capability)
+  values (tests.i('home-a'), tests.user_id('bob'), 'manageHomeDashboard');
+select tests.act_as('alice');
+select public.discard_dashboard_draft(tests.i('home-a'), 'mine');
+
 -- History ------------------------------------------------------------------------------------------
 
 select tests.act_as('alice');
@@ -273,6 +297,8 @@ select tests.assert_true(
 select tests.assert_true(
   (select reason = 'restore' from public.list_dashboard_versions() where revision = 17),
   'The restore is recorded as such');
+select tests.assert_denied($$select * from public.undo_dashboard_change(null)$$,
+  'Undo without an expected revision is malformed', '22023');
 select tests.assert_true(
   (select outcome = 'saved' from public.undo_dashboard_change(17)),
   'Undo of a restore works');
@@ -323,10 +349,18 @@ select tests.assert_true(
   (select target = 'mine' and layout is null and revision = 0 and can_edit
    from public.get_dashboard(tests.i('home-a'), 'mine')),
   'Her view does not exist yet');
+select public.save_dashboard_draft(tests.lay(array[tests.w(31)]), 0, tests.i('home-a'), 'mine');
+select tests.assert_true(
+  (select has_draft from public.get_dashboard(tests.i('home-a'), 'mine')),
+  'has_draft reports her Home-view draft');
+select tests.assert_true(
+  (select not has_draft from public.get_dashboard(tests.i('home-a'))),
+  'but not on the shared default');
 select tests.assert_true(
   (select outcome = 'saved' and revision = 1
-   from public.save_dashboard(tests.lay(array[tests.w(31), tests.w(40)]), 0, tests.i('home-a'), null, 'mine', true)),
-  'A member creates her own Home view (Done)');
+   from public.save_dashboard(tests.lay(array[tests.w(31), tests.w(40)]), 0, tests.i('home-a'),
+     (select layout from public.get_dashboard(tests.i('home-a'))), 'mine', true)),
+  'A member creates her own Home view from what she was shown (Done)');
 select tests.assert_true(not exists (select 1 from public.get_dashboard_draft(tests.i('home-a'), 'mine')),
   'Done discarded her Home-view draft');
 select tests.assert_true(
@@ -372,12 +406,21 @@ select tests.assert_true(
 select public.save_dashboard(tests.lay(array[tests.w(31), tests.w(40), tests.w(33)]), 1, tests.i('home-a'), null, 'mine');
 select tests.assert_true(not exists (select 1 from public.list_dashboard_suggestions(tests.i('home-a'))),
   'Adding the suggested widget settles it');
-select tests.act_as_owner();
+-- Removing an added suggestion later does not bring it back.
+select public.save_dashboard(tests.lay(array[tests.w(31), tests.w(40)]), 2, tests.i('home-a'), null, 'mine');
+select tests.assert_true(not exists (select 1 from public.list_dashboard_suggestions(tests.i('home-a'))),
+  'A widget she added and then removed is not suggested again');
+-- Seen or dismissed widgets that leave the shared default and come back stay settled.
+select tests.act_as('bob');
+select public.save_dashboard(tests.lay(array[tests.w(31)]), 3, tests.i('home-a'));
 select tests.assert_true(
-  (select known_default_widget_ids @> array[tests.w(32)] and not (known_default_widget_ids @> array[tests.w(40)])
-   from private.dashboard_member_overrides
-   where home_id = tests.i('home-a') and user_id = tests.user_id('carol')),
-  'Remembered ids are pruned to the shared default');
+  (select outcome = 'saved' from public.save_dashboard(
+    tests.lay(array[tests.w(30), tests.w(31), tests.w(32), tests.w(33), tests.w(34)]), 4, tests.i('home-a'))),
+  'The editor removes widgets and brings them back');
+select tests.act_as('carol');
+select tests.assert_true(
+  (select array_agg(widget_id) = array[tests.w(34)] from public.list_dashboard_suggestions(tests.i('home-a'))),
+  'Only the genuinely new widget is suggested; seen, dismissed and once-added ones are not');
 select tests.act_as('bob');
 select tests.assert_true(
   (select dismiss_dashboard_suggestions = 'no_override'
@@ -389,24 +432,28 @@ select tests.assert_denied($$select * from public.list_dashboard_suggestions(gen
 -- View history, Undo and restore are the owner's.
 select tests.act_as('carol');
 select tests.assert_true(
-  (select count(*) = 2 and bool_and(saved_by_me) from public.list_dashboard_versions(tests.i('home-a'), 'mine')),
+  (select count(*) = 3 and bool_and(saved_by_me) from public.list_dashboard_versions(tests.i('home-a'), 'mine')),
   'Her view has its own history');
 insert into ids select 'v-carol-1', version_id from public.list_dashboard_versions(tests.i('home-a'), 'mine')
   where revision = 1;
 select tests.act_as('bob');
 select tests.assert_true(
-  (select outcome = 'not_found' from public.restore_dashboard_version(tests.i('v-carol-1'), 2)),
+  (select outcome = 'not_found' from public.restore_dashboard_version(tests.i('v-carol-1'), 3)),
   'Nobody else restores her view''s versions');
 select tests.act_as('carol');
 select tests.assert_true(
-  (select outcome = 'saved' and revision = 3 from public.restore_dashboard_version(tests.i('v-carol-1'), 2)),
+  (select outcome = 'saved' and revision = 4 from public.restore_dashboard_version(tests.i('v-carol-1'), 3)),
   'She restores one of hers');
 select tests.assert_true(
-  (select outcome = 'saved' from public.undo_dashboard_change(3, tests.i('home-a'), 'mine')),
+  (select outcome = 'saved' from public.undo_dashboard_change(4, tests.i('home-a'), 'mine')),
   'and can undo it');
 
 -- Reset returns to the shared default.
-select public.save_dashboard_draft(tests.lay(), 4, tests.i('home-a'), 'mine');
+select tests.act_as_owner();
+insert into ids select 'view-carol-1', id from private.dashboard_member_overrides
+  where home_id = tests.i('home-a') and user_id = tests.user_id('carol');
+select tests.act_as('carol');
+select public.save_dashboard_draft(tests.lay(), 5, tests.i('home-a'), 'mine');
 select tests.assert_true(
   (select reset_dashboard_override = 'reset' from public.reset_dashboard_override(tests.i('home-a'))),
   'She resets her view');
@@ -417,9 +464,7 @@ select tests.assert_true(not exists (select 1 from public.get_dashboard_draft(te
   'Her view draft went with it');
 select tests.act_as_owner();
 select tests.assert_true(
-  not exists (select 1 from private.dashboard_layout_versions v
-    join private.dashboard_member_overrides o on o.id = v.override_id
-    where o.user_id = tests.user_id('carol')),
+  (select count(*) = 0 from private.dashboard_layout_versions where override_id = tests.i('view-carol-1')),
   'and so did its history');
 select tests.act_as('carol');
 select tests.assert_true(
@@ -432,12 +477,17 @@ select tests.assert_denied($$select public.reset_dashboard_override(tests.i('hom
 select public.save_dashboard(tests.lay(array[tests.w(50)]), 0, tests.i('home-a'), null, 'mine');
 select public.save_dashboard_draft(tests.lay(), 1, tests.i('home-a'), 'mine');
 select tests.act_as_owner();
+insert into ids select 'view-carol-2', id from private.dashboard_member_overrides
+  where home_id = tests.i('home-a') and user_id = tests.user_id('carol');
 delete from public.home_memberships where home_id = tests.i('home-a') and user_id = tests.user_id('carol');
 select tests.assert_true(
   not exists (select 1 from private.dashboard_member_overrides where user_id = tests.user_id('carol'))
   and not exists (select 1 from private.dashboard_drafts
     where user_id = tests.user_id('carol') and home_id is not null),
   'Leaving a Home deletes the member''s view and drafts there');
+select tests.assert_true(
+  (select count(*) = 0 from private.dashboard_layout_versions where override_id = tests.i('view-carol-2')),
+  'and the view''s history');
 select tests.act_as('carol');
 select tests.assert_denied($$select * from public.get_dashboard(tests.i('home-a'), 'mine')$$,
   'An ex-member reads nothing of the Home');
@@ -495,6 +545,8 @@ select tests.assert_true(
 
 select tests.act_as_owner();
 insert into ids values ('carol', tests.user_id('carol'));
+insert into ids select 'view-carol-3', id from private.dashboard_member_overrides
+  where user_id = tests.user_id('carol');
 delete from auth.users where id = tests.i('carol');
 select tests.assert_true(
   not exists (select 1 from private.dashboard_drafts where user_id = tests.i('carol'))
@@ -503,8 +555,58 @@ select tests.assert_true(
 select tests.assert_true(
   (select count(*) = 0 from private.dashboard_layout_versions v
    left join private.dashboard_layouts d on d.id = v.layout_id
-   where v.layout_id is not null and d.id is null),
+   left join private.dashboard_member_overrides o on o.id = v.override_id
+   where (v.layout_id is not null and d.id is null) or (v.override_id is not null and o.id is null)),
   'and leaves no orphaned history');
+select tests.assert_true(
+  (select count(*) = 0 from private.dashboard_layout_versions where override_id = tests.i('view-carol-3')),
+  'Her Home view''s history is gone');
 select tests.assert_true(
   (select bool_and(saved_by is distinct from tests.i('carol')) from private.dashboard_layout_versions),
   'Shared history forgets the deleted author');
+
+-- A view started while the Home still shows the starter --------------------------------------------
+
+select tests.act_as_owner();
+insert into public.home_memberships (home_id, user_id, role)
+  values (tests.i('home-b'), tests.user_id('alice'), 'member');
+select tests.act_as('alice');
+select tests.assert_true(
+  (select outcome = 'saved' from public.save_dashboard(tests.lay(array[tests.w(80)]), 0, tests.i('home-b'),
+    tests.lay(array[tests.w(80), tests.w(81)]), 'mine')),
+  'Alice starts a view from the starter she was shown (passed as p_previous), dropping one widget');
+select tests.act_as('bob');
+select public.save_dashboard(tests.lay(array[tests.w(80), tests.w(81), tests.w(82)]), 0, tests.i('home-b'));
+select tests.act_as('alice');
+select tests.assert_true(
+  (select array_agg(widget_id) = array[tests.w(82)] from public.list_dashboard_suggestions(tests.i('home-b'))),
+  'The first saved shared default suggests only its new widget, not the starter widget she removed');
+
+-- Home deletion cascades -------------------------------------------------------------------------------
+
+select tests.act_as('bob');
+select public.save_dashboard(tests.lay(array[tests.w(70)]), 1, tests.i('home-b'));
+select public.save_dashboard_draft(tests.lay(), 1, tests.i('home-b'));
+select public.save_dashboard(tests.lay(array[tests.w(71)]), 0, tests.i('home-b'), null, 'mine');
+select public.save_dashboard_draft(tests.lay(), 1, tests.i('home-b'), 'mine');
+select tests.act_as_owner();
+delete from public.homes where id = tests.i('home-b');
+select tests.assert_true(
+  not exists (select 1 from private.dashboard_drafts where home_id = tests.i('home-b'))
+  and not exists (select 1 from private.dashboard_member_overrides where home_id = tests.i('home-b'))
+  and not exists (select 1 from private.dashboard_layouts where owner_home_id = tests.i('home-b'))
+  and (select count(*) = 0 from private.dashboard_layout_versions v
+       left join private.dashboard_layouts d on d.id = v.layout_id
+       left join private.dashboard_member_overrides o on o.id = v.override_id
+       where d.id is null and o.id is null),
+  'Purging a Home deletes its shared default, views, drafts and all their history');
+
+-- The remembered set never fails on size ------------------------------------------------------------
+
+select tests.assert_true(
+  cardinality(private.merge_known_widget_ids(
+    (select array_agg(gen_random_uuid()) from generate_series(1, 450)), array[tests.w(1)], array[tests.w(1)]))
+    = 400
+  and tests.w(1) = any (private.merge_known_widget_ids(
+    (select array_agg(gen_random_uuid()) from generate_series(1, 450)), array[tests.w(1)], array[tests.w(1)])),
+  'Over the cap the set is trimmed, keeping on-screen ids, instead of failing');

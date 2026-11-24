@@ -37,11 +37,17 @@ service-role wrapper later), wall-display layout (UX8).
 - Reset of a Home view deletes the view, its history and its draft (the UI confirms first, Decision 33).
 - Personal and Home-view versions store no `saved_by` (always the owner): one cascade path on account deletion.
 - Existing saved layouts are backfilled with their current layout as the first history entry.
+- Suggestions: the remembered set only grows (every widget the view ever held, what the member was shown when the
+  view started, dismissals), capped at 400 keeping on-screen ids. **UX2d must pass the layout it showed (shared
+  default or starter) as `p_previous` on the first `mine` save**, and must filter suggested widget types the member
+  cannot use (Decision 34 permission scoping; review L6).
+- A shared-default draft is exported as metadata only (Home-owned content).
 
 ## Files
 
 - `supabase/migrations/20261219090000_dashboard_drafts_history.sql` (new; timestamp reserved with the coordinator)
 - `tests/db/rls/dashboard_drafts_history.test.sql` (new multi-actor RLS/RPC tests)
+- `tests/db/rls/dashboard-views-concurrency.test.ts` (new: racing first view saves, restore vs save)
 - `packages/database/src/database.types.ts` (regenerated)
 - `docs/adr/0059-dashboard-drafts-history-overrides.md`, `docs/provider-cost-register.md` (storage note)
 
@@ -69,4 +75,18 @@ docs commit after merge.
 
 ## Review
 
-Pending: `reviews/steps/UX2-data-review.md`.
+`reviews/steps/UX2-data-review.md`: CHANGES_REQUIRED, 1 HIGH, 2 MEDIUM, 7 LOW. Fixed and verified by the author
+(no second full review, per project rule):
+
+- H1 (suggestions reappeared): known set now grows on every view commit, is never pruned to the current default,
+  and takes the shown layout (`p_previous`) at view start. Tests: added-then-removed, removed-and-restored default
+  widgets, view started from the starter.
+- M1: tests added for ownership transfer, Home purge cascade, `has_draft` on `mine`, and a concurrency file.
+  Household Display accounts remain covered by code only (`can_customize_dashboard` uses `private.is_display`).
+- M2: reset/leave/account-deletion history checks now use the saved view id and check `override_id` orphans.
+- L1 cap trims instead of failing; L2 Undo rejects a null/negative revision; L3 ADR reworded (scheduled purge
+  job before release); L4 shared-default drafts exported without layout; L5 accepted (MVP scale); L6 handed to
+  UX2d; L7 owner adds the migration to `docs/production-migrations.md` after merge.
+
+Re-run after fixes: new SQL tests + 2 concurrency files + related suites, 15 passed; db-tests lint/typecheck passed;
+types check up to date.

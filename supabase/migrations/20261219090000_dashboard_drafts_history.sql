@@ -111,8 +111,11 @@ create table private.dashboard_member_overrides (
   previous_layout jsonb
     constraint dashboard_member_overrides_previous_check
       check (previous_layout is null or private.is_dashboard_layout(previous_layout)),
-  -- Shared-default widgets this member has already seen or dismissed: never suggested again
-  -- (Decision 34). Set when the view is created; grows by dismissals; pruned to the current default.
+  -- Widget ids this member has already seen or decided on: never suggested again (Decision 34).
+  -- Invariant: it only grows. It holds every widget the view has ever contained (added on every
+  -- commit of the view), the shared default and the layout the member was shown when the view
+  -- started, and every dismissed suggestion. Only when it passes the cap does
+  -- private.merge_known_widget_ids drop ids that are in neither the current default nor the view.
   known_default_widget_ids uuid[] not null default '{}'
     constraint dashboard_member_overrides_known_check
       check (pg_catalog.cardinality(known_default_widget_ids) <= private.dashboard_limit('known_widgets')),
@@ -243,6 +246,23 @@ create function private.record_dashboard_version(
   end
   $$;
 
+-- known ∪ p_add, capped at dashboard_limit('known_widgets'). Over the cap, ids in p_keep (the
+-- current shared default and view) are kept first, so a capped set never re-suggests what is on
+-- screen; the remaining room goes to the other ids. Never fails on size.
+create function private.merge_known_widget_ids(p_known uuid[], p_add uuid[], p_keep uuid[])
+returns uuid[]
+  language sql immutable set search_path = '' as $$
+  with u as (
+    select distinct i from pg_catalog.unnest(coalesce(p_known, '{}') || coalesce(p_add, '{}')) i
+    where i is not null
+  )
+  select coalesce(pg_catalog.array_agg(i order by k desc, i), '{}') from (
+    select i, i = any (coalesce(p_keep, '{}')) k from u
+    order by k desc, i
+    limit private.dashboard_limit('known_widgets')
+  ) x;
+  $$;
+
 -- The one commit path ------------------------------------------------------------------------------
 
 -- Commits p_layout to a resolved target if nobody committed since p_expected_revision (0: still the
@@ -261,19 +281,29 @@ create function private.commit_dashboard(
     v_default jsonb;
   begin
     if p_target = 'mine' then
+      select d.layout into v_default from private.dashboard_layouts d where d.owner_home_id = p_home_id;
       if p_expected_revision = 0 then
-        -- What the member sees when the view starts: never offered again as a suggestion.
-        select d.layout into v_default from private.dashboard_layouts d where d.owner_home_id = p_home_id;
+        -- What the member saw when the view started (the stored shared default, and p_previous:
+        -- the layout the caller showed, which is the starter while the Home has no saved default)
+        -- and what the view holds: never offered again as a suggestion. p_previous only shapes the
+        -- caller's own suggestions, so trusting it reveals or grants nothing.
         insert into private.dashboard_member_overrides
             (home_id, user_id, layout, previous_layout, known_default_widget_ids)
           values (p_home_id, p_user_id, p_layout, p_previous,
-            (select coalesce(pg_catalog.array_agg(distinct i), '{}') from pg_catalog.unnest(
-              private.dashboard_widget_ids(v_default) || private.dashboard_widget_ids(p_layout)) i))
+            private.merge_known_widget_ids(
+              private.dashboard_widget_ids(v_default) || private.dashboard_widget_ids(p_previous),
+              private.dashboard_widget_ids(p_layout),
+              private.dashboard_widget_ids(v_default) || private.dashboard_widget_ids(p_layout)))
           on conflict do nothing
           returning * into v_view;
       else
+        -- Every widget the view ever holds stays known, so removing an added suggestion later does
+        -- not bring it back as a suggestion.
         update private.dashboard_member_overrides o
           set layout = p_layout, previous_layout = p_previous, revision = o.revision + 1,
+            known_default_widget_ids = private.merge_known_widget_ids(
+              o.known_default_widget_ids, private.dashboard_widget_ids(p_layout),
+              private.dashboard_widget_ids(v_default) || private.dashboard_widget_ids(p_layout)),
             updated_at = pg_catalog.now()
           where o.home_id = p_home_id and o.user_id = p_user_id and o.revision = p_expected_revision
           returning * into v_view;
@@ -415,7 +445,8 @@ returns table (
 -- Commits a dashboard if nobody saved it since p_expected_revision (0: it was still the starter, or
 -- for 'mine' the caller had no view yet). p_target as get_dashboard, without 'effective'.
 -- p_previous, when given, is what this save replaces, kept for one-step Undo; a plain edit passes
--- null and clears it. p_commit_draft discards the caller's draft of this target in the same
+-- null and clears it. The first save of a 'mine' view should pass the layout the member was shown
+-- (the shared default, or the starter while the Home has none), so its widgets are not suggested. p_commit_draft discards the caller's draft of this target in the same
 -- transaction when the save succeeds (Done); on a conflict the draft stays. Outcomes: 'saved' with
 -- the new revision, 'conflict' with the current one, 'not_permitted'. 42501 "not permitted" for a
 -- Home the caller does not belong to; 22023 for a malformed layout or target.
@@ -460,6 +491,9 @@ create function public.undo_dashboard_change(
     v_revision integer;
     v_previous jsonb;
   begin
+    if p_expected_revision is null or p_expected_revision < 0 then
+      raise exception 'invalid revision' using errcode = '22023';
+    end if;
     if not private.can_save_dashboard_target(p_home_id, v_target, v_user_id) then
       return query select 'not_permitted', null::integer;
       return;
@@ -759,9 +793,9 @@ returns table (widget_id uuid, widget jsonb)
   end
   $$;
 
--- Dismisses suggested widgets so they are not offered again. Ids not in the current shared default
--- are ignored; the remembered set is pruned to the current default. Outcomes: 'dismissed',
--- 'no_override'. 42501 for a foreign Home; 22023 for a missing list.
+-- Dismisses suggested widgets so they are not offered again, even if they later leave the shared
+-- default and come back (Undo, restore, template). Ids not in the current shared default are
+-- ignored. Outcomes: 'dismissed', 'no_override'. 42501 for a foreign Home; 22023 for a missing list.
 create function public.dismiss_dashboard_suggestions(p_home_id uuid, p_widget_ids uuid[]) returns text
   language plpgsql volatile security definer set search_path = '' as $$
   declare
@@ -776,10 +810,11 @@ create function public.dismiss_dashboard_suggestions(p_home_id uuid, p_widget_id
       from private.dashboard_layouts d where d.owner_home_id = p_home_id;
     v_default_ids := coalesce(v_default_ids, '{}');
     update private.dashboard_member_overrides o
-      set known_default_widget_ids = (
-        select coalesce(pg_catalog.array_agg(distinct i), '{}')
-        from pg_catalog.unnest(o.known_default_widget_ids || p_widget_ids) i
-        where i = any (v_default_ids))
+      set known_default_widget_ids = private.merge_known_widget_ids(
+        o.known_default_widget_ids,
+        (select coalesce(pg_catalog.array_agg(i), '{}') from pg_catalog.unnest(p_widget_ids) i
+         where i = any (v_default_ids)),
+        v_default_ids || private.dashboard_widget_ids(o.layout))
       where o.home_id = p_home_id and o.user_id = v_user_id;
     return case when found then 'dismissed' else 'no_override' end;
   end
@@ -798,7 +833,11 @@ create function private.collect_dashboard_export(p_me uuid, p_homes uuid[]) retu
   select pg_catalog.jsonb_build_object(
     'account/dashboard_drafts', (
       select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-        'home', h.name, 'target', d.target, 'layout', d.layout, 'base_revision', d.base_revision,
+        -- A shared-default draft is a copy of Home-owned content: metadata only, like other Home
+        -- records in a personal export.
+        'home', h.name, 'target', d.target,
+        'layout', case when d.target = 'default' then null else d.layout end,
+        'base_revision', d.base_revision,
         'created_at', d.created_at, 'updated_at', d.updated_at) order by d.updated_at, d.id), '[]')
       from private.dashboard_drafts d left join public.homes h on h.id = d.home_id
       where d.user_id = p_me and (d.home_id is null or d.home_id = any (p_homes))),
@@ -887,6 +926,7 @@ begin
     'private.dashboard_target(uuid, text, uuid, boolean)',
     'private.can_save_dashboard_target(uuid, text, uuid)',
     'private.dashboard_widget_ids(jsonb)',
+    'private.merge_known_widget_ids(uuid[], uuid[], uuid[])',
     'private.discard_unpermitted_default_drafts()',
     'private.record_dashboard_version(uuid, uuid, integer, jsonb, text, uuid)',
     'private.commit_dashboard(uuid, uuid, text, jsonb, integer, jsonb, text)',
