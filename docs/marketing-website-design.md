@@ -368,40 +368,40 @@ The user concluded the first design iteration after Decision 15, then reopened d
 
 ## Decision log
 
-| ID  | Topic                                 | Selection                                                                                                   | Status    |
-| --- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------- |
-| 01  | Overall first impression              | Calm + warm/human + premium polish (A + D + C)                                                              | Confirmed |
-| 02  | Homepage hero                         | Interactive product showcase + editorial split (C + D)                                                      | Confirmed |
-| 03  | Hero headline                         | Everything in life, finally in sync. (B)                                                                    | Confirmed |
-| 04  | Hero supporting copy                  | Balanced and benefit-driven (D)                                                                             | Confirmed |
-| 05  | Hero calls to action                  | Get started for free + Explore features (B)                                                                 | Confirmed |
-| 06  | Hero product showcase                 | Dashboard + floating widgets with Personal/Home transition (C + D)                                          | Confirmed |
-| 07  | Personal/Home transition interaction  | Automatic switching + manual toggle (C)                                                                     | Confirmed |
-| 08  | Hero widget selection                 | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
-| 09  | Hero animation style                  | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D)                      | Confirmed |
-| 10  | Marketing colors                      | Reuse Madeora's default design tokens and purple accent                                                     | Confirmed |
-| 11  | Marketing themes                      | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
-| 12  | Marketing typography                  | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
-| 13  | Homepage navigation                   | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
-| 14  | Navigation header behavior            | Adaptive sticky header: spacious initially, compact on scroll (D)                                           | Confirmed |
-| 15  | Solutions dropdown design             | Hybrid premium mega menu with audience links and product storytelling (D)                                   | Confirmed |
-| 16  | Marketing page architecture           | Hybrid storytelling homepage plus dedicated audience and module pages (C + D)                               | Confirmed |
-| 17  | Features navigation dropdown          | Categorized premium mega menu with featured product panel (D)                                               | Confirmed |
-| 18  | Feature categorization                | Hybrid functional categories with benefit-driven supporting copy (D)                                        | Confirmed |
-| 19  | Homepage feature showcase             | Premium bento overview followed by editorial storytelling (D)                                               | Confirmed |
-| 20  | Product visualization style           | Layered editorial product compositions with selective lifestyle mockups (D + C)                             | Confirmed |
-| 21  | Lifestyle photography                 | Warm editorial realism (D)                                                                                  | Confirmed |
-| 22  | Ora marketing presence                | Premium brand companion with dedicated storytelling (D)                                                     | Confirmed |
-| 23  | Personal & Home storytelling          | Connected spaces visualization with lifestyle storytelling (D + C)                                          | Confirmed |
-| 24  | Customization storytelling            | Editorial storytelling with embedded interactive playground (D)                                             | Confirmed |
-| 25  | Homepage audience showcase            | Editorial audience selector with product storytelling (D)                                                   | Confirmed |
-| 26  | Homepage section order                | Balanced six-stage editorial journey (D)                                                                    | Confirmed |
-| 27  | Section backgrounds and visual rhythm | Adaptive editorial canvas (D)                                                                               | Confirmed |
-| 28  | Trust, privacy and security           | Premium homepage storytelling with dedicated privacy demonstrations (D + C)                                 | Confirmed |
-| 29  | Homepage pricing presentation         | Premium editorial pricing preview (D)                                                                       | Confirmed |
-| 30  | Homepage FAQ                          | Asymmetric editorial FAQ (D)                                                                                | Confirmed |
-| 31  | Final homepage CTA                    | Signature Madeora composition (D)                                                                           | Confirmed |
-| 32  | Website footer                        | Premium editorial footer (D)                                                                                | Confirmed |
+| ID  | Topic                                | Selection                                                                                                   | Status    |
+| --- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------- |
+| 01  | Overall first impression             | Calm + warm/human + premium polish (A + D + C)                                                              | Confirmed |
+| 02  | Homepage hero                        | Interactive product showcase + editorial split (C + D)                                                      | Confirmed |
+| 03  | Hero headline                        | Everything in life, finally in sync. (B)                                                                    | Confirmed |
+| 04  | Hero supporting copy                 | Balanced and benefit-driven (D)                                                                             | Confirmed |
+| 05  | Hero calls to action                 | Get started for free + Explore features (B)                                                                 | Confirmed |
+| 06  | Hero product showcase                | Dashboard + floating widgets with Personal/Home transition (C + D)                                          | Confirmed |
+| 07  | Personal/Home transition interaction | Automatic switching + manual toggle (C)                                                                     | Confirmed |
+| 08  | Hero widget selection                | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
+| 09  | Hero animation style                 | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D)                      | Confirmed |
+| 10  | Marketing colors                     | Reuse Madeora's default design tokens and purple accent                                                     | Confirmed |
+| 11  | Marketing themes                     | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
+| 12  | Marketing typography                 | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
+| 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
+| 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D) | Confirmed |
+| 15  | Solutions dropdown design | Hybrid premium mega menu with audience links and product storytelling (D) | Confirmed |
+| 16 | Marketing page architecture | Hybrid storytelling homepage plus dedicated audience and module pages (C + D) | Confirmed |
+| 17 | Features navigation dropdown | Categorized premium mega menu with featured product panel (D) | Confirmed |
+| 18 | Feature categorization | Hybrid functional categories with benefit-driven supporting copy (D) | Confirmed |
+| 19 | Homepage feature showcase | Premium bento overview followed by editorial storytelling (D) | Confirmed |
+| 20 | Product visualization style | Layered editorial product compositions with selective lifestyle mockups (D + C) | Confirmed |
+| 21 | Lifestyle photography | Warm editorial realism (D) | Confirmed |
+| 22 | Ora marketing presence | Premium brand companion with dedicated storytelling (D) | Confirmed |
+| 23 | Personal & Home storytelling | Connected spaces visualization with lifestyle storytelling (D + C) | Confirmed |
+| 24 | Customization storytelling | Editorial storytelling with embedded interactive playground (D) | Confirmed |
+| 25 | Homepage audience showcase | Editorial audience selector with product storytelling (D) | Confirmed |
+| 26 | Homepage section order | Balanced six-stage editorial journey (D) | Confirmed |
+| 27 | Section backgrounds and visual rhythm | Adaptive editorial canvas (D) | Confirmed |
+| 28 | Trust, privacy and security | Premium homepage storytelling with dedicated privacy demonstrations (D + C) | Confirmed |
+| 29 | Homepage pricing presentation | Premium editorial pricing preview (D) | Confirmed |
+| 30 | Homepage FAQ | Asymmetric editorial FAQ (D) | Confirmed |
+| 31 | Final homepage CTA | Signature Madeora composition (D) | Confirmed |
+| 32 | Website footer | Premium editorial footer (D) | Confirmed |
 
 ## Update protocol
 
