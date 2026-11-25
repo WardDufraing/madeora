@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–16 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–17 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -178,6 +178,17 @@ Use this exact supporting paragraph beneath the hero headline:
 - Connect homepage highlights and navigation to relevant deeper pages; avoid duplicate thin content, dead links and unsupported product claims.
 - Exact URL structure, page templates, final module inventory, pricing details and content remain open.
 
+### Decision 17 — Features navigation dropdown (CONFIRMED)
+
+**Selection: D — Categorized premium mega menu with featured product panel.**
+
+- Organize feature links into meaningful categories, with compact icons and labels, alongside a featured product panel and an All features link.
+- Match the Solutions mega menu's visual language, existing design tokens, typography, spacing and theme support.
+- The Personal life and Shared living categories and Meet Ora panel are illustrative, not final approved contents. Categories must not imply that modules are restricted to one space when they are not.
+- Allow the featured panel to highlight Ora or another major feature in future; confirm its initial content separately.
+- Provide keyboard-accessible disclosure, focus handling, Escape dismissal and a responsive mobile equivalent; avoid hover-only interaction and dead links.
+- Final category labels, module inventory, featured content and exact routes remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -224,6 +235,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D) | Confirmed |
 | 15  | Solutions dropdown design | Hybrid premium mega menu with audience links and product storytelling (D) | Confirmed |
 | 16 | Marketing page architecture | Hybrid storytelling homepage plus dedicated audience and module pages (C + D) | Confirmed |
+| 17 | Features navigation dropdown | Categorized premium mega menu with featured product panel (D) | Confirmed |
 
 ## Update protocol
 
