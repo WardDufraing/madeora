@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–31 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–32 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -330,6 +330,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use subtle entrance motion without continuous floating, respect reduced motion, maintain accessible contrast and responsive composition, and transition seamlessly into the footer.
 - Derive colors from existing Madeora design tokens and use synthetic preview data. Final headline, supporting copy, background tones and product composition remain open; verify free-registration claims and CTA destinations before publication.
 
+### Decision 32 — Website footer (CONFIRMED)
+
+**Selection: D — Premium editorial footer.**
+
+- Use a neutral editorial footer following the expressive closing CTA, with a dedicated brand column and four grouped navigation columns on desktop, responsively stacked on smaller screens.
+- Include product, audience, resource and company navigation; provide global language selection (English, Dutch, French, German where supported), Light/Dark/System appearance controls, legal links and applicable cookie preferences.
+- Synchronize appearance and language preferences with the rest of the website. Ensure accessible navigation and controls in both themes.
+- Include only verified social accounts and available destinations. Do not include a newsletter signup at this stage.
+- Exact navigation labels, destinations, social channels, wordmark treatment and responsive composition remain open. Use existing Madeora design tokens and brand assets.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -391,6 +401,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 29 | Homepage pricing presentation | Premium editorial pricing preview (D) | Confirmed |
 | 30 | Homepage FAQ | Asymmetric editorial FAQ (D) | Confirmed |
 | 31 | Final homepage CTA | Signature Madeora composition (D) | Confirmed |
+| 32 | Website footer | Premium editorial footer (D) | Confirmed |
 
 ## Update protocol
 
