@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–27 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–28 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -292,6 +292,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Derive surfaces, gradients and tonal variations from existing Madeora design tokens, with equivalent light and dark treatments. Preserve contrast, readability, responsive layouts and reduced-motion support.
 - Wireframe colors and compositions are illustrative; exact gradient stops, spacing and section-specific treatments remain open.
 
+### Decision 28 — Trust, privacy and security (CONFIRMED)
+
+**Selection: D + C — Premium homepage privacy storytelling with product demonstrations on a dedicated privacy page.**
+
+- Use human-centered copy, a distinctive brand illustration and concise explanations of personal boundaries, selective sharing, household permissions and Ora's contextual access on the homepage.
+- Link to a dedicated Privacy & Security page with lightweight, accessible product demonstrations using synthetic data and isolated preview state. Avoid another large interactive playground on the homepage.
+- Explain Personal/Home data separation, sharing controls, permissions, Ora's data access, storage, protection, retention, account deletion and recovery, applicable GDPR rights and privacy policies.
+- Verify every claim against implemented behavior and applicable policies. Do not advertise unverified encryption guarantees, certifications, compliance or security features. Keep the legal privacy policy separately accessible.
+- Final headlines, illustration, demonstration controls, route and legal/security copy remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -349,6 +359,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 25 | Homepage audience showcase | Editorial audience selector with product storytelling (D) | Confirmed |
 | 26 | Homepage section order | Balanced six-stage editorial journey (D) | Confirmed |
 | 27 | Section backgrounds and visual rhythm | Adaptive editorial canvas (D) | Confirmed |
+| 28 | Trust, privacy and security | Premium homepage storytelling with dedicated privacy demonstrations (D + C) | Confirmed |
 
 ## Update protocol
 
