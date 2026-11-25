@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–36 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–37 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -376,6 +376,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use faithful product previews, synthetic data, isolated demo state, accessible controls, responsive layouts and reduced-motion support. Verify all advertised functionality and commercial claims.
 - Exact copy, routes, section count and demonstration selection remain open.
 
+### Decision 37 — Solutions overview page (CONFIRMED)
+
+**Selection: D — Editorial lifestyle and product storytelling.**
+
+- Combine an editorial introduction, authentic lifestyle photography, audience-specific benefits and faithful product compositions.
+- Give Individuals, Couples, Families and Housemates comparable prominence, with dedicated editorial sections and direct links to their audience landing pages.
+- Explain that audiences are not mutually exclusive: a person can retain a Personal space while belonging to multiple shared Homes. Avoid implying unverified functionality.
+- Differentiate this page from the homepage audience selector through deeper, human-centered storytelling. Support both themes, responsive layouts and accessible content.
+- Final photography, copy, feature combinations and compositions remain open. Use synthetic preview data and verified product capabilities.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -442,6 +452,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 34  | Mobile homepage hero                  | Adaptive editorial hero with native mobile showcase (D)                                                     | Confirmed |
 | 35  | Dedicated Features overview page      | Editorial feature discovery hub (D)                                                                         | Confirmed |
 | 36  | Individual feature landing pages      | Modular editorial experience with selective interactive demonstrations (D + B)                              | Confirmed |
+| 37  | Solutions overview page               | Editorial lifestyle and product storytelling (D)                                                            | Confirmed |
 
 ## Update protocol
 
