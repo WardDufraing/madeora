@@ -56,7 +56,12 @@ export async function UpcomingEventsWidget({
       <div className="flex flex-col gap-3">
         <GoogleWarnings warnings={value.googleWarnings} names={names} formats={formats} compact />
         <WidgetEmpty
-          mode={config.emptyState}
+          // A stale Google calendar warning must stay visible, so then it never hides.
+          mode={
+            value.googleWarnings.length > 0 && config.emptyState === "hide"
+              ? "compact"
+              : config.emptyState
+          }
           title={t("widgetEmptyTitle")}
           description={t("widgetEmpty", { days: config.days })}
           action={add}

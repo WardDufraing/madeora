@@ -37,3 +37,12 @@ Prettier, ESLint (dashboard, calendar widget) and `tsc` clean; vitest dashboard,
 ## Review
 
 `reviews/steps/UX2a-review.md` (one independent review).
+
+## Review follow-up (verified by the implementer, no second review)
+
+Review: CHANGES_REQUIRED, 0 BLOCKER, 1 HIGH, 3 MEDIUM, 4 LOW (`reviews/steps/UX2a-review.md`).
+
+- HIGH-1 fixed: hide falls back to compact when a Google calendar warning or a missing label/member warning is present, so warnings are never hidden.
+- MEDIUM-3 fixed: `widget-empty.test.tsx` covers all three modes and the marker.
+- MEDIUM-1 (all widgets hidden shows an empty area, no "N hidden" note) and MEDIUM-2 (reserved slot not checked in a browser; no Supabase-backed app here): accepted for now, listed for Ward. A hidden-widget note needs the server to know emptiness; propose it with the compaction policy decision.
+- LOW-1..4 accepted; LOW-4 (rollback) is stated above.

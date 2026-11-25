@@ -409,7 +409,14 @@ async function TasksBody({
       {page.tasks.length === 0 ? (
         <WidgetEmpty
           // Filtered out is not empty: it keeps its full message so the filters stay explained.
-          mode={data.filtered ? "full" : config.emptyState}
+          mode={
+            data.filtered
+              ? "full"
+              : // A warning about the saved filters must stay visible, so it never hides.
+                (data.missingLabels > 0 || data.missingMember) && config.emptyState === "hide"
+                ? "compact"
+                : config.emptyState
+          }
           title={data.filtered ? tWidget("emptyFilteredTitle") : tWidget("emptyTitle")}
           description={data.filtered ? tWidget("emptyFiltered") : tWidget("empty")}
         />
