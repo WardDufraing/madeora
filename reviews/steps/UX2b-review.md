@@ -141,3 +141,28 @@ reload → Resume → Done, and one for a two-context conflict (Keep mine / Disc
 - M2 fixed: changes made while autosave is paused are marked and sent on `resume`.
 - M3 fixed: Done runs once at a time.
 - M4, L1–L6: left as follow-ups (e2e for resume/commit/conflict needs CI database).
+
+## Re-review (final diff, 1683da3)
+
+Scope: only the fixes for H1, M1, M2 and M3 (`git show 1683da3`). Local runs on the final tree: the four suites →
+13 files, 218 tests passed. `tsc --noEmit` is clean.
+
+- **H1: resolved.** `geometry.ts` adds `closeUp`, which `visiblePlacements` (lg/md) and `readLayout` (dropped
+  placements, `lost`) now call. Space freed by hidden or dropped widgets closes. A gap the person left is never in
+  the freed set, so it stays. That matches Ward's "keep gaps" and the brief, which is updated. I also ran a
+  throwaway randomised check: 3,000 compacted lg layouts, random widgets hidden, `closeUp(shown, hidden)` against
+  `compact(shown)`. There were 0 mismatches, so saved (compacted) layouts render exactly as before. The temp file was
+  removed and the tree is clean. New tests cover the hidden widget (equals the old compaction), a gap that is kept,
+  and a dropped widget.
+- **M1: resolved.** When the draft check failed, `draftUnchecked` → `localOnly` puts autosave in `local` from the
+  start. No PUT is sent, the status says no draft can be kept, and the leave guard is active. Tested.
+- **M2: resolved.** A change made while autosave is paused now sets `changed` and `unsaved` before the early
+  return, so `resume()` after a failed Done sends it. Not covered by a new test (LOW test gap).
+- **M3: resolved.** The `finishing` ref allows one Done at a time and is released in `finally`, so keep-mine's re-run
+  still works. Not covered by a new test (LOW test gap).
+- **New LOW (not blocking):** Cancel stays enabled during the short `await autosave.stop()` window before Done's
+  mutation turns `pending` on. Pressing Cancel then leaves edit mode while the commit still goes through. Disabling
+  Cancel while `finishing` is set would close this. M4 and L1–L6 stand as written above.
+
+**Updated verdict: PASS.** No BLOCKER or HIGH findings remain. Human PR approval and green CI, including e2e, are
+still required.
