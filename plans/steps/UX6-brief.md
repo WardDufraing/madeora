@@ -22,3 +22,7 @@ Source: `docs/design/dashboard-ux-ui-redesign.md` decisions 68–71, `plans/step
 ## Tests (local)
 
 prettier, eslint, tsc clean; vitest `components/shopping` 21 pass. Full suite on CI.
+
+## Review
+
+`reviews/steps/UX6-review.md`: PASS (0 BLOCKER/HIGH). Fixed MEDIUM: linger timer now starts after the server answer; Undo falls back to the item's own completion time. Deferred (documented): focus after a row moves into collapsed Completed, grouped/ungrouped toggle, LOW items.

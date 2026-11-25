@@ -112,15 +112,19 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
     setPending((current) => new Map(current).set(item.id, next));
     if (next && !lingering.has(item.id)) {
       setLingering((current) => new Set(current).add(item.id));
-      timers.current.set(
-        item.id,
-        setTimeout(() => {
-          stopLingering(item.id);
-        }, LINGER_MS),
-      );
     } else if (!next) {
       stopLingering(item.id);
     }
+  };
+  // The timer starts when the server has answered, so Undo is ready while the row is still there.
+  const settle = (item: ShoppingItem) => {
+    if (timers.current.has(item.id)) return;
+    timers.current.set(
+      item.id,
+      setTimeout(() => {
+        stopLingering(item.id);
+      }, LINGER_MS),
+    );
   };
   const untoggle = (item: ShoppingItem) => {
     stopLingering(item.id);
@@ -201,6 +205,7 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
                       amount={texts.amount(item.quantity, item.unit)}
                       onToggle={toggle}
                       onRevert={untoggle}
+                      onSettled={settle}
                       onEdit={() => {
                         setEditing(item.id);
                       }}
@@ -255,6 +260,7 @@ function ItemRow({
   amount,
   onToggle,
   onRevert,
+  onSettled,
   onEdit,
   announce,
 }: {
@@ -268,6 +274,7 @@ function ItemRow({
   readonly amount: string | null;
   readonly onToggle: (item: ShoppingItem, completed: boolean) => void;
   readonly onRevert: (item: ShoppingItem) => void;
+  readonly onSettled: (item: ShoppingItem) => void;
   readonly onEdit: () => void;
   readonly announce: (message: string) => void;
 }) {
@@ -277,7 +284,9 @@ function ItemRow({
   const [completedAt, setCompletedAt] = useState<string | null>(null);
   const complete = useCompletion(item, onToggle, onRevert, announce, completedAt, (answer) => {
     setCompletedAt(answer.completedAt);
+    onSettled(item);
   });
+  const reopenable = completedAt !== null || item.completedAt !== null;
   const move = useShoppingMutation(`shopping-item:${item.id}`, (direction: "up" | "down") =>
     sendShoppingRequest<object>("POST", shoppingItemEndpoint(item.id, "move"), { direction }),
   );
@@ -292,7 +301,7 @@ function ItemRow({
         type="checkbox"
         className="size-5 shrink-0 accent-accent"
         checked={done}
-        disabled={!rights.check || complete.busy || (done && completedAt === null)}
+        disabled={!rights.check || complete.busy || (done && !reopenable)}
         aria-label={
           done ? t("uncheckItem", { name: item.name }) : t("checkItem", { name: item.name })
         }
@@ -328,7 +337,7 @@ function ItemRow({
         <Button
           variant="secondary"
           size="sm"
-          disabled={complete.busy || completedAt === null}
+          disabled={complete.busy || !reopenable}
           onClick={() => {
             complete.mutate(false);
           }}
