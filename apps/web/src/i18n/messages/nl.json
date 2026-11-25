@@ -6246,7 +6246,23 @@
     "googleState_saving": "Wordt in Google opgeslagen",
     "googleState_deleting": "Wordt uit Google verwijderd",
     "googleState_conflict": "Conflict: kies een versie",
-    "googleState_failed": "Niet in Google opgeslagen"
+    "googleState_failed": "Niet in Google opgeslagen",
+    "closeDialog": "Sluiten",
+    "discardTitle": "Deze afspraak weggooien?",
+    "discardMessage": "Wat je getypt hebt gaat verloren.",
+    "discardConfirm": "Weggooien",
+    "discardKeep": "Verder bewerken",
+    "fieldWorkPeriod": "Dit is een werkperiode",
+    "fieldWorkPeriodHint": "Verschijnt als rustig blok \"Werk\" in je eigen agenda. Werkperiodes worden nooit gedeeld.",
+    "workLabel": "Werk",
+    "hideWork": "Werkperiodes verbergen",
+    "showWork": "Werkperiodes tonen",
+    "addOnDay": "Afspraak toevoegen op {date}",
+    "peekLoading": "Details laden…",
+    "peekFailed": "De details konden niet worden geladen.",
+    "peekMoreDetails": "Meer details",
+    "peekFewerDetails": "Minder details",
+    "peekOpenPage": "Volledige pagina openen"
   },
   "GoogleCalendar": {
     "pageTitle": "Google Agenda",
@@ -8096,10 +8112,14 @@
     "configureNamed": "Indeling en privacyvergrendeling van {name}",
     "ambientTitle": "Rustscherm",
     "ambientLabel": "Toon het rustscherm na",
-    "ambientIntro": "Na zo lang zonder aanraking tonen de schermen van dit Home alleen de tijd en de datum. Eén tik brengt het dashboard terug.",
+    "ambientIntro": "Na zo lang zonder aanraking tonen de schermen van dit Home het rustscherm: de tijd, de datum en de aantallen die je hieronder kiest. Eén tik brengt het dashboard terug.",
     "ambientOption": "{minutes, plural, one {# minuut} other {# minuten}}",
     "ambientSave": "Opslaan",
-    "ambientSaved": "Rustscherm opgeslagen."
+    "ambientSaved": "Rustscherm opgeslagen.",
+    "ambientCountsLabel": "Toon ook op het rustscherm",
+    "ambientCountsIntro": "Alleen aantallen, nooit titels of namen. Iedereen in de buurt van een scherm kan ze zien.",
+    "ambientShowChores": "Aantal open klusjes",
+    "ambientShowShopping": "Aantal boodschappen dat nog nodig is"
   },
   "DisplayBoard": {
     "widget": {
@@ -8149,7 +8169,15 @@
     "lockNow": "Nu vergrendelen",
     "lockInSession": "Je bent ontgrendeld op dit scherm, dus er is geen PIN nodig.",
     "ambientTitle": "Rustscherm",
-    "ambientHint": "Tik ergens om het dashboard te tonen."
+    "ambientHint": "Tik ergens om het dashboard te tonen.",
+    "menu": "Menu",
+    "menuTitle": "Ga naar",
+    "menuDescription": "Open een onderdeel van dit scherm. Dashboard brengt je terug naar het begin.",
+    "backToDashboard": "Terug naar het dashboard",
+    "ambientChores": "{count, plural, =0 {Geen open klusjes} one {# open klusje} other {# open klusjes}}",
+    "ambientShopping": "{count, plural, =0 {Niets meer te kopen} one {# boodschap nog nodig} other {# boodschappen nog nodig}}",
+    "unlockOpened": "{name} is ontgrendeld op dit scherm.",
+    "unlockEnded": "Ontgrendeling beëindigd. Dit scherm vraagt weer om pincodes."
   },
   "DisplayConfig": {
     "title": "Gezinsscherm",

@@ -102,14 +102,27 @@ export const AMBIENT_AFTER_CHOICES = [60, 120, 300, 600, 900, 1800] as const;
 export type AmbientAfterSeconds = (typeof AMBIENT_AFTER_CHOICES)[number];
 export const DEFAULT_AMBIENT_AFTER: AmbientAfterSeconds = 300;
 
+/** UX8b: which privacy-safe counts the ambient view shows (both off unless a manager chose them). */
+export interface AmbientShows {
+  readonly chores: boolean;
+  readonly shopping: boolean;
+}
+export const NO_AMBIENT_COUNTS: AmbientShows = { chores: false, shopping: false };
+
 export function isAmbientAfter(value: number): value is AmbientAfterSeconds {
   return (AMBIENT_AFTER_CHOICES as readonly number[]).includes(value);
 }
 
+/**
+ * The Home's ambient settings: the timing (UX8a) and which privacy-safe counts the ambient view may
+ * show (UX8b, decision 36; both off by default). Counts only, never titles or names.
+ */
 export const homeDisplaySettingsSchema = z.strictObject({
   ambientAfterSeconds: z
     .int()
     .refine((value) => isAmbientAfter(value), { message: "ambientInvalid" }),
+  ambientShowChores: z.boolean(),
+  ambientShowShopping: z.boolean(),
 });
 export type HomeDisplaySettingsInput = z.input<typeof homeDisplaySettingsSchema>;
 

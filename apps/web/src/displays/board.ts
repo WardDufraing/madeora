@@ -17,7 +17,7 @@ import {
   displayOrientations,
   displayThemes,
 } from "./layout";
-import { DEFAULT_AMBIENT_AFTER } from "./schema";
+import { DEFAULT_AMBIENT_AFTER, NO_AMBIENT_COUNTS, type AmbientShows } from "./schema";
 
 /**
  * What a paired display shows (S44), read with the display's own session through
@@ -133,6 +133,8 @@ interface BoardBase {
   readonly signalVersion: number;
   /** UX8a: seconds without a touch before the ambient view (the Home's setting). */
   readonly ambientAfterSeconds: number;
+  /** UX8b: which privacy-safe counts the ambient view shows (the Home's choice; off by default). */
+  readonly ambientShows: AmbientShows;
 }
 
 /** UX8a: the member whose protected-actions session is open on this display, and for how long. */
@@ -192,6 +194,7 @@ export function toDisplayBoard(data: unknown): DisplayBoard | null {
     },
     signalVersion: row.signal_version,
     ambientAfterSeconds: DEFAULT_AMBIENT_AFTER,
+    ambientShows: NO_AMBIENT_COUNTS,
   };
   if (row.locked) return { ...base, locked: true, lockMessage: row.lock_message };
   return {
@@ -256,12 +259,18 @@ export async function getDisplayBoard(): Promise<DisplayBoardResult> {
     log("display_board.shape");
     return { kind: "unavailable" };
   }
-  // The Home's ambient timing and the open protected-actions session (UX8a), for this display only.
+  // The Home's ambient timing and counts (UX8a, UX8b) and the open protected-actions session, for
+  // this display only. A locked display shows no ambient view, so it gets no counts.
   const state = await readDisplaySessionState(board.displayId);
   return {
     kind: "ok",
     board: board.locked
       ? { ...board, ambientAfterSeconds: state.ambientAfterSeconds }
-      : { ...board, ambientAfterSeconds: state.ambientAfterSeconds, unlock: state.unlock },
+      : {
+          ...board,
+          ambientAfterSeconds: state.ambientAfterSeconds,
+          ambientShows: state.ambientShows,
+          unlock: state.unlock,
+        },
   };
 }

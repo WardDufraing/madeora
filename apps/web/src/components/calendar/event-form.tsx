@@ -3,7 +3,7 @@
 import { upcomingDates, type IsoWeekday } from "@madeora/domain/tasks";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { EVENTS_ENDPOINT, eventEndpoint, sendCalendarRequest } from "@/calendar/api";
@@ -68,6 +68,8 @@ interface FormValues {
   scope: EventScope;
   /** S34, a new personal event: "" saves it in Madeora, a calendar id saves it to that Google calendar. */
   target: string;
+  /** UX3b, a new personal event: a work period, drawn as a background block (never shared). */
+  workPeriod: boolean;
 }
 
 const fieldNames = [
@@ -151,6 +153,9 @@ export function EventForm({
   event,
   on,
   googleTargets,
+  onDone,
+  onCancel,
+  onDirtyChange,
 }: {
   readonly homeId: string | null;
   readonly defaultTimeZone: string;
@@ -167,6 +172,15 @@ export function EventForm({
   readonly on?: string;
   /** S34: the Google calendars a new personal event may be saved to. */
   readonly googleTargets?: GoogleWriteTargets;
+  /**
+   * UX3b: inside a dialog. Called with the saved event's address instead of navigating to it, so
+   * the calendar underneath keeps its view, date, filters and scroll position.
+   */
+  readonly onDone?: (path: string) => void;
+  /** Cancel inside a dialog (honours its unsaved-changes question); default: back. */
+  readonly onCancel?: () => void;
+  /** Reports whether the person has typed anything, for the dialog's unsaved-changes question. */
+  readonly onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useTranslations("Calendar");
   const scopeLabel = {
@@ -210,18 +224,27 @@ export function EventForm({
       shares: [...sharesOf],
       scope: initialScope,
       target: !event && !homeId ? (googleTargets?.defaultId ?? "") : "",
+      workPeriod: event?.series.workPeriod ?? false,
     },
   });
+  const finish = (path: string) => {
+    if (onDone) onDone(path);
+    else router.push(path);
+  };
+  const isDirty = form.formState.isDirty;
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
   const errors = form.formState.errors;
-  const [allDay, startsOn, startTime, timezone, scope, target] = useWatch({
+  const [allDay, startsOn, startTime, timezone, scope, target, workPeriod] = useWatch({
     control: form.control,
-    name: ["allDay", "startsOn", "startTime", "timezone", "scope", "target"],
+    name: ["allDay", "startsOn", "startTime", "timezone", "scope", "target", "workPeriod"],
   });
   const toGoogle = !event && !homeId && target !== "";
   const googleSave = useGoogleMutation(`google-create:${id}`, async (body: object) => {
     const answer = await sendGoogleRequest("POST", GOOGLE_EVENTS_ENDPOINT, body);
     const created = typeof answer.eventId === "string" ? answer.eventId : null;
-    router.push(created ? googleEventPath(null, created) : calendarPath(null));
+    finish(created ? googleEventPath(null, created) : calendarPath(null));
   });
 
   const save = useCalendarMutation(
@@ -249,7 +272,7 @@ export function EventForm({
           : values.repeat.frequency !== "none"
             ? values.startsOn
             : null;
-      router.push(eventPath(homeId, savedId, target));
+      finish(eventPath(homeId, savedId, target));
     },
   );
 
@@ -286,6 +309,9 @@ export function EventForm({
     setPreview(null);
   };
 
+  const newWork = (values: FormValues) =>
+    !event && !homeId && values.target === "" && values.workPeriod;
+
   const submit = (values: FormValues) => {
     form.clearErrors();
     setPreview(null);
@@ -321,7 +347,13 @@ export function EventForm({
       ...(withRepeat ? { repeat: repeatParsed.data } : {}),
       ...(withRepeat ? { reminder: values.reminder === "" ? null : Number(values.reminder) } : {}),
       ...(homeId ? { participants: values.participants } : {}),
-      ...(!homeId && withRepeat ? { shares: values.shares } : {}),
+      ...(!homeId && withRepeat ? { shares: newWork(values) ? [] : values.shares } : {}),
+      // A new personal event may be a work period (fixed at creation, never shared). A later
+      // series started by "this and following" keeps its series' flag (UX3a).
+      ...(newWork(values) ? { workPeriod: true } : {}),
+      ...(event && recurring && values.scope === "following"
+        ? { workPeriod: event.series.workPeriod }
+        : {}),
     };
     if (!event && !homeId && values.target !== "") {
       const google = createGoogleEventSchema.safeParse({
@@ -434,6 +466,14 @@ export function EventForm({
         {...form.register("title")}
       />
       <Checkbox label={t("fieldAllDay")} data-testid="event-all-day" {...form.register("allDay")} />
+      {!event && !homeId && !toGoogle ? (
+        <Checkbox
+          label={t("fieldWorkPeriod")}
+          description={t("fieldWorkPeriodHint")}
+          data-testid="event-work-period"
+          {...form.register("workPeriod")}
+        />
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
           type="date"
@@ -590,7 +630,7 @@ export function EventForm({
           ) : null}
         </fieldset>
       ) : null}
-      {!homeId && homes.length > 0 && scope !== "only" && !toGoogle ? (
+      {!homeId && homes.length > 0 && scope !== "only" && !toGoogle && !workPeriod ? (
         <fieldset>
           <legend className="mb-1 text-body font-medium text-fg">{t("fieldShares")}</legend>
           <p className="mb-2 text-helper text-fg-muted">{t("fieldSharesHint")}</p>
@@ -656,7 +696,8 @@ export function EventForm({
         <Button
           variant="secondary"
           onClick={() => {
-            router.back();
+            if (onCancel) onCancel();
+            else router.back();
           }}
         >
           {t("cancel")}

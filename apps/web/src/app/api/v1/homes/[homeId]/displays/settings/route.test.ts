@@ -40,6 +40,8 @@ const sameOrigin = {
   "content-type": "application/json",
 };
 
+const COUNTS = { ambientShowChores: true, ambientShowShopping: false };
+
 function save(body: unknown, headers: Record<string, string> = sameOrigin) {
   return POST(
     new Request(`https://madeora.example/api/v1/homes/${HOME}/displays/settings`, {
@@ -58,38 +60,49 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/homes/{homeId}/displays/settings", () => {
-  it("saves one of the offered timings for the Home", async () => {
-    expect((await save({ ambientAfterSeconds: 600 })).status).toBe(200);
-    expect(rpc).toHaveBeenCalledWith("save_home_display_settings", {
+  it("saves one of the offered timings and the ambient counts for the Home", async () => {
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 600 })).status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("save_home_display_ambient", {
       p_home_id: HOME,
       p_ambient_after_seconds: 600,
+      p_show_chores: true,
+      p_show_shopping: false,
     });
   });
 
   it("refuses any other timing or field", async () => {
-    expect((await save({ ambientAfterSeconds: 45 })).status).toBe(400);
-    expect((await save({ ambientAfterSeconds: 300, homeId: HOME })).status).toBe(400);
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 45 })).status).toBe(400);
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 300, homeId: HOME })).status).toBe(400);
+    expect((await save({ ambientAfterSeconds: 300 })).status).toBe(400);
+    expect(
+      (await save({ ambientAfterSeconds: 300, ambientShowChores: 1, ambientShowShopping: false }))
+        .status,
+    ).toBe(400);
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it("refuses a visitor, a non-manager and a cross-site request", async () => {
     state.identity = false;
-    expect((await save({ ambientAfterSeconds: 300 })).status).toBe(401);
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 300 })).status).toBe(401);
     state.identity = true;
     state.allowed = false;
-    expect((await save({ ambientAfterSeconds: 300 })).status).toBe(403);
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 300 })).status).toBe(403);
     state.allowed = true;
     expect(
-      (await save({ ambientAfterSeconds: 300 }, { ...sameOrigin, origin: "https://evil.example" }))
-        .status,
+      (
+        await save(
+          { ...COUNTS, ambientAfterSeconds: 300 },
+          { ...sameOrigin, origin: "https://evil.example" },
+        )
+      ).status,
     ).toBe(403);
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it("maps the database's refusals", async () => {
     rpc.mockResolvedValueOnce({ data: "not_permitted", error: null });
-    expect((await save({ ambientAfterSeconds: 300 })).status).toBe(403);
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 300 })).status).toBe(403);
     rpc.mockResolvedValueOnce({ data: "not_found", error: null });
-    expect((await save({ ambientAfterSeconds: 300 })).status).toBe(404);
+    expect((await save({ ...COUNTS, ambientAfterSeconds: 300 })).status).toBe(404);
   });
 });

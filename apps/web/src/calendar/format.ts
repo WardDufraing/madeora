@@ -55,10 +55,17 @@ export function newEventPath(homeId: string | null, date?: string): string {
 }
 
 /** The calendar page's address with a view and a date (defaults left out). */
-export function calendarHref(homeId: string | null, view: CalendarView, date?: string): string {
+export function calendarHref(
+  homeId: string | null,
+  view: CalendarView,
+  date?: string,
+  /** UX3b: the person hides their work periods (`work=0`); kept while moving through the calendar. */
+  hideWork = false,
+): string {
   const params = new URLSearchParams();
   if (view !== "month") params.set("view", view);
   if (date) params.set("date", date);
+  if (hideWork) params.set("work", "0");
   const search = params.toString();
   return search ? `${calendarPath(homeId)}?${search}` : calendarPath(homeId);
 }
