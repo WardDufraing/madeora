@@ -298,7 +298,8 @@ export function TaskList({
         className={cx(
           "relative flex items-start gap-3 border-b border-line py-3 ps-4 pe-2 last:border-b-0",
           "motion-safe:transition-colors motion-safe:duration-(--md-duration-base)",
-          isSelected || retained ? "bg-accent-subtle" : late && !isDone ? "bg-warning-subtle" : "",
+          // A ring, not a tinted fill: muted text keeps its contrast on the plain surface.
+          isSelected || retained ? "ring-1 ring-inset ring-accent-edge" : "",
           inCompletedSection ? "opacity-80" : "",
         )}
         data-testid="task-row"
@@ -330,7 +331,6 @@ export function TaskList({
             label={t("completeTask", { task: task.title })}
             className="mt-0.5 [&_label]:sr-only"
             checked={isDone}
-            disabled={completion.busy}
             onChange={(event) => {
               const done = event.target.checked;
               // Unfinished subtasks: ask first, like the task page (spec).

@@ -175,6 +175,8 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.getByTestId("repeat-summary")).toContainText("Every day");
     expect(await axeViolations(page)).toEqual([]);
     await page.getByRole("button", { name: "Add task" }).press("Enter");
+    await expect(page.getByTestId("task-added")).toBeVisible();
+    await page.keyboard.press("Escape");
     const row = page.getByTestId("task-row").filter({ hasText: "Take out the bins" }).first();
     await expect(row).toContainText("Repeats");
     await row.getByRole("link").focus();

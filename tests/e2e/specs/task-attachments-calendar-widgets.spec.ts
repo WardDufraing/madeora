@@ -255,7 +255,10 @@ test("tasks widget and calendar: filter, complete from the widget and from a day
   await expect(page.getByTestId("calendar-day")).toHaveCount(7);
   await page.getByRole("link", { name: "Next week" }).click();
   await expect(page.locator(`[data-testid="calendar-day"][data-date="${today}"]`)).toHaveCount(0);
-  await page.getByRole("link", { name: "Today", exact: true }).click();
+  await page
+    .getByLabel("Calendar navigation")
+    .getByRole("link", { name: "Today", exact: true })
+    .click();
   await expect(page.locator(`[data-testid="calendar-day"][data-date="${today}"]`)).toHaveCount(1);
 });
 
