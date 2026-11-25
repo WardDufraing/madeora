@@ -102,13 +102,16 @@ test("a paired display shows only shareable Home data, takes actions and locks",
   await expect(screen.getByTestId("display-unlocked")).toContainText("Unlocked for Ward");
   await screen.getByRole("button", { name: "Lock now" }).click();
   await expect(screen.getByTestId("display-unlocked")).toHaveCount(0);
-  expect(
-    sql(
-      `select count(*) from private.audit_events e
-       where e.home_id = :'home'::uuid and e.action in ('display.unlock_opened', 'display.unlock_ended');`,
-      { home: homeId },
-    ),
-  ).toBe("2");
+  // The indicator hides at once; the server ends the session (and audits it) a moment later.
+  await expect
+    .poll(() =>
+      sql(
+        `select count(*) from private.audit_events e
+         where e.home_id = :'home'::uuid and e.action in ('display.unlock_opened', 'display.unlock_ended');`,
+        { home: homeId },
+      ),
+    )
+    .toBe("2");
 
   // Ward changes this display's layout from their own session: no shopping list here.
   await page.goto(`/homes/${homeId}/displays`);
