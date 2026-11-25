@@ -179,12 +179,18 @@ export const getHouseholdDisplayConfig = cache(
   },
 );
 
-/** A Home's display settings (UX8a), for its managers. */
+/** A Home's display settings (UX8a, UX8b), for its managers. */
 export interface HomeDisplaySettings {
   readonly ambientAfterSeconds: AmbientAfterSeconds;
+  readonly ambientShowChores: boolean;
+  readonly ambientShowShopping: boolean;
 }
 
-const homeDisplaySettingsRowSchema = z.object({ ambient_after_seconds: z.number().int() });
+const homeDisplaySettingsRowSchema = z.object({
+  ambient_after_seconds: z.number().int(),
+  ambient_show_chores: z.boolean().catch(false),
+  ambient_show_shopping: z.boolean().catch(false),
+});
 
 /** The Home's display settings for its managers; `null` for anyone else or when unreadable. */
 export const getHomeDisplaySettings = cache(
@@ -203,6 +209,10 @@ export const getHomeDisplaySettings = cache(
     const row = homeDisplaySettingsRowSchema.safeParse(data);
     if (!row.success) return null;
     const seconds = row.data.ambient_after_seconds;
-    return { ambientAfterSeconds: isAmbientAfter(seconds) ? seconds : DEFAULT_AMBIENT_AFTER };
+    return {
+      ambientAfterSeconds: isAmbientAfter(seconds) ? seconds : DEFAULT_AMBIENT_AFTER,
+      ambientShowChores: row.data.ambient_show_chores,
+      ambientShowShopping: row.data.ambient_show_shopping,
+    };
   },
 );

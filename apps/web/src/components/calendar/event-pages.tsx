@@ -22,6 +22,7 @@ import { isoDate } from "@/preferences/regional";
 import { timeZoneChoices } from "@/preferences/timezone";
 import { formatTaskDate } from "@/tasks/format";
 
+import type { CalendarCreateData } from "./calendar-client";
 import { EventActions } from "./event-actions";
 import { EventForm } from "./event-form";
 import { RepeatSummary } from "./repeat-summary";
@@ -256,6 +257,25 @@ async function formData(home: EventContext["home"]) {
           }))
         : [],
     homes: homes?.status === "ok" ? homes.homes.map(({ id, name }) => ({ id, name })) : [],
+  };
+}
+
+/** What the calendar's new-event dialog needs (UX3b): the new-event page's own data. */
+export async function calendarCreateData(
+  home: EventContext["home"],
+): Promise<CalendarCreateData | null> {
+  const [data, googleTargets] = await Promise.all([
+    formData(home),
+    !home && getGoogleCalendarServer() !== null ? readGoogleWriteTargets() : null,
+  ]);
+  if (!data) return null;
+  return {
+    defaultTimeZone: data.timeZone,
+    timeZoneChoices: timeZoneChoices([data.timeZone]),
+    members: data.members,
+    homes: data.homes,
+    googleTargets,
+    today: data.today,
   };
 }
 

@@ -7,7 +7,6 @@ import {
   bannerSpan,
   calendarHref,
   calendarViewWindow,
-  newEventPath,
   occurrencePath,
   occurrencesByDate,
   occurrenceTimes,
@@ -33,7 +32,10 @@ import { listTaskCalendar } from "@/tasks/data";
 import { defaultTaskQuery, taskQueryString } from "@/tasks/filters";
 import { formatTaskDate, tasksPath } from "@/tasks/format";
 
+import { AddOnDayButton, CalendarClient, NewEventButton } from "./calendar-client";
 import { CalendarToggles } from "./calendar-toggles";
+import { calendarCreateData } from "./event-pages";
+import { EventPreview } from "./event-preview";
 
 export interface CalendarViewProps {
   /** `null`: the Personal space. */
@@ -73,6 +75,8 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
     view: typeof searchParams.view === "string" ? searchParams.view : undefined,
     date: typeof searchParams.date === "string" ? searchParams.date : undefined,
   });
+  // UX3b: work periods (personal only) can be hidden from the address, so a view stays shareable.
+  const hideWork = searchParams.work === "0";
   const [t, tVacations, tTasks, tChores, formats, regional, directory, personalZone] =
     await Promise.all([
       getTranslations("Calendar"),
@@ -92,6 +96,7 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
   const value = calendar.value;
+  const create = value.canCreate ? await calendarCreateData(home) : null;
   const names: MemberNames = new Map(
     directory?.status === "ok"
       ? directory.members.map((member) => [member.membershipId, member.name])
@@ -145,11 +150,15 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
     sort: "due",
     offset: 0,
   })}`;
-  const byDate = occurrencesByDate(value.occurrences, window.from, window.to);
+  const hasWork = value.occurrences.some((occurrence) => occurrence.workPeriod);
+  const shownOccurrences = hideWork
+    ? value.occurrences.filter((occurrence) => !occurrence.workPeriod)
+    : value.occurrences;
+  const byDate = occurrencesByDate(shownOccurrences, window.from, window.to);
   const banners = value.showVacations ? value.vacations : [];
   const dateText = (date: string) => formatTaskDate(date, formats);
   const title = windowTitle(window, formats, t, dateText);
-  const href = (view: CalendarView, date?: string) => calendarHref(homeId, view, date);
+  const href = (view: CalendarView, date?: string) => calendarHref(homeId, view, date, hideWork);
   const viewLabel = {
     month: t("viewMonth"),
     week: t("viewWeek"),
@@ -175,8 +184,12 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
     />
   );
   const overlayLabel = { task: t("overlayTask"), chore: t("overlayChore") } as const;
-  const entriesOn = (date: string): ReactNode[] => [
-    ...(byDate.get(date) ?? []).map((occurrence) => item(occurrence, date)),
+  const entriesOn = (date: string, workFirst = true): ReactNode[] => [
+    // Work periods are the quiet background of the day: first in lists, last in a month cell,
+    // so they never push real events into "+N more".
+    ...[...(byDate.get(date) ?? [])]
+      .sort((a, b) => (Number(b.workPeriod) - Number(a.workPeriod)) * (workFirst ? 1 : -1))
+      .map((occurrence) => item(occurrence, date)),
     ...(overlays.get(date) ?? []).map((entry) => (
       <OverlayItem key={entry.key} entry={entry} label={overlayLabel[entry.kind]} />
     )),
@@ -184,7 +197,12 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
   const bannerLabel = (banner: VacationBanner) => banner.name ?? tVacations("genericName");
 
   return (
-    <>
+    <CalendarClient
+      homeId={homeId}
+      dateFormat={formats.dateFormat}
+      memberNames={Object.fromEntries(names)}
+      create={create}
+    >
       <PageHeader title={t("title")} />
       <p className="mb-4 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
@@ -237,16 +255,25 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
             showVacations={value.showVacations}
           />
           {value.canCreate ? (
-            <Link
-              href={newEventPath(homeId, window.view === "day" ? window.anchor : undefined)}
-              className="inline-flex min-h-10 items-center rounded-control bg-accent px-4 text-body font-medium text-on-accent"
-              data-testid="calendar-new-event"
-            >
-              {t("newEvent")}
-            </Link>
+            <NewEventButton
+              homeId={homeId}
+              {...(window.view === "day" ? { date: window.anchor } : {})}
+              label={t("newEvent")}
+            />
           ) : null}
         </div>
 
+        {homeId === null && (hasWork || hideWork) ? (
+          <p className="text-helper text-fg-muted">
+            <Link
+              href={calendarHref(homeId, window.view, window.anchor, !hideWork)}
+              className="font-medium text-accent-fg underline"
+              data-testid="calendar-toggle-work"
+            >
+              {hideWork ? t("showWork") : t("hideWork")}
+            </Link>
+          </p>
+        ) : null}
         <GoogleWarnings warnings={value.googleWarnings} names={names} formats={formats} />
         {homeId === null ? (
           <p className="text-helper text-fg-muted">
@@ -334,10 +361,12 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
             title={title}
             formats={formats}
             weekStart={regional.effective.weekStart}
+            hideWork={hideWork}
+            canCreate={value.canCreate}
           />
         ) : null}
       </div>
-    </>
+    </CalendarClient>
   );
 }
 
@@ -428,6 +457,43 @@ async function OccurrenceItem({
   if (!occurrence.allDay && occurrence.timezone !== timeZone) {
     notes.push(t("ownZone", { zone: occurrence.timezone }));
   }
+  const preview = {
+    href: occurrencePath(homeId, occurrence),
+    eventId: occurrence.eventId,
+    on: occurrence.on,
+    source: occurrence.source,
+    title: occurrence.title,
+    when,
+    dateLabel:
+      occurrence.from === occurrence.to
+        ? formatTaskDate(occurrence.from, formats)
+        : t("range", {
+            from: formatTaskDate(occurrence.from, formats),
+            to: formatTaskDate(occurrence.to, formats),
+          }),
+    location: occurrence.location,
+    notes,
+    workPeriod: occurrence.workPeriod,
+  } as const;
+  // A work period is a quiet block behind the day (decision 43): tinted, labelled "Work" with its
+  // times, and marked by a dashed edge as well as tone, so it never relies on colour alone.
+  if (occurrence.workPeriod) {
+    return (
+      <li
+        className="rounded-control border-s-4 border-dashed border-accent-edge bg-accent-subtle text-body"
+        data-testid="calendar-work-period"
+        data-kind={occurrence.kind}
+      >
+        <EventPreview
+          {...preview}
+          className="flex flex-wrap gap-x-2 rounded-control px-2 py-0.5 text-fg"
+        >
+          <span className="font-semibold">{t("workLabel")}</span>
+          <span className="text-fg-muted">{when}</span>
+        </EventPreview>
+      </li>
+    );
+  }
   return (
     <li
       className="text-body"
@@ -435,9 +501,9 @@ async function OccurrenceItem({
       data-kind={occurrence.kind}
       data-source={occurrence.source}
     >
-      <Link
-        href={occurrencePath(homeId, occurrence)}
-        className="flex flex-col rounded-control px-1 text-fg underline-offset-2 hover:underline"
+      <EventPreview
+        {...preview}
+        className="flex flex-col rounded-control px-1 text-fg hover:bg-accent-subtle"
       >
         <span>
           <span className="text-fg-muted">{when}</span>{" "}
@@ -446,7 +512,7 @@ async function OccurrenceItem({
         {notes.length > 0 ? (
           <span className="text-helper text-fg-muted">{notes.join(" · ")}</span>
         ) : null}
-      </Link>
+      </EventPreview>
     </li>
   );
 }
@@ -482,7 +548,7 @@ function OverlayItem({ entry, label }: { readonly entry: OverlayEntry; readonly 
   );
 }
 
-function MonthGrid({
+async function MonthGrid({
   window,
   today,
   entriesOn,
@@ -492,11 +558,15 @@ function MonthGrid({
   title,
   formats,
   weekStart,
+  hideWork,
+  canCreate,
 }: {
+  readonly hideWork: boolean;
+  readonly canCreate: boolean;
   readonly window: CalendarViewWindow;
   readonly today: string;
   /** A day's events, then its tasks and chores. */
-  readonly entriesOn: (date: string) => ReactNode[];
+  readonly entriesOn: (date: string, workFirst?: boolean) => ReactNode[];
   readonly banners: readonly VacationBanner[];
   readonly bannerLabel: (banner: VacationBanner) => string;
   readonly homeId: string | null;
@@ -506,7 +576,13 @@ function MonthGrid({
 }) {
   const weekdays = weekdayNames(weekStart, formats.locale, "short");
   const weekdaysLong = weekdayNames(weekStart, formats.locale, "long");
+  const t = await getTranslations("Calendar");
   const dateText = (date: string) => formatTaskDate(date, formats);
+  const href = (date: string) => calendarHref(homeId, "day", date, hideWork);
+  const isWeekend = (date: string) => {
+    const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+    return day === 0 || day === 6;
+  };
   return (
     <div className="hidden overflow-x-auto sm:block">
       <table
@@ -520,7 +596,7 @@ function MonthGrid({
               <th
                 key={day}
                 scope="col"
-                className="px-2 py-1 text-start text-helper font-medium text-fg-muted"
+                className="px-2 pb-2 text-start text-helper font-medium text-fg-muted"
               >
                 <abbr title={weekdaysLong[index]} className="no-underline">
                   {day}
@@ -550,44 +626,52 @@ function MonthGrid({
               )),
               <tr key={week[0]}>
                 {week.map((date) => {
-                  const entries = entriesOn(date);
+                  const entries = entriesOn(date, window.view !== "month");
                   const shown =
                     window.view === "month" ? entries.slice(0, MONTH_CELL_ENTRIES) : entries;
                   const outside = window.view === "month" && !inMonth(date, window.anchor);
                   return (
                     <td
                       key={date}
+                      // Borderless (decision 44): a hairline above each week and tone for weekends,
+                      // instead of a box around every day.
                       className={cx(
-                        "border border-line p-1 align-top",
+                        "group border-t border-line p-1.5 align-top",
                         window.view === "month" ? "h-28" : "h-48",
-                        outside && "bg-page",
+                        isWeekend(date) && "bg-page",
                       )}
                       data-testid="calendar-day"
                       data-date={date}
                     >
-                      <Link
-                        href={calendarHref(homeId, "day", date)}
-                        aria-current={date === today ? "date" : undefined}
-                        aria-label={dateText(date)}
-                        className={cx(
-                          "inline-flex min-h-8 min-w-8 items-center justify-center rounded-control px-1 text-body font-medium",
-                          date === today
-                            ? "bg-accent text-on-accent"
-                            : "text-fg underline-offset-2 hover:underline",
-                          outside && date !== today && "text-fg-muted",
-                        )}
-                      >
-                        {Number(date.slice(8, 10))}
-                      </Link>
+                      <div className="flex items-center justify-between">
+                        <Link
+                          href={href(date)}
+                          aria-current={date === today ? "date" : undefined}
+                          aria-label={dateText(date)}
+                          className={cx(
+                            "inline-flex min-h-8 min-w-8 items-center justify-center rounded-full px-1 text-body font-medium",
+                            date === today
+                              ? "bg-accent text-on-accent"
+                              : "text-fg hover:bg-accent-subtle",
+                            outside && date !== today && "text-fg-muted",
+                          )}
+                        >
+                          {Number(date.slice(8, 10))}
+                        </Link>
+                        {canCreate ? (
+                          <AddOnDayButton
+                            homeId={homeId}
+                            date={date}
+                            label={t("addOnDay", { date: dateText(date) })}
+                          />
+                        ) : null}
+                      </div>
                       {shown.length > 0 ? (
                         <ul className="mt-1 flex flex-col gap-0.5 text-helper">
                           {shown}
                           {entries.length > shown.length ? (
                             <li>
-                              <Link
-                                href={calendarHref(homeId, "day", date)}
-                                className="text-fg-muted underline"
-                              >
+                              <Link href={href(date)} className="text-fg-muted underline">
                                 <MoreText count={entries.length - shown.length} />
                               </Link>
                             </li>

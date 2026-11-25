@@ -76,8 +76,26 @@ describe("ambient timing (UX8a)", () => {
     expect(DEFAULT_AMBIENT_AFTER).toBe(300);
     expect(isAmbientAfter(600)).toBe(true);
     expect(isAmbientAfter(45)).toBe(false);
-    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 900 }).success).toBe(true);
-    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 301 }).success).toBe(false);
-    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: "300" }).success).toBe(false);
+    const counts = { ambientShowChores: false, ambientShowShopping: true };
+    expect(
+      homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 900, ...counts }).success,
+    ).toBe(true);
+    expect(
+      homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 301, ...counts }).success,
+    ).toBe(false);
+    expect(
+      homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: "300", ...counts }).success,
+    ).toBe(false);
+  });
+
+  it("needs both ambient counts as booleans (UX8b)", () => {
+    expect(homeDisplaySettingsSchema.safeParse({ ambientAfterSeconds: 300 }).success).toBe(false);
+    expect(
+      homeDisplaySettingsSchema.safeParse({
+        ambientAfterSeconds: 300,
+        ambientShowChores: "yes",
+        ambientShowShopping: false,
+      }).success,
+    ).toBe(false);
   });
 });

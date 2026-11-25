@@ -137,6 +137,8 @@ export default async function HomeDisplaysPage({ params }: HomeDisplaysPageProps
           <DisplayAmbientSetting
             homeId={home.id}
             ambientAfterSeconds={settings.ambientAfterSeconds}
+            ambientShowChores={settings.ambientShowChores}
+            ambientShowShopping={settings.ambientShowShopping}
           />
         </Card>
       ) : null}

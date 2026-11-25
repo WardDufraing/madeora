@@ -5,7 +5,12 @@ import { z } from "zod";
 import { householdClientKey, householdService } from "@/child-sign-in/service";
 import { verifyChildSecret } from "@/child-sign-in/secret-hash";
 
-import { DEFAULT_AMBIENT_AFTER, isAmbientAfter } from "./schema";
+import {
+  DEFAULT_AMBIENT_AFTER,
+  NO_AMBIENT_COUNTS,
+  isAmbientAfter,
+  type AmbientShows,
+} from "./schema";
 
 /**
  * Actions on a paired display (S44; spec "Confirmed Household Display member-only actions"): a
@@ -243,9 +248,10 @@ export async function lockOnDisplayBySession(
   }
 }
 
-/** The display's ambient timing and open protected-actions session (UX8a). */
+/** The display's ambient timing and counts (UX8a, UX8b) and open protected-actions session. */
 export interface DisplaySessionState {
   readonly ambientAfterSeconds: number;
+  readonly ambientShows: AmbientShows;
   readonly unlock: { readonly membershipId: string; readonly secondsLeft: number } | null;
 }
 
@@ -253,6 +259,9 @@ const sessionStateSchema = z.object({
   ambient_after_seconds: z.number().int().positive(),
   unlocked_membership_id: z.uuid().nullable(),
   unlock_seconds_left: z.number().int().nullable(),
+  // Off when missing or not a boolean: the ambient view then shows nothing from the household.
+  ambient_show_chores: z.boolean().catch(false),
+  ambient_show_shopping: z.boolean().catch(false),
 });
 
 /**
@@ -262,6 +271,7 @@ const sessionStateSchema = z.object({
 export async function readDisplaySessionState(displayId: string): Promise<DisplaySessionState> {
   const fallback: DisplaySessionState = {
     ambientAfterSeconds: DEFAULT_AMBIENT_AFTER,
+    ambientShows: NO_AMBIENT_COUNTS,
     unlock: null,
   };
   const client = householdService();
@@ -277,6 +287,10 @@ export async function readDisplaySessionState(displayId: string): Promise<Displa
   const secondsLeft = row.data.unlock_seconds_left;
   return {
     ambientAfterSeconds: isAmbientAfter(ambient) ? ambient : DEFAULT_AMBIENT_AFTER,
+    ambientShows: {
+      chores: row.data.ambient_show_chores,
+      shopping: row.data.ambient_show_shopping,
+    },
     unlock:
       membershipId !== null && secondsLeft !== null && secondsLeft > 0
         ? { membershipId, secondsLeft }
