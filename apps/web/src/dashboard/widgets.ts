@@ -70,12 +70,23 @@ function sizes(
   return { lg, md, sm: { ...sm, w: 1, minW: 1, maxW: 1 } };
 }
 
+/**
+ * What a widget shows when it has nothing to show (UX2a; redesign decision 9): the full friendly
+ * message, a compact one-line summary, or nothing at all (the widget is hidden while it is empty
+ * and returns on its own; render-only, the saved layout never changes). Additive: an older saved
+ * config without the field reads as `full`, which is how every widget looked before.
+ */
+export const emptyStateModes = ["full", "compact", "hide"] as const;
+export type EmptyStateMode = (typeof emptyStateModes)[number];
+const emptyStateField = z.enum(emptyStateModes).default("full");
+
 const welcomeConfig = z.strictObject({ showDate: z.boolean().default(true) });
 const quickActionsConfig = z.strictObject({});
 const oraConfig = z.strictObject({});
 export const notificationCounts = [3, 5, 10] as const;
 const notificationsConfig = z.strictObject({
   count: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(5),
+  emptyState: emptyStateField,
 });
 const homeMembersConfig = z.strictObject({ showRoles: z.boolean().default(true) });
 
@@ -108,6 +119,7 @@ const tasksConfig = z.strictObject({
   assignee: z.enum(taskWidgetAssignees).default("any"),
   memberId: z.uuid().nullable().default(null),
   count: z.union([z.literal(5), z.literal(10), z.literal(15)]).default(5),
+  emptyState: emptyStateField,
 });
 
 /**
@@ -132,6 +144,7 @@ const myChoresConfig = z.strictObject({
   state: z.enum(choreWidgetStates).default("outstanding"),
   range: z.enum(choreWidgetRanges).default("any"),
   count: choreCount,
+  emptyState: emptyStateField,
 });
 const homeChoresConfig = z.strictObject({
   state: z.enum(choreWidgetStates).default("outstanding"),
@@ -140,8 +153,9 @@ const homeChoresConfig = z.strictObject({
   assignee: z.enum(choreWidgetAssignees).default("any"),
   memberId: z.uuid().nullable().default(null),
   count: choreCount,
+  emptyState: emptyStateField,
 });
-const choreApprovalsConfig = z.strictObject({ count: choreCount });
+const choreApprovalsConfig = z.strictObject({ count: choreCount, emptyState: emptyStateField });
 
 /**
  * The Chore schedule widget (S21; spec "Confirmed Home chore overview widget"): a Home-local week or
@@ -297,6 +311,7 @@ export const upcomingEventsCounts = [3, 5, 10] as const;
 const upcomingEventsConfig = z.strictObject({
   days: z.union([z.literal(7), z.literal(14), z.literal(30)]).default(7),
   count: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(5),
+  emptyState: emptyStateField,
 });
 
 const habitSizes = sizes(
@@ -597,4 +612,40 @@ export function defaultConfig(type: WidgetType): Record<string, unknown> {
 export function parseConfig(type: WidgetType, value: unknown): Record<string, unknown> | null {
   const parsed = widgetRegistry[type].config.safeParse(value ?? {});
   return parsed.success ? parsed.data : null;
+}
+
+/** Widgets with a Full / Compact / Hide-when-empty preference (UX2a). */
+const emptyStateTypes: ReadonlySet<WidgetType> = new Set<WidgetType>([
+  "notifications",
+  "tasks",
+  "my-chores",
+  "home-chores",
+  "chore-approvals",
+  "upcoming-events",
+]);
+
+export function supportsEmptyState(type: WidgetType): boolean {
+  return emptyStateTypes.has(type);
+}
+
+/** The widgets that have nothing to configure; every other type opens its settings. */
+const noSettingsTypes: ReadonlySet<WidgetType> = new Set<WidgetType>([
+  "quick-actions",
+  "ora",
+  "home-vacation",
+  "my-points",
+  "personal-points",
+]);
+
+export function hasSettings(type: WidgetType): boolean {
+  return !noSettingsTypes.has(type);
+}
+
+/** A saved widget's empty-state preference: `full` when the type has none or the config is odd. */
+export function emptyStateModeOf(type: WidgetType, config: unknown): EmptyStateMode {
+  if (!supportsEmptyState(type)) return "full";
+  const parsed = widgetRegistry[type].config.safeParse(config ?? {});
+  if (!parsed.success) return "full";
+  const mode = (parsed.data as { emptyState?: unknown }).emptyState;
+  return emptyStateModes.find((candidate) => candidate === mode) ?? "full";
 }

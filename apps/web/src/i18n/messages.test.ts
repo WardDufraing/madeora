@@ -329,6 +329,7 @@ describe("message dictionaries", () => {
       // Points and rewards (S23): kinds, policies, periods, blocks and states, looked up by the
       // value the database answers.
       Dashboard: [
+        ...withPrefix("settingEmptyState_", ["full", "compact", "hide"]),
         ...withPrefix("settingPointsView_", ["mine", "shared"]),
         ...withPrefix("settingLeaderboardPeriod_", ["default", "week", "month", "all"]),
         // The Recipes widget's modes (S24).

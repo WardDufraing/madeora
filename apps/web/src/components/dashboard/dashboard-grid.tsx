@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cx } from "@/components/ui/cx";
+import { WidgetShell } from "./widget-shell";
 import { visiblePlacements, type DashboardLayout } from "@/dashboard/layout";
 import { breakpoints } from "@/dashboard/widgets";
 import type { WidgetEntry } from "@/dashboard/view-types";
@@ -18,11 +19,17 @@ export function DashboardGrid({
   layout,
   widgets,
   emptyState,
+  canEdit,
+  onSettings,
+  onCustomize,
 }: {
   readonly layout: DashboardLayout;
   readonly widgets: readonly WidgetEntry[];
   /** Shown when no widget is visible. */
   readonly emptyState: ReactNode;
+  readonly canEdit: boolean;
+  readonly onSettings: (widgetId: string) => void;
+  readonly onCustomize: () => void;
 }) {
   const byId = new Map(widgets.map((widget) => [widget.id, widget]));
   const positions = Object.fromEntries(
@@ -63,6 +70,9 @@ export function DashboardGrid({
               style={style}
               className={cx(
                 "min-h-0",
+                // Hide when empty (decision 9): render-only, the position stays reserved so
+                // nothing around it jumps when content appears.
+                "[&:has([data-widget-empty=hide])]:hidden",
                 "[grid-column:var(--dash-sm-col)] [grid-row:var(--dash-sm-row)]",
                 "@min-[640px]:[grid-column:var(--dash-md-col)] @min-[640px]:[grid-row:var(--dash-md-row)]",
                 "@min-[1024px]:[grid-column:var(--dash-lg-col)] @min-[1024px]:[grid-row:var(--dash-lg-row)]",
@@ -70,7 +80,12 @@ export function DashboardGrid({
               data-testid="dashboard-widget"
               data-widget-id={id}
             >
-              <WidgetFrame widget={widget}>{widget.body}</WidgetFrame>
+              <WidgetShell
+                entry={widget}
+                canEdit={canEdit}
+                onSettings={onSettings}
+                onCustomize={onCustomize}
+              />
             </li>
           );
         })}
@@ -98,14 +113,14 @@ export function WidgetFrame({
     <article
       aria-label={widget.title}
       className={cx(
-        "flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface text-fg shadow-raised",
+        "@container/widget flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface text-fg shadow-raised",
         className,
       )}
     >
       <div className="flex items-center gap-2 border-b border-line px-4 py-2">
         {/* Wraps instead of truncating, so a Home widget's source Home stays readable on a phone. */}
         <h2 className="min-w-0 flex-1 text-body font-semibold break-words">{widget.title}</h2>
-        {actions}
+        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
     </article>

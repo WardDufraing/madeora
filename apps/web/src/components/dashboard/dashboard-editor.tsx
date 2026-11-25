@@ -51,6 +51,7 @@ import {
   breakpoints,
   catalogueFor,
   defaultConfig,
+  emptyStateModeOf,
   GRID_GAP,
   ROW_HEIGHT,
   widgetRegistry,
@@ -539,6 +540,11 @@ export function DashboardEditor({
                         {widget.hidden ? (
                           <span className="rounded-control border border-line px-2 text-helper text-fg-muted">
                             {t("hiddenBadge")}
+                          </span>
+                        ) : null}
+                        {emptyStateModeOf(widget.type, widget.config) === "hide" ? (
+                          <span className="rounded-control border border-line px-2 text-helper text-fg-muted">
+                            {t("hidesWhenEmptyBadge")}
                           </span>
                         ) : null}
                         <button

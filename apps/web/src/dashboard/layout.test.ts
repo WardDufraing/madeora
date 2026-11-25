@@ -132,7 +132,7 @@ describe("widget registry", () => {
 
   it("has valid defaults for every type", () => {
     for (const type of widgetTypes) expect(defaultConfig(type)).toBeTypeOf("object");
-    expect(defaultConfig("notifications")).toEqual({ count: 5 });
+    expect(defaultConfig("notifications")).toEqual({ count: 5, emptyState: "full" });
     expect(defaultConfig("chore-schedule")).toEqual({ layout: "matrix", limit: 3 });
     expect(defaultConfig("shopping")).toEqual({ listIds: [], count: 5, quickAddListId: null });
   });

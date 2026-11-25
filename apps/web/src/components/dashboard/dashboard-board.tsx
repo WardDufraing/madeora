@@ -23,6 +23,7 @@ import type { SourceHome, WidgetEntry } from "@/dashboard/view-types";
 import { DashboardEditor, type EditorAction } from "./dashboard-editor";
 import { DashboardGrid } from "./dashboard-grid";
 import { useFailureMessage } from "./use-failure-message";
+import { WidgetSettingsDialog } from "./widget-settings-dialog";
 
 type Notice =
   | { readonly kind: "saved" | "reset" | "undone" }
@@ -65,6 +66,8 @@ export function DashboardBoard({
   // The revision the open draft started from: a save only succeeds if nobody saved since.
   const [baseRevision, setBaseRevision] = useState(revision);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // The widget whose settings panel is open (normal mode only).
+  const [settingsFor, setSettingsFor] = useState<string | null>(null);
   // Leaving edit mode (saved, cancelled, reset …) returns keyboard focus to Customize once it is
   // usable again, instead of dropping it at the top of the page.
   const customizeRef = useRef<HTMLButtonElement>(null);
@@ -102,6 +105,7 @@ export function DashboardBoard({
       // draft in one step.
       startRefresh(() => {
         setEditing(false);
+        setSettingsFor(null);
         returnFocus.current = true;
         router.refresh();
       });
@@ -133,16 +137,38 @@ export function DashboardBoard({
     setEditing(true);
   }
 
+  function openSettings(widgetId: string) {
+    mutation.reset();
+    setNotice(null);
+    setSettingsFor(widgetId);
+  }
+
+  /** Saves one widget's settings: the saved layout with only that widget's config replaced. */
+  function applySettings(widgetId: string, config: Record<string, unknown>) {
+    mutation.mutate({
+      kind: "save",
+      layout: {
+        ...layout,
+        widgets: layout.widgets.map((widget) =>
+          widget.id === widgetId ? { ...widget, config } : widget,
+        ),
+      },
+    });
+  }
+
   function loadLatest() {
     mutation.reset();
     startRefresh(() => {
       setEditing(false);
+      setSettingsFor(null);
       returnFocus.current = true;
       router.refresh();
     });
   }
 
   const error = mutation.error;
+  const settingsWidget = layout.widgets.find((widget) => widget.id === settingsFor);
+  const settingsEntry = widgets.find((entry) => entry.id === settingsFor);
   const noticeText =
     notice?.kind === "saved"
       ? t("savedNotice")
@@ -156,7 +182,7 @@ export function DashboardBoard({
 
   return (
     <div className="flex flex-col gap-4" data-testid="dashboard">
-      {error ? (
+      {error && !settingsFor ? (
         <FormAlert tone="error" announce>
           <p>{failureMessage(error.failure)}</p>
           {error.failure === "conflict" ? (
@@ -220,7 +246,44 @@ export function DashboardBoard({
             </div>
           ) : null}
           {dropped ? <FormAlert tone="info">{t("droppedNotice")}</FormAlert> : null}
-          <DashboardGrid layout={layout} widgets={widgets} emptyState={emptyState} />
+          <DashboardGrid
+            layout={layout}
+            widgets={widgets}
+            emptyState={emptyState}
+            canEdit={canEdit}
+            onSettings={openSettings}
+            onCustomize={startEditing}
+          />
+          {settingsWidget && settingsEntry ? (
+            <WidgetSettingsDialog
+              key={settingsWidget.id}
+              widget={settingsWidget}
+              title={settingsEntry.title}
+              contextHomeId={
+                target.kind === "home" ? target.homeId : (settingsWidget.source?.homeId ?? null)
+              }
+              pending={pending}
+              error={
+                error ? (
+                  <>
+                    <p>{failureMessage(error.failure)}</p>
+                    {error.failure === "conflict" ? (
+                      <Button size="sm" variant="secondary" className="mt-2" onClick={loadLatest}>
+                        {t("loadLatest")}
+                      </Button>
+                    ) : null}
+                  </>
+                ) : null
+              }
+              onApply={(config) => {
+                applySettings(settingsWidget.id, config);
+              }}
+              onClose={() => {
+                mutation.reset();
+                setSettingsFor(null);
+              }}
+            />
+          ) : null}
         </>
       )}
     </div>

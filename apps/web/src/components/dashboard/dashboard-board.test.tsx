@@ -12,7 +12,8 @@ import { renderWithQuery } from "@/test/intl";
 import { DashboardBoard } from "./dashboard-board";
 
 const refresh = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 
 const HOME_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0001";
 const fetchMock: Mock<typeof fetch> = vi.fn();
@@ -30,6 +31,9 @@ function entriesFor(layout: DashboardLayout): WidgetEntry[] {
     title: titles[widget.type] ?? widget.type,
     sourceName: null,
     body: <Link href="/somewhere">{`Content of ${widget.type}`}</Link>,
+    type: widget.type,
+    href: widget.type === "tasks" ? "/tasks" : null,
+    emptyState: "full",
     unavailable: false,
   }));
 }
@@ -78,6 +82,7 @@ function sentBody(call = 0): Record<string, unknown> {
 
 beforeEach(() => {
   refresh.mockReset();
+  push.mockReset();
   fetchMock.mockReset();
   templateList = [];
   queued = [];
@@ -488,6 +493,147 @@ describe("DashboardBoard edit mode", () => {
   it("has no axe violations in edit mode", async () => {
     const { container } = renderBoard();
     await openEditor();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+describe("DashboardBoard widget menu and settings (UX2a)", () => {
+  async function openMenu(widget: string) {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: `Actions for ${widget}` }));
+    return user;
+  }
+
+  it("gives every widget one three-dot menu, with the actions that fit it", async () => {
+    renderBoard();
+    expect(screen.getAllByRole("button", { name: /^Actions for / })).toHaveLength(
+      personalStarterLayout.widgets.length,
+    );
+    const user = await openMenu("Personal tasks");
+    expect(screen.getByRole("menuitem", { name: "Open full view" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Customize dashboard" })).toBeInTheDocument();
+    // Moving, resizing and removing live in edit mode only.
+    expect(screen.queryByRole("menuitem", { name: /remove|resize|move/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Open full view" }));
+    expect(push).toHaveBeenCalledWith("/tasks");
+  });
+
+  it("offers no settings or customize to someone who cannot edit, and no settings where none exist", async () => {
+    renderBoard({ canEdit: false });
+    await openMenu("Personal tasks");
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Customize dashboard" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeInTheDocument();
+  });
+
+  it("has no Settings item for a widget with nothing to configure", async () => {
+    renderBoard();
+    await openMenu("Quick actions");
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes from the menu", async () => {
+    renderBoard();
+    const user = await openMenu("Welcome");
+    await user.click(screen.getByRole("menuitem", { name: "Refresh" }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("opens edit mode from Customize dashboard", async () => {
+    renderBoard();
+    const user = await openMenu("Welcome");
+    await user.click(screen.getByRole("menuitem", { name: "Customize dashboard" }));
+    expect(await screen.findByTestId("dashboard-editor")).toBeInTheDocument();
+  });
+
+  it("saves only the widget's settings and leaves every position as it was", async () => {
+    renderBoard({ revision: 3 });
+    const user = await openMenu("Notifications");
+    await user.click(screen.getByRole("menuitem", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notifications settings" });
+    const apply = within(dialog).getByRole("button", { name: "Apply" });
+    expect(apply).toBeDisabled();
+    await user.selectOptions(
+      within(dialog).getByLabelText("When there is nothing to show"),
+      "hide",
+    );
+    answer(200, { revision: 4 });
+    await user.click(apply);
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(1);
+    });
+    const body = sentBody();
+    expect(body.expectedRevision).toBe(3);
+    const saved = body.layout as DashboardLayout;
+    expect(saved.placements).toEqual(personalStarterLayout.placements);
+    expect(saved.widgets.map((w) => w.id)).toEqual(personalStarterLayout.widgets.map((w) => w.id));
+    expect(saved.widgets.find((w) => w.type === "notifications")?.config).toMatchObject({
+      emptyState: "hide",
+    });
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("keeps the panel and the choices when applying fails", async () => {
+    renderBoard();
+    const user = await openMenu("Notifications");
+    await user.click(screen.getByRole("menuitem", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notifications settings" });
+    await user.selectOptions(
+      within(dialog).getByLabelText("When there is nothing to show"),
+      "compact",
+    );
+    answer(500, { error: "failed" });
+    await user.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("When there is nothing to show")).toHaveValue("compact");
+  });
+
+  it("asks before discarding unapplied settings", async () => {
+    renderBoard();
+    const user = await openMenu("Notifications");
+    await user.click(screen.getByRole("menuitem", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notifications settings" });
+    await user.selectOptions(
+      within(dialog).getByLabelText("When there is nothing to show"),
+      "compact",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(within(dialog).getByText("Discard these changes?")).toBeInTheDocument();
+  });
+
+  it("marks a widget that hides when empty in edit mode", async () => {
+    const layout: DashboardLayout = {
+      ...personalStarterLayout,
+      widgets: personalStarterLayout.widgets.map((w) =>
+        w.type === "notifications" ? { ...w, config: { count: 5, emptyState: "hide" } } : w,
+      ),
+    };
+    renderBoard({ layout, widgets: entriesFor(layout) });
+    await openEditor();
+    expect(screen.getAllByText("Hides when empty")).toHaveLength(1);
+  });
+
+  it("hides an empty widget that asked to be hidden, without touching the layout", () => {
+    const widgets = entriesFor(personalStarterLayout).map((entry) =>
+      entry.type === "notifications"
+        ? { ...entry, body: <div data-widget-empty="hide">Nothing</div> }
+        : entry,
+    );
+    renderBoard({ widgets });
+    // The marker is what the grid hides on (CSS `:has`); the item and its place stay in the DOM.
+    const item = screen
+      .getAllByTestId("dashboard-widget")
+      .find((el) => el.getAttribute("data-widget-id") === widgets[2]?.id);
+    expect(item?.className).toContain("[&:has([data-widget-empty=hide])]:hidden");
+  });
+
+  it("has no axe violations with the menu open", async () => {
+    const { container } = renderBoard();
+    await openMenu("Welcome");
     expect(await axeViolations(container)).toEqual([]);
   });
 });
