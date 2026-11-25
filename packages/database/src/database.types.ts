@@ -2287,6 +2287,8 @@ export type Database = {
         Args: { p_display_id: string };
         Returns: {
           ambient_after_seconds: number;
+          ambient_show_chores: boolean;
+          ambient_show_shopping: boolean;
           unlock_seconds_left: number;
           unlocked_membership_id: string;
         }[];
@@ -4271,6 +4273,15 @@ export type Database = {
       };
       save_google_calendar_connection: {
         Args: { p_account: string; p_scopes: string[]; p_token: string };
+        Returns: string;
+      };
+      save_home_display_ambient: {
+        Args: {
+          p_ambient_after_seconds: number;
+          p_home_id: string;
+          p_show_chores: boolean;
+          p_show_shopping: boolean;
+        };
         Returns: string;
       };
       save_home_display_settings: {

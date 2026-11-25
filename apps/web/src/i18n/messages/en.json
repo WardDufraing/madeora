@@ -8052,10 +8052,14 @@
     "configureNamed": "Layout and privacy lock of {name}",
     "ambientTitle": "Ambient mode",
     "ambientLabel": "Show the ambient view after",
-    "ambientIntro": "After this long without a touch, this Home's displays show only the time and date. A tap brings the dashboard back.",
+    "ambientIntro": "After this long without a touch, this Home's displays show the ambient view: the time, the date and any counts chosen below. A tap brings the dashboard back.",
     "ambientOption": "{minutes, plural, one {# minute} other {# minutes}}",
     "ambientSave": "Save",
-    "ambientSaved": "Ambient mode saved."
+    "ambientSaved": "Ambient mode saved.",
+    "ambientCountsLabel": "Also show in the ambient view",
+    "ambientCountsIntro": "Counts only, never titles or names. Anyone near a display can see them.",
+    "ambientShowChores": "Number of open chores",
+    "ambientShowShopping": "Number of shopping items left"
   },
   "DisplayBoard": {
     "widget": {
@@ -8105,7 +8109,15 @@
     "lockNow": "Lock now",
     "lockInSession": "You are unlocked on this display, so no PIN is needed.",
     "ambientTitle": "Ambient view",
-    "ambientHint": "Tap anywhere to show the dashboard."
+    "ambientHint": "Tap anywhere to show the dashboard.",
+    "menu": "Menu",
+    "menuTitle": "Go to",
+    "menuDescription": "Open a part of this display. Dashboard brings you back to the start.",
+    "backToDashboard": "Back to the dashboard",
+    "ambientChores": "{count, plural, =0 {No open chores} one {# open chore} other {# open chores}}",
+    "ambientShopping": "{count, plural, =0 {Nothing left to buy} one {# shopping item left} other {# shopping items left}}",
+    "unlockOpened": "{name} is unlocked on this display.",
+    "unlockEnded": "Unlock ended. PINs are asked again on this display."
   },
   "DisplayConfig": {
     "title": "Household Display",

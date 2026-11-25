@@ -46,7 +46,7 @@ import type {
  *   on this display stands in for the PIN; `409 pin-required` when there is none.
  * - `POST /api/v1/display/unlock/end` `{}` (UX8a, Lock now) → `200 {}`: ends this display's
  *   protected-actions session, if any.
- * - `POST /api/v1/homes/{homeId}/displays/settings` `{ ambientAfterSeconds }` (UX8a) → `200 {}`;
+ * - `POST /api/v1/homes/{homeId}/displays/settings` `{ ambientAfterSeconds, ambientShowChores, ambientShowShopping }` (UX8a/UX8b) → `200 {}`;
  *   `403 not-permitted`, `404 not-found`.
  * - `POST /api/v1/homes/{homeId}/displays/check` `{ code }` → `200 { request: { id, deviceKind,
  *   browser, platform, requestedAt, expiresAt } }`; `404 invalid-code`, `409 expired`,

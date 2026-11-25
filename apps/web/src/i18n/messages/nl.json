@@ -8052,10 +8052,14 @@
     "configureNamed": "Indeling en privacyvergrendeling van {name}",
     "ambientTitle": "Rustscherm",
     "ambientLabel": "Toon het rustscherm na",
-    "ambientIntro": "Na zo lang zonder aanraking tonen de schermen van dit Home alleen de tijd en de datum. Eén tik brengt het dashboard terug.",
+    "ambientIntro": "Na zo lang zonder aanraking tonen de schermen van dit Home het rustscherm: de tijd, de datum en de aantallen die je hieronder kiest. Eén tik brengt het dashboard terug.",
     "ambientOption": "{minutes, plural, one {# minuut} other {# minuten}}",
     "ambientSave": "Opslaan",
-    "ambientSaved": "Rustscherm opgeslagen."
+    "ambientSaved": "Rustscherm opgeslagen.",
+    "ambientCountsLabel": "Toon ook op het rustscherm",
+    "ambientCountsIntro": "Alleen aantallen, nooit titels of namen. Iedereen in de buurt van een scherm kan ze zien.",
+    "ambientShowChores": "Aantal open klusjes",
+    "ambientShowShopping": "Aantal boodschappen dat nog nodig is"
   },
   "DisplayBoard": {
     "widget": {
@@ -8105,7 +8109,15 @@
     "lockNow": "Nu vergrendelen",
     "lockInSession": "Je bent ontgrendeld op dit scherm, dus er is geen PIN nodig.",
     "ambientTitle": "Rustscherm",
-    "ambientHint": "Tik ergens om het dashboard te tonen."
+    "ambientHint": "Tik ergens om het dashboard te tonen.",
+    "menu": "Menu",
+    "menuTitle": "Ga naar",
+    "menuDescription": "Open een onderdeel van dit scherm. Dashboard brengt je terug naar het begin.",
+    "backToDashboard": "Terug naar het dashboard",
+    "ambientChores": "{count, plural, =0 {Geen open klusjes} one {# open klusje} other {# open klusjes}}",
+    "ambientShopping": "{count, plural, =0 {Niets meer te kopen} one {# boodschap nog nodig} other {# boodschappen nog nodig}}",
+    "unlockOpened": "{name} is ontgrendeld op dit scherm.",
+    "unlockEnded": "Ontgrendeling beëindigd. Dit scherm vraagt weer om pincodes."
   },
   "DisplayConfig": {
     "title": "Gezinsscherm",
