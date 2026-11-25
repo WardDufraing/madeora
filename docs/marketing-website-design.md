@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–24 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–25 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -260,6 +260,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Ensure responsive, keyboard-accessible controls, reduced-motion support and a useful static fallback. Avoid unnecessary client-side weight.
 - Final copy, exact controls, composition and preview implementation remain open.
 
+### Decision 25 — Homepage audience showcase (CONFIRMED)
+
+**Selection: D — Editorial audience selector with product storytelling.**
+
+- Present Individuals, Couples, Families and Housemates through a manually controlled audience selector, combining warm editorial realism photography, tailored benefit-driven copy and faithful audience-relevant product previews.
+- Use layered, spacious editorial compositions on desktop and responsive stacking on mobile. Provide accessible keyboard-operable selection controls and avoid automatic rotation.
+- Give every audience a direct link to its dedicated landing page; keep all audiences discoverable without relying solely on interaction.
+- Use synthetic preview data and verify feature availability. Sample headlines, household names, feature assignments and reference photography are illustrative only.
+- Final default audience, copy, assets and exact layout remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -314,6 +324,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 22 | Ora marketing presence | Premium brand companion with dedicated storytelling (D) | Confirmed |
 | 23 | Personal & Home storytelling | Connected spaces visualization with lifestyle storytelling (D + C) | Confirmed |
 | 24 | Customization storytelling | Editorial storytelling with embedded interactive playground (D) | Confirmed |
+| 25 | Homepage audience showcase | Editorial audience selector with product storytelling (D) | Confirmed |
 
 ## Update protocol
 
