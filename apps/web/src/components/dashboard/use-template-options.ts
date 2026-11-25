@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchTemplates, type DashboardRequestError } from "@/dashboard/api";
+import { layoutPreview } from "@/dashboard/preview";
 import type { DashboardTarget } from "@/dashboard/schema";
 import { builtInTemplates } from "@/dashboard/starter";
 import type { TemplateOption } from "@/dashboard/view-types";
@@ -37,6 +38,7 @@ export function useTemplateOptions(target: DashboardTarget): {
       source: "built-in",
       builtIn: template.id,
       widgets: template.layout.widgets.map((w) => w.type),
+      preview: layoutPreview(template.layout),
     }));
   const saved = (query.data ?? [])
     .filter(
@@ -52,6 +54,7 @@ export function useTemplateOptions(target: DashboardTarget): {
       id: template.id,
       name: template.name,
       widgets: template.widgets.filter(isWidgetType),
+      preview: template.preview ?? null,
     }));
   return { options: [...builtIn, ...saved], loading: query.isPending, error: query.error };
 }

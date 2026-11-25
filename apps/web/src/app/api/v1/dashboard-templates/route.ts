@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { getVerifiedIdentity } from "@/auth/identity";
 import { templateCopy } from "@/dashboard/layout";
+import { layoutPreview } from "@/dashboard/preview";
 import {
   databaseFailure,
   failure,
@@ -17,6 +18,7 @@ import { homeIdSchema } from "@/homes/schema";
 /**
  * The templates the signed-in person may see (S17): their own, and those shared into a Home they
  * belong to, or with `homeId` only those shared into that Home (404 when they are not a member).
+ * Each comes with its arrangement for a preview (UX2c), never its widget settings.
  */
 export async function GET(request: Request): Promise<Response> {
   if (!(await getVerifiedIdentity())) return failure(401, "unauthenticated");
@@ -38,6 +40,8 @@ export async function GET(request: Request): Promise<Response> {
       isMine: template.isMine,
       sharedHomeIds: template.sharedHomeIds,
       widgets: template.layout.widgets.map((widget) => widget.type),
+      // The arrangement for a preview (UX2c): widget types and places, never settings.
+      preview: layoutPreview(template.layout),
     })),
   });
 }

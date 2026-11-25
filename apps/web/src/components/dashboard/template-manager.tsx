@@ -15,14 +15,17 @@ import { TextField } from "@/components/ui/text-field";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import {
   deleteTemplate,
+  duplicateTemplate,
   renameTemplate,
   setTemplateShare,
   type DashboardRequestError,
 } from "@/dashboard/api";
+import { copyName, type LayoutPreview } from "@/dashboard/preview";
 import { TEMPLATE_NAME_MAX, templateNameSchema } from "@/dashboard/schema";
 import type { DashboardKind, WidgetType } from "@/dashboard/widgets";
 import { isolate } from "@/invitations/format";
 
+import { LayoutPreviewView } from "./layout-preview";
 import { useFailureMessage } from "./use-failure-message";
 import { useWidgetLabels } from "./use-widget-labels";
 
@@ -34,6 +37,18 @@ export interface ManagedTemplate {
   readonly isMine: boolean;
   /** Homes it is shared into, among the viewer's Homes. */
   readonly sharedHomeIds: readonly string[];
+  /** Its arrangement, for the preview (UX2c). */
+  readonly preview: LayoutPreview;
+}
+
+/** How many Home widgets a duplicate left out (the duplicate answer's `dropped`). */
+function droppedOf(result: unknown): number {
+  return result &&
+    typeof result === "object" &&
+    "dropped" in result &&
+    typeof result.dropped === "number"
+    ? result.dropped
+    : 0;
 }
 
 export interface TemplateHome {
@@ -51,16 +66,21 @@ type Action =
       readonly homeId: string;
       readonly shared: boolean;
     }
-  | { readonly kind: "delete"; readonly id: string; readonly name: string };
+  | { readonly kind: "delete"; readonly id: string; readonly name: string }
+  | { readonly kind: "duplicate"; readonly id: string; readonly name: string };
 
 type Notice =
   | { readonly kind: "renamed" }
   | { readonly kind: "shared" | "unshared"; readonly home: string }
-  | { readonly kind: "deleted"; readonly name: string };
+  | { readonly kind: "deleted"; readonly name: string }
+  | { readonly kind: "duplicated"; readonly name: string; readonly dropped: number };
 
 /**
  * The person's dashboard templates (S17): rename, share into Homes (spec: templates are private
- * until shared, and shared into a Home by its members), stop sharing, and delete to the trash.
+ * until shared, and shared into a Home by its members), stop sharing, and delete to the trash. With
+ * UX2c (redesign decision 31, layout presets) every template also has a preview of its arrangement
+ * and can be duplicated: own ones and shared ones alike become a new private template of the
+ * person's own, under a name none of their templates uses.
  * The database decides every action again; boxes for Homes that cannot take a template are
  * disabled with the reason, never hidden.
  */
@@ -86,6 +106,8 @@ export function TemplateManager({
   const mutation = useMutation<unknown, DashboardRequestError, Action>({
     mutationFn: (action) => {
       switch (action.kind) {
+        case "duplicate":
+          return duplicateTemplate(action.id, action.name);
         case "rename":
           return renameTemplate(action.id, action.name);
         case "share":
@@ -94,13 +116,15 @@ export function TemplateManager({
           return deleteTemplate(action.id);
       }
     },
-    onSuccess: (_, action) => {
+    onSuccess: (result, action) => {
       setNotice(
         action.kind === "rename"
           ? { kind: "renamed" }
           : action.kind === "delete"
             ? { kind: "deleted", name: action.name }
-            : { kind: action.shared ? "shared" : "unshared", home: homeName(action.homeId) },
+            : action.kind === "duplicate"
+              ? { kind: "duplicated", name: action.name, dropped: droppedOf(result) }
+              : { kind: action.shared ? "shared" : "unshared", home: homeName(action.homeId) },
       );
       router.refresh();
     },
@@ -115,6 +139,19 @@ export function TemplateManager({
   const mine = templates.filter((template) => template.isMine);
   const shared = templates.filter((template) => !template.isMine);
   const busy = !hydrated || mutation.isPending;
+  const ownNames = mine.map((template) => template.name);
+
+  /** Decision 31: a copy gets a name none of the person's templates uses. */
+  function duplicate(template: ManagedTemplate) {
+    const name = copyName(
+      template.name,
+      ownNames,
+      (base, n) =>
+        n === 1 ? t("copyName", { name: base }) : t("copyNameNumbered", { name: base, n }),
+      TEMPLATE_NAME_MAX,
+    );
+    mutation.mutate({ kind: "duplicate", id: template.id, name });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -128,6 +165,12 @@ export function TemplateManager({
           {notice.kind === "renamed" ? t("renamedNotice") : null}
           {notice.kind === "shared" ? t("sharedNotice", { home: isolate(notice.home) }) : null}
           {notice.kind === "unshared" ? t("unsharedNotice", { home: isolate(notice.home) }) : null}
+          {notice.kind === "duplicated" ? (
+            <>
+              {t("duplicatedNotice", { name: isolate(notice.name) })}
+              {notice.dropped > 0 ? ` ${t("duplicatedDropped", { count: notice.dropped })}` : ""}
+            </>
+          ) : null}
           {notice.kind === "deleted" ? (
             <>
               {t("deletedNotice", { name: isolate(notice.name) })}{" "}
@@ -153,8 +196,12 @@ export function TemplateManager({
                   template={template}
                   homes={homes}
                   busy={busy}
+                  takenNames={ownNames.filter((name) => name !== template.name)}
                   onRename={(name) => {
                     mutation.mutate({ kind: "rename", id: template.id, name });
+                  }}
+                  onDuplicate={() => {
+                    duplicate(template);
                   }}
                   isShared={(homeId) =>
                     shareOverrides[shareKey(template.id, homeId)] ??
@@ -193,6 +240,9 @@ export function TemplateManager({
                   busy={busy}
                   onUnshare={(homeId) => {
                     mutation.mutate({ kind: "share", id: template.id, homeId, shared: false });
+                  }}
+                  onDuplicate={() => {
+                    duplicate(template);
                   }}
                 />
               </li>
@@ -241,6 +291,8 @@ export function TemplateManager({
 function TemplateSummary({ template }: { readonly template: ManagedTemplate }) {
   const t = useTranslations("DashboardTemplates");
   const labels = useWidgetLabels();
+  const previewId = useId();
+  const [previewing, setPreviewing] = useState(false);
   return (
     <>
       <p className="text-helper text-fg-muted">
@@ -251,6 +303,32 @@ function TemplateSummary({ template }: { readonly template: ManagedTemplate }) {
           ? t("noWidgets")
           : t("contains", { widgets: template.widgets.map(labels.name).join(", ") })}
       </p>
+      {template.widgets.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-expanded={previewing}
+              aria-controls={previewId}
+              onClick={() => {
+                setPreviewing((value) => !value);
+              }}
+              data-testid="template-preview"
+            >
+              {previewing ? t("hidePreview") : t("preview")}
+            </Button>
+          </div>
+          <div id={previewId} hidden={!previewing}>
+            {previewing ? (
+              <LayoutPreviewView
+                preview={template.preview}
+                label={t("previewLabel", { name: template.name })}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -259,7 +337,9 @@ function OwnTemplate({
   template,
   homes,
   busy,
+  takenNames,
   onRename,
+  onDuplicate,
   isShared: sharedInto,
   onShare,
   onDelete,
@@ -267,7 +347,10 @@ function OwnTemplate({
   readonly template: ManagedTemplate;
   readonly homes: readonly TemplateHome[];
   readonly busy: boolean;
+  /** Names of the person's other templates: a rename may not reuse one. */
+  readonly takenNames: readonly string[];
   readonly onRename: (name: string) => void;
+  readonly onDuplicate: () => void;
   readonly isShared: (homeId: string) => boolean;
   readonly onShare: (homeId: string, shared: boolean) => void;
   readonly onDelete: () => void;
@@ -298,6 +381,11 @@ function OwnTemplate({
             const parsed = templateNameSchema.safeParse(name);
             if (!parsed.success) {
               setError(t("nameInvalid"));
+              return;
+            }
+            const lower = parsed.data.toLocaleLowerCase();
+            if (takenNames.some((taken) => taken.trim().toLocaleLowerCase() === lower)) {
+              setError(t("nameTaken"));
               return;
             }
             setError(undefined);
@@ -374,6 +462,15 @@ function OwnTemplate({
             {t("rename")}
           </Button>
         )}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={onDuplicate}
+          data-testid="template-duplicate"
+        >
+          {t("duplicate")}
+        </Button>
         <Button size="sm" variant="destructive" disabled={busy} onClick={onDelete}>
           {t("delete")}
         </Button>
@@ -387,11 +484,13 @@ function SharedTemplate({
   homes,
   busy,
   onUnshare,
+  onDuplicate,
 }: {
   readonly template: ManagedTemplate;
   readonly homes: readonly TemplateHome[];
   readonly busy: boolean;
   readonly onUnshare: (homeId: string) => void;
+  readonly onDuplicate: () => void;
 }) {
   const t = useTranslations("DashboardTemplates");
   const headingId = useId();
@@ -428,6 +527,17 @@ function SharedTemplate({
       <p className="text-helper text-fg-muted">
         {template.kind === "personal" ? t("applyHintPersonal") : t("applyHintHome")}
       </p>
+      <div>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={onDuplicate}
+          data-testid="template-duplicate"
+        >
+          {t("saveCopy")}
+        </Button>
+      </div>
     </article>
   );
 }

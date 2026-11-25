@@ -1,8 +1,10 @@
 import type { Mock } from "vitest";
 
 import { addWidget } from "@/dashboard/layout";
-import { personalStarterLayout } from "@/dashboard/starter";
+import { homeStarterLayout, personalStarterLayout } from "@/dashboard/starter";
+import { defaultConfig } from "@/dashboard/widgets";
 
+import { POST as duplicate } from "./[templateId]/duplicate/route";
 import { DELETE as deleteTemplate, PATCH } from "./[templateId]/route";
 import { DELETE as unshare, PUT as share } from "./[templateId]/shares/[homeId]/route";
 import { GET, POST } from "./route";
@@ -66,7 +68,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/v1/dashboard-templates", () => {
-  it("lists visible templates with their widget types, never their layouts", async () => {
+  it("lists visible templates with their widget types and arrangement, never settings", async () => {
     answers({
       list_dashboard_templates: {
         data: [
@@ -93,6 +95,14 @@ describe("GET /api/v1/dashboard-templates", () => {
           isMine: true,
           sharedHomeIds: [HOME_ID],
           widgets: ["welcome", "quick-actions", "notifications", "tasks", "upcoming-events"],
+          preview: {
+            widgets: personalStarterLayout.widgets.map(({ id, type, hidden }) => ({
+              id,
+              type,
+              hidden,
+            })),
+            placements: personalStarterLayout.placements,
+          },
         },
       ],
     });
@@ -226,5 +236,77 @@ describe("PUT and DELETE /api/v1/dashboard-templates/{id}/shares/{homeId}", () =
       shareParams,
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/dashboard-templates/:id/duplicate", () => {
+  const SHARED_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0101";
+  const visible = {
+    data: [
+      {
+        template_id: SHARED_ID,
+        name: "Weekend",
+        kind: "home",
+        layout: addWidget(homeStarterLayout, {
+          id: WIDGET_ID,
+          type: "tasks",
+          hidden: false,
+          config: defaultConfig("tasks"),
+        }),
+        is_mine: false,
+        shared_home_ids: [HOME_ID],
+        updated_at: "2026-10-16T08:00:00Z",
+      },
+    ],
+  };
+  const params = (templateId: string) => ({ params: Promise.resolve({ templateId }) });
+
+  it("copies a visible template, even one shared by someone else, as the person's own", async () => {
+    answers({
+      list_dashboard_templates: visible,
+      create_dashboard_template: { data: [{ outcome: "created", template_id: TEMPLATE_ID }] },
+    });
+    const response = await duplicate(
+      send(`/${SHARED_ID}/duplicate`, "POST", { name: "Weekend (copy)" }),
+      params(SHARED_ID),
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ id: TEMPLATE_ID, dropped: 0 });
+    const args = rpcArgs("create_dashboard_template");
+    expect(args?.p_name).toBe("Weekend (copy)");
+    expect(args?.p_kind).toBe("home");
+    // New widget ids: the copy never shares ids with the original.
+    const layout = args?.p_layout as { widgets: { id: string }[] };
+    expect(layout.widgets.map((w) => w.id)).not.toContain(WIDGET_ID);
+    expect(layout.widgets).toHaveLength(homeStarterLayout.widgets.length + 1);
+  });
+
+  it("answers 404 for a template the person may not see", async () => {
+    answers({ list_dashboard_templates: visible });
+    const response = await duplicate(
+      send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Copy" }),
+      params(TEMPLATE_ID),
+    );
+    expect(response.status).toBe(404);
+    expect(rpcArgs("create_dashboard_template")).toBeUndefined();
+    expect(
+      (await duplicate(send("/nope/duplicate", "POST", { name: "Copy" }), params("nope"))).status,
+    ).toBe(404);
+  });
+
+  it("answers 409 at the template limit and 400 for a bad name", async () => {
+    answers({
+      list_dashboard_templates: visible,
+      create_dashboard_template: { data: [{ outcome: "limit_reached", template_id: null }] },
+    });
+    const response = await duplicate(
+      send(`/${SHARED_ID}/duplicate`, "POST", { name: "Copy" }),
+      params(SHARED_ID),
+    );
+    expect(response.status).toBe(409);
+    expect(
+      (await duplicate(send(`/${SHARED_ID}/duplicate`, "POST", { name: " " }), params(SHARED_ID)))
+        .status,
+    ).toBe(400);
   });
 });

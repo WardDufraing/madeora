@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { DashboardLayout } from "./layout";
+import { layoutPreviewSchema, type LayoutPreview } from "./preview";
 import type { DashboardTarget } from "./schema";
 import type { BuiltInTemplateId } from "./starter";
 
@@ -22,6 +23,10 @@ import type { BuiltInTemplateId } from "./starter";
  * - `GET /api/v1/dashboard/draft?homeId` → `200 { draft }`; `PUT …/draft` `{ target, layout,
  *   baseRevision }` → `200 { updatedAt }`; `DELETE …/draft` `{ target }` (UX2b edit-mode drafts).
  *   `PUT /api/v1/dashboard` with `commitDraft: true` is Done: it commits and drops the draft.
+ *
+ * - `GET /api/v1/dashboard/history?homeId` → `200 { versions }`; `POST …/history/restore`
+ *   `{ target, versionId, expectedRevision }` → `200 { revision }` (UX2c version history).
+ * - `POST /api/v1/dashboard-templates/:id/duplicate` `{ name }` → `201 { id, dropped }` (UX2c).
  *
  * `409 conflict` (with the current `revision`) means someone saved the dashboard since it was read.
  */
@@ -256,11 +261,13 @@ const templateListSchema = z.object({
       isMine: z.boolean(),
       sharedHomeIds: z.array(z.string()),
       widgets: z.array(z.string()),
+      /** Its arrangement for a preview (UX2c); absent from an older server. */
+      preview: layoutPreviewSchema.optional(),
     }),
   ),
 });
 
-/** A template as the list answers it: what it contains, never its layout. */
+/** A template as the list answers it: what it contains and where, never widget settings. */
 export type TemplateSummary = z.infer<typeof templateListSchema>["templates"][number];
 
 /** Every template the person may see: their own, and those shared into their Homes. */
@@ -305,5 +312,89 @@ export async function setTemplateShare(id: string, homeId: string, shared: boole
     shared ? "PUT" : "DELETE",
     `${DASHBOARD_TEMPLATES_ENDPOINT}/${encodeURIComponent(id)}/shares/${encodeURIComponent(homeId)}`,
     {},
+  );
+}
+
+export async function duplicateTemplate(
+  id: string,
+  name: string,
+): Promise<TemplateCreatedResponse> {
+  const payload = await send(
+    "POST",
+    `${DASHBOARD_TEMPLATES_ENDPOINT}/${encodeURIComponent(id)}/duplicate`,
+    { name },
+  );
+  const record = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
+  if (typeof record.id !== "string") throw new DashboardRequestError("failed");
+  return { id: record.id, dropped: typeof record.dropped === "number" ? record.dropped : 0 };
+}
+
+export const DASHBOARD_HISTORY_ENDPOINT = `${DASHBOARD_ENDPOINT}/history`;
+
+const historySchema = z.object({
+  versions: z.array(
+    z.object({
+      id: z.string(),
+      revision: z.number().int().min(1),
+      reason: z.enum(["save", "undo", "restore"]),
+      savedByMe: z.boolean(),
+      createdAt: z.string(),
+      isCurrent: z.boolean(),
+      dropped: z.boolean(),
+      preview: layoutPreviewSchema,
+    }),
+  ),
+});
+
+/** One committed version of a dashboard (UX2c; decision 32), newest first in a history. */
+export interface DashboardVersion {
+  readonly id: string;
+  readonly revision: number;
+  readonly reason: "save" | "undo" | "restore";
+  readonly savedByMe: boolean;
+  readonly createdAt: string;
+  readonly isCurrent: boolean;
+  /** Something in this version can no longer be shown and is left out of the preview. */
+  readonly dropped: boolean;
+  readonly preview: LayoutPreview;
+}
+
+/** The dashboard's last committed versions, newest first; only for someone who may edit it. */
+export async function fetchHistory(target: DashboardTarget): Promise<readonly DashboardVersion[]> {
+  const query = target.kind === "home" ? `?homeId=${encodeURIComponent(target.homeId)}` : "";
+  let response: Response;
+  try {
+    response = await fetch(`${DASHBOARD_HISTORY_ENDPOINT}${query}`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    });
+  } catch {
+    throw new DashboardRequestError("network");
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const record = (payload && typeof payload === "object" ? payload : {}) as Record<
+      string,
+      unknown
+    >;
+    throw new DashboardRequestError(failureFor(record.error));
+  }
+  const parsed = historySchema.safeParse(payload);
+  if (!parsed.success) throw new DashboardRequestError("failed");
+  return parsed.data.versions;
+}
+
+/** Restores a version as a new commit; the layout it replaces stays in history (decision 32). */
+export async function restoreVersion(
+  target: DashboardTarget,
+  versionId: string,
+  expectedRevision: number,
+): Promise<RevisionResponse> {
+  return revisionOf(
+    await send("POST", `${DASHBOARD_HISTORY_ENDPOINT}/restore`, {
+      target,
+      versionId,
+      expectedRevision,
+    }),
   );
 }

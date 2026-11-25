@@ -52,6 +52,7 @@ import {
   type DashboardWidget,
 } from "@/dashboard/layout";
 import type { DashboardTarget } from "@/dashboard/schema";
+import { layoutPreview } from "@/dashboard/preview";
 import { starterLayout } from "@/dashboard/starter";
 import type { SourceHome, TemplateOption, WidgetEntry } from "@/dashboard/view-types";
 import {
@@ -70,12 +71,14 @@ import {
 import { isolate } from "@/invitations/format";
 
 import { WidgetFrame } from "./dashboard-grid";
+import { LayoutPreviewView } from "./layout-preview";
 import { LayoutTools } from "./layout-tools";
 import { presetKey, StackEditor } from "./stack-editor";
 import { useDraftAutosave, type DraftStatus } from "./use-draft-autosave";
 import { useFailureMessage } from "./use-failure-message";
 import { useTemplateOptions } from "./use-template-options";
 import { useWidgetLabels } from "./use-widget-labels";
+import { VersionHistory } from "./version-history";
 import { WidgetGallery } from "./widget-gallery";
 import { WidgetSettings } from "./widget-settings";
 
@@ -96,7 +99,13 @@ export type EditorAction =
   | { readonly kind: "save"; readonly layout: DashboardLayout }
   | { readonly kind: "reset" }
   | { readonly kind: "undo" }
-  | { readonly kind: "apply"; readonly option: TemplateOption };
+  | { readonly kind: "apply"; readonly option: TemplateOption }
+  | {
+      readonly kind: "restore";
+      readonly versionId: string;
+      /** The dashboard revision the history showed as current. */
+      readonly expectedRevision: number;
+    };
 
 type Confirmation =
   | { readonly kind: "cancel" }
@@ -199,6 +208,7 @@ export function DashboardEditor({
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [gallery, setGallery] = useState<{ readonly slot: Slot | null } | null>(null);
   const [listView, setListView] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   // Where keyboard focus goes after the arrangement changes: a widget's handle (after a remove, the
   // next one; after an add, the new one), or the Add widget button when none is left, so focus never
@@ -610,10 +620,16 @@ export function DashboardEditor({
       confirmation.kind === "reset"
         ? starterLayout(kind).widgets.map((w) => w.type)
         : confirmation.option.widgets;
+    // Decision 31: see the arrangement before it replaces the current one.
+    const preview =
+      confirmation.kind === "reset"
+        ? layoutPreview(starterLayout(kind))
+        : confirmation.option.preview;
     return (
       <div className="flex flex-col gap-3 text-body">
         <p>{confirmation.kind === "reset" ? t("resetConfirm") : t("applyConfirm")}</p>
         <p>{t("replaceWith", { widgets: widgets.map(labels.name).join(", ") })}</p>
+        {preview ? <LayoutPreviewView preview={preview} label={confirmTitle} /> : null}
         {dirty || resumed ? <p>{t("discardUnsaved")}</p> : null}
         <p>{t("undoOnce")}</p>
       </div>
@@ -775,6 +791,9 @@ export function DashboardEditor({
             }}
             onUndo={() => {
               void commitNow({ kind: "undo" });
+            }}
+            onHistory={() => {
+              setHistoryOpen(true);
             }}
           />
         </EditorPanel>
@@ -962,6 +981,7 @@ export function DashboardEditor({
         }}
         title={confirmTitle}
         closeLabel={t("close")}
+        size={confirmation?.kind === "cancel" ? "default" : "large"}
         footer={
           <>
             <Button
@@ -987,6 +1007,20 @@ export function DashboardEditor({
       >
         {confirmBody()}
       </Dialog>
+
+      <VersionHistory
+        open={historyOpen}
+        target={target}
+        discardsChanges={dirty || resumed}
+        pending={pending}
+        onClose={() => {
+          setHistoryOpen(false);
+        }}
+        onRestore={(version, expectedRevision) => {
+          setHistoryOpen(false);
+          void commitNow({ kind: "restore", versionId: version.id, expectedRevision });
+        }}
+      />
     </div>
   );
 }
