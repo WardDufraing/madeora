@@ -459,8 +459,10 @@ test.describe("all modules and shortcuts", () => {
   test("search narrows the list of modules", async ({ page }) => {
     await page.goto("/modules");
     await page.getByRole("searchbox", { name: "Search modules" }).fill("meal");
-    await expect(page.getByRole("link", { name: "Meals" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Goals" })).toHaveCount(0);
+    // The sidebar also has shortcut links; the list lives in the main area.
+    const main = page.getByRole("main");
+    await expect(main.getByRole("link", { name: "Meals" })).toBeVisible();
+    await expect(main.getByRole("link", { name: "Goals" })).toHaveCount(0);
   });
 });
 
