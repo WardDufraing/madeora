@@ -21,6 +21,13 @@ const formats = {
 } as const;
 
 describe("addresses", () => {
+  it("keeps hidden work periods in the calendar address", () => {
+    expect(calendarHref(null, "week", "2026-11-04", true)).toBe(
+      "/calendar?view=week&date=2026-11-04&work=0",
+    );
+    expect(calendarHref(null, "month")).toBe("/calendar");
+  });
+
   it("are Personal or the Home's, with an occurrence date when given", () => {
     expect(eventPath(null, "e1")).toBe("/calendar/events/e1");
     expect(eventPath("h1", "e1", "2026-11-17")).toBe("/homes/h1/calendar/events/e1?on=2026-11-17");
