@@ -9,41 +9,8 @@ import { axeViolations, expect, nonTokenColours, settle, test } from "../support
 const desktop = { width: 1280, height: 800 };
 const phone = { width: 390, height: 844 };
 
-const navNames = {
-  en: [
-    "Dashboard",
-    "Calendar",
-    "Tasks",
-    "Chores",
-    "Meals",
-    "Shopping",
-    "Habits",
-    "Goals",
-    "Pets",
-    "Photos",
-    "Integrations",
-    "Settings",
-    "Help",
-  ],
-  nl: [
-    "Dashboard",
-    "Agenda",
-    "Taken",
-    "Klusjes",
-    "Maaltijden",
-    "Boodschappen",
-    "Gewoontes",
-    "Doelen",
-    "Huisdieren",
-    "Foto's",
-    "Koppelingen",
-    "Instellingen",
-    "Help",
-  ],
-} as const;
-
 // The desktop sidebar: core destinations, the Personal shortcuts (nothing pinned yet), All modules
-// and the secondary links. The small-screen menu still lists every destination (navNames).
+// and the secondary links. The small-screen menu lists the same.
 const sidebarNames = {
   en: [
     "Dashboard",
@@ -194,6 +161,16 @@ test.describe("desktop sidebar", () => {
     await expect(tooltip).toBeVisible();
     await tooltip.hover();
     await expect(tooltip).toBeVisible();
+  });
+
+  test("the collapsed navigation fits its icons without sideways scrolling", async ({
+    page,
+    context,
+  }) => {
+    await setCookies(context, { "md-sidebar": "collapsed" }, page);
+    await page.goto("/");
+    const fits = await mainNav(page).evaluate((el) => el.scrollWidth <= el.clientWidth);
+    expect(fits).toBe(true);
   });
 
   test("marks the current page with aria-current and a non-colour cue", async ({ page }) => {
@@ -473,7 +450,7 @@ test.describe("all modules and shortcuts", () => {
 
     await page.reload();
     await expect(mainNav(page).getByRole("link", { name: "Pets" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Remove Pets from shortcuts" })).toHaveAttribute(
+    await expect(page.getByRole("button", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -528,7 +505,7 @@ test.describe("small screens", () => {
 
     const dialog = page.getByRole("dialog", { name: "Menu" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("link")).toHaveText([...navNames.en]);
+    await expect(dialog.getByRole("link")).toHaveText([...sidebarNames.en]);
     // Tab stays in the menu. Past its last link the browser may move focus to its own toolbar
     // (document.body here), but never to the page behind the menu.
     for (let i = 0; i < 20; i++) {

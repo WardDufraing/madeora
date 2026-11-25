@@ -276,7 +276,7 @@ export function OraAssistant({ userId, settings, homes }: OraAssistantProps) {
         aria-controls={everOpened ? "ora-surface" : undefined}
         aria-label={t("launcher")}
         data-testid="ora-launcher"
-        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] end-4 z-40 inline-flex size-14 items-center justify-center rounded-full border border-line bg-surface-elevated shadow-overlay hover:bg-accent-subtle"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] end-4 z-40 md:bottom-[max(1rem,env(safe-area-inset-bottom))] inline-flex size-14 items-center justify-center rounded-full border border-line bg-surface-elevated shadow-overlay hover:bg-accent-subtle"
       >
         <OraCharacter
           palette={palette}

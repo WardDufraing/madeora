@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { axeViolations } from "@/test/axe";
@@ -19,7 +19,7 @@ describe("MobileNav", () => {
     await user.click(button);
     const dialog = screen.getByRole("dialog", { name: "Menu" });
     const nav = within(dialog).getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(13);
+    expect(within(nav).getAllByRole("link")).toHaveLength(9);
 
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -65,6 +65,40 @@ describe("MobileNav", () => {
     );
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(create).toHaveFocus();
+    navigation.pathname = "/";
+  });
+
+  it("hides after a downward scroll, and stays shown while a menu is open", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<MobileNav />);
+    const bar = screen.getByRole("navigation", { name: "Quick navigation" });
+    const scrollTo = (y: number) => { act(() => {
+        Object.defineProperty(window, "scrollY", { value: y, configurable: true });
+        window.dispatchEvent(new Event("scroll"));
+      }); };
+    scrollTo(150);
+    scrollTo(200);
+    expect(bar).toHaveAttribute("data-hidden", "true");
+    scrollTo(180);
+    expect(bar).toHaveAttribute("data-hidden", "false");
+    scrollTo(300);
+    expect(bar).toHaveAttribute("data-hidden", "true");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(bar).toHaveAttribute("data-hidden", "false");
+    scrollTo(0);
+  });
+
+  it("lists All modules for the open context in the full menu", async () => {
+    const user = userEvent.setup();
+    navigation.pathname = "/homes/0b1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    renderWithIntl(<MobileNav />);
+    await user.click(screen.getByRole("button", { name: "More" }));
+    const dialog = screen.getByRole("dialog", { name: "Menu" });
+    expect(within(dialog).getByRole("link", { name: "All modules" })).toHaveAttribute(
+      "href",
+      "/homes/0b1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/modules",
+    );
+    expect(within(dialog).getByRole("link", { name: "Chores" })).toBeInTheDocument();
     navigation.pathname = "/";
   });
 

@@ -90,7 +90,7 @@ export function AllModules({ homeId }: AllModulesProps) {
                   <button
                     type="button"
                     aria-pressed={pinned}
-                    aria-label={pinned ? t("unpin", { module: name }) : t("pin", { module: name })}
+                    aria-label={t("pinToggle", { module: name })}
                     onClick={() => {
                       togglePin(item);
                     }}

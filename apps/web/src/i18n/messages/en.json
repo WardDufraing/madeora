@@ -8644,6 +8644,7 @@
     "unpin": "Remove {module} from shortcuts",
     "core": "Always in the menu",
     "others": "Modules",
-    "resultCount": "{count, plural, one {# module} other {# modules}}"
+    "resultCount": "{count, plural, one {# module} other {# modules}}",
+    "pinToggle": "Pin {module} to shortcuts"
   }
 }

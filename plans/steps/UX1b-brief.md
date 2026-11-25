@@ -21,7 +21,10 @@ Desktop: a floating, softly raised sidebar with Dashboard / Calendar / Tasks pro
 - Shortcuts are a **device cookie**, not an account setting: no migration, no privacy surface, same pattern as the sidebar state. Per-account sync is possible later. One list for Personal and Homes (open item in D10: "per-context persistence").
 - The bottom bar has the fixed five slots; pinned shortcuts live in the More menu and All modules, not the bar (D26 says "bounded number"). Ward can overrule.
 - Create entries open the **existing creation pages** (`/calendar/new`, the Tasks and Shopping pages) because the compact creation dialogs arrive with UX3b / UX4b / UX6. No capability check is shown yet; the destination pages enforce permissions as before.
-- The More menu still lists all 13 destinations flat (it is the mobile All modules).
+- The More menu mirrors the sidebar: core items, shortcuts, All modules, Settings and Help (review H2). Every module stays reachable through All modules.
+- One shortcuts list is shared by Personal and Homes. Pinning in one context while nothing is saved turns that context's defaults into the saved list, so the other context shows them too (review M2); per-context lists are a follow-up if Ward wants them.
+- On small screens the Ora launcher, teaser and celebration sit above the bottom bar (review B1).
+- Create entries show no capability filtering and no destination workspace yet (review M1); tracked for UX3b/UX4b/UX6.
 
 ## Not in this phase (UX1c)
 

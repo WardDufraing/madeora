@@ -114,7 +114,8 @@ export function Sidebar({ initialState }: SidebarProps) {
     <aside
       data-state={state}
       className={cx(
-        "sticky top-0 hidden h-dvh shrink-0 p-3 md:flex",
+        "sticky top-0 hidden h-dvh shrink-0 md:flex",
+        collapsed ? "p-2" : "p-3",
         "transition-[width] duration-(--md-duration-slow) ease-standard",
         collapsed ? "w-(--md-shell-sidebar-collapsed)" : "w-(--md-shell-sidebar-expanded)",
       )}
@@ -122,8 +123,8 @@ export function Sidebar({ initialState }: SidebarProps) {
       <div className="flex min-w-0 flex-1 flex-col rounded-card border border-line bg-sidebar shadow-raised">
         <div
           className={cx(
-            "flex gap-2 p-3",
-            collapsed ? "flex-col items-center" : "items-center justify-between",
+            "flex gap-2",
+            collapsed ? "flex-col items-center px-1 py-3" : "items-center justify-between p-3",
           )}
         >
           <Brand label={t("brandLink")} showWordmark={!collapsed} />
@@ -131,7 +132,10 @@ export function Sidebar({ initialState }: SidebarProps) {
         </div>
         <nav
           aria-label={t("mainNavigation")}
-          className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto px-3 pt-1 pb-3"
+          className={cx(
+            "flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto pt-1 pb-3",
+            collapsed ? "px-1" : "px-3",
+          )}
         >
           <div className="flex flex-col gap-4">
             {renderItems(coreNav)}

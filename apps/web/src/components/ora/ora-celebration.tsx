@@ -97,7 +97,7 @@ export function OraCelebrationNote({
     <div
       role="status"
       data-testid="ora-celebration"
-      className="fixed bottom-[max(9.5rem,calc(env(safe-area-inset-bottom)+9rem))] end-4 z-40 flex max-w-xs items-center gap-3 rounded-card border border-line bg-surface-elevated p-3 text-fg shadow-overlay"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+13rem)] end-4 md:bottom-[max(9.5rem,calc(env(safe-area-inset-bottom)+9rem))] z-40 flex max-w-xs items-center gap-3 rounded-card border border-line bg-surface-elevated p-3 text-fg shadow-overlay"
     >
       <OraCharacter
         palette={palette}

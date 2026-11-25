@@ -8644,6 +8644,7 @@
     "unpin": "{module} uit snelkoppelingen halen",
     "core": "Altijd in het menu",
     "others": "Modules",
-    "resultCount": "{count, plural, one {# module} other {# modules}}"
+    "resultCount": "{count, plural, one {# module} other {# modules}}",
+    "pinToggle": "{module} vastzetten in snelkoppelingen"
   }
 }

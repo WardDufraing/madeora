@@ -1,6 +1,6 @@
 "use client";
 
-import { CloseIcon, MenuIcon, PlusIcon } from "@madeora/icons";
+import { CloseIcon, MenuIcon, ModulesIcon, PlusIcon } from "@madeora/icons";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,14 +9,17 @@ import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
 import { cx } from "@/components/ui/cx";
 import { Dialog } from "@/components/ui/dialog";
 
+import { useFavorites } from "./favorites";
 import { NavLink } from "./nav-link";
 import {
   contextHref,
   coreNav,
   createHref,
   homeIdFromPath,
+  isActive,
   isItemActive,
-  primaryNav,
+  modulesHref,
+  moduleNav,
   secondaryNav,
   type NavItem,
 } from "./nav-items";
@@ -102,6 +105,12 @@ export function MobileNav() {
   }
 
   const homeId = homeIdFromPath(pathname);
+  const shortcutsId = useId();
+  const { pinned } = useFavorites();
+  const shortcuts = pinned
+    .map((id) => moduleNav.find((item) => item.id === id))
+    .filter((item): item is NavItem => item !== undefined);
+  const modulesLink = modulesHref(homeId);
   const renderItems = (items: readonly NavItem[]) => (
     <ul className="flex flex-col gap-1">
       {items.map((item) => (
@@ -254,7 +263,33 @@ export function MobileNav() {
             aria-label={t("mainNavigation")}
             className="flex min-h-0 flex-1 flex-col justify-between gap-6 overflow-y-auto p-1"
           >
-            {renderItems(primaryNav)}
+            <div className="flex flex-col gap-4">
+              {renderItems(coreNav)}
+              {shortcuts.length > 0 ? (
+                <section aria-labelledby={shortcutsId} className="flex flex-col gap-1">
+                  <h3
+                    id={shortcutsId}
+                    className="px-3 text-helper font-semibold tracking-wide text-fg-muted uppercase"
+                  >
+                    {t("shortcuts")}
+                  </h3>
+                  {renderItems(shortcuts)}
+                </section>
+              ) : null}
+              <ul className="flex flex-col gap-1">
+                <li>
+                  <NavLink
+                    item={{ icon: ModulesIcon }}
+                    href={modulesLink}
+                    label={t("allModules")}
+                    active={isActive(modulesLink, pathname)}
+                    onNavigate={() => {
+                      setOpen(false);
+                    }}
+                  />
+                </li>
+              </ul>
+            </div>
             {renderItems(secondaryNav)}
           </nav>
         </div>

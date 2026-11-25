@@ -30,7 +30,7 @@ describe("AllModules", () => {
     // Core destinations cannot be pinned or unpinned.
     expect(screen.queryByRole("button", { name: /Calendar/ })).not.toBeInTheDocument();
     // Personal defaults are shown as pinned.
-    expect(screen.getByRole("button", { name: "Remove Shopping from shortcuts" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pin Shopping to shortcuts" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -82,12 +82,12 @@ describe("AllModules", () => {
     await user.click(screen.getByRole("button", { name: "Pin Pets to shortcuts" }));
     expect(within(nav).getByRole("link", { name: "Pets" })).toBeInTheDocument();
     expect(document.cookie).toContain("md-favorites=shopping%2Chabits%2Cgoals%2Cpets");
-    expect(screen.getByRole("button", { name: "Remove Pets from shortcuts" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
 
-    await user.click(screen.getByRole("button", { name: "Remove Pets from shortcuts" }));
+    await user.click(screen.getByRole("button", { name: "Pin Pets to shortcuts" }));
     expect(within(nav).queryByRole("link", { name: "Pets" })).not.toBeInTheDocument();
   });
 
