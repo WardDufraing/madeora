@@ -72,10 +72,12 @@ describe("MobileNav", () => {
     const user = userEvent.setup();
     renderWithIntl(<MobileNav />);
     const bar = screen.getByRole("navigation", { name: "Quick navigation" });
-    const scrollTo = (y: number) => { act(() => {
+    const scrollTo = (y: number) => {
+      act(() => {
         Object.defineProperty(window, "scrollY", { value: y, configurable: true });
         window.dispatchEvent(new Event("scroll"));
-      }); };
+      });
+    };
     scrollTo(150);
     scrollTo(200);
     expect(bar).toHaveAttribute("data-hidden", "true");
