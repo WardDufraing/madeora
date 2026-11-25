@@ -70,6 +70,7 @@ let queued: Response[] = [];
 let storedDraft: unknown = null;
 /** What draft autosaves answer. */
 let draftSaveStatus = 200;
+let draftReadStatus = 200;
 function answer(status: number, body: unknown) {
   queued.push(jsonResponse(status, body));
 }
@@ -111,10 +112,15 @@ beforeEach(() => {
   queued = [];
   storedDraft = null;
   draftSaveStatus = 200;
+  draftReadStatus = 200;
   fetchMock.mockImplementation((url, init) => {
     if (isDraftCall(url)) {
       if (init?.method === undefined)
-        return Promise.resolve(jsonResponse(200, { draft: storedDraft }));
+        return Promise.resolve(
+          draftReadStatus === 200
+            ? jsonResponse(200, { draft: storedDraft })
+            : jsonResponse(draftReadStatus, { error: "failed" }),
+        );
       if (init.method === "PUT") {
         return Promise.resolve(
           draftSaveStatus === 200
@@ -634,6 +640,20 @@ describe("DashboardBoard edit-mode drafts, gallery and list editing (UX2b)", () 
         /A draft can't be kept for you/,
       );
     });
+  });
+
+  it("keeps no server draft when the check for an earlier one failed, so none is overwritten", async () => {
+    draftReadStatus = 500;
+    renderBoard();
+    const user = await openEditor();
+    expect(screen.getByText(/Couldn't check for a saved draft/)).toBeInTheDocument();
+    screen.getByRole("button", { name: "Arrange Quick actions" }).focus();
+    await user.keyboard("{ArrowUp}");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(draftCalls("PUT")).toHaveLength(0);
+    expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent(
+      /A draft can't be kept for you/,
+    );
   });
 
   it("offers to resume a stored draft, and Done commits it on the revision it started from", async () => {

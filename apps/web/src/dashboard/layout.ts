@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  closeUp,
   compact,
   fitsRows,
   hasOverlap,
@@ -206,9 +207,11 @@ export function readLayout(
     breakpoints.map((breakpoint) => {
       const cols = breakpointColumns[breakpoint];
       const kept: Placement[] = [];
+      const lost: Placement[] = [];
       const placed = new Set<string>();
       for (const p of parsed.data.placements[breakpoint]) {
         const type = types.get(p.id);
+        if (!type) lost.push(p);
         if (!type || placed.has(p.id)) continue;
         const bounds = widgetRegistry[type].sizes[breakpoint];
         const w = Math.min(Math.max(p.w, bounds.minW), bounds.maxW, cols);
@@ -216,7 +219,8 @@ export function readLayout(
         kept.push({ id: p.id, x: Math.min(p.x, cols - w), y: p.y, w, h });
         placed.add(p.id);
       }
-      let result = settle(kept, breakpoint);
+      // A dropped widget's space closes, as it always did; gaps the person left stay.
+      let result = settle(closeUp(settle(kept, breakpoint), lost), breakpoint);
       for (const widget of widgets) {
         if (!placed.has(widget.id)) result = placeNew(result, widget.id, widget.type, breakpoint);
       }
@@ -276,14 +280,19 @@ export function removeWidget(layout: DashboardLayout, id: string): DashboardLayo
 }
 
 /**
- * The visible widgets' placements for normal use: hidden widgets are left out. On desktop and
- * tablet the others stay where they are (UX2b, "keep gaps": a hidden widget's space stays reserved,
- * like a widget hidden while empty, so nothing jumps); the phone list closes up.
+ * The visible widgets' placements for normal use: hidden widgets are left out and the space they
+ * take closes, as before UX2b, so a saved layout with a hidden widget renders unchanged. On desktop
+ * and tablet a gap the person left on purpose stays (Ward: "keep gaps"); the phone list closes up.
  */
 export function visiblePlacements(layout: DashboardLayout, breakpoint: Breakpoint): Placement[] {
   const visible = new Set(layout.widgets.filter((w) => !w.hidden).map((w) => w.id));
-  const shown = layout.placements[breakpoint].filter((p) => visible.has(p.id));
-  return keepsGaps(breakpoint) ? shown : compact(shown, breakpoint);
+  const all = layout.placements[breakpoint];
+  const shown = all.filter((p) => visible.has(p.id));
+  if (!keepsGaps(breakpoint)) return compact(shown, breakpoint);
+  return closeUp(
+    shown,
+    all.filter((p) => !visible.has(p.id)),
+  );
 }
 
 /** Home ids bound by personal widgets. */

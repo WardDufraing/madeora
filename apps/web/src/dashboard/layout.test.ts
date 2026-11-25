@@ -400,7 +400,7 @@ describe("editing", () => {
     expect(read.find((p) => p.id === second)).toMatchObject({ y: 2 });
   });
 
-  it("leaves hidden widgets out of normal view: the phone closes up, desktop keeps the space", () => {
+  it("leaves hidden widgets out of normal view and closes their space, as before UX2b", () => {
     const layout = personalStarterLayout;
     const hidden = {
       ...layout,
@@ -409,9 +409,53 @@ describe("editing", () => {
     const visible = visiblePlacements(hidden, "sm");
     expect(visible).toHaveLength(4);
     expect(visible[0]).toMatchObject({ y: 0 });
+    // Desktop renders exactly what the old compaction gave: existing saved layouts are unchanged.
     const desktop = visiblePlacements(hidden, "lg");
-    expect(desktop).toHaveLength(4);
-    expect(desktop).toEqual(layout.placements.lg.filter((p) => p.id !== layout.widgets[0]?.id));
+    const welcome = layout.widgets[0]?.id;
+    expect(desktop).toEqual(
+      compact(
+        layout.placements.lg.filter((p) => p.id !== welcome),
+        "lg",
+      ),
+    );
+  });
+
+  it("keeps a gap the person left even when a widget above it is hidden", () => {
+    const layout = personalStarterLayout;
+    const lg = layout.placements.lg;
+    const bottom = Math.max(...lg.map((p) => p.y + p.h));
+    const last = lg.reduce((a, b) => (b.y > a.y ? b : a));
+    // Push the last widget down, leaving a 3-row gap above it, then hide the first widget.
+    const gapped = {
+      ...layout,
+      widgets: layout.widgets.map((w) => (w.type === "welcome" ? { ...w, hidden: true } : w)),
+      placements: {
+        ...layout.placements,
+        lg: lg.map((p) => (p.id === last.id ? { ...p, y: bottom + 3 } : p)),
+      },
+    };
+    const shown = visiblePlacements(gapped, "lg");
+    const moved = shown.find((p) => p.id === last.id);
+    const others = shown.filter((p) => p.id !== last.id);
+    const othersBottom = Math.max(...others.map((p) => p.y + p.h));
+    expect(moved && moved.y - othersBottom).toBeGreaterThanOrEqual(3);
+  });
+
+  it("closes the space of a widget the reader drops, as before UX2b", () => {
+    const layout = personalStarterLayout;
+    const welcome = layout.widgets[0];
+    const forged = {
+      ...layout,
+      widgets: layout.widgets.map((w) => (w.id === welcome?.id ? { ...w, type: "retired" } : w)),
+    };
+    const read = readLayout(forged, "personal");
+    expect(read.dropped).toBe(true);
+    expect(read.layout.placements.lg).toEqual(
+      compact(
+        layout.placements.lg.filter((p) => p.id !== welcome?.id),
+        "lg",
+      ),
+    );
   });
 
   it("copies a template with new ids and without Home bindings", () => {

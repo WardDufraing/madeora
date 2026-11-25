@@ -148,6 +148,7 @@ export function DashboardEditor({
   committed,
   initial,
   resumed,
+  draftUnchecked = false,
   baseRevision,
   doneRequest = 0,
   entries,
@@ -164,6 +165,8 @@ export function DashboardEditor({
   readonly initial: DashboardLayout;
   /** The session resumed a draft the server already holds. */
   readonly resumed: boolean;
+  /** The check for an earlier draft failed: keep no server draft, so none is overwritten. */
+  readonly draftUnchecked?: boolean;
   /** The committed revision the draft builds on. */
   readonly baseRevision: number;
   /** Changes when the dashboard asks to run Done again (keeping this draft after a conflict). */
@@ -207,7 +210,13 @@ export function DashboardEditor({
   const breakpoint = breakpointFor(width);
   const dirty = !sameLayout(draft, committed);
   const kind = target.kind;
-  const autosave = useDraftAutosave({ target, layout: draft, baseRevision, startedSaved: resumed });
+  const autosave = useDraftAutosave({
+    target,
+    layout: draft,
+    baseRevision,
+    startedSaved: resumed,
+    localOnly: draftUnchecked,
+  });
   // The drag or resize in progress: the arrangement it started from, so the live preview is always
   // computed from there and never drifts while the pointer moves back and forth.
   const gesture = useRef<{ readonly id: string; readonly base: readonly Placement[] } | null>(null);
@@ -508,7 +517,20 @@ export function DashboardEditor({
     );
   }
 
+  // One Done at a time: a second press while the first is on its way would commit twice.
+  const finishing = useRef(false);
+
   async function done() {
+    if (finishing.current) return;
+    finishing.current = true;
+    try {
+      await finish();
+    } finally {
+      finishing.current = false;
+    }
+  }
+
+  async function finish() {
     if (!dirty) {
       // Nothing to commit: leave, dropping a resumed draft that matches the saved layout.
       await autosave.stop();

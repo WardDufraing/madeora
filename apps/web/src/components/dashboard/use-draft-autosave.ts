@@ -50,6 +50,7 @@ export function useDraftAutosave({
   layout,
   baseRevision,
   startedSaved,
+  localOnly = false,
 }: {
   readonly target: DashboardTarget;
   readonly layout: DashboardLayout;
@@ -57,6 +58,11 @@ export function useDraftAutosave({
   readonly baseRevision: number;
   /** Edit mode resumed a draft the server already holds. */
   readonly startedSaved: boolean;
+  /**
+   * Keep no server draft this session: the check for an earlier draft failed, so an autosave could
+   * silently replace a draft the person never saw.
+   */
+  readonly localOnly?: boolean;
 }): DraftAutosave {
   const [status, setStatus] = useState<DraftStatus>(startedSaved ? "saved" : "idle");
   const latest = useRef({ layout, baseRevision, target });
@@ -64,7 +70,7 @@ export function useDraftAutosave({
   const inFlight = useRef<Promise<void> | null>(null);
   const again = useRef(false);
   const stopped = useRef(false);
-  const local = useRef(false);
+  const local = useRef(localOnly);
   // Where edit mode began: not a change (also when development StrictMode re-runs effects).
   const start = useRef({ layout, baseRevision });
   const touched = useRef(false);
@@ -126,12 +132,16 @@ export function useDraftAutosave({
       return;
     }
     touched.current = true;
-    if (stopped.current) return;
     const sent = lastSent.current;
     if (sent && sent.layout === layout && sent.baseRevision === baseRevision) return;
-    if (local.current) return;
+    if (local.current) {
+      setStatus("local");
+      return;
+    }
     changed.current = true;
     setStatus("unsaved");
+    // Paused (Done, a reset or a template on its way): `resume` sends it if that fails.
+    if (stopped.current) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;

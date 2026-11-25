@@ -297,6 +297,43 @@ export function setSize(
  * position unless it overlaps one above it), compacted on the phone. Used by the reader, so a stored
  * layout keeps the arrangement its owner chose.
  */
+/**
+ * Closes the space that `removed` widgets leave (hidden in normal view, or dropped when a saved
+ * layout is read), so an existing layout renders as it did before "keep gaps" (UX2b). A widget
+ * moves up one row at a time while that row is empty across its columns and at least one of those
+ * cells was freed (by a removed widget, or by a widget that moved up). A gap the person left on
+ * purpose was never freed, so it stays.
+ */
+export function closeUp(
+  placements: readonly Placement[],
+  removed: readonly Placement[],
+): Placement[] {
+  const key = (x: number, y: number) => `${String(x)}:${String(y)}`;
+  const freed = new Set<string>();
+  const free = (p: Placement, fromY: number, toY: number) => {
+    for (let y = fromY; y < toY; y++) for (let x = p.x; x < p.x + p.w; x++) freed.add(key(x, y));
+  };
+  for (const p of removed) free(p, p.y, p.y + p.h);
+  if (freed.size === 0) return [...placements];
+  const placed: Placement[] = [];
+  for (const p of [...placements].sort(byPosition)) {
+    let y = p.y;
+    for (;;) {
+      if (y === 0) break;
+      const row = { ...p, y: y - 1, h: 1 };
+      if (placed.some((other) => overlaps(row, other))) break;
+      let anyFreed = false;
+      for (let x = p.x; x < p.x + p.w; x++) if (freed.has(key(x, y - 1))) anyFreed = true;
+      if (!anyFreed) break;
+      y -= 1;
+    }
+    if (y < p.y) free(p, Math.max(y + p.h, p.y), p.y + p.h);
+    placed.push({ ...p, y });
+  }
+  const order = new Map(placements.map((p, index) => [p.id, index]));
+  return placed.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
 export function settle(placements: readonly Placement[], breakpoint: Breakpoint): Placement[] {
   return keepsGaps(breakpoint) ? reflow(placements, []) : compact(placements, breakpoint);
 }

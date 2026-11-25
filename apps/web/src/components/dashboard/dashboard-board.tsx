@@ -385,6 +385,7 @@ export function DashboardBoard({
           committed={layout}
           initial={session.initial}
           resumed={session.resumed}
+          draftUnchecked={draftCheckFailed}
           baseRevision={session.baseRevision}
           doneRequest={session.doneRequest}
           entries={widgets}

@@ -102,10 +102,10 @@ display (UX8). Not editing `mobile-nav.tsx`, `sidebar.tsx`, `docs/marketing-webs
   `dashboard-board.tsx` (resume / conflict prompts, Done commits the draft); `dashboard-board.test.tsx`.
 - i18n `en.json`, `nl.json`; e2e specs that add widgets now open the gallery first (10 specs).
 
-## Consequence of keep gaps (for Ward)
+## Hidden and dropped widgets
 
-On desktop and tablet a hidden widget now keeps its space in normal mode (it is empty space, as for any gap), where
-before the widgets below closed up. The phone still stacks without gaps. Saved layouts are otherwise unchanged.
+Normal view closes the space of a hidden widget, or of a widget the reader drops, exactly as before UX2b, so saved
+layouts render unchanged (review H1). Only a gap the person leaves on purpose stays.
 
 ## Progress notes
 
@@ -113,3 +113,6 @@ before the widgets below closed up. The phone still stacks without gaps. Saved l
   migration RPCs; current editor/geometry/API). Opus chosen.
 - 2026-11-25: built on fresh main after UX2a merged. Local: format, lint, typecheck clean; dashboard, components,
   API and i18n suites pass (215 + 12 tests). E2E runs on CI. Branch `feat/ux-dashboard-edit-mode`.
+- 2026-11-25: PR #125 opened. Review CHANGES_REQUIRED (H1: hidden widgets left gaps); fixed with `closeUp`, plus
+  M1 (no autosave when the draft check failed), M2 (changes during a paused autosave are resent) and M3 (one Done
+  at a time). 218 tests pass; lint and typecheck clean.
