@@ -11,6 +11,7 @@ import { renderWithQuery } from "@/test/intl";
 import { AddSeveral } from "./add-several";
 import { ItemTransfer } from "./item-transfer";
 import { QuickAdd } from "./quick-add";
+import { ShoppingListSwitcher } from "./shopping-list-switcher";
 import { ShoppingListView } from "./shopping-list-view";
 import { ShoppingLive } from "./shopping-live";
 import { ShoppingWidgetBody } from "./shopping-widget-body";
@@ -199,7 +200,7 @@ describe("a shopping list", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 
-  it("moves a checked item to Completed at once and sends set-to-state", async () => {
+  it("keeps a checked item in place as done, then moves it to Completed, and sends set-to-state", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(
       jsonResponse(200, { outcome: "completed", completedAt: null, completedBy: null }),
@@ -214,15 +215,82 @@ describe("a shopping list", () => {
       />,
     );
     await user.click(screen.getByRole("checkbox", { name: "Check off Bread" }));
-    expect(within(screen.getByTestId("shopping-completed")).getByText("Bread")).toBeInTheDocument();
+    // Still in place, shown as done with a text cue and Undo, so the list does not jump.
+    const row = screen.getByText("Bread").closest("li");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByTestId("shopping-item-done")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("shopping-completed")).queryByText("Bread"),
+    ).not.toBeInTheDocument();
     await waitFor(() => {
       expect(router.refresh).toHaveBeenCalled();
     });
+    await waitFor(
+      () => {
+        expect(
+          within(screen.getByTestId("shopping-completed")).getByText("Bread"),
+        ).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
+    expect(screen.getByTestId("shopping-completed")).not.toHaveAttribute("open");
     expect(sent(0)).toEqual({
       url: `/api/v1/shopping/items/${BREAD}/completion`,
       method: "PUT",
       body: { completed: true, seenCompletedAt: null },
     });
+  });
+
+  it("sends quantity, unit and category from the quick-add details", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(jsonResponse(200, { results: [{ outcome: "created" }] }));
+    renderWithQuery(<QuickAdd listId={LIST} categories={[{ id: "cat-1", name: "Dairy" }]} />);
+    await user.click(screen.getByTestId("shopping-quick-add-details"));
+    await user.type(screen.getByTestId("shopping-quick-add"), "Milk");
+    await user.type(screen.getByTestId("shopping-quick-add-quantity"), "1,5");
+    await user.selectOptions(screen.getByTestId("shopping-quick-add-unit"), "l");
+    await user.selectOptions(screen.getByTestId("shopping-quick-add-category"), "cat-1");
+    await user.click(screen.getByTestId("shopping-quick-add-submit"));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(sent(0).body).toMatchObject({
+      items: [{ name: "Milk", quantity: "1.5", unit: "l", categoryId: "cat-1" }],
+    });
+  });
+
+  it("asks for a quantity when a unit is chosen without one", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<QuickAdd listId={LIST} />);
+    await user.click(screen.getByTestId("shopping-quick-add-details"));
+    await user.type(screen.getByTestId("shopping-quick-add"), "Milk");
+    await user.selectOptions(screen.getByTestId("shopping-quick-add-unit"), "l");
+    await user.click(screen.getByTestId("shopping-quick-add-submit"));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/unit needs/i)).toBeInTheDocument();
+  });
+
+  it("switches lists from the switcher and offers New list", async () => {
+    const user = userEvent.setup();
+    router.push.mockClear();
+    render(
+      <ShoppingListSwitcher
+        lists={[
+          { id: LIST, name: "Groceries", activeItems: 3 },
+          { id: "other-list", name: "Hardware", activeItems: 0 },
+        ]}
+        currentId={LIST}
+        homeId={HOME}
+        canCreate
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Groceries/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "Hardware" }));
+    expect(router.push).toHaveBeenCalledWith(`/homes/${HOME}/shopping/other-list`);
+    expect(screen.getByRole("button", { name: /New list/i })).toBeInTheDocument();
   });
 
   it("takes a check-off back when it is refused", async () => {

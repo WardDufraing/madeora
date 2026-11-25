@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
 import { HydrationGate } from "@/components/tasks/hydration-gate";
@@ -30,6 +30,8 @@ import { useShoppingFailure, useShoppingTexts } from "./use-shopping-texts";
 import { useShoppingMutation } from "./use-shopping-mutation";
 
 const noPending: ReadonlyMap<string, boolean> = new Map();
+/** How long a just-checked item stays in place before it moves to Completed. */
+const LINGER_MS = 1500;
 
 export interface ShoppingListViewProps {
   readonly list: ShoppingListDetail;
@@ -66,10 +68,34 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
     }));
   };
 
+  // Items checked a moment ago stay where they are, shown as done, before they move to Completed
+  // (redesign decision 70: no list jumping while someone taps through it).
+  const [lingering, setLingering] = useState<ReadonlySet<string>>(new Set());
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const running = timers.current;
+    return () => {
+      for (const timer of running.values()) clearTimeout(timer);
+      running.clear();
+    };
+  }, []);
+  const stopLingering = (id: string) => {
+    const timer = timers.current.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    timers.current.delete(id);
+    setLingering((current) => {
+      if (!current.has(id)) return current;
+      const copy = new Set(current);
+      copy.delete(id);
+      return copy;
+    });
+  };
+
   const isCompleted = (item: ShoppingItem) => pending.get(item.id) ?? item.completedAt !== null;
-  const active = list.items.filter((item) => !isCompleted(item));
+  const active = list.items.filter((item) => !isCompleted(item) || lingering.has(item.id));
+  const remaining = list.items.filter((item) => !isCompleted(item)).length;
   const completed = list.items
-    .filter(isCompleted)
+    .filter((item) => isCompleted(item) && !lingering.has(item.id))
     .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   const groups = [
     ...list.categories.map((category) => ({
@@ -84,8 +110,20 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
 
   const toggle = (item: ShoppingItem, next: boolean) => {
     setPending((current) => new Map(current).set(item.id, next));
+    if (next && !lingering.has(item.id)) {
+      setLingering((current) => new Set(current).add(item.id));
+      timers.current.set(
+        item.id,
+        setTimeout(() => {
+          stopLingering(item.id);
+        }, LINGER_MS),
+      );
+    } else if (!next) {
+      stopLingering(item.id);
+    }
   };
   const untoggle = (item: ShoppingItem) => {
+    stopLingering(item.id);
     setPending((current) => {
       const copy = new Map(current);
       copy.delete(item.id);
@@ -104,10 +142,16 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
         ) : list.access === "check" ? (
           <FormAlert tone="info">{t("checkOnlyNotice")}</FormAlert>
         ) : null}
+        {list.items.length > 0 ? (
+          <p className="text-helper text-fg-muted" data-testid="shopping-progress">
+            {t("progress", { remaining, total: list.items.length })}
+          </p>
+        ) : null}
         {rights.edit ? (
           <div className="flex flex-col gap-2">
             <QuickAdd
               listId={list.id}
+              categories={list.categories}
               onAdded={(name) => {
                 announce(t("announceAdded", { name }));
               }}
@@ -149,6 +193,7 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
                     <ItemRow
                       key={item.id}
                       item={item}
+                      done={isCompleted(item)}
                       rights={rights}
                       first={index === 0}
                       last={index === group.items.length - 1}
@@ -202,6 +247,7 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
 
 function ItemRow({
   item,
+  done,
   rights,
   first,
   last,
@@ -213,6 +259,8 @@ function ItemRow({
   announce,
 }: {
   readonly item: ShoppingItem;
+  /** Checked a moment ago: shown as done in place until it moves to Completed. */
+  readonly done: boolean;
   readonly rights: ShoppingRights;
   readonly first: boolean;
   readonly last: boolean;
@@ -225,7 +273,11 @@ function ItemRow({
 }) {
   const t = useTranslations("Shopping");
   const failure = useShoppingFailure();
-  const complete = useCompletion(item, onToggle, onRevert, announce);
+  // The completion time from the answer, which a reopen needs and the page has not re-read yet.
+  const [completedAt, setCompletedAt] = useState<string | null>(null);
+  const complete = useCompletion(item, onToggle, onRevert, announce, completedAt, (answer) => {
+    setCompletedAt(answer.completedAt);
+  });
   const move = useShoppingMutation(`shopping-item:${item.id}`, (direction: "up" | "down") =>
     sendShoppingRequest<object>("POST", shoppingItemEndpoint(item.id, "move"), { direction }),
   );
@@ -239,16 +291,19 @@ function ItemRow({
       <input
         type="checkbox"
         className="size-5 shrink-0 accent-accent"
-        checked={false}
-        disabled={!rights.check || complete.busy}
-        aria-label={t("checkItem", { name: item.name })}
+        checked={done}
+        disabled={!rights.check || complete.busy || (done && completedAt === null)}
+        aria-label={
+          done ? t("uncheckItem", { name: item.name }) : t("checkItem", { name: item.name })
+        }
         onChange={() => {
-          complete.mutate(true);
+          complete.mutate(!done);
         }}
         data-testid="shopping-item-check"
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-body text-fg">
+        <span className={done ? "text-body text-fg-muted line-through" : "text-body text-fg"}>
+          {done ? <span className="sr-only">{t("doneLabel")} </span> : null}
           {amount ? <span className="font-semibold">{amount} </span> : null}
           <bdi>{item.name}</bdi>
           {item.packaging ? (
@@ -262,7 +317,26 @@ function ItemRow({
           <span className="whitespace-pre-line text-helper text-fg-muted">{item.notes}</span>
         ) : null}
         {repeats ? <span className="text-helper text-fg-muted">{t("repeatsBadge")}</span> : null}
+        {done ? (
+          <span className="text-helper font-medium text-fg-muted" data-testid="shopping-item-done">
+            {"\u{2713} "}
+            {t("doneLabel")}
+          </span>
+        ) : null}
       </div>
+      {done && rights.check ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={complete.busy || completedAt === null}
+          onClick={() => {
+            complete.mutate(false);
+          }}
+          data-testid="shopping-item-undo"
+        >
+          {t("undo")}
+        </Button>
+      ) : null}
       <div className="flex flex-wrap gap-1">
         {rights.edit ? (
           <>
@@ -332,6 +406,9 @@ function useCompletion(
   onToggle: (item: ShoppingItem, completed: boolean) => void,
   onRevert: (item: ShoppingItem) => void,
   announce: (message: string) => void,
+  /** The completion time to send when reopening, when the item's own copy is older than it. */
+  seenCompletedAt?: string | null,
+  onAnswer?: (answer: ShoppingCompletionAnswer) => void,
 ) {
   const t = useTranslations("Shopping");
   return useShoppingMutation(
@@ -342,7 +419,7 @@ function useCompletion(
         return await sendShoppingRequest<ShoppingCompletionAnswer>(
           "PUT",
           shoppingItemEndpoint(item.id, "completion"),
-          { completed, seenCompletedAt: completed ? null : item.completedAt },
+          { completed, seenCompletedAt: completed ? null : (seenCompletedAt ?? item.completedAt) },
         );
       } catch (error) {
         onRevert(item);
@@ -350,6 +427,7 @@ function useCompletion(
       }
     },
     (answer, completed) => {
+      onAnswer?.(answer);
       announce(
         answer.outcome === "unchanged"
           ? t("announceAlreadyDone", { name: item.name })
@@ -409,8 +487,8 @@ function CompletedSection({
   if (items.length === 0) return null;
   return (
     <section aria-labelledby="shopping-completed-heading" className="flex flex-col gap-3">
-      <details open className="flex flex-col gap-3" data-testid="shopping-completed">
-        <summary className="cursor-pointer">
+      <details className="flex flex-col gap-3" data-testid="shopping-completed">
+        <summary className="flex min-h-11 cursor-pointer items-center">
           <h2
             id="shopping-completed-heading"
             className="inline text-section-title font-semibold text-fg"

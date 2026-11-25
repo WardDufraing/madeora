@@ -6,11 +6,12 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
 import { zonedParts } from "@/chores/format";
 import { getDateTimeFormats } from "@/invitations/server";
-import { getShoppingContext, getShoppingList } from "@/shopping/data";
+import { getShoppingContext, getShoppingList, listShoppingLists } from "@/shopping/data";
 import { shoppingPath, signalContextId } from "@/shopping/format";
 import { listTaskMembers } from "@/tasks/data";
 
 import { ShoppingListView } from "./shopping-list-view";
+import { ShoppingListSwitcher } from "./shopping-list-switcher";
 import { ShoppingLive } from "./shopping-live";
 
 export interface ShoppingListPageProps {
@@ -30,11 +31,12 @@ export async function ShoppingListPage({ userId, listId, home }: ShoppingListPag
   // The signal version is read before the content, so a change committed in between makes the
   // live view refresh once instead of being taken as already shown.
   const context = await getShoppingContext(homeId);
-  const [t, formats, list, members] = await Promise.all([
+  const [t, formats, list, members, lists] = await Promise.all([
     getTranslations("Shopping"),
     getDateTimeFormats(),
     getShoppingList(listId, homeId),
     homeId ? listTaskMembers(homeId) : Promise.resolve({ status: "ok", value: [] } as const),
+    listShoppingLists(homeId, false),
   ]);
   if (list.status === "not-found") notFound();
   if (list.status !== "ok" || context.status !== "ok" || members.status !== "ok") {
@@ -58,6 +60,20 @@ export async function ShoppingListPage({ userId, listId, home }: ShoppingListPag
         </Link>
       </p>
       <PageHeader title={list.value.name} />
+      <div className="mb-4 flex flex-col gap-3">
+        <p className="flex flex-wrap gap-x-2 text-body text-fg-muted">
+          <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
+        </p>
+        {/* The switcher is a convenience: if the other lists cannot be read, the list still shows. */}
+        {lists.status === "ok" ? (
+          <ShoppingListSwitcher
+            lists={lists.value.map(({ id, name, activeItems }) => ({ id, name, activeItems }))}
+            currentId={list.value.id}
+            homeId={homeId}
+            canCreate={context.value.canCreate}
+          />
+        ) : null}
+      </div>
       <ShoppingListView
         list={list.value}
         homeId={homeId}
