@@ -17,13 +17,14 @@ import {
   HABITS_ENDPOINT,
   sendHabitRequest,
   type HabitList,
-  type HabitSummary,
 } from "@/habits/api";
 import { habitKeys, habitsPath } from "@/habits/format";
-import { memberNames, type MemberNames, type MemberOption } from "@/tasks/format";
+import { memberNames, type MemberOption } from "@/tasks/format";
 
 import { HabitFormDialog } from "./habit-form-dialog";
-import { HabitToday, HabitWeekProgress } from "./habit-today";
+import { HabitRow } from "./habit-row";
+import { HabitSummaryBand } from "./habit-summary";
+import { HabitTrends } from "./habit-trends";
 import { useHabitMutation } from "./use-habit-mutation";
 import { useHabitTexts } from "./use-habit-texts";
 
@@ -82,6 +83,8 @@ export function HabitsView({
   const list = useHabitList(homeId, view, query, initialList);
   const names = memberNames(members);
   const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<"today" | "week" | "trends">("today");
+  const editor = { today, weekStart, timeZone, timeZones };
   const base = habitsPath(homeId);
   const views = [
     { view: "active", label: t("viewActive", { count: list.counts.active }) },
@@ -129,17 +132,49 @@ export function HabitsView({
           </Button>
         </form>
       ) : null}
-      {view === "active" && list.access === "manage" ? (
-        <div>
-          <Button
-            onClick={() => {
-              setCreating(true);
-            }}
-            data-testid="habit-new"
-          >
-            {t("newHabit")}
-          </Button>
-        </div>
+      {view === "active" && list.habits.length > 0 ? (
+        <>
+          <HabitSummaryBand habits={list.habits} celebrations={list.celebrations} />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div role="group" aria-label={t("modeLabel")} className="flex flex-wrap gap-2">
+              {(["today", "week"] as const).map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  variant={mode === option ? "primary" : "secondary"}
+                  aria-pressed={mode === option}
+                  onClick={() => {
+                    setMode(option);
+                  }}
+                  data-testid={`habits-mode-${option}`}
+                >
+                  {option === "today" ? t("modeToday") : t("modeWeek")}
+                </Button>
+              ))}
+              <Button
+                size="sm"
+                variant={mode === "trends" ? "primary" : "secondary"}
+                aria-pressed={mode === "trends"}
+                onClick={() => {
+                  setMode(mode === "trends" ? "today" : "trends");
+                }}
+                data-testid="habits-view-trends"
+              >
+                {t("viewTrends")}
+              </Button>
+            </div>
+            {list.access === "manage" ? (
+              <Button
+                onClick={() => {
+                  setCreating(true);
+                }}
+                data-testid="habit-new"
+              >
+                {t("newHabit")}
+              </Button>
+            ) : null}
+          </div>
+        </>
       ) : null}
       {list.habits.length === 0 ? (
         <EmptyState
@@ -159,12 +194,32 @@ export function HabitsView({
                 : t("emptyActiveView")
               : undefined
           }
+          action={
+            view === "active" && !query && list.access === "manage" ? (
+              <Button
+                onClick={() => {
+                  setCreating(true);
+                }}
+                data-testid="habit-new"
+              >
+                {t("newHabit")}
+              </Button>
+            ) : undefined
+          }
         />
+      ) : mode === "trends" && view === "active" ? (
+        <HabitTrends habits={list.habits} homeId={homeId} today={today} weekStart={weekStart} />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2" data-testid="habit-list">
+        <ul className="flex flex-col gap-3" data-testid="habit-list">
           {list.habits.map((habit) => (
             <li key={habit.id}>
-              <HabitCard habit={habit} homeId={homeId} names={names} />
+              <HabitRow
+                habit={habit}
+                homeId={homeId}
+                names={names}
+                showWeek={mode === "week"}
+                editor={editor}
+              />
             </li>
           ))}
         </ul>
@@ -184,53 +239,6 @@ export function HabitsView({
         />
       ) : null}
     </div>
-  );
-}
-
-function HabitCard({
-  habit,
-  homeId,
-  names,
-}: {
-  readonly habit: HabitSummary;
-  readonly homeId: string | null;
-  readonly names: MemberNames;
-}) {
-  const t = useTranslations("Habits");
-  const texts = useHabitTexts();
-  const headingId = `habit-${habit.id}-name`;
-  return (
-    <article
-      aria-labelledby={headingId}
-      className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-4"
-      data-testid="habit-card"
-    >
-      <h2 id={headingId} className="text-section-title font-semibold text-fg">
-        <Link href={habitsPath(homeId, habit.id)} className="underline-offset-4 hover:underline">
-          <bdi>{habit.name}</bdi>
-        </Link>
-      </h2>
-      <p className="text-helper text-fg-muted">
-        {texts.schedule(habit.schedule)} · {texts.status(habit)}
-      </p>
-      {habit.status === "ended" && habit.endsOn ? (
-        <p className="text-helper text-fg-muted">
-          {t("endedOn", { date: texts.date(habit.endsOn, "short") })}
-        </p>
-      ) : null}
-      {habit.status === "upcoming" ? (
-        <p className="text-helper text-fg-muted">
-          {t("startsOn", { date: texts.date(habit.periodStartsOn, "short") })}
-        </p>
-      ) : null}
-      <HabitWeekProgress habit={habit} />
-      <p className="text-body text-fg" data-testid="habit-streak">
-        {texts.streak(habit.streak)}
-      </p>
-      {habit.status === "active" || habit.status === "paused" ? (
-        <HabitToday habit={habit} names={names} source="app" />
-      ) : null}
-    </article>
   );
 }
 

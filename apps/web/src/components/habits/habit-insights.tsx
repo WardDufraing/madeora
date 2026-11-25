@@ -9,7 +9,6 @@ import {
   habitInsightDays,
   habitMonthGrid,
   habitWeekdayOrder,
-  type HabitDayState,
   type HabitWeekStart,
 } from "@madeora/domain/habits";
 
@@ -23,31 +22,9 @@ import {
 } from "@/habits/api";
 import { completionRate, formatWeekday, habitKeys } from "@/habits/format";
 
+import { stateMark, stateTone } from "./habit-day-marks";
 import { NumericSummaries } from "./habit-numeric-summaries";
 import { useHabitTexts } from "./use-habit-texts";
-
-/** A mark per state, so a state never depends on colour alone. */
-const stateMark: { readonly [S in HabitDayState]: string } = {
-  completed: "\u{2713}",
-  missed: "\u{2717}",
-  paused: "\u{2016}",
-  pending: "\u{25CB}",
-  open: "\u{25CB}",
-  not_scheduled: "\u{2013}",
-  untracked: "\u{00B7}",
-  future: "",
-};
-
-const stateTone: { readonly [S in HabitDayState]: string } = {
-  completed: "bg-accent-subtle text-fg font-semibold",
-  missed: "text-danger",
-  paused: "text-fg-muted",
-  pending: "text-fg",
-  open: "text-fg",
-  not_scheduled: "text-fg-muted",
-  untracked: "text-fg-muted",
-  future: "text-fg-muted",
-};
 
 export interface HabitInsightsProps {
   readonly habitId: string;
