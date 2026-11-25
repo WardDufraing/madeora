@@ -8117,7 +8117,7 @@
     "ambientChores": "{count, plural, =0 {Geen open klusjes} one {# open klusje} other {# open klusjes}}",
     "ambientShopping": "{count, plural, =0 {Niets meer te kopen} one {# boodschap nog nodig} other {# boodschappen nog nodig}}",
     "unlockOpened": "{name} is ontgrendeld op dit scherm.",
-    "unlockEnded": "Dit scherm is weer vergrendeld."
+    "unlockEnded": "Ontgrendeling beëindigd. Dit scherm vraagt weer om pincodes."
   },
   "DisplayConfig": {
     "title": "Gezinsscherm",

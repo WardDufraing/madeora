@@ -53,3 +53,9 @@ Out (later slices, named so nothing is lost):
 
 - 2026-11-25: brief written; scope chosen as above.
 - 2026-11-25: migration + DB test pass on the local PostgreSQL fallback (display tests only); DB types regenerated. Web: menu, Chores/Shopping views, ambient counts, settings checkboxes, session announcements. Local: tsc, eslint (touched folders), prettier, vitest for displays, display routes and i18n pass (131 + 40 tests). Full suite left to CI.
+
+## 7. Independent review
+
+`reviews/steps/UX8b-review.md`: **PASS**, 0 BLOCKER, 0 HIGH, 0 MEDIUM, 5 LOW. Fixed: L1 (menu and lock dialog close when the display goes offline-stale), L3 (session-end announcement reworded so it is not confused with the privacy lock), L5 (privacy note linked to both checkboxes via `aria-describedby`). Accepted: L2 (counts follow `display_board()`'s 50-chore cap, unchanged here), L4 (shared Dialog close button is 40 px; changing the shared primitive belongs to UX9 polish). Fixes verified locally: tsc, eslint, display + i18n vitest (97 tests).
+
+Rollout: apply the migration before deploying the app (an old app keeps working on the new database). Rollback: app first, then the migration (header notes). `docs/production-migrations.md` needs `20261223090000` added by the owner's docs commit.

@@ -263,6 +263,9 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     const left = Math.max(0, offlineSince + OFFLINE_KEEP_MS - Date.now());
     const timer = setTimeout(() => {
       setStale(true);
+      // Nothing household-related stays open behind the time-only screen (UX8b review L1).
+      setMenuOpen(false);
+      setLockOpen(false);
     }, left);
     return () => {
       clearTimeout(timer);

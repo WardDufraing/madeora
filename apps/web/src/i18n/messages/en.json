@@ -8117,7 +8117,7 @@
     "ambientChores": "{count, plural, =0 {No open chores} one {# open chore} other {# open chores}}",
     "ambientShopping": "{count, plural, =0 {Nothing left to buy} one {# shopping item left} other {# shopping items left}}",
     "unlockOpened": "{name} is unlocked on this display.",
-    "unlockEnded": "This display is locked again."
+    "unlockEnded": "Unlock ended. PINs are asked again on this display."
   },
   "DisplayConfig": {
     "title": "Household Display",

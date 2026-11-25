@@ -85,9 +85,9 @@ export function DisplayAmbientSetting({
       />
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-1 text-body font-medium text-fg">{t("ambientCountsLabel")}</legend>
-        <p className="text-helper text-fg-muted">{t("ambientCountsIntro")}</p>
         <Checkbox
           label={t("ambientShowChores")}
+          description={t("ambientCountsIntro")}
           checked={showChores}
           onChange={(event) => {
             setShowChores(event.target.checked);
@@ -96,6 +96,7 @@ export function DisplayAmbientSetting({
         />
         <Checkbox
           label={t("ambientShowShopping")}
+          description={t("ambientCountsIntro")}
           checked={showShopping}
           onChange={(event) => {
             setShowShopping(event.target.checked);

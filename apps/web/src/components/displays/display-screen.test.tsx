@@ -720,7 +720,7 @@ describe("DisplayScreen navigation and ambient content (UX8b)", () => {
     });
     await user.click(screen.getByRole("button", { name: "Lock now" }));
     await waitFor(() => {
-      expect(region).toHaveTextContent("This display is locked again.");
+      expect(region).toHaveTextContent("Unlock ended. PINs are asked again on this display.");
     });
   });
 });
