@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–30 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–31 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -321,6 +321,15 @@ Use this exact supporting paragraph beneath the hero headline:
 - Match the adaptive editorial canvas and existing design tokens in both themes.
 - Verify answers against implemented functionality and approved commercial terms. Example headlines, questions, answers, exact count and dedicated FAQ route remain open.
 
+### Decision 31 — Final homepage CTA (CONFIRMED)
+
+**Selection: D — Signature Madeora composition.**
+
+- Close the homepage with a deep accent-derived background, restrained localized purple glow, confident editorial typography and layered faithful product visuals representing Personal, Home and Ora.
+- Use one dominant registration CTA and a subordinate feature exploration link. Create a visual callback to the hero without repeating its interactive behavior.
+- Use subtle entrance motion without continuous floating, respect reduced motion, maintain accessible contrast and responsive composition, and transition seamlessly into the footer.
+- Derive colors from existing Madeora design tokens and use synthetic preview data. Final headline, supporting copy, background tones and product composition remain open; verify free-registration claims and CTA destinations before publication.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -381,6 +390,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 28 | Trust, privacy and security | Premium homepage storytelling with dedicated privacy demonstrations (D + C) | Confirmed |
 | 29 | Homepage pricing presentation | Premium editorial pricing preview (D) | Confirmed |
 | 30 | Homepage FAQ | Asymmetric editorial FAQ (D) | Confirmed |
+| 31 | Final homepage CTA | Signature Madeora composition (D) | Confirmed |
 
 ## Update protocol
 
