@@ -29,3 +29,4 @@ Local (per standing rule): prettier, eslint, `tsc --noEmit`, vitest for `compone
 ## Progress notes
 
 - 2026-11-25: started on Sonnet (UI only); implemented; local checks green.
+- 2026-11-25: independent review PASS (`reviews/steps/UX5-review.md`). MEDIUM-1 partly fixed (strip key no longer includes revision, so no "Loading" flash); the refetch fan-out stays (needs a batched RPC, owner decision). MEDIUM-2 accepted: trends has a month stepper and links to each habit's page for detail; numeric partial days count as missed there. LOWs left as notes.

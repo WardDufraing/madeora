@@ -58,7 +58,7 @@ export function weekCells(
 /** Reads one habit's recent days (the same read as its page) for the strip. */
 function useHabitWeek(habit: HabitSummary) {
   return useQuery<{ habit: HabitDetail }>({
-    queryKey: [...habitKeys.all, "week", habit.id, habit.today, habit.revision],
+    queryKey: [...habitKeys.all, "week", habit.id, habit.today],
     queryFn: () => sendHabitRequest("GET", habitEndpoint(habit.id)),
     staleTime: 30_000,
   });
