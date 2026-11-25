@@ -51,7 +51,19 @@ export function TaskPanel({
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
+      const target = event.target;
+      if (target instanceof Element) {
+        if (target.closest("dialog[open]")) return;
+        // Escape in a field (a comment, a subtask, an inline "Add a task") must not drop the draft.
+        if (target.closest("input, textarea, select, [contenteditable]")) return;
+        // Escape elsewhere on the page belongs to that part of the page, not to the panel.
+        if (
+          target !== document.body &&
+          !ref.current?.contains(target) &&
+          !target.closest("[data-task-id]")
+        )
+          return;
+      }
       router.push(closeHref, { scroll: false });
     }
     document.addEventListener("keydown", onKeyDown);

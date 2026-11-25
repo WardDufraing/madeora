@@ -128,6 +128,7 @@ export function TaskForm({
 }: TaskFormProps) {
   const t = useTranslations("Tasks");
   const [showAll, setShowAll] = useState(!quick);
+  const [revealed, setRevealed] = useState(false);
   const hydrated = useHydrated();
   const form = useForm<TaskFormInput, unknown, TaskFormOutput>({
     resolver: zodResolver(formSchema),
@@ -146,6 +147,10 @@ export function TaskForm({
       cancelAnimationFrame(frame);
     };
   }, [focusTitle, form]);
+  // "More options" removes its button: focus moves to the first field it reveals.
+  useEffect(() => {
+    if (revealed) form.setFocus("description");
+  }, [revealed, form]);
   const message = (error: { readonly message?: string | undefined } | undefined) => {
     const key = error?.message as FormError | undefined;
     return key && key in fieldErrorKey ? t(fieldErrorKey[key]) : undefined;
@@ -232,9 +237,9 @@ export function TaskForm({
           <Button
             variant="ghost"
             size="sm"
-            aria-expanded={false}
             onClick={() => {
               setShowAll(true);
+              setRevealed(true);
             }}
             data-testid="task-more-options"
           >

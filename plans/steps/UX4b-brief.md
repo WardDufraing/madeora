@@ -23,3 +23,12 @@ Source: `docs/design/dashboard-ux-ui-redesign.md` decisions 46–55 and "Tasks: 
 ## Progress notes
 
 - 2026-11-25: brief written, started.
+- 2026-11-25: built; unit tests 186 pass locally, tsc and eslint clean; e2e specs updated (not runnable locally, CI runs them).
+- Review: `reviews/steps/UX4b-review.md` (CHANGES_REQUIRED: 1 HIGH, 3 MEDIUM, 4 LOW). Fixed H1 (acceptance-ora-change uses `view=all`), M2 (Escape ignored in fields), M3 (focus after More options).
+
+## Gaps for Ward
+
+- **Upcoming** shows due in the next 7 days plus tasks that start later. A task due in 3+ weeks with no future start date shows only in All tasks (needs a new filter in the database; not built). Decide if Upcoming should cover all future due dates.
+- Completed-task display preference (D51) not built (needs a stored preference).
+- Narrow-screen bottom sheet has a backdrop but no focus trap on the list behind (LOW, review L2).
+- Unsaved-input prompt for the New Task dialog not built (title-only quick form).
