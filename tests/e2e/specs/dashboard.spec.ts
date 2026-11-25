@@ -104,6 +104,7 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
   await panel.getByRole("button", { name: "Hide" }).click();
   panel = await select(page, "Welcome");
   await panel.getByRole("button", { name: "Remove" }).click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Welcome" })
@@ -226,6 +227,7 @@ test("a selected Home widget on the personal dashboard is labelled, and unavaila
 
   await page.goto("/?context=personal");
   await customize(page);
+  await page.getByTestId("dashboard-add-widget").click();
   const catalogue = page.getByTestId("dashboard-catalogue");
   await expect(catalogue.getByText(/Home members · .*Buren/)).toBeVisible();
   await catalogue.getByRole("button", { name: "Add Home members" }).click();

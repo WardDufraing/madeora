@@ -191,6 +191,7 @@ test("a draft stays private, publishing shares it, the lock, cooking mode and th
   // The Home dashboard's Recipes widget: Bea's favorite for her, nothing yet for Ward.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Recipes" })

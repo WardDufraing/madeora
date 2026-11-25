@@ -217,6 +217,7 @@ test("a whole-Home vacation: the pause, a one-off chore decided and the widget",
   // Ward adds the Home vacation widget to the Home dashboard; Bea sees it there.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Home vacation" })

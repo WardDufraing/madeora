@@ -1,6 +1,18 @@
 import { z } from "zod";
 
-import { compact, fitsRows, hasOverlap, MAX_ROWS, placeNew, type Placement } from "./geometry";
+import {
+  closeUp,
+  compact,
+  fitsRows,
+  hasOverlap,
+  keepsGaps,
+  MAX_ROWS,
+  placeInSlot,
+  placeNew,
+  settle,
+  type Placement,
+  type Slot,
+} from "./geometry";
 import {
   breakpointColumns,
   breakpoints,
@@ -159,8 +171,9 @@ export function checkLayout(input: unknown, context: LayoutContext): LayoutCheck
 /**
  * A stored layout as the dashboard can show it. Widgets of an unknown type, on the wrong surface or
  * with broken settings are dropped (settings that no longer parse fall back to defaults); missing or
- * out-of-bounds placements are rebuilt; overlaps are resolved by compaction. `dropped` says whether
- * anything had to be left out, so the page can say so instead of hiding it.
+ * out-of-bounds placements are rebuilt; overlaps are resolved by moving only the overlapping widget
+ * down, so the gaps the owner left on desktop and tablet stay (UX2b); the phone list is compacted.
+ * `dropped` says whether anything had to be left out, so the page can say so instead of hiding it.
  */
 export function readLayout(
   input: unknown,
@@ -194,9 +207,11 @@ export function readLayout(
     breakpoints.map((breakpoint) => {
       const cols = breakpointColumns[breakpoint];
       const kept: Placement[] = [];
+      const lost: Placement[] = [];
       const placed = new Set<string>();
       for (const p of parsed.data.placements[breakpoint]) {
         const type = types.get(p.id);
+        if (!type) lost.push(p);
         if (!type || placed.has(p.id)) continue;
         const bounds = widgetRegistry[type].sizes[breakpoint];
         const w = Math.min(Math.max(p.w, bounds.minW), bounds.maxW, cols);
@@ -204,11 +219,12 @@ export function readLayout(
         kept.push({ id: p.id, x: Math.min(p.x, cols - w), y: p.y, w, h });
         placed.add(p.id);
       }
-      let result = compact(kept, breakpoint);
+      // A dropped widget's space closes, as it always did; gaps the person left stay.
+      let result = settle(closeUp(settle(kept, breakpoint), lost), breakpoint);
       for (const widget of widgets) {
         if (!placed.has(widget.id)) result = placeNew(result, widget.id, widget.type, breakpoint);
       }
-      return [breakpoint, compact(result, breakpoint)];
+      return [breakpoint, settle(result, breakpoint)];
     }),
   ) as { [B in Breakpoint]: Placement[] };
   return { layout: { version: LAYOUT_VERSION, widgets, placements }, dropped };
@@ -218,16 +234,25 @@ export function emptyLayout(): DashboardLayout {
   return { version: LAYOUT_VERSION, widgets: [], placements: { lg: [], md: [], sm: [] } };
 }
 
-/** Adds a widget at the bottom of every breakpoint. */
-export function addWidget(layout: DashboardLayout, widget: DashboardWidget): DashboardLayout {
+/**
+ * Adds a widget at the bottom of every breakpoint, or, with `at`, into that free slot of one
+ * breakpoint ("Add widget here", decision 3; only what it would overlap moves). The other
+ * breakpoints always get it at the bottom, so membership stays the same everywhere while each
+ * screen size keeps its own arrangement (decision 25).
+ */
+export function addWidget(
+  layout: DashboardLayout,
+  widget: DashboardWidget,
+  at?: { readonly breakpoint: Breakpoint; readonly slot: Slot },
+): DashboardLayout {
+  const place = (breakpoint: Breakpoint) =>
+    at?.breakpoint === breakpoint
+      ? placeInSlot(layout.placements[breakpoint], widget.id, widget.type, at.slot, breakpoint)
+      : placeNew(layout.placements[breakpoint], widget.id, widget.type, breakpoint);
   return {
     ...layout,
     widgets: [...layout.widgets, widget],
-    placements: {
-      lg: placeNew(layout.placements.lg, widget.id, widget.type, "lg"),
-      md: placeNew(layout.placements.md, widget.id, widget.type, "md"),
-      sm: placeNew(layout.placements.sm, widget.id, widget.type, "sm"),
-    },
+    placements: { lg: place("lg"), md: place("md"), sm: place("sm") },
   };
 }
 
@@ -238,13 +263,15 @@ export function canAddWidget(layout: DashboardLayout, type: WidgetType): boolean
   );
 }
 
-/** Removes a widget everywhere and closes the gap it leaves. */
+/**
+ * Removes a widget everywhere. Desktop and tablet keep the space it leaves (Ward: "keep gaps"; edit
+ * mode offers "Add widget here" there); the phone list closes up.
+ */
 export function removeWidget(layout: DashboardLayout, id: string): DashboardLayout {
-  const without = (breakpoint: Breakpoint) =>
-    compact(
-      layout.placements[breakpoint].filter((p) => p.id !== id),
-      breakpoint,
-    );
+  const without = (breakpoint: Breakpoint) => {
+    const rest = layout.placements[breakpoint].filter((p) => p.id !== id);
+    return keepsGaps(breakpoint) ? rest : compact(rest, breakpoint);
+  };
   return {
     ...layout,
     widgets: layout.widgets.filter((w) => w.id !== id),
@@ -253,14 +280,18 @@ export function removeWidget(layout: DashboardLayout, id: string): DashboardLayo
 }
 
 /**
- * The visible widgets' placements for normal use: hidden widgets are left out and the rest move up
- * into the space, so hiding never leaves a hole.
+ * The visible widgets' placements for normal use: hidden widgets are left out and the space they
+ * take closes, as before UX2b, so a saved layout with a hidden widget renders unchanged. On desktop
+ * and tablet a gap the person left on purpose stays (Ward: "keep gaps"); the phone list closes up.
  */
 export function visiblePlacements(layout: DashboardLayout, breakpoint: Breakpoint): Placement[] {
   const visible = new Set(layout.widgets.filter((w) => !w.hidden).map((w) => w.id));
-  return compact(
-    layout.placements[breakpoint].filter((p) => visible.has(p.id)),
-    breakpoint,
+  const all = layout.placements[breakpoint];
+  const shown = all.filter((p) => visible.has(p.id));
+  if (!keepsGaps(breakpoint)) return compact(shown, breakpoint);
+  return closeUp(
+    shown,
+    all.filter((p) => !visible.has(p.id)),
   );
 }
 

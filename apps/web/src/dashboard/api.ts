@@ -19,6 +19,10 @@ import type { BuiltInTemplateId } from "./starter";
  * - `PATCH /api/v1/dashboard-templates/:id` `{ name }`, `DELETE …/:id` `{}` (to the trash).
  * - `PUT` / `DELETE /api/v1/dashboard-templates/:id/shares/:homeId` `{}`.
  *
+ * - `GET /api/v1/dashboard/draft?homeId` → `200 { draft }`; `PUT …/draft` `{ target, layout,
+ *   baseRevision }` → `200 { updatedAt }`; `DELETE …/draft` `{ target }` (UX2b edit-mode drafts).
+ *   `PUT /api/v1/dashboard` with `commitDraft: true` is Done: it commits and drops the draft.
+ *
  * `409 conflict` (with the current `revision`) means someone saved the dashboard since it was read.
  */
 export const DASHBOARD_ENDPOINT = "/api/v1/dashboard";
@@ -137,8 +141,80 @@ export async function saveDashboard(
   target: DashboardTarget,
   layout: DashboardLayout,
   expectedRevision: number,
+  options: { readonly commitDraft?: boolean } = {},
 ): Promise<RevisionResponse> {
-  return revisionOf(await send("PUT", DASHBOARD_ENDPOINT, { target, layout, expectedRevision }));
+  return revisionOf(
+    await send("PUT", DASHBOARD_ENDPOINT, {
+      target,
+      layout,
+      expectedRevision,
+      ...(options.commitDraft ? { commitDraft: true } : {}),
+    }),
+  );
+}
+
+export const DASHBOARD_DRAFT_ENDPOINT = `${DASHBOARD_ENDPOINT}/draft`;
+
+/** A recoverable edit-mode draft as the server keeps it (UX2b). */
+export interface DashboardDraft {
+  readonly layout: DashboardLayout;
+  /** The committed revision the draft started from. */
+  readonly baseRevision: number;
+  /** The dashboard's committed revision now; different means someone saved since. */
+  readonly currentRevision: number;
+  readonly updatedAt: string;
+  readonly expiresAt: string;
+}
+
+const draftResponseSchema = z.object({
+  draft: z
+    .object({
+      // Already read with `readLayout` by the server.
+      layout: z.custom<DashboardLayout>(
+        (value) => typeof value === "object" && value !== null && "placements" in value,
+      ),
+      baseRevision: z.number().int().min(0),
+      currentRevision: z.number().int().min(0),
+      updatedAt: z.string(),
+      expiresAt: z.string(),
+    })
+    .nullable(),
+});
+
+export async function fetchDraft(target: DashboardTarget): Promise<DashboardDraft | null> {
+  const query = target.kind === "home" ? `?homeId=${encodeURIComponent(target.homeId)}` : "";
+  let response: Response;
+  try {
+    response = await fetch(`${DASHBOARD_DRAFT_ENDPOINT}${query}`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    });
+  } catch {
+    throw new DashboardRequestError("network");
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const record = (payload && typeof payload === "object" ? payload : {}) as Record<
+      string,
+      unknown
+    >;
+    throw new DashboardRequestError(failureFor(record.error));
+  }
+  const parsed = draftResponseSchema.safeParse(payload);
+  if (!parsed.success) throw new DashboardRequestError("failed");
+  return parsed.data.draft;
+}
+
+export async function saveDraft(
+  target: DashboardTarget,
+  layout: DashboardLayout,
+  baseRevision: number,
+): Promise<void> {
+  await send("PUT", DASHBOARD_DRAFT_ENDPOINT, { target, layout, baseRevision });
+}
+
+export async function discardDraft(target: DashboardTarget): Promise<void> {
+  await send("DELETE", DASHBOARD_DRAFT_ENDPOINT, { target });
 }
 
 export async function resetDashboard(

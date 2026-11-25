@@ -204,6 +204,7 @@ test("the Chores calendar, moving, reminders, the daily summary and the schedule
   // one to claim; the layout Ward picks is remembered in his browser.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Chore schedule" })

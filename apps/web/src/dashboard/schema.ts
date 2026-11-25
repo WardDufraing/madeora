@@ -19,7 +19,23 @@ export const saveDashboardSchema = z.strictObject({
   /** Checked by `checkLayout`, which needs the registry and the person's Homes. */
   layout: z.unknown(),
   expectedRevision: revision,
+  /**
+   * Done in edit mode (UX2b): discards the person's draft of this dashboard in the same transaction
+   * when the save succeeds. On a conflict the draft stays.
+   */
+  commitDraft: z.boolean().optional(),
 });
+
+/** Autosaves an edit-mode draft (UX2b; decision 6). Never changes the dashboard itself. */
+export const saveDraftSchema = z.strictObject({
+  target: dashboardTargetSchema,
+  /** Checked by `checkLayout`, like a save. */
+  layout: z.unknown(),
+  /** The committed revision the draft started from (0: the starter). */
+  baseRevision: revision,
+});
+
+export const discardDraftSchema = z.strictObject({ target: dashboardTargetSchema });
 
 export const resetDashboardSchema = z.strictObject({
   target: dashboardTargetSchema,

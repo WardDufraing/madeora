@@ -66,13 +66,37 @@ function jsonResponse(status: number, body: unknown): Response {
 /** The templates edit mode loads (GET); answers for the mutations are queued with `answer`. */
 let templateList: unknown[] = [];
 let queued: Response[] = [];
+/** What GET /api/v1/dashboard/draft answers (UX2b). */
+let storedDraft: unknown = null;
+/** What draft autosaves answer. */
+let draftSaveStatus = 200;
+let draftReadStatus = 200;
 function answer(status: number, body: unknown) {
   queued.push(jsonResponse(status, body));
 }
 
-/** The requests that change something, in order (edit mode's template list is left out). */
+function isDraftCall(url: unknown): boolean {
+  return String(url).includes("/api/v1/dashboard/draft");
+}
+
+/**
+ * The requests that change something, in order (edit mode's template list and the draft calls,
+ * checked separately with `draftCalls`, are left out).
+ */
 function mutations() {
-  return fetchMock.mock.calls.filter(([, init]) => init?.method !== undefined);
+  return fetchMock.mock.calls.filter(
+    ([url, init]) => init?.method !== undefined && !isDraftCall(url),
+  );
+}
+
+/** Draft autosaves and discards (UX2b), in order. */
+function draftCalls(method?: string) {
+  return fetchMock.mock.calls.filter(
+    ([url, init]) =>
+      isDraftCall(url) &&
+      init?.method !== undefined &&
+      (method === undefined || init.method === method),
+  );
 }
 
 function sentBody(call = 0): Record<string, unknown> {
@@ -86,13 +110,34 @@ beforeEach(() => {
   fetchMock.mockReset();
   templateList = [];
   queued = [];
-  fetchMock.mockImplementation((_url, init) =>
-    Promise.resolve(
+  storedDraft = null;
+  draftSaveStatus = 200;
+  draftReadStatus = 200;
+  fetchMock.mockImplementation((url, init) => {
+    if (isDraftCall(url)) {
+      if (init?.method === undefined)
+        return Promise.resolve(
+          draftReadStatus === 200
+            ? jsonResponse(200, { draft: storedDraft })
+            : jsonResponse(draftReadStatus, { error: "failed" }),
+        );
+      if (init.method === "PUT") {
+        return Promise.resolve(
+          draftSaveStatus === 200
+            ? jsonResponse(200, { updatedAt: "2026-11-25T10:00:00Z" })
+            : jsonResponse(draftSaveStatus, {
+                error: draftSaveStatus === 403 ? "not-permitted" : "failed",
+              }),
+        );
+      }
+      return Promise.resolve(jsonResponse(200, { discarded: true }));
+    }
+    return Promise.resolve(
       init?.method === undefined
         ? jsonResponse(200, { templates: templateList })
         : (queued.shift() ?? jsonResponse(500, { error: "failed" })),
-    ),
-  );
+    );
+  });
   vi.stubGlobal("fetch", fetchMock);
 });
 afterEach(() => {
@@ -104,6 +149,12 @@ async function openEditor() {
   await user.click(screen.getByRole("button", { name: "Customize" }));
   await screen.findByTestId("dashboard-editor");
   return user;
+}
+
+/** Opens the widget gallery (UX2b) and returns its full catalogue list. */
+async function openGallery(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Add widget" }));
+  return screen.findByTestId("dashboard-catalogue");
 }
 
 describe("DashboardBoard in normal use", () => {
@@ -158,7 +209,7 @@ describe("DashboardBoard edit mode", () => {
     expect(handles).toHaveLength(5);
     const link = screen.getByRole("link", { hidden: true, name: "Content of welcome" });
     expect(link.closest("[inert]")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent("No changes yet.");
   });
 
   it("moves a widget with the keyboard, announces it, and saves the new arrangement", async () => {
@@ -184,13 +235,15 @@ describe("DashboardBoard edit mode", () => {
     expect(second).not.toBe(first);
 
     answer(200, { revision: 1 });
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(refresh).toHaveBeenCalled();
     });
     const body = sentBody();
     expect(body.expectedRevision).toBe(0);
     expect(body.target).toEqual({ kind: "personal" });
+    // Done commits and drops the draft in the same transaction (UX2b).
+    expect(body.commitDraft).toBe(true);
     const sm = (body.layout as DashboardLayout).placements.sm;
     const quick = personalStarterLayout.widgets[1]?.id;
     expect(sm.find((p) => p.id === quick)?.y).toBe(0);
@@ -219,7 +272,7 @@ describe("DashboardBoard edit mode", () => {
     expect(screen.getByText("Hidden")).toBeInTheDocument();
 
     answer(200, { revision: 1 });
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(mutations()).toHaveLength(1);
     });
@@ -243,14 +296,14 @@ describe("DashboardBoard edit mode", () => {
   it("adds a Home widget bound to the chosen Home, labelled with it", async () => {
     renderBoard();
     const user = await openEditor();
-    const catalogue = screen.getByTestId("dashboard-catalogue");
+    const catalogue = await openGallery(user);
     expect(within(catalogue).getByText("Home members · ⁨Thuis⁩")).toBeInTheDocument();
     await user.click(within(catalogue).getByRole("button", { name: "Add Home members · ⁨Thuis⁩" }));
     expect(
       screen.getByRole("button", { name: "Arrange Home members · ⁨Thuis⁩" }),
     ).toBeInTheDocument();
     answer(200, { revision: 1 });
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(mutations()).toHaveLength(1);
     });
@@ -262,16 +315,16 @@ describe("DashboardBoard edit mode", () => {
 
   it("offers tasks both from the Personal space and from a chosen Home", async () => {
     renderBoard();
-    await openEditor();
-    const catalogue = screen.getByTestId("dashboard-catalogue");
+    const user = await openEditor();
+    const catalogue = await openGallery(user);
     expect(within(catalogue).getByRole("button", { name: "Add Personal tasks" })).toBeEnabled();
     expect(within(catalogue).getByRole("button", { name: "Add Tasks · ⁨Thuis⁩" })).toBeEnabled();
   });
 
   it("shows a small decorative preview beside each widget in the picker (S17-L9)", async () => {
     renderBoard();
-    await openEditor();
-    const catalogue = screen.getByTestId("dashboard-catalogue");
+    const user = await openEditor();
+    const catalogue = await openGallery(user);
     const items = within(catalogue).getAllByRole("listitem");
     for (const item of items) {
       const preview = item.querySelector("[data-testid^='widget-preview-']");
@@ -283,17 +336,18 @@ describe("DashboardBoard edit mode", () => {
 
   it("explains that Home widgets need a Home when the person has none", async () => {
     renderBoard({ sourceHomes: [] });
-    await openEditor();
-    const catalogue = screen.getByTestId("dashboard-catalogue");
+    const user = await openEditor();
+    const catalogue = await openGallery(user);
     // Home members, Tasks of a Home, the four chore widgets, Home vacation, the three points
     // widgets (S23), Recipes of a Home (S24), Shopping of a Home (S26), the Meal planner of a
     // Home (S27), Habits and Habit insights of a Home (S28), Habit progress of a Home (S29), and
     // Goals and Goal progress of a Home (S30), Pet care (S31), Upcoming events of a Home (S32), and
     // Photos of a Home (S36).
     expect(within(catalogue).getAllByText(/Join or create a Home/)).toHaveLength(21);
-    expect(within(catalogue).getByRole("button", { name: "Add My Chores" })).toBeDisabled();
-    expect(within(catalogue).getByRole("button", { name: "Add Home members" })).toBeDisabled();
-    expect(within(catalogue).getByRole("button", { name: "Add Tasks" })).toBeDisabled();
+    // Never an action the person cannot perform (decision 7): the reason instead of Add.
+    expect(within(catalogue).queryByRole("button", { name: "Add My Chores" })).toBeNull();
+    expect(within(catalogue).queryByRole("button", { name: "Add Home members" })).toBeNull();
+    expect(within(catalogue).queryByRole("button", { name: "Add Tasks" })).toBeNull();
     expect(within(catalogue).getByRole("button", { name: "Add Personal tasks" })).toBeEnabled();
   });
 
@@ -304,8 +358,8 @@ describe("DashboardBoard edit mode", () => {
       widgets: entriesFor(homeStarterLayout),
       sourceHomes: [],
     });
-    await openEditor();
-    const catalogue = screen.getByTestId("dashboard-catalogue");
+    const user = await openEditor();
+    const catalogue = await openGallery(user);
     expect(within(catalogue).queryByRole("button", { name: "Add Notifications" })).toBeNull();
     expect(within(catalogue).getByRole("button", { name: "Add Home members" })).toBeEnabled();
   });
@@ -323,19 +377,48 @@ describe("DashboardBoard edit mode", () => {
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
     expect(screen.queryByTestId("dashboard-editor")).not.toBeInTheDocument();
     expect(mutations()).toHaveLength(0);
+    // Cancel discards the server draft too (decision 6).
+    await waitFor(() => {
+      expect(draftCalls("DELETE")).toHaveLength(1);
+    });
   });
 
-  it("keeps the draft and offers the latest version after a conflict", async () => {
+  it("keeps the draft after a conflict on Done and lets the person discard it", async () => {
     renderBoard();
     const user = await openEditor();
     screen.getByRole("button", { name: "Arrange Quick actions" }).focus();
     await user.keyboard("{ArrowUp}");
     answer(409, { error: "conflict", revision: 3 });
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/changed elsewhere/);
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/saved elsewhere while you were/);
     expect(screen.getByTestId("dashboard-editor")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Load the latest version" }));
+    await user.click(
+      screen.getByRole("button", { name: "Discard my changes and load the latest" }),
+    );
     expect(refresh).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(draftCalls("DELETE")).toHaveLength(1);
+    });
+  });
+
+  it("replaces the newer version only when the person keeps their draft after a conflict", async () => {
+    renderBoard({ revision: 2 });
+    const user = await openEditor();
+    screen.getByRole("button", { name: "Arrange Quick actions" }).focus();
+    await user.keyboard("{ArrowUp}");
+    answer(409, { error: "conflict", revision: 3 });
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await screen.findByRole("alert");
+    answer(200, { revision: 4 });
+    await user.click(screen.getByRole("button", { name: "Replace it with my version" }));
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(2);
+    });
+    expect(sentBody(0)).toMatchObject({ expectedRevision: 2, commitDraft: true });
+    expect(sentBody(1)).toMatchObject({ expectedRevision: 3, commitDraft: true });
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalled();
+    });
   });
 
   it("resets to the starter layout after confirming what it contains", async () => {
@@ -471,7 +554,7 @@ describe("DashboardBoard edit mode", () => {
     expect(screen.getByRole("button", { name: "Customize" })).toHaveFocus();
   });
 
-  it("moves focus to the catalogue when the last widget is removed", async () => {
+  it("moves focus to Add widget when the last widget is removed", async () => {
     const layout: DashboardLayout = {
       version: 1,
       widgets: personalStarterLayout.widgets.slice(0, 1),
@@ -487,13 +570,240 @@ describe("DashboardBoard edit mode", () => {
     await user.click(
       within(screen.getByTestId("dashboard-selected")).getByRole("button", { name: "Remove" }),
     );
-    expect(screen.getByRole("button", { name: "Add Welcome" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Add widget" })).toHaveFocus();
   });
 
   it("has no axe violations in edit mode", async () => {
     const { container } = renderBoard();
     await openEditor();
     expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+describe("DashboardBoard edit-mode drafts, gallery and list editing (UX2b)", () => {
+  const welcomeOnly: DashboardLayout = {
+    version: 1,
+    widgets: personalStarterLayout.widgets.slice(0, 1),
+    placements: {
+      lg: personalStarterLayout.placements.lg.slice(0, 1),
+      md: personalStarterLayout.placements.md.slice(0, 1),
+      sm: personalStarterLayout.placements.sm.slice(0, 1),
+    },
+  };
+
+  function draftOf(layout: DashboardLayout, baseRevision: number, currentRevision: number) {
+    return {
+      layout,
+      baseRevision,
+      currentRevision,
+      updatedAt: "2026-11-24T09:30:00Z",
+      expiresAt: "2026-12-24T09:30:00Z",
+    };
+  }
+
+  it("autosaves changes as a draft and says so only once the server confirms", async () => {
+    renderBoard({ revision: 4 });
+    const user = await openEditor();
+    expect(draftCalls("PUT")).toHaveLength(0);
+    screen.getByRole("button", { name: "Arrange Quick actions" }).focus();
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent("Unsaved changes");
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent("Draft saved");
+      },
+      { timeout: 3000 },
+    );
+    expect(draftCalls("PUT")).toHaveLength(1);
+    const body = JSON.parse(draftCalls("PUT")[0]?.[1]?.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({ target: { kind: "personal" }, baseRevision: 4 });
+    // The dashboard itself was not touched.
+    expect(mutations()).toHaveLength(0);
+  });
+
+  it("says plainly when an autosave fails, and when no draft can be kept", async () => {
+    draftSaveStatus = 500;
+    renderBoard();
+    const user = await openEditor();
+    screen.getByRole("button", { name: "Arrange Quick actions" }).focus();
+    await user.keyboard("{ArrowUp}");
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent("Save failed");
+      },
+      { timeout: 3000 },
+    );
+    draftSaveStatus = 403;
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent(
+        /A draft can't be kept for you/,
+      );
+    });
+  });
+
+  it("keeps no server draft when the check for an earlier one failed, so none is overwritten", async () => {
+    draftReadStatus = 500;
+    renderBoard();
+    const user = await openEditor();
+    expect(screen.getByText(/Couldn't check for a saved draft/)).toBeInTheDocument();
+    screen.getByRole("button", { name: "Arrange Quick actions" }).focus();
+    await user.keyboard("{ArrowUp}");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(draftCalls("PUT")).toHaveLength(0);
+    expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent(
+      /A draft can't be kept for you/,
+    );
+  });
+
+  it("offers to resume a stored draft, and Done commits it on the revision it started from", async () => {
+    storedDraft = draftOf(welcomeOnly, 4, 4);
+    renderBoard({ revision: 4 });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    const dialog = await screen.findByRole("dialog", { name: "Resume your draft?" });
+    expect(dialog).toHaveTextContent("didn't finish");
+    expect(within(dialog).queryByTestId("dashboard-draft-conflict")).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Resume draft" }));
+    expect(await screen.findByTestId("dashboard-editor")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(1);
+    expect(screen.getByTestId("dashboard-draft-status")).toHaveTextContent("Draft saved");
+    answer(200, { revision: 5 });
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(1);
+    });
+    expect(sentBody()).toMatchObject({ expectedRevision: 4, commitDraft: true });
+    expect((sentBody().layout as DashboardLayout).widgets).toHaveLength(1);
+  });
+
+  it("warns when the dashboard was saved since the draft began, and resuming builds on the newer one", async () => {
+    storedDraft = draftOf(welcomeOnly, 4, 6);
+    renderBoard({ revision: 6 });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    const dialog = await screen.findByRole("dialog", { name: "Resume your draft?" });
+    expect(within(dialog).getByTestId("dashboard-draft-conflict")).toHaveTextContent(
+      /replaces that newer version/,
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Resume draft" }));
+    answer(200, { revision: 7 });
+    await user.click(await screen.findByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(1);
+    });
+    expect(sentBody()).toMatchObject({ expectedRevision: 6, commitDraft: true });
+  });
+
+  it("discards a stored draft and starts from the saved dashboard", async () => {
+    storedDraft = draftOf(welcomeOnly, 4, 4);
+    renderBoard({ revision: 4 });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    const dialog = await screen.findByRole("dialog", { name: "Resume your draft?" });
+    await user.click(within(dialog).getByRole("button", { name: "Discard draft" }));
+    expect(await screen.findByTestId("dashboard-editor")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(5);
+    expect(draftCalls("DELETE")).toHaveLength(1);
+  });
+
+  it("steps back and forward through this session's changes", async () => {
+    renderBoard();
+    const user = await openEditor();
+    const undo = screen.getByRole("button", { name: "Undo" });
+    const redo = screen.getByRole("button", { name: "Redo" });
+    expect(undo).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Arrange Welcome" }));
+    await user.click(
+      within(screen.getByTestId("dashboard-selected")).getByRole("button", { name: "Remove" }),
+    );
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(4);
+    await user.click(undo);
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(5);
+    expect(redo).toBeEnabled();
+    await user.click(redo);
+    expect(screen.getAllByRole("button", { name: /^Arrange / })).toHaveLength(4);
+  });
+
+  it("searches and filters the gallery, recommends missing defaults, and offers single widgets once", async () => {
+    renderBoard();
+    const user = await openEditor();
+    await openGallery(user);
+    const gallery = screen.getByTestId("widget-gallery");
+    const catalogue = within(gallery).getByTestId("dashboard-catalogue");
+    // Quick actions has no settings, so a second copy would show the same thing.
+    expect(within(catalogue).queryByRole("button", { name: "Add Quick actions" })).toBeNull();
+    expect(
+      within(catalogue).getAllByText("Already on this dashboard. This widget can be added once."),
+    ).not.toHaveLength(0);
+    // Everything from the starter is on the dashboard: nothing to recommend.
+    expect(within(gallery).queryByTestId("gallery-recommended")).toBeNull();
+
+    await user.type(within(gallery).getByLabelText("Search widgets"), "habit");
+    const names = within(within(gallery).getByTestId("dashboard-catalogue"))
+      .getAllByTestId("gallery-card")
+      .map((card) => card.getAttribute("data-widget-type"));
+    expect(new Set(names)).toEqual(new Set(["habits", "habit-insights", "habit-progress"]));
+
+    await user.clear(within(gallery).getByLabelText("Search widgets"));
+    await user.click(within(gallery).getByRole("button", { name: "Lifestyle" }));
+    const lifestyle = within(within(gallery).getByTestId("dashboard-catalogue"))
+      .getAllByTestId("gallery-card")
+      .map((card) => card.getAttribute("data-widget-type"));
+    expect(new Set(lifestyle)).toEqual(new Set(["recipes", "shopping", "pet-care", "photos"]));
+  });
+
+  it("recommends a default widget that was removed, and adds it with focus on it", async () => {
+    renderBoard();
+    const user = await openEditor();
+    await user.click(screen.getByRole("button", { name: "Arrange Welcome" }));
+    await user.click(
+      within(screen.getByTestId("dashboard-selected")).getByRole("button", { name: "Remove" }),
+    );
+    await openGallery(user);
+    const recommended = screen.getByTestId("gallery-recommended");
+    await user.click(within(recommended).getByRole("button", { name: "Add Welcome" }));
+    expect(screen.queryByRole("dialog", { name: "Add widget" })).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Arrange Welcome" })).toHaveFocus();
+    });
+  });
+
+  it("arranges the phone layout as a list on the same draft, and applies named sizes", async () => {
+    renderBoard();
+    const user = await openEditor();
+    await user.click(screen.getByRole("button", { name: "List" }));
+    const rows = screen.getAllByTestId("dashboard-stack-row");
+    expect(rows).toHaveLength(5);
+    await user.click(screen.getByRole("button", { name: "Move up: Quick actions" }));
+    const order = screen
+      .getAllByTestId("dashboard-stack-row")
+      .map((row) => row.getAttribute("data-widget-id"));
+    expect(order[0]).toBe(personalStarterLayout.widgets[1]?.id);
+    await user.selectOptions(screen.getByLabelText("Size of Notifications"), "large");
+
+    answer(200, { revision: 1 });
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(1);
+    });
+    const saved = sentBody().layout as DashboardLayout;
+    const quick = personalStarterLayout.widgets[1]?.id;
+    expect(saved.placements.sm.find((p) => p.id === quick)?.y).toBe(0);
+    // Only the phone arrangement changed (decision 25).
+    expect(saved.placements.lg).toEqual(personalStarterLayout.placements.lg);
+    expect(saved.placements.md).toEqual(personalStarterLayout.placements.md);
+    const notifications = personalStarterLayout.widgets[2]?.id;
+    expect(saved.placements.sm.find((p) => p.id === notifications)?.h).toBeGreaterThan(
+      personalStarterLayout.placements.sm.find((p) => p.id === notifications)?.h ?? 0,
+    );
+  });
+
+  it("has no axe violations with the gallery open", async () => {
+    const { container } = renderBoard();
+    const user = await openEditor();
+    await openGallery(user);
+    expect(await axeViolations(container.ownerDocument.body)).toEqual([]);
   });
 });
 

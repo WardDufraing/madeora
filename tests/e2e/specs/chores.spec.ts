@@ -252,9 +252,12 @@ test("the shared chore journey: template, approval from widgets, Home history an
   // The Home dashboard gets the three chore widgets.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   const catalogue = page.getByTestId("dashboard-catalogue");
   await catalogue.getByRole("button", { name: "Add My Chores" }).click();
+  await page.getByTestId("dashboard-add-widget").click();
   await catalogue.getByRole("button", { name: "Add All Home Chores" }).click();
+  await page.getByTestId("dashboard-add-widget").click();
   await catalogue.getByRole("button", { name: "Add Pending Approvals" }).click();
   await page.getByTestId("dashboard-save").click();
   await expect(page.getByTestId("dashboard-editor")).toHaveCount(0);

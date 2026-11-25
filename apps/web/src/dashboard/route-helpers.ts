@@ -119,6 +119,7 @@ export async function persistLayout(
   expectedRevision: number,
   previous: DashboardLayout | null,
   extra: { readonly dropped?: number } = {},
+  options: { readonly commitDraft?: boolean } = {},
 ): Promise<Response> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("save_dashboard", {
@@ -126,6 +127,8 @@ export async function persistLayout(
     p_expected_revision: expectedRevision,
     ...(target.kind === "home" ? { p_home_id: target.homeId } : {}),
     ...(previous ? { p_previous: layoutJson(previous) } : {}),
+    // Done (UX2b): the draft is discarded in the same transaction, and only when the save succeeds.
+    ...(options.commitDraft ? { p_commit_draft: true } : {}),
   });
   if (error) return databaseFailure(event, error);
   return revisionAnswer(event, data[0], extra);

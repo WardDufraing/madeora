@@ -157,6 +157,7 @@ test("shopping lists: live check-off, quick add, add several, categories, moves,
   // The Home dashboard: one Shopping widget combining both lists, with each row's list.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Shopping" })
