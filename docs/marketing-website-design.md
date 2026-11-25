@@ -211,8 +211,8 @@ The user has concluded the first design iteration after Decision 15. When instru
 | 11  | Marketing themes                     | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
 | 12  | Marketing typography                 | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
 | 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
-| 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D) | Confirmed |
-| 15  | Solutions dropdown design | Hybrid premium mega menu with audience links and product storytelling (D) | Confirmed |
+| 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D)                                           | Confirmed |
+| 15  | Solutions dropdown design            | Hybrid premium mega menu with audience links and product storytelling (D)                                   | Confirmed |
 
 ## Update protocol
 
