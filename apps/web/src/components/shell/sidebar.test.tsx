@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { axeViolations } from "@/test/axe";
 import { renderWithIntl } from "@/test/intl";
 
+import { FavoritesProvider } from "./favorites";
 import { Sidebar } from "./sidebar";
 
 const navigation = vi.hoisted(() => ({ pathname: "/" }));
@@ -28,18 +29,15 @@ describe("Sidebar", () => {
 
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = within(nav).getAllByRole("link");
+    // Core destinations, the Personal defaults (nothing pinned yet), All modules, then Settings and Help.
     expect(links.map((link) => link.textContent)).toEqual([
       "Dashboard",
       "Calendar",
       "Tasks",
-      "Chores",
-      "Meals",
       "Shopping",
       "Habits",
       "Goals",
-      "Pets",
-      "Photos",
-      "Integrations",
+      "All modules",
       "Settings",
       "Help",
     ]);
@@ -69,10 +67,45 @@ describe("Sidebar", () => {
   it("keeps every item's name for assistive technology when collapsed", () => {
     renderWithIntl(<Sidebar initialState="collapsed" />);
     const nav = screen.getByRole("navigation", { name: "Main" });
-    for (const name of ["Dashboard", "Pets", "Settings", "Help"]) {
+    for (const name of ["Dashboard", "Shopping", "All modules", "Settings", "Help"]) {
       expect(within(nav).getByRole("link", { name })).toBeInTheDocument();
     }
     expect(screen.getByRole("link", { name: "Madeora, go to the dashboard" })).toBeInTheDocument();
+  });
+
+  it("shows the Home defaults in a Home and the pinned shortcuts once the person chose", () => {
+    navigation.pathname = "/homes/0b1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/tasks";
+    const { unmount } = renderWithIntl(<Sidebar initialState="expanded" />);
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual([
+      "Dashboard",
+      "Calendar",
+      "Tasks",
+      "Chores",
+      "Meals",
+      "Shopping",
+      "All modules",
+      "Settings",
+      "Help",
+    ]);
+    expect(within(nav).getByRole("link", { name: "All modules" })).toHaveAttribute(
+      "href",
+      "/homes/0b1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/modules",
+    );
+    unmount();
+
+    renderWithIntl(
+      <FavoritesProvider initial={["pets"]}>
+        <Sidebar initialState="expanded" />
+      </FavoritesProvider>,
+    );
+    const pinned = screen.getByRole("navigation", { name: "Main" });
+    expect(within(pinned).getByRole("link", { name: "Pets" })).toBeInTheDocument();
+    expect(within(pinned).queryByRole("link", { name: "Chores" })).not.toBeInTheDocument();
   });
 
   it("is translated", () => {

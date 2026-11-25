@@ -133,3 +133,48 @@ export function isActive(target: string, pathname: string): boolean {
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
+
+/** The destinations that stay prominent everywhere (redesign decision 10). Never pinned or unpinned. */
+export const coreNavIds: readonly NavId[] = ["dashboard", "calendar", "tasks"];
+
+/** The modules a person can pin as shortcuts, or find in All modules: everything but core and secondary. */
+export const moduleNav: readonly NavItem[] = primaryNav.filter(
+  (item) => !coreNavIds.includes(item.id),
+);
+
+/** The core destinations, in order. */
+export const coreNav: readonly NavItem[] = primaryNav.filter((item) =>
+  coreNavIds.includes(item.id),
+);
+
+const pinnableIds: ReadonlySet<string> = new Set(moduleNav.map((item) => item.id));
+
+/**
+ * The shortcuts shown until the person pins their own: what a household does daily in a Home,
+ * what a person tracks on their own in Personal. Pinning anything replaces them (decision 10).
+ */
+export function defaultFavorites(homeId: string | null): readonly NavId[] {
+  return homeId !== null ? ["chores", "meals", "shopping"] : ["shopping", "habits", "goals"];
+}
+
+/**
+ * The shortcuts in effect: the person's pinned list (cleaned of anything that cannot be pinned),
+ * or the context's defaults when they never chose.
+ */
+export function resolveFavorites(saved: readonly string[] | null, homeId: string | null): NavId[] {
+  if (saved === null) return [...defaultFavorites(homeId)];
+  const clean = saved.filter((id): id is NavId => pinnableIds.has(id));
+  return [...new Set(clean)];
+}
+
+/** Where All modules lives in the current context. */
+export function modulesHref(homeId: string | null): string {
+  return homeId !== null ? `/homes/${homeId}/modules` : "/modules";
+}
+
+/** Where the quick-create entries lead until each module has its own creation dialog (UX3, UX4, UX6). */
+export function createHref(kind: "task" | "event" | "shopping", homeId: string | null): string {
+  const base = homeId !== null ? `/homes/${homeId}` : "";
+  if (kind === "event") return `${base}/calendar/new`;
+  return `${base}/${kind === "task" ? "tasks" : "shopping"}`;
+}

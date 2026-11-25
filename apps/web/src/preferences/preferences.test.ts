@@ -1,5 +1,8 @@
 import {
+  MAX_FAVORITES,
+  parseFavorites,
   parseSidebar,
+  serializeFavorites,
   parseTheme,
   preferenceCookie,
   themeAttribute,
@@ -38,5 +41,20 @@ describe("device preferences", () => {
       "md-theme=dark; Path=/; Max-Age=31536000; SameSite=Lax; Secure",
     );
     expect(preferenceCookie(THEME_COOKIE, "a;b=c", false)).toContain("md-theme=a%3Bb%3Dc;");
+  });
+});
+
+describe("module shortcuts cookie", () => {
+  it("tells never chose (null) from pinned nothing ([])", () => {
+    expect(parseFavorites(undefined)).toBeNull();
+    expect(parseFavorites("")).toBeNull();
+    expect(parseFavorites(serializeFavorites([]))).toEqual([]);
+  });
+
+  it("round-trips ids, drops junk and duplicates, and caps the count", () => {
+    expect(parseFavorites(serializeFavorites(["pets", "chores"]))).toEqual(["pets", "chores"]);
+    expect(parseFavorites("pets,Pets,../x,pets,a,chores;x")).toEqual(["pets"]);
+    const many = Array.from({ length: 20 }, (_, i) => `mod${"abcdefghijklmnopqrst"[i] ?? "z"}`);
+    expect(parseFavorites(many.join(","))).toHaveLength(MAX_FAVORITES);
   });
 });

@@ -4,10 +4,10 @@ import Link from "next/link";
 
 import { cx } from "@/components/ui/cx";
 
-import type { NavItem } from "./nav-items";
+import type { IconComponent } from "@madeora/icons";
 
 export interface NavLinkProps {
-  readonly item: NavItem;
+  readonly item: { readonly icon: IconComponent };
   /** Where the link leads in the current context (see `contextHref`). */
   readonly href: string;
   readonly label: string;

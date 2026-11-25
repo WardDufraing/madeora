@@ -61,7 +61,7 @@ export function OraTeaser({
     <div
       role="status"
       data-testid="ora-teaser"
-      className="fixed bottom-[max(5rem,calc(env(safe-area-inset-bottom)+4.5rem))] end-4 z-40 flex max-w-xs flex-col gap-2 rounded-card border border-line bg-surface-elevated p-3 text-fg shadow-overlay"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+9rem)] end-4 md:bottom-[max(5rem,calc(env(safe-area-inset-bottom)+4.5rem))] z-40 flex max-w-xs flex-col gap-2 rounded-card border border-line bg-surface-elevated p-3 text-fg shadow-overlay"
     >
       <p className="text-helper">
         {t(`suggestions.${suggestion.kind}`, { count: suggestion.count })}

@@ -1,10 +1,15 @@
 import {
   contextHref,
+  coreNavIds,
+  createHref,
   homeIdFromPath,
   isActive,
   isItemActive,
   isUnbuiltSection,
+  modulesHref,
+  moduleNav,
   primaryNav,
+  resolveFavorites,
   secondaryNav,
   unbuiltSections,
 } from "./nav-items";
@@ -142,5 +147,33 @@ describe("navigation items", () => {
     expect(isActive(`/homes/${HOME}/pets`, `/homes/${HOME}/pets/${HOME}/medical/${HOME}`)).toBe(
       true,
     );
+  });
+});
+
+describe("module shortcuts", () => {
+  it("uses the context defaults until the person chooses", () => {
+    expect(resolveFavorites(null, null)).toEqual(["shopping", "habits", "goals"]);
+    expect(resolveFavorites(null, "h")).toEqual(["chores", "meals", "shopping"]);
+  });
+
+  it("keeps the person's own order and drops anything that cannot be pinned", () => {
+    expect(
+      resolveFavorites(["pets", "tasks", "bogus", "settings", "pets", "chores"], null),
+    ).toEqual(["pets", "chores"]);
+    expect(resolveFavorites([], "h")).toEqual([]);
+  });
+
+  it("never lets core, secondary or unknown ids be pinned", () => {
+    expect(moduleNav.map((item) => item.id)).not.toContain("dashboard");
+    expect(moduleNav.map((item) => item.id)).not.toContain("settings");
+    expect(coreNavIds).toEqual(["dashboard", "calendar", "tasks"]);
+  });
+
+  it("leads All modules and the quick-create entries to the open context", () => {
+    expect(modulesHref(null)).toBe("/modules");
+    expect(modulesHref("h")).toBe("/homes/h/modules");
+    expect(createHref("event", null)).toBe("/calendar/new");
+    expect(createHref("task", "h")).toBe("/homes/h/tasks");
+    expect(createHref("shopping", null)).toBe("/shopping");
   });
 });

@@ -7,12 +7,15 @@ import type { MyHome } from "@/homes/types";
 import type { SidebarState } from "@/preferences/preferences";
 
 import { ContextSwitcher } from "./context-switcher";
+import { FavoritesProvider } from "./favorites";
 import { MobileNav } from "./mobile-nav";
 import { NotificationBell } from "./notification-bell";
 import { Sidebar } from "./sidebar";
 
 export interface AppShellProps {
   readonly sidebar: SidebarState;
+  /** The module shortcuts pinned on this device, `null` until the person chooses (defaults apply). */
+  readonly favorites?: readonly string[] | null;
   /** The Homes the person belongs to, for the context switcher; `null` if they could not be read. */
   readonly homes: readonly MyHome[] | null;
   /** Unread notifications, for the bell (S14). */
@@ -24,12 +27,18 @@ export interface AppShellProps {
  * The signed-in application frame: skip link, sidebar (desktop), top bar with the context
  * switcher slot and the small-screen menu, and the main landmark.
  */
-export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: AppShellProps) {
+export function AppShell({
+  sidebar,
+  favorites = null,
+  homes,
+  unreadNotifications = 0,
+  children,
+}: AppShellProps) {
   const t = useTranslations("Shell");
   const tAccounts = useTranslations("Accounts");
 
   return (
-    <>
+    <FavoritesProvider initial={favorites}>
       <a
         href="#main"
         className="fixed start-3 top-3 z-50 -translate-y-24 rounded-control bg-surface-elevated px-4 py-2 text-body font-semibold text-fg shadow-overlay focus-visible:translate-y-0"
@@ -40,7 +49,6 @@ export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: 
         <Sidebar initialState={sidebar} />
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="relative flex h-16 items-center gap-3 px-4 md:px-8">
-            <MobileNav />
             {/* Personal or one Home (S09); the spec requires a clearly identified Personal
                 context even with zero Homes. */}
             <ContextSwitcher homes={homes} />
@@ -61,6 +69,7 @@ export function AppShell({ sidebar, homes, unreadNotifications = 0, children }: 
           </main>
         </div>
       </div>
-    </>
+      <MobileNav />
+    </FavoritesProvider>
   );
 }

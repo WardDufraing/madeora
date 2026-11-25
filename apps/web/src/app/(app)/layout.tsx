@@ -17,7 +17,7 @@ import { getDevicePreferences } from "@/preferences/server";
 /** Every page in this group needs a confirmed account (each page checks again, see requireIdentity). */
 export default async function AppLayout({ children }: Readonly<{ children: ReactNode }>) {
   const identity = await requireIdentity();
-  const [{ sidebar }, myHomes, stored, unread, reviewDue] = await Promise.all([
+  const [{ sidebar, favorites }, myHomes, stored, unread, reviewDue] = await Promise.all([
     getDevicePreferences(),
     listMyHomes(),
     getStoredPreferences(),
@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       <AppToasts>
         <AppShell
           sidebar={sidebar}
+          favorites={favorites}
           homes={myHomes.status === "ok" ? myHomes.homes : null}
           unreadNotifications={unread}
         >
