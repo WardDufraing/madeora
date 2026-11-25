@@ -1,24 +1,36 @@
 "use client";
 
-import { CloseIcon, MenuIcon } from "@madeora/icons";
+import { CloseIcon, MenuIcon, PlusIcon } from "@madeora/icons";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
+
+import { cx } from "@/components/ui/cx";
+import { Dialog } from "@/components/ui/dialog";
 
 import { NavLink } from "./nav-link";
 import {
   contextHref,
+  coreNav,
+  createHref,
   homeIdFromPath,
   isItemActive,
   primaryNav,
   secondaryNav,
   type NavItem,
 } from "./nav-items";
+import { useScrollHide } from "./use-scroll-hide";
+
+const tabClass =
+  "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-helper transition-colors duration-(--md-duration-fast) hover:bg-accent-subtle";
 
 /**
- * Navigation below the `md` breakpoint: a menu button that opens a drawer on the native
- * `<dialog>`, which traps focus, makes the page inert and handles Escape. Designed for small
- * screens rather than squeezing the desktop sidebar (spec).
+ * Navigation below the `md` breakpoint (redesign decisions 26, 27 and 29): a bottom bar with
+ * Dashboard, Calendar, a central Create action, Tasks and More. More opens the full menu with
+ * every destination on the native `<dialog>`, which traps focus, makes the page inert and handles
+ * Escape. The bar hides while scrolling down and returns on scrolling up, at the top of the page,
+ * when focus is inside it and while a menu is open. The workspace switcher lives in the top bar.
  */
 export function MobileNav() {
   const t = useTranslations("Shell");
@@ -26,9 +38,12 @@ export function MobileNav() {
   const tComponents = useTranslations("Components");
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [focusInside, setFocusInside] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const hidden = useScrollHide(open || createOpen || focusInside);
 
   useEffect(() => {
     const element = dialog.current;
@@ -40,12 +55,13 @@ export function MobileNav() {
     }
   }, [open]);
 
-  // Any navigation closes the menu, including the browser's back button. Adjusted during
-  // render rather than in an effect, so there is no extra render with the menu still open.
+  // Any navigation closes the menus, including the browser's back button. Adjusted during
+  // render rather than in an effect, so there is no extra render with a menu still open.
   const [shownPath, setShownPath] = useState(pathname);
   if (pathname !== shownPath) {
     setShownPath(pathname);
     setOpen(false);
+    setCreateOpen(false);
   }
 
   // A click on the backdrop lands on the dialog element itself; inside the panel it lands on its
@@ -62,20 +78,23 @@ export function MobileNav() {
     };
   }, []);
 
-  // The menu is for small screens only. If the window grows past the breakpoint while it is
+  // The menus are for small screens only. If the window grows past the breakpoint while one is
   // open, the sidebar takes over and the menu closes, so the page is not left inert.
   useEffect(() => {
-    if (!open) return;
+    if (!open && !createOpen) return;
     const wide = window.matchMedia("(min-width: 48rem)");
     function closeIfWide() {
-      if (wide.matches) setOpen(false);
+      if (wide.matches) {
+        setOpen(false);
+        setCreateOpen(false);
+      }
     }
     closeIfWide();
     wide.addEventListener("change", closeIfWide);
     return () => {
       wide.removeEventListener("change", closeIfWide);
     };
-  }, [open]);
+  }, [open, createOpen]);
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>) {
     event.preventDefault();
@@ -101,20 +120,111 @@ export function MobileNav() {
     </ul>
   );
 
+  const createEntries = [
+    { id: "task", label: t("createTask"), href: createHref("task", homeId) },
+    { id: "event", label: t("createEvent"), href: createHref("event", homeId) },
+    { id: "shopping", label: t("createShoppingItem"), href: createHref("shopping", homeId) },
+  ] as const;
+
+  const [dashboard, calendar, tasks] = coreNav;
+  const tabs = (items: readonly (NavItem | undefined)[]) =>
+    items.map((item) => {
+      if (!item) return null;
+      const Icon = item.icon;
+      const active = isItemActive(item, homeId, pathname);
+      return (
+        <li key={item.id} className="flex flex-1">
+          <Link
+            href={contextHref(item, homeId)}
+            aria-current={active ? "page" : undefined}
+            className={cx(tabClass, active ? "font-semibold text-fg" : "text-fg-muted")}
+          >
+            <Icon size="md" />
+            <span>{tNav(item.id)}</span>
+            {/* The current tab is marked by a bar and weight, not by colour alone. */}
+            {active ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-4 top-0 h-1 rounded-full bg-accent forced-colors:bg-[Highlight]"
+              />
+            ) : null}
+          </Link>
+        </li>
+      );
+    });
+
   return (
     <>
-      <button
-        ref={button}
-        type="button"
-        onClick={() => {
-          setOpen(true);
+      <nav
+        aria-label={t("bottomNavigation")}
+        data-hidden={hidden}
+        onFocusCapture={() => {
+          setFocusInside(true);
         }}
-        aria-haspopup="dialog"
-        aria-label={t("openMenu")}
-        className="inline-flex size-10 shrink-0 items-center justify-center rounded-control text-fg-muted hover:bg-accent-subtle hover:text-fg md:hidden"
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setFocusInside(false);
+        }}
+        className={cx(
+          "fixed inset-x-0 bottom-0 z-30 border-t border-line bg-sidebar pb-[env(safe-area-inset-bottom)] shadow-overlay md:hidden",
+          "transition-transform duration-(--md-duration-base) ease-standard",
+          hidden && "translate-y-full",
+        )}
       >
-        <MenuIcon />
-      </button>
+        <ul className="mx-auto flex max-w-xl items-stretch gap-1 px-2 pt-1">
+          {tabs([dashboard, calendar])}
+          <li className="flex flex-1 items-center justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setCreateOpen(true);
+              }}
+              aria-haspopup="dialog"
+              className="inline-flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5 rounded-control bg-accent px-3 text-helper font-semibold text-on-accent shadow-raised hover:bg-accent-hover active:bg-accent-pressed"
+            >
+              <PlusIcon size="md" />
+              <span>{t("createMenu")}</span>
+            </button>
+          </li>
+          {tabs([tasks])}
+          <li className="flex flex-1">
+            <button
+              ref={button}
+              type="button"
+              onClick={() => {
+                setOpen(true);
+              }}
+              aria-haspopup="dialog"
+              className={cx(tabClass, "text-fg-muted")}
+            >
+              <MenuIcon size="md" />
+              <span>{t("moreMenu")}</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <Dialog
+        open={createOpen}
+        onClose={() => {
+          setCreateOpen(false);
+        }}
+        title={t("createMenuTitle")}
+        closeLabel={t("closeCreateMenu")}
+        size="sheet"
+      >
+        <ul className="flex flex-col gap-1">
+          {createEntries.map((entry) => (
+            <li key={entry.id}>
+              <Link
+                href={entry.href}
+                className="flex min-h-12 items-center gap-3 rounded-control px-3 text-body font-medium text-fg hover:bg-accent-subtle"
+              >
+                <PlusIcon size="md" className="text-fg-muted" />
+                {entry.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Dialog>
       <dialog
         ref={dialog}
         aria-labelledby={titleId}
@@ -122,7 +232,6 @@ export function MobileNav() {
         onClose={() => {
           setOpen(false);
         }}
-
         className="m-0 h-dvh max-h-dvh w-72 max-w-[calc(100vw-3rem)] border-e border-line bg-sidebar p-0 text-fg shadow-overlay backdrop:bg-overlay open:animate-enter"
       >
         <div className="flex h-full flex-col gap-4 p-3">

@@ -42,6 +42,33 @@ const navNames = {
   ],
 } as const;
 
+// The desktop sidebar: core destinations, the Personal shortcuts (nothing pinned yet), All modules
+// and the secondary links. The small-screen menu still lists every destination (navNames).
+const sidebarNames = {
+  en: [
+    "Dashboard",
+    "Calendar",
+    "Tasks",
+    "Shopping",
+    "Habits",
+    "Goals",
+    "All modules",
+    "Settings",
+    "Help",
+  ],
+  nl: [
+    "Dashboard",
+    "Agenda",
+    "Taken",
+    "Boodschappen",
+    "Gewoontes",
+    "Doelen",
+    "Alle modules",
+    "Instellingen",
+    "Help",
+  ],
+} as const;
+
 async function setCookies(context: BrowserContext, cookies: Record<string, string>, page: Page) {
   const url = new URL(page.url() === "about:blank" ? "http://127.0.0.1" : page.url());
   await context.addCookies(
@@ -124,7 +151,7 @@ test.describe("desktop sidebar", () => {
       await expect(focused).toHaveAccessibleName(
         state === "expanded" ? "Collapse sidebar" : "Expand sidebar",
       );
-      for (const name of navNames.en) {
+      for (const name of sidebarNames.en) {
         await page.keyboard.press("Tab");
         await expect(focused).toHaveAccessibleName(name);
         await expect(focused).toHaveCSS("outline-style", "solid");
@@ -321,7 +348,7 @@ test.describe("language", () => {
       await page.getByRole("radio", { name: "Nederlands" }).check();
       await expect(page.locator("html")).toHaveAttribute("lang", "nl");
       await expect(page.getByRole("heading", { level: 1, name: "Instellingen" })).toBeVisible();
-      await expect(mainNav(page).getByRole("link")).toHaveText([...navNames.nl]);
+      await expect(mainNav(page).getByRole("link")).toHaveText([...sidebarNames.nl]);
       await expect(page).toHaveTitle("Instellingen · Madeora");
       expect(await stillSamePage(page)).toBe(true);
 
@@ -331,7 +358,7 @@ test.describe("language", () => {
 
       await page.getByRole("radio", { name: "English" }).check();
       await expect(page.locator("html")).toHaveAttribute("lang", "en");
-      await expect(mainNav(page).getByRole("link")).toHaveText([...navNames.en]);
+      await expect(mainNav(page).getByRole("link")).toHaveText([...sidebarNames.en]);
       await page.reload();
       await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
     });
@@ -430,15 +457,73 @@ test.describe("pages", () => {
   });
 });
 
+test.describe("all modules and shortcuts", () => {
+  test.use({ viewport: desktop });
+
+  test("pinning a module adds a shortcut that survives a reload", async ({ page }) => {
+    await page.goto("/");
+    await mainNav(page).getByRole("link", { name: "All modules" }).click();
+    await expect(page).toHaveURL(/\/modules$/);
+    await expect(page.getByRole("heading", { level: 1, name: "All modules" })).toBeVisible();
+    expect(await axeViolations(page)).toEqual([]);
+
+    await expect(mainNav(page).getByRole("link", { name: "Pets" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Pin Pets to shortcuts" }).click();
+    await expect(mainNav(page).getByRole("link", { name: "Pets" })).toBeVisible();
+
+    await page.reload();
+    await expect(mainNav(page).getByRole("link", { name: "Pets" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove Pets from shortcuts" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("search narrows the list of modules", async ({ page }) => {
+    await page.goto("/modules");
+    await page.getByRole("searchbox", { name: "Search modules" }).fill("meal");
+    await expect(page.getByRole("link", { name: "Meals" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Goals" })).toHaveCount(0);
+  });
+});
+
 test.describe("small screens", () => {
   test.use({ viewport: phone });
+
+  test("a bottom bar offers the core destinations, Create and More", async ({ page }) => {
+    await page.goto("/");
+    const bar = page.getByRole("navigation", { name: "Quick navigation" });
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole("listitem")).toHaveText([
+      "Dashboard",
+      "Calendar",
+      "Create",
+      "Tasks",
+      "More",
+    ]);
+    await expect(bar.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(await axeViolations(page)).toEqual([]);
+
+    await bar.getByRole("button", { name: "Create" }).click();
+    const sheet = page.getByRole("dialog", { name: "Create something new" });
+    await expect(sheet.getByRole("link", { name: "New event" })).toHaveAttribute(
+      "href",
+      "/calendar/new",
+    );
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(bar.getByRole("button", { name: "Create" })).toBeFocused();
+  });
 
   test("a menu replaces the sidebar; it traps focus, closes with Escape and returns focus", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(sidebar(page)).toBeHidden();
-    const menuButton = page.getByRole("button", { name: "Open menu" });
+    const menuButton = page.getByRole("button", { name: "More", exact: true });
     await menuButton.click();
 
     const dialog = page.getByRole("dialog", { name: "Menu" });
@@ -466,7 +551,7 @@ test.describe("small screens", () => {
 
   test("choosing a destination navigates and closes the menu", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Open menu" }).click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
     await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: "Tasks" }).click();
     await expect(page).toHaveURL(/\/tasks$/);
     await expect(page.getByRole("dialog")).toBeHidden();
@@ -475,7 +560,7 @@ test.describe("small screens", () => {
 
   test("a click on the backdrop closes the menu", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Open menu" }).click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
     await page.mouse.click(phone.width - 10, phone.height / 2);
     await expect(page.getByRole("dialog")).toBeHidden();
@@ -483,7 +568,7 @@ test.describe("small screens", () => {
 
   test("widening the window to desktop size closes the menu", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Open menu" }).click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
     await page.setViewportSize(desktop);
     await expect(page.getByRole("dialog")).toBeHidden();
@@ -535,7 +620,7 @@ test.describe("right-to-left layout", () => {
   test("the small-screen menu opens from the right", async ({ page }) => {
     await page.setViewportSize(phone);
     await goRtl(page, "/");
-    await page.getByRole("button", { name: "Open menu" }).click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
     // Measure after the enter animation (a slight scale-up) has finished.
     await settle(page);
@@ -567,7 +652,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.setViewportSize(phone);
       await setCookies(context, { "md-theme": theme }, page);
       await page.goto("/calendar");
-      await page.getByRole("button", { name: "Open menu" }).click();
+      await page.getByRole("button", { name: "More", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
       expect(await axeViolations(page)).toEqual([]);
     });

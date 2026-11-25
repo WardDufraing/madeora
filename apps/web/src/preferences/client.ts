@@ -1,6 +1,8 @@
 import {
+  FAVORITES_COOKIE,
   LOCALE_COOKIE,
   preferenceCookie,
+  serializeFavorites,
   SIDEBAR_COOKIE,
   THEME_COOKIE,
   themeAttribute,
@@ -27,6 +29,11 @@ export function saveTheme(theme: ThemePreference): void {
 
 export function saveSidebar(state: SidebarState): void {
   write(SIDEBAR_COOKIE, state);
+}
+
+/** Saves the pinned module shortcuts (device preference, no personal data). */
+export function saveFavorites(ids: readonly string[]): void {
+  write(FAVORITES_COOKIE, serializeFavorites(ids));
 }
 
 /** Saves the language; the caller refreshes the page data so the server renders it. */

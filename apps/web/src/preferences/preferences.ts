@@ -9,6 +9,7 @@
 export const THEME_COOKIE = "md-theme";
 export const SIDEBAR_COOKIE = "md-sidebar";
 export const LOCALE_COOKIE = "md-locale";
+export const FAVORITES_COOKIE = "md-favorites";
 
 export const themePreferences = ["light", "dark", "system"] as const;
 export type ThemePreference = (typeof themePreferences)[number];
@@ -49,4 +50,27 @@ export function preferenceCookie(name: string, value: string, secure: boolean): 
   ];
   if (secure) parts.push("Secure");
   return parts.join("; ");
+}
+
+/** The most module shortcuts a person can pin. */
+export const MAX_FAVORITES = 8;
+
+/** The cookie value for "pinned nothing", so it differs from "never chose" (the context defaults). */
+const NO_FAVORITES = "-";
+
+/**
+ * Pinned module ids from the cookie, or `null` when the person never chose (the context's default
+ * shortcuts apply). Only lower-case words are kept; the caller still checks them against the
+ * modules that can be pinned, so a hand-edited cookie cannot add anything.
+ */
+export function parseFavorites(value: unknown): readonly string[] | null {
+  if (typeof value !== "string" || value === "") return null;
+  if (value === NO_FAVORITES) return [];
+  const ids = value.split(",").filter((id) => /^[a-z]{2,24}$/.test(id));
+  return [...new Set(ids)].slice(0, MAX_FAVORITES);
+}
+
+/** The cookie value for a list of pinned module ids. */
+export function serializeFavorites(ids: readonly string[]): string {
+  return ids.length === 0 ? NO_FAVORITES : ids.slice(0, MAX_FAVORITES).join(",");
 }

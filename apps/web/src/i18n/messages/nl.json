@@ -8,7 +8,6 @@
     "brandLink": "Madeora, naar het dashboard",
     "collapseSidebar": "Zijbalk inklappen",
     "expandSidebar": "Zijbalk uitklappen",
-    "openMenu": "Menu openen",
     "menuTitle": "Menu",
     "currentContext": "Huidige omgeving",
     "personalContext": "Persoonlijk",
@@ -20,7 +19,17 @@
     "createHome": "Een Home aanmaken",
     "joinHome": "Aansluiten bij een Home",
     "notificationsLink": "Meldingen",
-    "notificationsUnread": "Meldingen: {count, plural, one {# ongelezen} other {# ongelezen}}"
+    "notificationsUnread": "Meldingen: {count, plural, one {# ongelezen} other {# ongelezen}}",
+    "shortcuts": "Snelkoppelingen",
+    "allModules": "Alle modules",
+    "bottomNavigation": "Snelle navigatie",
+    "moreMenu": "Meer",
+    "createMenu": "Maken",
+    "createMenuTitle": "Maak iets nieuws",
+    "createTask": "Nieuwe taak",
+    "createEvent": "Nieuwe afspraak",
+    "createShoppingItem": "Boodschap toevoegen",
+    "closeCreateMenu": "Sluiten"
   },
   "Nav": {
     "dashboard": "Dashboard",
@@ -8622,5 +8631,19 @@
     "failInvalid": "Er klopt iets niet. Controleer het en probeer het opnieuw.",
     "failNetwork": "Ik kon Madeora niet bereiken. Je keuzes blijven bewaard; probeer het opnieuw.",
     "failGeneric": "Dat is niet gelukt en er is niets gewijzigd. Je keuzes blijven bewaard; probeer het opnieuw."
+  },
+  "Modules": {
+    "title": "Alle modules",
+    "description": "Alles wat Madeora kan in {context}. Zet de modules die je het meest gebruikt vast in je snelkoppelingen.",
+    "contextPersonal": "je persoonlijke ruimte",
+    "contextHome": "deze Home",
+    "searchLabel": "Modules zoeken",
+    "searchPlaceholder": "Modules zoeken",
+    "noResults": "Geen module past bij “{query}”.",
+    "pin": "{module} vastzetten in snelkoppelingen",
+    "unpin": "{module} uit snelkoppelingen halen",
+    "core": "Altijd in het menu",
+    "others": "Modules",
+    "resultCount": "{count, plural, one {# module} other {# modules}}"
   }
 }

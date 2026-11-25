@@ -5,7 +5,14 @@ import { cookies, headers } from "next/headers";
 import { cache } from "react";
 
 import { getStoredPreferences } from "./account";
-import { parseSidebar, parseTheme, SIDEBAR_COOKIE, THEME_COOKIE } from "./preferences";
+import {
+  FAVORITES_COOKIE,
+  parseFavorites,
+  parseSidebar,
+  parseTheme,
+  SIDEBAR_COOKIE,
+  THEME_COOKIE,
+} from "./preferences";
 import { detectRegionalFormats, regionalTag, resolveRegionalFormats } from "./regional";
 import type { RegionalFormats } from "./schema";
 import { resolveTimeZone, TIMEZONE_COOKIE, type EffectiveTimeZone } from "./timezone";
@@ -16,6 +23,7 @@ export async function getDevicePreferences() {
   return {
     theme: parseTheme(store.get(THEME_COOKIE)?.value),
     sidebar: parseSidebar(store.get(SIDEBAR_COOKIE)?.value),
+    favorites: parseFavorites(store.get(FAVORITES_COOKIE)?.value),
   };
 }
 

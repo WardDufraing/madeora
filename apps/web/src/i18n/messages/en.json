@@ -8,7 +8,6 @@
     "brandLink": "Madeora, go to the dashboard",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
-    "openMenu": "Open menu",
     "menuTitle": "Menu",
     "currentContext": "Current context",
     "personalContext": "Personal",
@@ -20,7 +19,17 @@
     "createHome": "Create a Home",
     "joinHome": "Join a Home",
     "notificationsLink": "Notifications",
-    "notificationsUnread": "Notifications: {count, plural, one {# unread} other {# unread}}"
+    "notificationsUnread": "Notifications: {count, plural, one {# unread} other {# unread}}",
+    "shortcuts": "Shortcuts",
+    "allModules": "All modules",
+    "bottomNavigation": "Quick navigation",
+    "moreMenu": "More",
+    "createMenu": "Create",
+    "createMenuTitle": "Create something new",
+    "createTask": "New task",
+    "createEvent": "New event",
+    "createShoppingItem": "Add a shopping item",
+    "closeCreateMenu": "Close"
   },
   "Nav": {
     "dashboard": "Dashboard",
@@ -8622,5 +8631,19 @@
     "failInvalid": "Something in this does not fit. Check it and try again.",
     "failNetwork": "I could not reach Madeora. Your choices are kept; try again.",
     "failGeneric": "That did not work and nothing was changed. Your choices are kept; try again."
+  },
+  "Modules": {
+    "title": "All modules",
+    "description": "Everything Madeora can do in {context}. Pin the modules you use most to your shortcuts.",
+    "contextPersonal": "your personal space",
+    "contextHome": "this Home",
+    "searchLabel": "Search modules",
+    "searchPlaceholder": "Search modules",
+    "noResults": "No module matches “{query}”.",
+    "pin": "Pin {module} to shortcuts",
+    "unpin": "Remove {module} from shortcuts",
+    "core": "Always in the menu",
+    "others": "Modules",
+    "resultCount": "{count, plural, one {# module} other {# modules}}"
   }
 }
