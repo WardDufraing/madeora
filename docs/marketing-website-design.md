@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–32 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–33 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -340,6 +340,15 @@ Use this exact supporting paragraph beneath the hero headline:
 - Include only verified social accounts and available destinations. Do not include a newsletter signup at this stage.
 - Exact navigation labels, destinations, social channels, wordmark treatment and responsive composition remain open. Use existing Madeora design tokens and brand assets.
 
+### Decision 33 — Mobile navigation (CONFIRMED)
+
+**Selection: D — Full-screen adaptive editorial navigation.**
+
+- Use a full-screen navigation overlay with editorial typography, scrollable content, expandable Features and Solutions categories, direct How it works and Pricing links, and a persistent bottom area for Log in, Get started, language and appearance controls.
+- Share navigation configuration with the desktop header. Include a featured Ora panel where appropriate without duplicating excessive content.
+- Provide accessible focus management, keyboard dismissal, focus restoration, large touch targets, background scroll locking, subtle transitions and reduced-motion support. Close the overlay on navigation.
+- Exact breakpoint, initial expanded state, category labels and featured Ora panel treatment remain open. Use existing design tokens and support both themes.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -402,6 +411,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 30 | Homepage FAQ | Asymmetric editorial FAQ (D) | Confirmed |
 | 31 | Final homepage CTA | Signature Madeora composition (D) | Confirmed |
 | 32 | Website footer | Premium editorial footer (D) | Confirmed |
+| 33 | Mobile navigation | Full-screen adaptive editorial navigation (D) | Confirmed |
 
 ## Update protocol
 
