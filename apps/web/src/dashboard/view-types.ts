@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { BuiltInTemplateId } from "./starter";
-import type { WidgetType } from "./widgets";
+import type { EmptyStateMode, WidgetType } from "./widgets";
 
 /** One widget as the dashboard shows it: rendered on the server, placed by the client (S17). */
 export interface WidgetEntry {
@@ -11,6 +11,11 @@ export interface WidgetEntry {
   /** The source Home's current name (personal dashboard only), shown on every layout. */
   readonly sourceName: string | null;
   readonly body: ReactNode;
+  readonly type: WidgetType;
+  /** The full module view for this widget's context (UX2a menu: "Open"), or null when none fits. */
+  readonly href: string | null;
+  /** What the widget does when empty; `hide` only ever hides it while it is rendered. */
+  readonly emptyState: EmptyStateMode;
   /** Its Home is no longer one the viewer belongs to. */
   readonly unavailable: boolean;
 }

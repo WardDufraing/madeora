@@ -39,7 +39,10 @@ import {
   getChoreSettings,
   listChoreSchedule,
 } from "@/chores/data";
+import { calendarPath } from "@/calendar/format";
 import { choresPath } from "@/chores/format";
+import { habitsPath } from "@/habits/format";
+import { shoppingPath } from "@/shopping/format";
 import {
   loadChoreApprovalsWidget,
   loadChoreWidget,
@@ -47,9 +50,15 @@ import {
   type ChoreWidgetKind,
 } from "@/chores/widget-data";
 import { EmptyState, ErrorState } from "@/components/ui/states";
+import { WidgetDetail, WidgetEmpty } from "./widget-empty";
 import type { DashboardLayout, DashboardWidget } from "@/dashboard/layout";
 import type { WidgetEntry } from "@/dashboard/view-types";
-import { widgetRegistry, type WidgetConfigs } from "@/dashboard/widgets";
+import {
+  emptyStateModeOf,
+  widgetRegistry,
+  type EmptyStateMode,
+  type WidgetConfigs,
+} from "@/dashboard/widgets";
 import { formatDateTime, isolate, type DateTimeFormats } from "@/invitations/format";
 import { getHomeDirectory } from "@/members/directory";
 import { listNotifications } from "@/notifications/server";
@@ -196,7 +205,11 @@ async function NotificationsBody({
   return (
     <div className="flex flex-col gap-3">
       {items.length === 0 ? (
-        <EmptyState title={t("notificationsEmptyTitle")} description={t("notificationsEmpty")} />
+        <WidgetEmpty
+          mode={config.emptyState}
+          title={t("notificationsEmptyTitle")}
+          description={t("notificationsEmpty")}
+        />
       ) : (
         <ol className="flex flex-col gap-2">
           {items.map((item) => (
@@ -214,11 +227,13 @@ async function NotificationsBody({
                     : "",
                 })}
               </p>
-              <p className="text-helper text-fg-muted">
-                <time dateTime={item.createdAt}>
-                  {formatDateTime(item.createdAt, scope.formats)}
-                </time>
-              </p>
+              <WidgetDetail minSize="m">
+                <p className="text-helper text-fg-muted">
+                  <time dateTime={item.createdAt}>
+                    {formatDateTime(item.createdAt, scope.formats)}
+                  </time>
+                </p>
+              </WidgetDetail>
             </li>
           ))}
         </ol>
@@ -375,10 +390,14 @@ async function TasksBody({
   const allHref = `${base}?${taskQueryString(data.query)}`;
   return (
     <div className="flex flex-col gap-3" data-testid="task-widget">
-      <p className="text-helper text-fg-muted" data-testid="task-widget-scope">
-        {data.list ? tWidget("scopeList", { list: isolate(data.list.name) }) : tWidget("scopeAll")}
-        {filters.length > 0 ? ` · ${filters.join(" · ")}` : ` · ${tWidget("noFilters")}`}
-      </p>
+      <WidgetDetail minSize="m">
+        <p className="text-helper text-fg-muted" data-testid="task-widget-scope">
+          {data.list
+            ? tWidget("scopeList", { list: isolate(data.list.name) })
+            : tWidget("scopeAll")}
+          {filters.length > 0 ? ` · ${filters.join(" · ")}` : ` · ${tWidget("noFilters")}`}
+        </p>
+      </WidgetDetail>
       {data.missingLabels > 0 ? (
         <p className="text-helper text-warning">
           {tWidget("labelsMissing", { count: data.missingLabels })}
@@ -388,7 +407,9 @@ async function TasksBody({
         <p className="text-helper text-warning">{tWidget("memberMissing")}</p>
       ) : null}
       {page.tasks.length === 0 ? (
-        <EmptyState
+        <WidgetEmpty
+          // Filtered out is not empty: it keeps its full message so the filters stay explained.
+          mode={data.filtered ? "full" : config.emptyState}
           title={data.filtered ? tWidget("emptyFilteredTitle") : tWidget("emptyTitle")}
           description={data.filtered ? tWidget("emptyFiltered") : tWidget("empty")}
         />
@@ -506,7 +527,11 @@ async function ChoresBody({
         <p className="text-helper text-warning">{tChoreWidget("memberMissing")}</p>
       ) : null}
       {data.rows.length === 0 ? (
-        <EmptyState title={tChoreWidget("emptyTitle")} description={tChoreWidget("empty")} />
+        <WidgetEmpty
+          mode={config.emptyState}
+          title={tChoreWidget("emptyTitle")}
+          description={tChoreWidget("empty")}
+        />
       ) : (
         <ul className="flex flex-col divide-y divide-line">
           {data.rows.map((row) => {
@@ -601,10 +626,12 @@ async function ChoresBody({
 async function ChoreApprovalsBody({
   homeId,
   count,
+  emptyState,
   formats,
 }: {
   readonly homeId: string;
   readonly count: number;
+  readonly emptyState: EmptyStateMode;
   readonly formats: DateTimeFormats;
 }) {
   const [tChoreWidget, tChores, data] = await Promise.all([
@@ -640,7 +667,8 @@ async function ChoreApprovalsBody({
     <div className="flex flex-col gap-3" data-testid="chore-approvals-widget">
       <p className="text-helper text-fg-muted">{tChoreWidget("approvalsScope")}</p>
       {data.approvals.length === 0 ? (
-        <EmptyState
+        <WidgetEmpty
+          mode={emptyState}
           title={tChoreWidget("approvalsEmptyTitle")}
           description={tChoreWidget("approvalsEmpty")}
         />
@@ -817,7 +845,9 @@ function choreConfig<T extends "my-chores" | "home-chores" | "chore-approvals" |
   return (parsed.success ? parsed.data : config.parse({})) as WidgetConfigs[T];
 }
 
-async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<WidgetEntry> {
+type RenderedEntry = Omit<WidgetEntry, "type" | "href" | "emptyState">;
+
+async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<RenderedEntry> {
   const t = await getTranslations("Dashboard");
   const titles = {
     welcome: t("widgetWelcome"),
@@ -847,7 +877,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
     photos: t("widgetPhotos"),
     ora: t("widgetOra"),
   } as const;
-  const unavailable: WidgetEntry = {
+  const unavailable: RenderedEntry = {
     id: widget.id,
     title: t("unavailableTitle"),
     sourceName: null,
@@ -1313,6 +1343,7 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
           <ChoreApprovalsBody
             homeId={homeId}
             count={choreConfig("chore-approvals", widget).count}
+            emptyState={choreConfig("chore-approvals", widget).emptyState}
             formats={scope.formats}
           />
         ) : (
@@ -1337,6 +1368,32 @@ async function entryFor(widget: DashboardWidget, scope: WidgetScope): Promise<Wi
   }
 }
 
+/** The module a widget opens from its menu, for the context its data comes from. */
+function moduleHref(widget: DashboardWidget, scope: WidgetScope): string | null {
+  const homeId = scope.kind === "home" ? scope.home.id : (widget.source?.homeId ?? null);
+  switch (widget.type) {
+    case "notifications":
+      return "/notifications";
+    case "tasks":
+      return tasksPath(homeId);
+    case "my-chores":
+    case "home-chores":
+    case "chore-approvals":
+    case "chore-schedule":
+      return homeId ? choresPath(homeId) : null;
+    case "shopping":
+      return shoppingPath(homeId);
+    case "habits":
+    case "habit-insights":
+    case "habit-progress":
+      return habitsPath(homeId);
+    case "upcoming-events":
+      return calendarPath(homeId);
+    default:
+      return null;
+  }
+}
+
 /** Every widget's title and content, in layout order. */
 export async function renderWidgets(
   layout: DashboardLayout,
@@ -1344,7 +1401,13 @@ export async function renderWidgets(
 ): Promise<WidgetEntry[]> {
   return Promise.all(
     layout.widgets.map(async (widget) => {
-      const entry = await entryFor(widget, scope);
+      const rendered = await entryFor(widget, scope);
+      const entry: WidgetEntry = {
+        ...rendered,
+        type: widget.type,
+        href: rendered.unavailable ? null : moduleHref(widget, scope),
+        emptyState: emptyStateModeOf(widget.type, widget.config),
+      };
       // A hidden widget is never shown in normal use, so its body is not rendered and its data is
       // not read (review S17-L7). Edit mode shows its frame and title without content until the
       // layout that shows it again is saved; the refresh after the save renders it.

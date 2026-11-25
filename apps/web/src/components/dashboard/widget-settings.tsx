@@ -19,6 +19,9 @@ import {
   recipeWidgetModes,
   parseConfig,
   defaultConfig,
+  emptyStateModeOf,
+  emptyStateModes,
+  supportsEmptyState,
   upcomingEventsCounts,
   upcomingEventsDays,
   weeklyPointsViews,
@@ -38,7 +41,37 @@ import { TaskWidgetSettings } from "./task-widget-settings";
  * A widget's own settings in edit mode (S17). Each type's settings come from its registry schema;
  * the server checks them again on save. Changes show in the widget once the dashboard is saved.
  */
-export function WidgetSettings({
+export function WidgetSettings(props: {
+  readonly widget: DashboardWidget;
+  /** The Home the widget's data comes from, or null for the Personal space. */
+  readonly contextHomeId: string | null;
+  readonly onChange: (config: Record<string, unknown>) => void;
+}) {
+  const t = useTranslations("Dashboard");
+  const { widget, onChange } = props;
+  const config = parseConfig(widget.type, widget.config) ?? defaultConfig(widget.type);
+  return (
+    <div className="flex flex-col gap-4">
+      <TypeSettings {...props} />
+      {supportsEmptyState(widget.type) ? (
+        <SelectField
+          label={t("settingEmptyState")}
+          description={t("settingEmptyStateHelp")}
+          value={emptyStateModeOf(widget.type, config)}
+          options={emptyStateModes.map((mode) => ({
+            value: mode,
+            label: t(`settingEmptyState_${mode}`),
+          }))}
+          onChange={(event) => {
+            onChange({ ...config, emptyState: event.currentTarget.value });
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TypeSettings({
   widget,
   contextHomeId,
   onChange,
