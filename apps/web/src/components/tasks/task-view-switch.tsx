@@ -3,10 +3,12 @@ import Link from "next/link";
 
 import { cx } from "@/components/ui/cx";
 import { tasksPath } from "@/tasks/format";
+import { taskViews, viewHref, type TaskView } from "@/tasks/views";
 
 /**
- * List / Calendar (S19c): the calendar is an optional second view of the same tasks; the list stays
- * the default and nothing needs the calendar. `list` keeps the chosen list across the switch.
+ * Today / Upcoming / All tasks / Lists, and the Calendar as a further view of the same tasks
+ * (redesign decision 46, S19c). Today is where the page starts. `list` keeps the chosen list across
+ * the switch to the Calendar and back.
  */
 export async function TaskViewSwitch({
   homeId,
@@ -14,31 +16,42 @@ export async function TaskViewSwitch({
   list,
 }: {
   readonly homeId: string | null;
-  readonly current: "list" | "calendar";
+  readonly current: TaskView | "calendar";
   readonly list?: string | undefined;
 }) {
   const t = await getTranslations("TaskCalendar");
-  const base = tasksPath(homeId);
-  const suffix = list ? `?list=${list}` : "";
-  const item = (view: "list" | "calendar", href: string, label: string) => (
-    <li>
+  const tTasks = await getTranslations("Tasks");
+  const label: Record<TaskView, string> = {
+    today: tTasks("viewToday"),
+    upcoming: tTasks("viewUpcoming"),
+    all: tTasks("viewAll"),
+    lists: tTasks("viewLists"),
+  };
+  const item = (view: TaskView | "calendar", href: string, text: string) => (
+    <li key={view}>
       <Link
         href={href}
         aria-current={current === view ? "page" : undefined}
         className={cx(
-          "inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium",
-          current === view ? "bg-accent-subtle text-fg" : "text-accent-fg underline",
+          "press-feedback inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium",
+          current === view
+            ? "bg-accent-subtle font-semibold text-fg shadow-selected"
+            : "text-fg-muted hover:bg-accent-subtle hover:text-fg",
         )}
       >
-        {label}
+        {text}
       </Link>
     </li>
   );
   return (
     <nav aria-label={t("viewSwitch")} className="mb-4" data-testid="task-view-switch">
-      <ul className="flex flex-wrap gap-2">
-        {item("list", `${base}${suffix}`, t("viewList"))}
-        {item("calendar", `${base}/calendar${suffix}`, t("viewCalendar"))}
+      <ul className="flex flex-wrap gap-1">
+        {taskViews.map((view) => item(view, viewHref(homeId, view, { list }), label[view]))}
+        {item(
+          "calendar",
+          `${tasksPath(homeId)}/calendar${list ? `?list=${list}` : ""}`,
+          t("viewCalendar"),
+        )}
       </ul>
     </nav>
   );

@@ -32,6 +32,8 @@ export const TASKS_ENDPOINT = "/api/v1/tasks";
 export const SUBTASKS_ENDPOINT = "/api/v1/subtasks";
 export const TASK_COMMENTS_ENDPOINT = "/api/v1/task-comments";
 export const TASK_LISTS_ENDPOINT = "/api/v1/task-lists";
+/** UX4a: creates a list and its first task together, after the person confirmed the list. */
+export const TASK_LIST_WITH_TASK_ENDPOINT = "/api/v1/task-lists/with-first-task";
 export const TASK_LABELS_ENDPOINT = "/api/v1/task-labels";
 export const TASK_TEMPLATES_ENDPOINT = "/api/v1/task-templates";
 export const BULK_ENDPOINT = "/api/v1/tasks/bulk";

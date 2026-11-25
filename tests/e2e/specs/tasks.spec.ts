@@ -52,16 +52,19 @@ async function addTask(
   title: string,
   extra: (page: Page) => Promise<void> = async () => {},
 ) {
-  // The form stays open after adding a task, ready for the next one.
-  const open = page.getByTestId("new-task-open");
+  // + New Task opens the quick form in a dialog; "More options" holds labels and assignees.
   const form = page.getByTestId("new-task-form");
-  await expect(open.or(form)).toBeVisible();
-  if (await open.isVisible()) await open.click();
+  if (!(await form.isVisible())) await page.getByTestId("new-task-open").click();
   await page.getByLabel("Title").fill(title);
   await extra(page);
   await page.getByRole("button", { name: "Add task" }).click();
+  await expect(page.getByTestId("task-added")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(form).toBeHidden();
   await expect(page.getByTestId("task-row").filter({ hasText: title })).toBeVisible();
 }
+
+const moreOptions = (page: Page) => page.getByTestId("task-more-options").click();
 
 test("personal tasks: lists, create, labels, subtasks, comment, complete, delete and restore", async ({
   page,
@@ -90,6 +93,7 @@ test("personal tasks: lists, create, labels, subtasks, comment, complete, delete
   await page.getByRole("link", { name: "Back to tasks" }).click();
   await expect(page).toHaveURL(/\/tasks$/);
   await addTask(page, "Buy bulbs", async (p) => {
+    await moreOptions(p);
     await p.getByLabel("Due date").fill("2026-10-10");
     await p.getByLabel("Priority").selectOption("high");
     await p.getByTestId("new-task-form").getByRole("checkbox", { name: "Shop" }).check();
@@ -100,13 +104,18 @@ test("personal tasks: lists, create, labels, subtasks, comment, complete, delete
   await expect(row).toContainText("Shop");
   expect(await axeViolations(page)).toEqual([]);
 
-  // Filter by label, then clear.
+  // Filter by label (All tasks view), then clear.
+  await page.getByTestId("task-view-switch").getByRole("link", { name: "All tasks" }).click();
   await page.getByTestId("task-filters").getByRole("checkbox", { name: "Shop" }).check();
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByTestId("task-row")).toHaveCount(1);
   await page.getByRole("link", { name: "Clear filters" }).click();
 
+  // A row opens the side panel beside the list; "Open full page" goes to the task page.
   await row.getByRole("link", { name: "Buy bulbs" }).click();
+  await expect(page.getByTestId("task-panel")).toBeVisible();
+  await expect(page.getByTestId("task-row")).toHaveCount(1);
+  await page.getByRole("link", { name: "Open full page" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Buy bulbs" })).toBeVisible();
   await page.getByTestId("subtask-new").fill("Measure the socket");
   await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -164,6 +173,7 @@ test("Home tasks: assign, shared completion, rights of a plain member, and priva
   await createList(page, base, "Kitchen");
   await page.goto(base);
   await addTask(page, "Fix the tap", async (p) => {
+    await moreOptions(p);
     await p.getByRole("checkbox", { name: "You" }).check();
     await p.getByRole("checkbox", { name: "Bea" }).check();
   });
@@ -183,14 +193,16 @@ test("Home tasks: assign, shared completion, rights of a plain member, and priva
     .filter({ hasText: "Fix the tap" })
     .getByRole("checkbox", { name: "Completed: Fix the tap" })
     .check();
-  await expect(bea.page.getByTestId("task-list").getByTestId("live-region")).toContainText(
-    "Fix the tap",
-  );
+  await expect(
+    bea.page.getByTestId("live-region").filter({ hasText: "Fix the tap" }),
+  ).toBeVisible();
 
   // Ward sees one shared completion by Bea, not by every assignee.
   await page.goto(base + "?status=all");
   await page.getByTestId("task-row").filter({ hasText: "Fix the tap" }).getByRole("link").click();
   await expect(page.getByTestId("task-status")).toContainText("Completed by Bea");
+  await page.getByRole("link", { name: "Open full page" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Fix the tap" })).toBeVisible();
   const taskUrl = page.url();
 
   // The member without rights: read-only, and a forged request is refused by the server.
@@ -204,7 +216,7 @@ test("Home tasks: assign, shared completion, rights of a plain member, and priva
   await expect(bea.page.getByTestId("task-complete")).toHaveCount(0);
   await expect(bea.page.getByTestId("task-delete")).toHaveCount(0);
   await expect(bea.page.getByTestId("task-assignees-edit")).toHaveCount(0);
-  const ovenId = bea.page.url().split("/").at(-1) ?? "";
+  const ovenId = new URL(bea.page.url()).searchParams.get("task") ?? "";
   const forged = await bea.page.evaluate(async (id) => {
     const response = await fetch(`/api/v1/tasks/${id}/completion`, {
       method: "PUT",
@@ -317,8 +329,9 @@ for (const scheme of ["light", "dark"] as const) {
     expect(await axeViolations(page)).toEqual([]);
     await page.goto("/tasks");
 
-    // Open the form, type and add with the keyboard only.
-    await page.getByTestId("new-task-open").focus();
+    // Open the dialog, type and add with the keyboard only.
+    const opener = page.getByTestId("new-task-open");
+    await opener.focus();
     await page.keyboard.press("Enter");
     await expect(page.getByLabel("Title")).toBeFocused();
     await page.keyboard.type("Water the plants");
@@ -327,19 +340,23 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(row).toBeVisible();
     await expect(page.getByLabel("Title")).toBeFocused();
     expect(await axeViolations(page)).toEqual([]);
+    // Escape closes the dialog and returns focus to + New Task.
+    await page.keyboard.press("Escape");
+    await expect(opener).toBeFocused();
 
-    // Tick it with Space; focus stays on the list, which says what happened.
+    // Tick it with Space; the row stays where it is, so focus stays on its checkbox.
     await row.getByRole("checkbox").focus();
     await page.keyboard.press("Space");
-    await expect(page.getByTestId("task-list").getByRole("heading")).toBeFocused();
-    await expect(page.getByTestId("task-list").getByTestId("live-region")).toContainText(
-      "Water the plants",
-    );
+    await expect(row.getByRole("checkbox")).toBeFocused();
+    await expect(
+      page.getByTestId("live-region").filter({ hasText: "Water the plants" }),
+    ).toBeVisible();
 
+    // Enter on a row opens the side panel; focus moves to its title.
     await page.goto("/tasks?status=all");
     await page.getByTestId("task-row").getByRole("link").focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { level: 1, name: "Water the plants" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Water the plants" })).toBeFocused();
     await page.getByTestId("subtask-new").focus();
     await page.keyboard.type("Kitchen");
     await page.keyboard.press("Enter");

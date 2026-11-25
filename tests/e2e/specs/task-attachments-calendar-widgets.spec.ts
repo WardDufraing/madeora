@@ -76,13 +76,14 @@ async function addTask(
   title: string,
   extra: (page: Page) => Promise<void> = async () => {},
 ) {
-  const open = page.getByTestId("new-task-open");
   const form = page.getByTestId("new-task-form");
-  await expect(open.or(form)).toBeVisible();
-  if (await open.isVisible()) await open.click();
+  if (!(await form.isVisible())) await page.getByTestId("new-task-open").click();
   await page.getByLabel("Title").fill(title);
   await extra(page);
   await page.getByRole("button", { name: "Add task" }).click();
+  await expect(page.getByTestId("task-added")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(form).toBeHidden();
   await expect(page.getByTestId("task-row").filter({ hasText: title })).toBeVisible();
 }
 
@@ -129,6 +130,7 @@ test("Home task attachments: add, preview, download, refuse strangers, remove an
     .filter({ hasText: "Renew the lease" })
     .getByRole("link")
     .click();
+  await page.getByRole("link", { name: "Open full page" }).click();
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
   const taskUrl = page.url();
   await expect(page.getByTestId("attachment-count")).toHaveText("0 of 10");
@@ -253,7 +255,10 @@ test("tasks widget and calendar: filter, complete from the widget and from a day
   await expect(page.getByTestId("calendar-day")).toHaveCount(7);
   await page.getByRole("link", { name: "Next week" }).click();
   await expect(page.locator(`[data-testid="calendar-day"][data-date="${today}"]`)).toHaveCount(0);
-  await page.getByRole("link", { name: "Today", exact: true }).click();
+  await page
+    .getByLabel("Calendar navigation")
+    .getByRole("link", { name: "Today", exact: true })
+    .click();
   await expect(page.locator(`[data-testid="calendar-day"][data-date="${today}"]`)).toHaveCount(1);
 });
 

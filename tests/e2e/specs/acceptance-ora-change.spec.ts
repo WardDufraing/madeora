@@ -38,7 +38,7 @@ test("Ora change: preview, edit, confirm, result and Undo for an added and a com
   await page.getByTestId("list-new").fill("Errands");
   await page.getByRole("button", { name: "Create list" }).click();
   await expect(page.getByTestId("manage-list").filter({ hasText: "Errands" })).toBeVisible();
-  await page.goto("/tasks");
+  await page.goto("/tasks?view=all");
   await expect(page.getByTestId("task-row")).toHaveCount(0);
 
   // 1. Ask for help: the guided "Add a task" with an editable preview that saves nothing yet.
@@ -57,7 +57,7 @@ test("Ora change: preview, edit, confirm, result and Undo for an added and a com
 
   // Nothing is saved before the confirm: a second tab sees no task yet.
   const other = await page.context().newPage();
-  await other.goto("/tasks");
+  await other.goto("/tasks?view=all");
   await expect(other.getByTestId("task-row")).toHaveCount(0);
 
   // 2. Review and edit once more, then confirm with the action-named button.

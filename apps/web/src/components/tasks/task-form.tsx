@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -83,6 +83,13 @@ export interface TaskFormProps {
   /** S19: offers the repeat fields (creating only); the date format is for their summary. */
   readonly repeatable?: boolean;
   readonly dateFormat?: DateFormat;
+  /**
+   * Redesign decision 55: start with the essentials (title, list, due date, priority) and a
+   * "More options" button that reveals the rest. Values already typed are kept either way.
+   */
+  readonly quick?: boolean;
+  /** A field shown after the title, e.g. the name of the first list when there is none yet. */
+  readonly extraField?: ReactNode;
 }
 
 type FormError = TaskFieldError | "repeatNeedsDue" | "repeatOffset";
@@ -116,8 +123,12 @@ export function TaskForm({
   focusTitle = false,
   repeatable = false,
   dateFormat = "ymd-dash",
+  quick = false,
+  extraField,
 }: TaskFormProps) {
   const t = useTranslations("Tasks");
+  const [showAll, setShowAll] = useState(!quick);
+  const [revealed, setRevealed] = useState(false);
   const hydrated = useHydrated();
   const form = useForm<TaskFormInput, unknown, TaskFormOutput>({
     resolver: zodResolver(formSchema),
@@ -126,12 +137,47 @@ export function TaskForm({
   const errors = form.formState.errors;
   const dueDate = useWatch({ control: form.control, name: "dueDate" });
   useEffect(() => {
-    if (focusTitle) form.setFocus("title");
+    if (!focusTitle) return;
+    // One frame later: inside a dialog, the browser focuses its first control when the dialog opens,
+    // which happens after this form has mounted.
+    const frame = requestAnimationFrame(() => {
+      form.setFocus("title");
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [focusTitle, form]);
+  // "More options" removes its button: focus moves to the first field it reveals.
+  useEffect(() => {
+    if (revealed) form.setFocus("description");
+  }, [revealed, form]);
   const message = (error: { readonly message?: string | undefined } | undefined) => {
     const key = error?.message as FormError | undefined;
     return key && key in fieldErrorKey ? t(fieldErrorKey[key]) : undefined;
   };
+
+  const priority = (
+    <SelectField
+      label={t("fieldPriority")}
+      options={[
+        { value: "", label: t("priorityUnset") },
+        ...taskPriorities.map((value: TaskPriority) => ({
+          value,
+          label: t(
+            (
+              {
+                low: "priorityLow",
+                normal: "priorityNormal",
+                high: "priorityHigh",
+                urgent: "priorityUrgent",
+              } as const
+            )[value],
+          ),
+        })),
+      ]}
+      {...form.register("priority")}
+    />
+  );
 
   return (
     <form
@@ -150,64 +196,67 @@ export function TaskForm({
         error={message(errors.title)}
         {...form.register("title")}
       />
+      {extraField}
       {mode === "create" && lists.length > 0 ? (
         <SelectField
           label={t("fieldList")}
-          description={t("fieldListHelp")}
+          {...(showAll ? { description: t("fieldListHelp") } : {})}
           options={lists.map((list) => ({ value: list.id, label: list.name }))}
           {...form.register("listId")}
         />
       ) : null}
-      <TextArea
-        label={t("fieldDescription")}
-        rows={3}
-        error={message(errors.description)}
-        {...form.register("description")}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          type="date"
-          label={t("fieldStartDate")}
-          description={t("fieldStartDateHelp")}
-          error={message(errors.startDate)}
-          {...form.register("startDate")}
+      {showAll ? (
+        <TextArea
+          label={t("fieldDescription")}
+          rows={3}
+          error={message(errors.description)}
+          {...form.register("description")}
         />
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {showAll ? (
+          <TextField
+            type="date"
+            label={t("fieldStartDate")}
+            description={t("fieldStartDateHelp")}
+            error={message(errors.startDate)}
+            {...form.register("startDate")}
+          />
+        ) : null}
         <TextField
           type="date"
           label={t("fieldDueDate")}
-          description={t("fieldDueDateHelp")}
+          {...(showAll ? { description: t("fieldDueDateHelp") } : {})}
           error={message(errors.dueDate)}
           {...form.register("dueDate")}
         />
+        {priority}
       </div>
-      <SelectField
-        label={t("fieldPriority")}
-        options={[
-          { value: "", label: t("priorityUnset") },
-          ...taskPriorities.map((priority: TaskPriority) => ({
-            value: priority,
-            label: t(
-              (
-                {
-                  low: "priorityLow",
-                  normal: "priorityNormal",
-                  high: "priorityHigh",
-                  urgent: "priorityUrgent",
-                } as const
-              )[priority],
-            ),
-          })),
-        ]}
-        {...form.register("priority")}
-      />
-      <Controller
-        control={form.control}
-        name="labelIds"
-        render={({ field }) => (
-          <LabelPicker labels={labels} value={field.value} onChange={field.onChange} />
-        )}
-      />
-      {mode === "create" && repeatable ? (
+      {!showAll ? (
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setShowAll(true);
+              setRevealed(true);
+            }}
+            data-testid="task-more-options"
+          >
+            {t("moreOptions")}
+          </Button>
+        </div>
+      ) : null}
+      {showAll ? (
+        <Controller
+          control={form.control}
+          name="labelIds"
+          render={({ field }) => (
+            <LabelPicker labels={labels} value={field.value} onChange={field.onChange} />
+          )}
+        />
+      ) : null}
+      {showAll && mode === "create" && repeatable ? (
         <Controller
           control={form.control}
           name="repeat"
@@ -232,7 +281,7 @@ export function TaskForm({
           }}
         />
       ) : null}
-      {mode === "create" && members.length > 0 ? (
+      {showAll && mode === "create" && members.length > 0 ? (
         <Controller
           control={form.control}
           name="assigneeIds"
