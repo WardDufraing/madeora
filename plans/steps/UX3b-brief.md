@@ -10,7 +10,7 @@ Create and cancel without leaving the calendar (view, date, filters, scroll kept
 
 - `calendar-client.tsx`: `CalendarClient` (one new-event `Dialog`, large, full screen below `sm`, unsaved-changes question) plus `NewEventButton` and `AddOnDayButton`. Both are real links to `/calendar/new?date=`; a plain click opens the dialog, a modified click or no JavaScript uses the page.
 - `event-form.tsx`: optional `onDone`, `onCancel`, `onDirtyChange` (page behaviour unchanged when absent). New personal events get a **work period** checkbox (hidden for Home events and Google targets; hides sharing; sends `workPeriod: true, shares: []`). "This and following" now sends the series' own `workPeriod` (the UX3a known gap).
-- `event-preview.tsx`: event chips are links that open a preview: anchored panel on wide screens (kept inside the viewport, closes on Escape/outside click/scroll, focus returns), bottom sheet below 40rem. It shows the time, place and notes from the list at once; "More details" reads the event with the viewer's session (`GET /api/v1/calendar/events/:id`) for repeat, reminder, participants and description; **Edit appears only when that read says `canEdit`**. Google events have no read endpoint: preview plus "Open full page" only.
+- `event-preview.tsx`: event chips are links that open a preview: anchored panel on wide screens (kept inside the viewport, closes on Escape/outside click/scroll, focus returns), bottom sheet below 40rem. It shows the time, place and notes from the list at once; the event is read as soon as the preview opens (one GET per open) and "More details" shows it: the viewer's session (`GET /api/v1/calendar/events/:id`) for repeat, reminder, participants and description; **Edit appears only when that read says `canEdit`**. Google events have no read endpoint: preview plus "Open full page" only.
 - `calendar-view.tsx`: borderless month/week grid (hairline above each week, weekend tone, round today marker, hover "+" per day); work periods first in each day, tinted with a dashed edge and the word "Work" (not colour alone); `?work=0` hides them (link in the Personal calendar, kept across navigation via `calendarHref`).
 - `event-pages.tsx`: `calendarCreateData` gives the dialog the new-event page's own data.
 - i18n: 15 Calendar keys in en and nl.
@@ -27,6 +27,10 @@ Create and cancel without leaving the calendar (view, date, filters, scroll kept
 ## Tests
 
 `calendar-redesign.test.tsx` (10): dialog open/save/close without `router.push`, prefill from a day, discard question and keep, no dialog without create right, work period payload (unshared), preview content and axe, Edit only when `canEdit`, Escape and focus return, Google event not read, work label. `format.test.ts`: `work=0` in the address. Local: those plus the whole `components/calendar`, `calendar` and `i18n` suites (79 pass), tsc, eslint, prettier. Full suite on CI.
+
+## Review (reviews/steps/UX3b-review.md) and fixes
+
+First verdict CHANGES_REQUIRED (0 BLOCKER, 1 HIGH, 6 MEDIUM, 10 LOW). Fixed: H1 e2e steps now go through the preview (`event-peek-*` ids, also asserts Escape and no Edit for Bea); M1 focus moves in once the panel is visible; M2 Close returns focus, Tab-out closes; M3 work periods list last in month cells (first in lists); M4 tests for "this and following" flag, no box on edit, narrow sheet; M5 date shown in the preview; L1 ids renamed, L2 no retries, L8 import order. Left as noted: M6 defaults 1-3 await Ward; L3-L7, L9, L10 (weekend days fixed Sat/Sun, 42 tab stops, one extra server read, no save toast, whole name map, per-chip matchMedia) are low and accepted.
 
 ## Rollback
 

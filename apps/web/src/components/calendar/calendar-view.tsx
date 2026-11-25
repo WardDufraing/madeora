@@ -14,7 +14,6 @@ import {
 } from "@/calendar/format";
 import { calendarPageQuerySchema, calendarViews, type CalendarView } from "@/calendar/schema";
 import type { Occurrence, VacationBanner } from "@/calendar/shapes";
-import { calendarCreateData } from "./event-pages";
 import { GoogleWarnings } from "@/components/google-calendar/google-warnings";
 import { PageHeader } from "@/components/shell/page-header";
 import { settingsPath as googleSettingsPath } from "@/google-calendar/schema";
@@ -35,6 +34,7 @@ import { formatTaskDate, tasksPath } from "@/tasks/format";
 
 import { AddOnDayButton, CalendarClient, NewEventButton } from "./calendar-client";
 import { CalendarToggles } from "./calendar-toggles";
+import { calendarCreateData } from "./event-pages";
 import { EventPreview } from "./event-preview";
 
 export interface CalendarViewProps {
@@ -184,10 +184,11 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
     />
   );
   const overlayLabel = { task: t("overlayTask"), chore: t("overlayChore") } as const;
-  const entriesOn = (date: string): ReactNode[] => [
-    // Work periods come first: they are the quiet background of the day.
+  const entriesOn = (date: string, workFirst = true): ReactNode[] => [
+    // Work periods are the quiet background of the day: first in lists, last in a month cell,
+    // so they never push real events into "+N more".
     ...[...(byDate.get(date) ?? [])]
-      .sort((a, b) => Number(b.workPeriod) - Number(a.workPeriod))
+      .sort((a, b) => (Number(b.workPeriod) - Number(a.workPeriod)) * (workFirst ? 1 : -1))
       .map((occurrence) => item(occurrence, date)),
     ...(overlays.get(date) ?? []).map((entry) => (
       <OverlayItem key={entry.key} entry={entry} label={overlayLabel[entry.kind]} />
@@ -463,6 +464,13 @@ async function OccurrenceItem({
     source: occurrence.source,
     title: occurrence.title,
     when,
+    dateLabel:
+      occurrence.from === occurrence.to
+        ? formatTaskDate(occurrence.from, formats)
+        : t("range", {
+            from: formatTaskDate(occurrence.from, formats),
+            to: formatTaskDate(occurrence.to, formats),
+          }),
     location: occurrence.location,
     notes,
     workPeriod: occurrence.workPeriod,
@@ -558,7 +566,7 @@ async function MonthGrid({
   readonly window: CalendarViewWindow;
   readonly today: string;
   /** A day's events, then its tasks and chores. */
-  readonly entriesOn: (date: string) => ReactNode[];
+  readonly entriesOn: (date: string, workFirst?: boolean) => ReactNode[];
   readonly banners: readonly VacationBanner[];
   readonly bannerLabel: (banner: VacationBanner) => string;
   readonly homeId: string | null;
@@ -618,7 +626,7 @@ async function MonthGrid({
               )),
               <tr key={week[0]}>
                 {week.map((date) => {
-                  const entries = entriesOn(date);
+                  const entries = entriesOn(date, window.view !== "month");
                   const shown =
                     window.view === "month" ? entries.slice(0, MONTH_CELL_ENTRIES) : entries;
                   const outside = window.view === "month" && !inMonth(date, window.anchor);

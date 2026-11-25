@@ -8,6 +8,7 @@ import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
 
 import { AddOnDayButton, CalendarClient, NewEventButton } from "./calendar-client";
+import { EventForm } from "./event-form";
 import { EventPreview, type EventPreviewProps } from "./event-preview";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn(), back: vi.fn() }));
@@ -146,6 +147,7 @@ const preview: Omit<EventPreviewProps, "children"> = {
   source: "madeora",
   title: "Dentist",
   when: "09:00–10:00",
+  dateLabel: "17/11/2026",
   location: "Main street 1",
   notes: ["Repeats"],
   workPeriod: false,
@@ -175,17 +177,17 @@ describe("the event preview", () => {
     expect(trigger).toHaveAttribute("href", preview.href);
     await user.click(trigger);
     const panel = await screen.findByRole("dialog", { name: "Dentist" });
-    expect(within(panel).getByText("09:00–10:00")).toBeVisible();
+    expect(within(panel).getByText(/17\/11\/2026 · 09:00–10:00/)).toBeVisible();
     expect(within(panel).getByText(/Main street 1/)).toBeVisible();
     expect(await axeViolations(container)).toEqual([]);
-    await user.click(within(panel).getByTestId("event-preview-more"));
+    await user.click(within(panel).getByTestId("event-peek-more"));
     expect(await within(panel).findByTestId("event-more")).toBeVisible();
     // Edit appears only once the event says the person may edit it.
-    expect(await within(panel).findByTestId("event-preview-edit")).toHaveAttribute(
+    expect(await within(panel).findByTestId("event-peek-edit")).toHaveAttribute(
       "href",
       expect.stringContaining(`/events/${EVENT}/edit`),
     );
-    expect(within(panel).getByTestId("event-preview-open")).toHaveAttribute("href", preview.href);
+    expect(within(panel).getByTestId("event-peek-open")).toHaveAttribute("href", preview.href);
   });
 
   it("offers no Edit on an event the person may not edit", async () => {
@@ -194,12 +196,12 @@ describe("the event preview", () => {
     open();
     await user.click(screen.getByRole("link", { name: "Dentist" }));
     const panel = await screen.findByRole("dialog", { name: "Dentist" });
-    await user.click(within(panel).getByTestId("event-preview-more"));
+    await user.click(within(panel).getByTestId("event-peek-more"));
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
     await within(panel).findByTestId("event-more");
-    expect(within(panel).queryByTestId("event-preview-edit")).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId("event-peek-edit")).not.toBeInTheDocument();
   });
 
   it("closes with Escape and returns focus to the event", async () => {
@@ -225,7 +227,7 @@ describe("the event preview", () => {
     );
     await user.click(screen.getByRole("link", { name: "Dentist" }));
     const panel = await screen.findByRole("dialog", { name: "Dentist" });
-    expect(within(panel).queryByTestId("event-preview-more")).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId("event-peek-more")).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -241,5 +243,98 @@ describe("the event preview", () => {
     await user.click(screen.getByRole("link", { name: "Work" }));
     const panel = await screen.findByRole("dialog", { name: "Dentist" });
     expect(within(panel).getByText("Work", { selector: "p" })).toBeVisible();
+  });
+});
+
+describe("a work series", () => {
+  const work = eventDetail({
+    homeId: null,
+    kind: "personal",
+    shares: [],
+    series: { ...eventDetail().series, workPeriod: true },
+  });
+
+  async function save(scope: "all" | "following") {
+    fetchMock.mockImplementation(() => reply(200, { outcome: "updated", id: EVENT, revision: 4 }));
+    const user = userEvent.setup();
+    renderWithQuery(
+      <EventForm
+        homeId={null}
+        defaultTimeZone="Europe/Brussels"
+        timeZoneChoices={["Europe/Brussels"]}
+        members={[]}
+        homes={[]}
+        dateFormat="dmy-slash"
+        initialDate="2026-11-10"
+        event={work}
+        on="2026-11-17"
+      />,
+    );
+    await user.click(screen.getByTestId(`event-scope-${scope}`));
+    await user.click(screen.getByRole("button", { name: "Review change" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    const init = fetchMock.mock.calls[0]?.[1];
+    return JSON.parse(typeof init?.body === "string" ? init.body : "{}") as {
+      event: Record<string, unknown>;
+    };
+  }
+
+  it("keeps its flag when 'this and following' starts a later series", async () => {
+    expect((await save("following")).event).toMatchObject({ workPeriod: true });
+  });
+
+  it("sends no flag when the whole series changes (it is fixed at creation)", async () => {
+    expect((await save("all")).event).not.toHaveProperty("workPeriod");
+  });
+
+  it("offers no work-period box when editing", () => {
+    renderWithQuery(
+      <EventForm
+        homeId={null}
+        defaultTimeZone="Europe/Brussels"
+        timeZoneChoices={["Europe/Brussels"]}
+        members={[]}
+        homes={[]}
+        dateFormat="dmy-slash"
+        initialDate="2026-11-10"
+        event={work}
+      />,
+    );
+    expect(screen.queryByTestId("event-work-period")).not.toBeInTheDocument();
+  });
+});
+
+describe("the preview on a narrow screen", () => {
+  it("is a bottom sheet with a close button", async () => {
+    const spy = vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+        }) as unknown as MediaQueryList,
+    );
+    try {
+      const user = userEvent.setup();
+      renderWithQuery(
+        <CalendarClient homeId={null} dateFormat="dmy-slash" memberNames={{}} create={null}>
+          <EventPreview {...preview} source="google">
+            Dentist
+          </EventPreview>
+        </CalendarClient>,
+      );
+      await user.click(screen.getByRole("link", { name: "Dentist" }));
+      const sheet = await screen.findByRole("dialog", { name: "Dentist" });
+      expect(within(sheet).getByText(/17\/11\/2026 · 09:00–10:00/)).toBeVisible();
+      await user.click(within(sheet).getByRole("button", { name: "Close" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "Dentist" })).not.toBeInTheDocument();
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -31,6 +31,8 @@ export interface EventPreviewProps {
   readonly title: string;
   /** The time in words (translated and formatted by the server). */
   readonly when: string;
+  /** The date (or range) in words, so the preview says which day it is. */
+  readonly dateLabel: string;
   readonly location: string | null;
   /** Context in words: shared by, repeats, from Google… */
   readonly notes: readonly string[];
@@ -80,6 +82,7 @@ export function EventPreview(props: EventPreviewProps) {
     setOpen(false);
   };
   const title = props.title || t("untitledGoogle");
+  const whenLine = `${props.dateLabel} · ${props.when}`;
 
   return (
     <>
@@ -102,7 +105,7 @@ export function EventPreview(props: EventPreviewProps) {
           open
           onClose={close}
           title={title}
-          description={props.when}
+          description={whenLine}
           closeLabel={t("closeDialog")}
           size="sheet"
         >
@@ -114,7 +117,7 @@ export function EventPreview(props: EventPreviewProps) {
           <h3 className="text-body font-semibold text-fg">
             <bdi>{title}</bdi>
           </h3>
-          <p className="text-body text-fg-muted">{props.when}</p>
+          <p className="text-body text-fg-muted">{whenLine}</p>
           <PreviewBody {...props} onNavigate={close} />
         </AnchoredPanel>
       ) : null}
@@ -174,13 +177,18 @@ function AnchoredPanel({
     };
   }, [anchor]);
 
+  // Focus moves in once the panel is visible (a hidden element cannot take focus).
+  const placed = position !== null;
+  useEffect(() => {
+    if (placed) ref.current?.focus();
+  }, [placed]);
+
   useEffect(() => {
     const panel = ref.current;
     const trigger = anchor.current;
     const onClose = () => {
       closeRef.current();
     };
-    panel?.focus();
     function onPointerDown(event: PointerEvent) {
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -198,11 +206,18 @@ function AnchoredPanel({
       if (event.target instanceof Node && panel?.contains(event.target)) return;
       onClose();
     };
+    // Tabbing out of the panel closes it, so it never hides other events' controls.
+    const onFocusOut = (event: FocusEvent) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && !panel?.contains(next)) onClose();
+    };
+    panel?.addEventListener("focusout", onFocusOut);
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onClose);
     return () => {
+      panel?.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("scroll", onScroll, true);
@@ -216,7 +231,7 @@ function AnchoredPanel({
       role="dialog"
       aria-label={label}
       tabIndex={-1}
-      data-testid="event-preview-panel"
+      data-testid="event-peek-panel"
       style={{
         position: "fixed",
         top: position?.top ?? 0,
@@ -228,7 +243,10 @@ function AnchoredPanel({
       {children}
       <button
         type="button"
-        onClick={onClose}
+        onClick={() => {
+          onClose();
+          anchor.current?.focus();
+        }}
         className="sr-only focus:not-sr-only focus:self-end focus:rounded-control focus:px-3 focus:py-2 focus:text-body"
       >
         {t("closeDialog")}
@@ -255,6 +273,7 @@ function PreviewBody({
   const detail = useQuery({
     queryKey: [...calendarKeys.all, "event", eventId, on, homeId],
     enabled: readable,
+    retry: false,
     queryFn: async (): Promise<EventDetail> => {
       const params = new URLSearchParams();
       if (homeId) params.set("homeId", homeId);
@@ -277,7 +296,7 @@ function PreviewBody({
   const names = client?.memberNames ?? {};
 
   return (
-    <div className="flex flex-col gap-2" data-testid="event-preview">
+    <div className="flex flex-col gap-2" data-testid="event-peek">
       {workPeriod ? (
         <p className="text-helper font-medium text-fg-muted">{t("workLabel")}</p>
       ) : null}
@@ -350,7 +369,7 @@ function PreviewBody({
           <Link
             href={editEventPath(event.homeId, event.id, event.repeat ? on : null)}
             onClick={onNavigate}
-            data-testid="event-preview-edit"
+            data-testid="event-peek-edit"
             className="inline-flex min-h-10 items-center rounded-control bg-accent px-4 text-body font-medium text-on-accent"
           >
             {t("edit")}
@@ -363,7 +382,7 @@ function PreviewBody({
             onClick={() => {
               setExpanded((value) => !value);
             }}
-            data-testid="event-preview-more"
+            data-testid="event-peek-more"
             className="inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium text-accent-fg underline"
           >
             {expanded ? t("peekFewerDetails") : t("peekMoreDetails")}
@@ -372,7 +391,7 @@ function PreviewBody({
         <Link
           href={href}
           onClick={onNavigate}
-          data-testid="event-preview-open"
+          data-testid="event-peek-open"
           className={cx(
             "inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium text-accent-fg underline",
           )}

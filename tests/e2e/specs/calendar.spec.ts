@@ -160,7 +160,18 @@ test("Calendar: sharing a personal event, privacy of unshared ones, and calendar
   await expect(bea.page.getByTestId("calendar-show-tasks")).toBeChecked();
   await expect(agenda).not.toContainText("Pay rent");
   expect(await axeViolations(bea.page)).toEqual([]);
-  await agenda.getByRole("link", { name: /Dentist/ }).click();
+  // A click on an event opens its preview; Escape closes it; "Open full page" goes to the event.
+  const dentist = agenda.getByRole("link", { name: /Dentist/ });
+  await dentist.click();
+  await expect(bea.page.getByTestId("event-peek-panel")).toBeVisible();
+  await bea.page.keyboard.press("Escape");
+  await expect(bea.page.getByTestId("event-peek-panel")).toHaveCount(0);
+  await dentist.click();
+  await bea.page.getByTestId("event-peek-more").click();
+  await expect(bea.page.getByTestId("event-more")).toBeVisible();
+  // Shared events are read-only for Bea: no Edit in the preview.
+  await expect(bea.page.getByTestId("event-peek-edit")).toHaveCount(0);
+  await bea.page.getByTestId("event-peek-open").click();
   await expect(bea.page.getByTestId("event-shared-by")).toContainText("Shared by Ward");
   // Ward's reminder is his own: nothing of it shows to the Home.
   await expect(bea.page.getByTestId("event-reminder-shown")).toHaveCount(0);
@@ -204,6 +215,7 @@ test("Calendar: sharing a personal event, privacy of unshared ones, and calendar
     .getByTestId("calendar-agenda")
     .getByRole("link", { name: /Dentist/ })
     .click();
+  await page.getByTestId("event-peek-open").click();
   await page.getByTestId("event-share-home").uncheck();
   await page.getByTestId("event-share-save").click();
   await expect(page.getByText("Sharing saved.")).toBeVisible();
