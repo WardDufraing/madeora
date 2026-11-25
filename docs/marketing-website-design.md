@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–26 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–27 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -283,6 +283,15 @@ Use this exact supporting paragraph beneath the hero headline:
 - Vary section heights, backgrounds, spacing and composition to create editorial rhythm. Preserve responsive reading order and avoid unnecessary repetition.
 - Wireframe headlines beyond previously approved copy, pricing tiers, security claims and FAQ content remain unapproved. Do not fabricate testimonials or customer statistics.
 
+### Decision 27 — Section backgrounds and visual rhythm (CONFIRMED)
+
+**Selection: D — Adaptive editorial canvas.**
+
+- Use a continuous neutral canvas with generous whitespace, localized accent gradients, occasional inset tinted sections, asymmetric editorial compositions, overlapping product previews and carefully selected full-width moments.
+- Reserve strong brand-colored backgrounds for high-impact conversion moments; avoid repetitive alternating rectangular sections and excessive decorative gradients.
+- Derive surfaces, gradients and tonal variations from existing Madeora design tokens, with equivalent light and dark treatments. Preserve contrast, readability, responsive layouts and reduced-motion support.
+- Wireframe colors and compositions are illustrative; exact gradient stops, spacing and section-specific treatments remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -339,6 +348,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 24 | Customization storytelling | Editorial storytelling with embedded interactive playground (D) | Confirmed |
 | 25 | Homepage audience showcase | Editorial audience selector with product storytelling (D) | Confirmed |
 | 26 | Homepage section order | Balanced six-stage editorial journey (D) | Confirmed |
+| 27 | Section backgrounds and visual rhythm | Adaptive editorial canvas (D) | Confirmed |
 
 ## Update protocol
 
