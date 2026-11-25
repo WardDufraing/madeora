@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–20 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–21 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -219,6 +219,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Do not use third-party dashboard imagery as final product visuals or depict unsupported functionality. Optimize assets, preserve legibility and respect reduced-motion preferences.
 - Exact photography art direction, asset production method and individual compositions remain open.
 
+### Decision 21 — Lifestyle photography art direction (CONFIRMED)
+
+**Selection: D — Warm editorial realism.**
+
+- Combine premium editorial composition with authentic everyday moments, diverse households, natural expressions and believable lived-in homes.
+- Favor soft natural daylight, warm shadows, natural materials, restrained earthy photographic tones and intentional negative space. These photographic tones are not additional brand colors.
+- Integrate devices naturally into everyday activities; keep Madeora product depictions faithful to the redesigned application.
+- Avoid generic corporate stock photography, exaggerated poses, unrealistically perfect households and artificial purple lighting.
+- Reference imagery is moodboard inspiration only; final assets, licensing and production methods remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -269,6 +279,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 18 | Feature categorization | Hybrid functional categories with benefit-driven supporting copy (D) | Confirmed |
 | 19 | Homepage feature showcase | Premium bento overview followed by editorial storytelling (D) | Confirmed |
 | 20 | Product visualization style | Layered editorial product compositions with selective lifestyle mockups (D + C) | Confirmed |
+| 21 | Lifestyle photography | Warm editorial realism (D) | Confirmed |
 
 ## Update protocol
 
