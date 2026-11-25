@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: First design iteration complete (2026-11-25). Decisions 01–15 confirmed. Ready for Claude Code to implement the confirmed first-iteration scope when instructed; unresolved product and page decisions remain deferred.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–16 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -168,13 +168,23 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use existing Madeora tokens, typography and icons in both themes. Provide keyboard-accessible disclosure, focus handling, Escape dismissal, and a compact mobile equivalent; avoid hover-only interaction.
 - Do not create dead links or imply unimplemented audience pages exist. Resolve destinations against existing routes or defer them explicitly.
 
+### Decision 16 — Marketing website page architecture (CONFIRMED)
+
+**Selection: C + D — Hybrid storytelling website with individual module pages from the start.**
+
+- Create a comprehensive homepage with hero, feature highlights, audience overview, how it works, pricing preview where verified, FAQ and CTA.
+- Provide dedicated Features, How it works, Pricing and audience pages for Individuals, Couples, Families and Housemates.
+- Include individual landing pages for major Madeora modules from the initial website iteration, with Calendar, Tasks, Habits, Shopping, Meal planning and Ora as illustrative candidates. Verify availability and agree the final module inventory before implementation.
+- Connect homepage highlights and navigation to relevant deeper pages; avoid duplicate thin content, dead links and unsupported product claims.
+- Exact URL structure, page templates, final module inventory, pricing details and content remain open.
+
 ## First iteration handoff
 
-The user has concluded the first design iteration after Decision 15. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
+The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
 
 ## Implementation principles for Claude Code
 
-1. The first design iteration is complete. Implement confirmed scope when the user instructs Claude Code to build; do not treat deferred decisions as approved or this milestone as launch authorization.
+1. Design discovery is reopened. Wait for explicit implementation instruction; do not treat deferred decisions as approved or the earlier milestone as launch authorization.
 2. Treat sections marked CONFIRMED as binding design direction; examples and future topics are not decisions.
 3. Inspect the actual repository structure, existing marketing routes/app, design tokens, icon package, and current product features before making implementation choices.
 4. Keep marketing claims grounded in implemented functionality and clearly distinguish available, upcoming, and conceptual features.
@@ -186,7 +196,7 @@ The user has concluded the first design iteration after Decision 15. When instru
 ## Open decisions (NOT YET APPROVED)
 
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
-- Exact navigation destinations, final Solutions menu copy, and page architecture (top-level navigation and hybrid mega menu structure confirmed).
+- Exact navigation destinations, final Solutions menu copy, URL structure, module inventory and page templates (hybrid multi-page architecture with module pages confirmed).
 - Illustration/photography strategy and Ora's role (brand colors and font families confirmed as existing Madeora defaults; editorial headline treatment confirmed).
 - Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
@@ -213,6 +223,7 @@ The user has concluded the first design iteration after Decision 15. When instru
 | 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
 | 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D) | Confirmed |
 | 15  | Solutions dropdown design | Hybrid premium mega menu with audience links and product storytelling (D) | Confirmed |
+| 16 | Marketing page architecture | Hybrid storytelling homepage plus dedicated audience and module pages (C + D) | Confirmed |
 
 ## Update protocol
 
