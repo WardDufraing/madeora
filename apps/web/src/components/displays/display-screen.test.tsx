@@ -67,6 +67,7 @@ const base = {
   preferences: defaultDisplayPreferences,
   signalVersion: 3,
   ambientAfterSeconds: 300,
+  ambientShows: { chores: false, shopping: false },
 };
 
 const board: DisplayBoard = {
@@ -498,6 +499,229 @@ describe("DisplayScreen protected sessions and ambient view (UX8a)", () => {
       await vi.advanceTimersByTimeAsync(11_000);
     });
     expect(screen.getByTestId("display-ambient")).toBeInTheDocument();
+  });
+});
+
+describe("DisplayScreen navigation and ambient content (UX8b)", () => {
+  const SECOND_LIST = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0032";
+  const busy: DisplayBoard = {
+    ...board,
+    // A layout without a chores or shopping widget: the menu still reaches both.
+    layout: {
+      version: 1,
+      widgets: defaultDisplayLayout.widgets.filter((widget) => widget.type === "clock"),
+    },
+    shopping: [
+      ...board.shopping,
+      {
+        listId: SECOND_LIST,
+        name: "Hardware",
+        remaining: 2,
+        items: [
+          {
+            itemId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0042",
+            name: "Nails",
+            quantity: null,
+            unit: null,
+          },
+          {
+            itemId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0043",
+            name: "Glue",
+            quantity: null,
+            unit: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  it("opens on the dashboard with an always-visible menu control", () => {
+    renderWithQuery(<DisplayScreen initialBoard={board} />);
+    expect(screen.getByTestId("display-board")).toHaveAttribute("data-view", "dashboard");
+    expect(screen.getByRole("button", { name: "Menu" })).toHaveAttribute("aria-haspopup", "dialog");
+  });
+
+  it("offers Dashboard, Chores and Shopping in a menu that marks where it is, accessibly", async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithQuery(<DisplayScreen initialBoard={busy} />);
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    const dialog = screen.getByRole("dialog", { name: "Go to" });
+    const nav = within(dialog).getByRole("navigation", { name: "Menu" });
+    expect(
+      within(nav)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Dashboard", "Chores", "Shopping"]);
+    expect(within(nav).getByRole("button", { name: "Dashboard" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(nav).getByRole("button", { name: "Chores" })).not.toHaveAttribute("aria-current");
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("opens Chores directly, with member actions, and returns to the dashboard", async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithQuery(<DisplayScreen initialBoard={busy} />);
+    expect(screen.queryByRole("button", { name: /Dishes/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    await user.click(screen.getByRole("button", { name: "Chores" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const view = screen.getByTestId("display-view-chores");
+    expect(within(view).getByRole("heading", { name: "Chores" })).toHaveFocus();
+    expect(within(view).getByRole("button", { name: /Dishes/ })).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
+    await user.click(screen.getByRole("button", { name: "Back to the dashboard" }));
+    expect(screen.getByTestId("display-board")).toHaveAttribute("data-view", "dashboard");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+  });
+
+  it("shows chores read-only in the Chores view when the display offers no actions", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<DisplayScreen initialBoard={{ ...busy, actions: false, members: [] }} />);
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    await user.click(screen.getByRole("button", { name: "Chores" }));
+    const view = screen.getByTestId("display-view-chores");
+    expect(within(view).getByTestId("display-chore-list")).toHaveTextContent("Dishes");
+    expect(within(view).queryByRole("button", { name: /Dishes/ })).not.toBeInTheDocument();
+  });
+
+  it("shows every Home list in the Shopping view, read-only", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<DisplayScreen initialBoard={busy} />);
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    await user.click(screen.getByRole("button", { name: "Shopping" }));
+    const view = screen.getByTestId("display-view-shopping");
+    expect(within(view).getByText("Milk")).toBeInTheDocument();
+    expect(within(view).getByText("Nails")).toBeInTheDocument();
+    expect(within(view).getByText("Glue")).toBeInTheDocument();
+    expect(within(view).queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("closes the menu with Escape or Close and gives focus back to the menu control", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<DisplayScreen initialBoard={busy} />);
+    const menu = screen.getByRole("button", { name: "Menu" });
+    await user.click(menu);
+    // Escape reaches a native dialog as its cancel event (jsdom does not send it from a key).
+    act(() => {
+      screen.getByRole("dialog").dispatchEvent(new Event("cancel", { cancelable: true }));
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(menu).toHaveFocus();
+    await user.click(menu);
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(menu).toHaveFocus();
+    expect(screen.getByTestId("display-board")).toHaveAttribute("data-view", "dashboard");
+  });
+
+  it("closes the menu after a minute without a touch", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    renderWithQuery(<DisplayScreen initialBoard={busy} />);
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(IDLE_RESET_MS + 100);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("going ambient closes the menu, and a tap comes back on the dashboard", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const quick = { ...busy, ambientAfterSeconds: 60 };
+    fetchMock.mockImplementation(() => answer(200, { board: quick }));
+    renderWithQuery(<DisplayScreen initialBoard={quick} />);
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    await user.click(screen.getByRole("button", { name: "Shopping" }));
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    const ambient = screen.getByTestId("display-ambient");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(ambient);
+    expect(await screen.findByTestId("display-board")).toHaveAttribute("data-view", "dashboard");
+  });
+
+  it("shows only the time and date in the ambient view by default", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderWithQuery(<DisplayScreen initialBoard={{ ...busy, ambientAfterSeconds: 60 }} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    const ambient = screen.getByTestId("display-ambient");
+    expect(within(ambient).getByTestId("display-clock")).toBeInTheDocument();
+    expect(within(ambient).queryByTestId("display-ambient-counts")).not.toBeInTheDocument();
+    expect(ambient).not.toHaveTextContent(/chore|shopping/i);
+  });
+
+  it("shows only the counts a manager chose, never a title or a name, accessibly", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { container } = renderWithQuery(
+      <DisplayScreen
+        initialBoard={{
+          ...busy,
+          ambientAfterSeconds: 60,
+          ambientShows: { chores: true, shopping: true },
+        }}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    const counts = screen.getByTestId("display-ambient-counts");
+    expect(counts).toHaveTextContent("1 open chore");
+    expect(counts).toHaveTextContent("3 shopping items left");
+    const ambient = screen.getByTestId("display-ambient");
+    for (const secret of ["Dishes", "Milk", "Nails", "Groceries", "Hardware", "Bob", "Alice"]) {
+      expect(ambient).not.toHaveTextContent(secret);
+    }
+    vi.useRealTimers();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("shows just the shopping count when only that was chosen", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderWithQuery(
+      <DisplayScreen
+        initialBoard={{
+          ...busy,
+          ambientAfterSeconds: 60,
+          ambientShows: { chores: false, shopping: true },
+        }}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    const counts = screen.getByTestId("display-ambient-counts");
+    expect(counts).toHaveTextContent("3 shopping items left");
+    expect(counts).not.toHaveTextContent("chore");
+  });
+
+  it("announces when a session opens and when it ends", async () => {
+    const user = userEvent.setup();
+    const unlocked: DisplayBoard = { ...board, unlock: { membershipId: BOB, secondsLeft: 120 } };
+    fetchMock
+      .mockReturnValueOnce(answer(200, { board: unlocked }))
+      .mockReturnValueOnce(answer(200, {}))
+      .mockReturnValueOnce(answer(200, { board }));
+    renderWithQuery(<DisplayScreen initialBoard={board} />);
+    const region = screen.getByTestId("live-region");
+    expect(region).toHaveTextContent("");
+    act(() => {
+      realtime.handler?.({ new: { version: 9 } });
+    });
+    await waitFor(() => {
+      expect(region).toHaveTextContent("Bob is unlocked on this display.");
+    });
+    await user.click(screen.getByRole("button", { name: "Lock now" }));
+    await waitFor(() => {
+      expect(region).toHaveTextContent("This display is locked again.");
+    });
   });
 });
 

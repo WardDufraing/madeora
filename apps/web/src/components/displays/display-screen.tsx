@@ -1,5 +1,6 @@
 "use client";
 
+import { MenuIcon } from "@madeora/icons";
 import { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
@@ -8,6 +9,7 @@ import { DISPLAY_PATH } from "@/auth/redirects";
 import { getSupabaseBrowserClient } from "@/auth/supabase-browser";
 import { HouseholdChores } from "@/components/child-sign-in/household-chores";
 import { Button } from "@/components/ui/button";
+import { useAnnouncer } from "@/components/ui/use-announcer";
 import {
   completeChoreOnDisplay,
   endUnlockHere,
@@ -19,6 +21,7 @@ import type { DisplayBoard, DisplayBoardChore } from "@/displays/board";
 import { displayColumns, widgetSpan, type DisplayWidget } from "@/displays/layout";
 
 import { DisplayLockDialog } from "./display-lock-dialog";
+import { DisplayMenu, type DisplayView } from "./display-menu";
 import { DisplayChoreList, DisplayClock, DisplayOra, DisplayShopping } from "./display-widgets";
 
 /** How often the display reads its board without a signal (also its heartbeat). */
@@ -34,6 +37,8 @@ const AMBIENT_SHIFT_MS = 60_000;
 const AMBIENT_SHIFTS = ["0px, 0px", "12px, -8px", "-10px, 10px", "8px, 12px"] as const;
 
 const choreActions = { complete: completeChoreOnDisplay, undo: undoChoreOnDisplay };
+/** A module view shows everything the board carries, not a widget's first few. */
+const ALL = Number.POSITIVE_INFINITY;
 
 /** `m:ss` for a countdown. */
 export function formatCountdown(seconds: number): string {
@@ -75,12 +80,18 @@ function usePortrait(): boolean {
  *   which that member's PIN is not asked again on this display. The screen shows who is unlocked
  *   and for how long, with Lock now. It relocks when the time is up, on Lock now and when the
  *   display goes ambient; the server keeps the real expiry and checks every action.
- * - Ambient view (UX8a, decision 36): after the Home's ambient timing without a touch or key, only
- *   the time and date; a tap brings the dashboard back. Any selection, dialog and session are
- *   cleared on the way in.
+ * - Ambient view (UX8a/UX8b, decision 36): after the Home's ambient timing without a touch or key,
+ *   the time and date, plus the counts of open chores and shopping items left only when a manager
+ *   chose them (never a title or a name); a tap brings the dashboard back. Any selection, dialog,
+ *   menu and session are cleared on the way in.
+ * - Navigation (UX8b, decision 38): dashboard first, with an always-visible Menu control that opens
+ *   the places this display can show (Dashboard, Chores, Shopping: only what the board carries).
+ *   A module view has a clear way back to the dashboard. The menu closes after a minute without a
+ *   touch, on ambient and on lock; ambient and lock also return to the dashboard.
  */
 export function DisplayScreen({ initialBoard }: { readonly initialBoard: DisplayBoard }) {
   const t = useTranslations("DisplayBoard");
+  const tNav = useTranslations("Nav");
   const locale = useLocale();
   const [board, setBoard] = useState(initialBoard);
   const [connection, setConnection] = useState<"online" | "offline" | "leaving">("online");
@@ -90,6 +101,12 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
   const [resetKey, setResetKey] = useState(0);
   const [ambient, setAmbient] = useState(false);
   const [ambientShift, setAmbientShift] = useState(0);
+  const [view, setView] = useState<DisplayView>("dashboard");
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Set when the person picks a place in the menu, so focus goes to that view's heading.
+  const focusView = useRef(false);
+  const viewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const { announce, region } = useAnnouncer();
   // Seconds left of the open protected-actions session, as the server last said (so the tablet's
   // clock does not matter), counted down here; null: none.
   const initialUnlockLeft = initialBoard.locked ? null : (initialBoard.unlock?.secondsLeft ?? null);
@@ -114,6 +131,11 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
       return;
     }
     shownVersion.current = result.board.signalVersion;
+    if (result.board.locked) {
+      // Locked shows nothing else; once unlocked again it starts on the dashboard, menu closed.
+      setMenuOpen(false);
+      setView("dashboard");
+    }
     setBoard(result.board);
     const left = result.board.locked ? null : (result.board.unlock?.secondsLeft ?? null);
     unlockLeftRef.current = left;
@@ -131,6 +153,24 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
       : (board.members.find((member) => member.membershipId === unlockedId) ??
         board.lockManagers.find((member) => member.membershipId === unlockedId) ??
         null);
+
+  // Session opened or ended: said politely to screen readers (decision 37; UX8a review L6).
+  const announcedId = useRef<string | null>(unlockedId);
+  useEffect(() => {
+    if (announcedId.current === unlockedId) return;
+    announcedId.current = unlockedId;
+    if (unlockedId === null) announce(t("unlockEnded"));
+    else announce(t("unlockOpened", { name: unlockedMember?.name ?? t("unnamed") }));
+  }, [unlockedId, unlockedMember?.name, announce, t]);
+
+  // A place picked in the menu: its heading gets focus. This runs after the menu has given focus
+  // back to its opener, so it wins.
+  useEffect(() => {
+    if (!focusView.current) return;
+    focusView.current = false;
+    if (view === "dashboard") headingRef.current?.focus();
+    else viewHeadingRef.current?.focus();
+  }, [view, menuOpen]);
 
   // Lock now: ends the session on the server (one retry), then shows what the server says, so a
   // session that could not be ended shows again rather than staying open unseen.
@@ -234,6 +274,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     const idle = () => {
       setResetKey((key) => key + 1);
       setLockOpen(false);
+      setMenuOpen(false);
     };
     let timer = setTimeout(idle, IDLE_RESET_MS);
     const touch = () => {
@@ -256,6 +297,8 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
     setAmbient(true);
     setResetKey((key) => key + 1);
     setLockOpen(false);
+    setMenuOpen(false);
+    setView("dashboard");
     // Always asked, also when this screen has not heard of a session yet.
     void endUnlockHere();
     unlockLeftRef.current = null;
@@ -344,32 +387,60 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
           <p className="max-w-md text-helper text-fg-muted">{t("lockedHint")}</p>
         ) : null}
         {status}
+        {region}
       </div>
     );
   }
 
   if (ambient) {
+    // Only the counts a manager chose for the ambient view (UX8b); never a title or a name.
+    const ambientCounts: string[] = [];
+    if (board.ambientShows.chores) {
+      ambientCounts.push(t("ambientChores", { count: board.chores.length }));
+    }
+    if (board.ambientShows.shopping) {
+      ambientCounts.push(
+        t("ambientShopping", {
+          count: board.shopping.reduce((sum, list) => sum + list.remaining, 0),
+        }),
+      );
+    }
     return (
-      <button
-        type="button"
-        className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-        data-testid="display-ambient"
-        onClick={() => {
-          lastActivity.current = Date.now();
-          setAmbient(false);
-          void refresh();
-        }}
-      >
-        <span className="sr-only">{t("ambientTitle")}</span>
-        <span
-          className="flex flex-col items-center gap-6"
-          style={{ transform: `translate(${AMBIENT_SHIFTS[ambientShift] ?? "0px, 0px"})` }}
+      <>
+        <button
+          type="button"
+          className="flex min-h-dvh w-full flex-col items-center justify-center gap-8 px-4 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          data-testid="display-ambient"
+          onClick={() => {
+            lastActivity.current = Date.now();
+            setAmbient(false);
+            void refresh();
+          }}
         >
-          <DisplayClock timeZone={board.timeZone} clockFormat={clockFormat} />
-        </span>
-        <span className="text-helper text-fg-muted">{t("ambientHint")}</span>
-        {status}
-      </button>
+          <span className="sr-only">{t("ambientTitle")}</span>
+          <span
+            className="flex flex-col items-center gap-8"
+            style={{ transform: `translate(${AMBIENT_SHIFTS[ambientShift] ?? "0px, 0px"})` }}
+          >
+            <DisplayClock timeZone={board.timeZone} clockFormat={clockFormat} />
+            {ambientCounts.length > 0 ? (
+              <span
+                className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2"
+                data-testid="display-ambient-counts"
+              >
+                {ambientCounts.map((text) => (
+                  <span key={text} className="text-section-title text-fg">
+                    {text}
+                  </span>
+                ))}
+              </span>
+            ) : null}
+          </span>
+          <span className="text-helper text-fg-muted">{t("ambientHint")}</span>
+          {status}
+        </button>
+        {region}
+      </>
     );
   }
 
@@ -393,6 +464,32 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         })
       : t("dueToday");
 
+  // Chores with member actions where the display offers them and is online (the same PIN and
+  // protected-session rules everywhere on the display), otherwise read-only.
+  const choresBody = (count: number, actions: boolean) =>
+    actions && board.actions && !offline ? (
+      <HouseholdChores
+        key={resetKey}
+        requirePin={board.requirePin}
+        members={board.members}
+        chores={board.chores.slice(0, count).map((chore) => ({
+          occurrenceId: chore.occurrenceId,
+          title: chore.title,
+          dueLabel: dueLabel(chore),
+          overdue: chore.overdue,
+          assigneeIds: chore.assigneeIds,
+          mandatoryOpen: chore.mandatoryOpen,
+          requiresApproval: chore.requiresApproval,
+          requiresPin: chore.requiresPin,
+        }))}
+        actions={choreActions}
+        onChanged={() => void refresh()}
+        unlockedMembershipId={unlockedId}
+      />
+    ) : (
+      <DisplayChoreList chores={board.chores} count={count} dueLabel={dueLabel} />
+    );
+
   const widgetBody = (widget: DisplayWidget) => {
     switch (widget.type) {
       case "clock":
@@ -405,28 +502,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
           />
         );
       case "chores":
-        return widget.config.actions && board.actions && !offline ? (
-          <HouseholdChores
-            key={resetKey}
-            requirePin={board.requirePin}
-            members={board.members}
-            chores={board.chores.slice(0, widget.config.count).map((chore) => ({
-              occurrenceId: chore.occurrenceId,
-              title: chore.title,
-              dueLabel: dueLabel(chore),
-              overdue: chore.overdue,
-              assigneeIds: chore.assigneeIds,
-              mandatoryOpen: chore.mandatoryOpen,
-              requiresApproval: chore.requiresApproval,
-              requiresPin: chore.requiresPin,
-            }))}
-            actions={choreActions}
-            onChanged={() => void refresh()}
-            unlockedMembershipId={unlockedId}
-          />
-        ) : (
-          <DisplayChoreList chores={board.chores} count={widget.config.count} dueLabel={dueLabel} />
-        );
+        return choresBody(widget.config.count, widget.config.actions);
       case "shopping":
         return (
           <DisplayShopping
@@ -448,16 +524,37 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
   const titleOf = (widget: DisplayWidget): string | null =>
     widget.type === "clock" ? null : t(`widget.${widget.type}`);
 
+  const backToDashboard = () => {
+    setView("dashboard");
+    headingRef.current?.focus();
+  };
+
   return (
     <div
       className={`flex w-full flex-col ${compact ? "gap-3 p-3" : "gap-5 p-5"}`}
       data-testid="display-board"
       data-orientation={orientation}
+      data-view={view}
     >
       <header className="flex flex-wrap items-center justify-between gap-3 text-start">
-        <h1 ref={headingRef} tabIndex={-1} className="text-page-title font-semibold text-fg">
-          <bdi>{board.homeName}</bdi>
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-12"
+            aria-haspopup="dialog"
+            data-testid="display-menu-open"
+            onClick={() => {
+              setMenuOpen(true);
+            }}
+          >
+            <MenuIcon />
+            {t("menu")}
+          </Button>
+          <h1 ref={headingRef} tabIndex={-1} className="text-page-title font-semibold text-fg">
+            <bdi>{board.homeName}</bdi>
+          </h1>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           {status}
           {unlockedId !== null && unlockLeft !== null ? (
@@ -488,7 +585,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
             <Button
               type="button"
               variant="secondary"
-              size="sm"
+              className="min-h-12"
               onClick={() => {
                 setLockOpen(true);
               }}
@@ -499,35 +596,80 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         </div>
       </header>
       {offline ? <p className="text-helper text-fg-muted">{t("offlineReadOnly")}</p> : null}
-      <div
-        className={`grid grid-cols-1 sm:[grid-template-columns:repeat(var(--display-columns),minmax(0,1fr))] ${compact ? "gap-3" : "gap-5"} [grid-auto-flow:dense]`}
-        style={{ "--display-columns": columns } as CSSProperties}
-      >
-        {board.layout.widgets.map((widget) => {
-          const span = widgetSpan(widget.size, columns);
-          const title = titleOf(widget);
-          return (
-            <section
-              key={widget.id}
-              aria-label={title ?? t("widget.clock")}
-              className={`flex min-w-0 flex-col gap-3 overflow-hidden rounded-card border border-line bg-surface ${compact ? "p-3" : "p-5"} sm:[grid-column:span_var(--span-columns)] sm:[grid-row:span_var(--span-rows)]`}
-              style={
-                {
-                  "--span-columns": span.columns,
-                  "--span-rows": span.rows,
-                } as CSSProperties
-              }
-              data-testid={`display-widget-${widget.type}`}
+      {view === "dashboard" ? (
+        <div
+          className={`grid grid-cols-1 sm:[grid-template-columns:repeat(var(--display-columns),minmax(0,1fr))] ${compact ? "gap-3" : "gap-5"} [grid-auto-flow:dense]`}
+          style={{ "--display-columns": columns } as CSSProperties}
+        >
+          {board.layout.widgets.map((widget) => {
+            const span = widgetSpan(widget.size, columns);
+            const title = titleOf(widget);
+            return (
+              <section
+                key={widget.id}
+                aria-label={title ?? t("widget.clock")}
+                className={`flex min-w-0 flex-col gap-3 overflow-hidden rounded-card border border-line bg-surface ${compact ? "p-3" : "p-5"} sm:[grid-column:span_var(--span-columns)] sm:[grid-row:span_var(--span-rows)]`}
+                style={
+                  {
+                    "--span-columns": span.columns,
+                    "--span-rows": span.rows,
+                  } as CSSProperties
+                }
+                data-testid={`display-widget-${widget.type}`}
+              >
+                {title ? (
+                  <h2 className="text-section-title font-semibold text-fg text-start">{title}</h2>
+                ) : null}
+                {widgetBody(widget)}
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <section
+          className={`flex min-w-0 flex-col gap-4 rounded-card border border-line bg-surface ${compact ? "p-3" : "p-5"}`}
+          data-testid={`display-view-${view}`}
+          aria-labelledby="display-view-heading"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2
+              id="display-view-heading"
+              ref={viewHeadingRef}
+              tabIndex={-1}
+              className="text-section-title font-semibold text-fg text-start"
             >
-              {title ? (
-                <h2 className="text-section-title font-semibold text-fg text-start">{title}</h2>
-              ) : null}
-              {widgetBody(widget)}
-            </section>
-          );
-        })}
-      </div>
+              {tNav(view)}
+            </h2>
+            <Button
+              type="button"
+              className="min-h-12"
+              data-testid="display-back"
+              onClick={backToDashboard}
+            >
+              {t("backToDashboard")}
+            </Button>
+          </div>
+          {view === "chores" ? (
+            choresBody(ALL, true)
+          ) : (
+            <DisplayShopping lists={board.shopping} listIds={[]} count={ALL} />
+          )}
+        </section>
+      )}
       <p className="text-helper text-fg-muted">{t("pairedAs", { name: board.displayName })}</p>
+      {region}
+      <DisplayMenu
+        open={menuOpen}
+        current={view}
+        onClose={() => {
+          setMenuOpen(false);
+        }}
+        onSelect={(next) => {
+          focusView.current = true;
+          setView(next);
+          setMenuOpen(false);
+        }}
+      />
       <DisplayLockDialog
         key={resetKey}
         open={lockOpen}
@@ -538,6 +680,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         }}
         onLocked={() => {
           setLockOpen(false);
+          setView("dashboard");
           void refresh();
         }}
       />

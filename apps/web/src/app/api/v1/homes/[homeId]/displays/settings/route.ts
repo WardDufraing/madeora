@@ -15,8 +15,8 @@ interface SettingsRouteContext {
 }
 
 /**
- * Saves the Home's display settings (UX8a): how long its displays wait without a touch before the
- * ambient view. The Owner, or an Administrator granted manageHomeSettings; the database checks
+ * Saves the Home's display settings: how long its displays wait without a touch before the ambient
+ * view (UX8a) and which privacy-safe counts that view shows (UX8b). The Owner, or an Administrator granted manageHomeSettings; the database checks
  * again.
  */
 export async function POST(request: Request, { params }: SettingsRouteContext): Promise<Response> {
@@ -27,9 +27,11 @@ export async function POST(request: Request, { params }: SettingsRouteContext): 
   if (!allowed.ok) return allowed.response;
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("save_home_display_settings", {
+  const { data, error } = await supabase.rpc("save_home_display_ambient", {
     p_home_id: allowed.context.home.id,
     p_ambient_after_seconds: input.data.ambientAfterSeconds,
+    p_show_chores: input.data.ambientShowChores,
+    p_show_shopping: input.data.ambientShowShopping,
   });
   if (error) return databaseFailure("home_display_settings.save_failed", error.code);
   return data === "saved" || data === "unchanged" ? json(200, {}) : outcomeFailure(data);
