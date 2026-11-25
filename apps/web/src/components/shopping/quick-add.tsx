@@ -3,8 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
+import { parseShoppingQuantity, shoppingUnits } from "@madeora/domain/shopping";
+
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
+import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
 import {
   sendShoppingRequest,
@@ -12,10 +15,10 @@ import {
   shoppingListEndpoint,
   type ShoppingAddResult,
 } from "@/shopping/api";
-import { itemNameSchema } from "@/shopping/schema";
+import { itemNameSchema, unitSchema } from "@/shopping/schema";
 
 import { useFieldMessage } from "./field-message";
-import { useShoppingFailure } from "./use-shopping-texts";
+import { useShoppingFailure, useShoppingTexts } from "./use-shopping-texts";
 import { useShoppingMutation } from "./use-shopping-mutation";
 
 /** Sends rows to a list's items endpoint and answers with the per-row results. */
@@ -46,9 +49,12 @@ const refusal = {
  */
 export function QuickAdd({
   listId,
+  categories = [],
   onAdded,
 }: {
   readonly listId: string;
+  /** The list's categories, offered under Details when there are any. */
+  readonly categories?: readonly { readonly id: string; readonly name: string }[];
   readonly onAdded?: (name: string) => void;
 }) {
   const t = useTranslations("Shopping");
@@ -59,12 +65,28 @@ export function QuickAdd({
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [itemId, setItemId] = useState(() => crypto.randomUUID());
   const [duplicate, setDuplicate] = useState<string | null>(null);
+  const texts = useShoppingTexts({ byId: new Map(), selfId: null });
+  // Optional details (quantity, unit, category) stay hidden until asked for; the default entry is
+  // only a name. A category chosen for one item is kept for the next, as list context.
+  const [details, setDetails] = useState(false);
+  const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [quantityError, setQuantityError] = useState<string | undefined>(undefined);
 
   const add = useShoppingMutation(
     `shopping-add:${listId}`,
-    async ({ value, allowDuplicate }: { value: string; allowDuplicate: boolean }) => {
+    async ({
+      value,
+      allowDuplicate,
+      extra,
+    }: {
+      value: string;
+      allowDuplicate: boolean;
+      extra: object;
+    }) => {
       const [result] = await addShoppingItems(listId, [
-        { id: itemId, name: value, allowDuplicate },
+        { id: itemId, name: value, allowDuplicate, ...extra },
       ]);
       const outcome = result?.outcome ?? "invalid";
       if (outcome === "created" || outcome === "exists") return { value, outcome };
@@ -78,6 +100,8 @@ export function QuickAdd({
       }
       setDuplicate(null);
       setName("");
+      setQuantity("");
+      setUnit("");
       setItemId(crypto.randomUUID());
       onAdded?.(value);
       input.current?.focus();
@@ -92,7 +116,28 @@ export function QuickAdd({
       return;
     }
     setFieldError(undefined);
-    add.mutate({ value: parsed.data, allowDuplicate });
+    const extra: { quantity?: string; unit?: string; categoryId?: string } = {};
+    if (details) {
+      if (quantity.trim() !== "") {
+        const parsedQuantity = parseShoppingQuantity(quantity);
+        if (parsedQuantity === null) {
+          setQuantityError(message("invalidQuantity"));
+          return;
+        }
+        extra.quantity = parsedQuantity;
+      }
+      const parsedUnit = unitSchema.safeParse(unit);
+      if (parsedUnit.success) {
+        if (extra.quantity === undefined) {
+          setQuantityError(message("unitNeedsQuantity"));
+          return;
+        }
+        extra.unit = parsedUnit.data;
+      }
+      if (categoryId !== "") extra.categoryId = categoryId;
+    }
+    setQuantityError(undefined);
+    add.mutate({ value: parsed.data, allowDuplicate, extra });
   };
 
   return (
@@ -123,6 +168,61 @@ export function QuickAdd({
           {t("add")}
         </Button>
       </div>
+      <div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={details}
+          onClick={() => {
+            setDetails((open) => !open);
+          }}
+          data-testid="shopping-quick-add-details"
+        >
+          {details ? t("quickAddHideDetails") : t("quickAddShowDetails")}
+        </Button>
+      </div>
+      {details ? (
+        <div className="grid gap-3 sm:grid-cols-3" data-testid="shopping-quick-add-extra">
+          <TextField
+            label={t("fieldQuantity")}
+            inputMode="decimal"
+            autoComplete="off"
+            value={quantity}
+            error={quantityError}
+            onChange={(event) => {
+              setQuantity(event.currentTarget.value);
+            }}
+            data-testid="shopping-quick-add-quantity"
+          />
+          <SelectField
+            label={t("fieldUnit")}
+            value={unit}
+            options={[
+              { value: "", label: t("unitNone") },
+              ...shoppingUnits.map((value) => ({ value, label: texts.unit(value) })),
+            ]}
+            onChange={(event) => {
+              setUnit(event.currentTarget.value);
+            }}
+            data-testid="shopping-quick-add-unit"
+          />
+          {categories.length > 0 ? (
+            <SelectField
+              label={t("fieldCategory")}
+              value={categoryId}
+              options={[
+                { value: "", label: t("uncategorized") },
+                ...categories.map((category) => ({ value: category.id, label: category.name })),
+              ]}
+              onChange={(event) => {
+                setCategoryId(event.currentTarget.value);
+              }}
+              data-testid="shopping-quick-add-category"
+            />
+          ) : null}
+        </div>
+      ) : null}
       {duplicate !== null ? (
         <FormAlert tone="info" announce>
           <span className="flex flex-col gap-2">
