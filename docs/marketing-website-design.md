@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: First design iteration complete (2026-11-25). Decisions 01–15 confirmed. Ready for Claude Code to implement the confirmed first-iteration scope when instructed; unresolved product and page decisions remain deferred.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–32 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -168,13 +168,185 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use existing Madeora tokens, typography and icons in both themes. Provide keyboard-accessible disclosure, focus handling, Escape dismissal, and a compact mobile equivalent; avoid hover-only interaction.
 - Do not create dead links or imply unimplemented audience pages exist. Resolve destinations against existing routes or defer them explicitly.
 
+### Decision 16 — Marketing website page architecture (CONFIRMED)
+
+**Selection: C + D — Hybrid storytelling website with individual module pages from the start.**
+
+- Create a comprehensive homepage with hero, feature highlights, audience overview, how it works, pricing preview where verified, FAQ and CTA.
+- Provide dedicated Features, How it works, Pricing and audience pages for Individuals, Couples, Families and Housemates.
+- Include individual landing pages for major Madeora modules from the initial website iteration, with Calendar, Tasks, Habits, Shopping, Meal planning and Ora as illustrative candidates. Verify availability and agree the final module inventory before implementation.
+- Connect homepage highlights and navigation to relevant deeper pages; avoid duplicate thin content, dead links and unsupported product claims.
+- Exact URL structure, page templates, final module inventory, pricing details and content remain open.
+
+### Decision 17 — Features navigation dropdown (CONFIRMED)
+
+**Selection: D — Categorized premium mega menu with featured product panel.**
+
+- Organize feature links into meaningful categories, with compact icons and labels, alongside a featured product panel and an All features link.
+- Match the Solutions mega menu's visual language, existing design tokens, typography, spacing and theme support.
+- The Personal life and Shared living categories and Meet Ora panel are illustrative, not final approved contents. Categories must not imply that modules are restricted to one space when they are not.
+- Allow the featured panel to highlight Ora or another major feature in future; confirm its initial content separately.
+- Provide keyboard-accessible disclosure, focus handling, Escape dismissal and a responsive mobile equivalent; avoid hover-only interaction and dead links.
+- Final category labels, module inventory, featured content and exact routes remain open.
+
+### Decision 18 — Feature categorization (CONFIRMED)
+
+**Selection: D — Hybrid functional and benefit-driven categories.**
+
+- Use concise, recognizable functional category names in navigation and more expressive benefit-driven supporting copy on the homepage, feature overview and module pages.
+- Proposed category examples: Plan & organize, Grow & improve, Live together, Collect & remember, and Powered by Madeora. These labels and module assignments remain illustrative until separately confirmed.
+- Keep Personal and Home as overarching product concepts, not mutually exclusive feature categories. Do not misrepresent module availability across spaces.
+- Maintain consistent categorization across navigation and marketing pages, and verify module availability against the repository.
+- Final category names, assignments and module inventory remain open.
+
+### Decision 19 — Homepage feature showcase layout (CONFIRMED)
+
+**Selection: D — Bento overview followed by editorial storytelling.**
+
+- Use a premium responsive bento grid after the hero to introduce feature categories with varied card sizes, expressive typography and faithful Madeora product previews.
+- Follow the overview with spacious editorial sections explaining distinctive connected experiences rather than repeating every module. Personal/Home, customization, shared living and Ora are proposed storytelling topics, subject to final content decisions and verified availability.
+- Link feature highlights to relevant dedicated pages. Use existing theme tokens and synthetic preview data; avoid generic dashboard imagery, unsupported claims and decorative motion that impairs readability.
+- Ensure logical reading order, responsive stacking, keyboard accessibility and reduced-motion support.
+- Exact card composition, featured modules, section copy and editorial sequence remain open.
+
+### Decision 20 — Product visualization style (CONFIRMED)
+
+**Selection: D + C — Layered editorial product compositions with selective lifestyle device mockups.**
+
+- Use faithful Madeora application interfaces with enlarged components, overlapping layers, restrained depth and controlled motion as the primary visual language.
+- Homepage: layered editorial compositions; bento cards: isolated enlarged components; individual feature pages: detailed product previews; audience pages: occasional lifestyle device mockups; How it works: authentic application screenshots.
+- Lifestyle photography should complement rather than obscure the product. Use the redesigned Madeora interface as the source of truth, synthetic preview data, and existing design tokens in both themes.
+- Do not use third-party dashboard imagery as final product visuals or depict unsupported functionality. Optimize assets, preserve legibility and respect reduced-motion preferences.
+- Exact photography art direction, asset production method and individual compositions remain open.
+
+### Decision 21 — Lifestyle photography art direction (CONFIRMED)
+
+**Selection: D — Warm editorial realism.**
+
+- Combine premium editorial composition with authentic everyday moments, diverse households, natural expressions and believable lived-in homes.
+- Favor soft natural daylight, warm shadows, natural materials, restrained earthy photographic tones and intentional negative space. These photographic tones are not additional brand colors.
+- Integrate devices naturally into everyday activities; keep Madeora product depictions faithful to the redesigned application.
+- Avoid generic corporate stock photography, exaggerated poses, unrealistically perfect households and artificial purple lighting.
+- Reference imagery is moodboard inspiration only; final assets, licensing and production methods remain open.
+
+### Decision 22 — Ora's marketing presence (CONFIRMED)
+
+**Selection: D — Premium brand companion with dedicated storytelling.**
+
+- Give Ora a dedicated homepage storytelling section, individual landing page, featured position in the Features mega menu and subtle contextual appearances on relevant pages.
+- Present Ora as a thoughtful companion supporting personal and household organization, not as the primary AI-first positioning of Madeora.
+- Reuse Ora's actual visual identity and fixed accent; conceptual illustrations are not final assets. Explain capabilities, personality and privacy using verified product behavior only.
+- Keep appearances restrained, accessible and consistent with both themes. An interactive public website chatbot or guide is not approved by this decision.
+- Final copy, visual compositions and exact contextual placements remain open.
+
+### Decision 23 — Personal & Home storytelling (CONFIRMED)
+
+**Selection: D + C — Connected spaces visualization with lifestyle storytelling.**
+
+- Create a signature connected-spaces illustration explaining a Personal space, multiple shared Homes and selective sharing, complemented by warm editorial realism photography.
+- Explain the relationship between spaces rather than repeating the hero's interactive space switcher. Emphasize personal privacy and user-controlled sharing only to the extent verified by the implemented permission model.
+- Use faithful Madeora design tokens, synthetic household examples and accessible explanatory text; ensure the diagram remains understandable on mobile and in both themes.
+- The illustration may be reused on How it works and relevant audience pages; onboarding changes are outside this marketing specification.
+- Sample household names, headlines, final compositions, exact copy and photography assets remain illustrative or open.
+
+### Decision 24 — Customization storytelling (CONFIRMED)
+
+**Selection: D — Editorial storytelling with an embedded interactive playground.**
+
+- Combine benefit-driven editorial copy, faithful layered product visuals and a lightweight interactive dashboard preview.
+- Allow visitors to experiment with supported accent colors, light/dark appearance, dashboard layouts and widget selection without creating an account. Include a reset action.
+- Use synthetic data and isolated preview state; never modify actual application settings or the surrounding marketing site's theme or accent.
+- Match the redesigned application and verify supported controls, layouts and widgets before implementation. Conceptual sample presets and copy are not final product specifications.
+- Ensure responsive, keyboard-accessible controls, reduced-motion support and a useful static fallback. Avoid unnecessary client-side weight.
+- Final copy, exact controls, composition and preview implementation remain open.
+
+### Decision 25 — Homepage audience showcase (CONFIRMED)
+
+**Selection: D — Editorial audience selector with product storytelling.**
+
+- Present Individuals, Couples, Families and Housemates through a manually controlled audience selector, combining warm editorial realism photography, tailored benefit-driven copy and faithful audience-relevant product previews.
+- Use layered, spacious editorial compositions on desktop and responsive stacking on mobile. Provide accessible keyboard-operable selection controls and avoid automatic rotation.
+- Give every audience a direct link to its dedicated landing page; keep all audiences discoverable without relying solely on interaction.
+- Use synthetic preview data and verify feature availability. Sample headlines, household names, feature assignments and reference photography are illustrative only.
+- Final default audience, copy, assets and exact layout remain open.
+
+### Decision 26 — Homepage section order (CONFIRMED)
+
+**Selection: D — Balanced editorial journey.**
+
+- Introduce: interactive Personal/Home hero with approved headline and CTAs, followed by a short value proposition transition.
+- Discover: premium feature bento overview, then Personal & Home connected-spaces storytelling.
+- Connect: editorial audience selector with product storytelling.
+- Experience: interactive customization playground, then dedicated Ora storytelling.
+- Build confidence: privacy/security/transparency section, pricing preview, then FAQ.
+- Convert: final registration CTA followed by footer.
+- Vary section heights, backgrounds, spacing and composition to create editorial rhythm. Preserve responsive reading order and avoid unnecessary repetition.
+- Wireframe headlines beyond previously approved copy, pricing tiers, security claims and FAQ content remain unapproved. Do not fabricate testimonials or customer statistics.
+
+### Decision 27 — Section backgrounds and visual rhythm (CONFIRMED)
+
+**Selection: D — Adaptive editorial canvas.**
+
+- Use a continuous neutral canvas with generous whitespace, localized accent gradients, occasional inset tinted sections, asymmetric editorial compositions, overlapping product previews and carefully selected full-width moments.
+- Reserve strong brand-colored backgrounds for high-impact conversion moments; avoid repetitive alternating rectangular sections and excessive decorative gradients.
+- Derive surfaces, gradients and tonal variations from existing Madeora design tokens, with equivalent light and dark treatments. Preserve contrast, readability, responsive layouts and reduced-motion support.
+- Wireframe colors and compositions are illustrative; exact gradient stops, spacing and section-specific treatments remain open.
+
+### Decision 28 — Trust, privacy and security (CONFIRMED)
+
+**Selection: D + C — Premium homepage privacy storytelling with product demonstrations on a dedicated privacy page.**
+
+- Use human-centered copy, a distinctive brand illustration and concise explanations of personal boundaries, selective sharing, household permissions and Ora's contextual access on the homepage.
+- Link to a dedicated Privacy & Security page with lightweight, accessible product demonstrations using synthetic data and isolated preview state. Avoid another large interactive playground on the homepage.
+- Explain Personal/Home data separation, sharing controls, permissions, Ora's data access, storage, protection, retention, account deletion and recovery, applicable GDPR rights and privacy policies.
+- Verify every claim against implemented behavior and applicable policies. Do not advertise unverified encryption guarantees, certifications, compliance or security features. Keep the legal privacy policy separately accessible.
+- Final headlines, illustration, demonstration controls, route and legal/security copy remain open.
+
+### Decision 29 — Homepage pricing presentation (CONFIRMED)
+
+**Selection: D — Premium editorial pricing preview.**
+
+- Use a concise editorial pricing section with benefit-driven messaging, refined plan previews, a verified starting price, registration CTA and direct link to full pricing.
+- Keep complete subscription details, billing options, feature comparisons, plan limitations and billing FAQ on the dedicated pricing page.
+- Integrate the section into the adaptive editorial canvas, using existing design tokens, responsive layouts and accessible contrast.
+- Plan names, number of plans, prices, free offering, billing intervals and entitlements remain unconfirmed. Do not publish invented pricing or benefits; verify approved commercial terms before launch.
+- Final copy, card composition and pricing page design remain open.
+
+### Decision 30 — Homepage FAQ (CONFIRMED)
+
+**Selection: D — Asymmetric editorial FAQ.**
+
+- Combine a spacious editorial introduction with an accessible accordion in a two-column desktop composition and stacked mobile layout.
+- Focus on approximately six to eight essential questions and link to a comprehensive FAQ page. Use subtle expansion animations, keyboard-accessible controls, clear expanded states and reduced-motion support.
+- Match the adaptive editorial canvas and existing design tokens in both themes.
+- Verify answers against implemented functionality and approved commercial terms. Example headlines, questions, answers, exact count and dedicated FAQ route remain open.
+
+### Decision 31 — Final homepage CTA (CONFIRMED)
+
+**Selection: D — Signature Madeora composition.**
+
+- Close the homepage with a deep accent-derived background, restrained localized purple glow, confident editorial typography and layered faithful product visuals representing Personal, Home and Ora.
+- Use one dominant registration CTA and a subordinate feature exploration link. Create a visual callback to the hero without repeating its interactive behavior.
+- Use subtle entrance motion without continuous floating, respect reduced motion, maintain accessible contrast and responsive composition, and transition seamlessly into the footer.
+- Derive colors from existing Madeora design tokens and use synthetic preview data. Final headline, supporting copy, background tones and product composition remain open; verify free-registration claims and CTA destinations before publication.
+
+### Decision 32 — Website footer (CONFIRMED)
+
+**Selection: D — Premium editorial footer.**
+
+- Use a neutral editorial footer following the expressive closing CTA, with a dedicated brand column and four grouped navigation columns on desktop, responsively stacked on smaller screens.
+- Include product, audience, resource and company navigation; provide global language selection (English, Dutch, French, German where supported), Light/Dark/System appearance controls, legal links and applicable cookie preferences.
+- Synchronize appearance and language preferences with the rest of the website. Ensure accessible navigation and controls in both themes.
+- Include only verified social accounts and available destinations. Do not include a newsletter signup at this stage.
+- Exact navigation labels, destinations, social channels, wordmark treatment and responsive composition remain open. Use existing Madeora design tokens and brand assets.
+
 ## First iteration handoff
 
-The user has concluded the first design iteration after Decision 15. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
+The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
 
 ## Implementation principles for Claude Code
 
-1. The first design iteration is complete. Implement confirmed scope when the user instructs Claude Code to build; do not treat deferred decisions as approved or this milestone as launch authorization.
+1. Design discovery is reopened. Wait for explicit implementation instruction; do not treat deferred decisions as approved or the earlier milestone as launch authorization.
 2. Treat sections marked CONFIRMED as binding design direction; examples and future topics are not decisions.
 3. Inspect the actual repository structure, existing marketing routes/app, design tokens, icon package, and current product features before making implementation choices.
 4. Keep marketing claims grounded in implemented functionality and clearly distinguish available, upcoming, and conceptual features.
@@ -186,7 +358,7 @@ The user has concluded the first design iteration after Decision 15. When instru
 ## Open decisions (NOT YET APPROVED)
 
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
-- Exact navigation destinations, final Solutions menu copy, and page architecture (top-level navigation and hybrid mega menu structure confirmed).
+- Exact navigation destinations, final Solutions menu copy, URL structure, module inventory and page templates (hybrid multi-page architecture with module pages confirmed).
 - Illustration/photography strategy and Ora's role (brand colors and font families confirmed as existing Madeora defaults; editorial headline treatment confirmed).
 - Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
@@ -196,23 +368,40 @@ The user has concluded the first design iteration after Decision 15. When instru
 
 ## Decision log
 
-| ID  | Topic                                | Selection                                                                                                   | Status    |
-| --- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------- |
-| 01  | Overall first impression             | Calm + warm/human + premium polish (A + D + C)                                                              | Confirmed |
-| 02  | Homepage hero                        | Interactive product showcase + editorial split (C + D)                                                      | Confirmed |
-| 03  | Hero headline                        | Everything in life, finally in sync. (B)                                                                    | Confirmed |
-| 04  | Hero supporting copy                 | Balanced and benefit-driven (D)                                                                             | Confirmed |
-| 05  | Hero calls to action                 | Get started for free + Explore features (B)                                                                 | Confirmed |
-| 06  | Hero product showcase                | Dashboard + floating widgets with Personal/Home transition (C + D)                                          | Confirmed |
-| 07  | Personal/Home transition interaction | Automatic switching + manual toggle (C)                                                                     | Confirmed |
-| 08  | Hero widget selection                | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
-| 09  | Hero animation style                 | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D)                      | Confirmed |
-| 10  | Marketing colors                     | Reuse Madeora's default design tokens and purple accent                                                     | Confirmed |
-| 11  | Marketing themes                     | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
-| 12  | Marketing typography                 | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
-| 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
-| 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D)                                           | Confirmed |
-| 15  | Solutions dropdown design            | Hybrid premium mega menu with audience links and product storytelling (D)                                   | Confirmed |
+| ID  | Topic                                 | Selection                                                                                                   | Status    |
+| --- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------- |
+| 01  | Overall first impression              | Calm + warm/human + premium polish (A + D + C)                                                              | Confirmed |
+| 02  | Homepage hero                         | Interactive product showcase + editorial split (C + D)                                                      | Confirmed |
+| 03  | Hero headline                         | Everything in life, finally in sync. (B)                                                                    | Confirmed |
+| 04  | Hero supporting copy                  | Balanced and benefit-driven (D)                                                                             | Confirmed |
+| 05  | Hero calls to action                  | Get started for free + Explore features (B)                                                                 | Confirmed |
+| 06  | Hero product showcase                 | Dashboard + floating widgets with Personal/Home transition (C + D)                                          | Confirmed |
+| 07  | Personal/Home transition interaction  | Automatic switching + manual toggle (C)                                                                     | Confirmed |
+| 08  | Hero widget selection                 | Context-aware: Personal tasks/habits/calendar/goals; Home chores/shared calendar/shopping/meal planning (C) | Confirmed |
+| 09  | Hero animation style                  | Balanced premium motion: smooth transitions, staggered entrances, restrained depth (D)                      | Confirmed |
+| 10  | Marketing colors                      | Reuse Madeora's default design tokens and purple accent                                                     | Confirmed |
+| 11  | Marketing themes                      | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
+| 12  | Marketing typography                  | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
+| 13  | Homepage navigation                   | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
+| 14  | Navigation header behavior            | Adaptive sticky header: spacious initially, compact on scroll (D)                                           | Confirmed |
+| 15  | Solutions dropdown design             | Hybrid premium mega menu with audience links and product storytelling (D)                                   | Confirmed |
+| 16  | Marketing page architecture           | Hybrid storytelling homepage plus dedicated audience and module pages (C + D)                               | Confirmed |
+| 17  | Features navigation dropdown          | Categorized premium mega menu with featured product panel (D)                                               | Confirmed |
+| 18  | Feature categorization                | Hybrid functional categories with benefit-driven supporting copy (D)                                        | Confirmed |
+| 19  | Homepage feature showcase             | Premium bento overview followed by editorial storytelling (D)                                               | Confirmed |
+| 20  | Product visualization style           | Layered editorial product compositions with selective lifestyle mockups (D + C)                             | Confirmed |
+| 21  | Lifestyle photography                 | Warm editorial realism (D)                                                                                  | Confirmed |
+| 22  | Ora marketing presence                | Premium brand companion with dedicated storytelling (D)                                                     | Confirmed |
+| 23  | Personal & Home storytelling          | Connected spaces visualization with lifestyle storytelling (D + C)                                          | Confirmed |
+| 24  | Customization storytelling            | Editorial storytelling with embedded interactive playground (D)                                             | Confirmed |
+| 25  | Homepage audience showcase            | Editorial audience selector with product storytelling (D)                                                   | Confirmed |
+| 26  | Homepage section order                | Balanced six-stage editorial journey (D)                                                                    | Confirmed |
+| 27  | Section backgrounds and visual rhythm | Adaptive editorial canvas (D)                                                                               | Confirmed |
+| 28  | Trust, privacy and security           | Premium homepage storytelling with dedicated privacy demonstrations (D + C)                                 | Confirmed |
+| 29  | Homepage pricing presentation         | Premium editorial pricing preview (D)                                                                       | Confirmed |
+| 30  | Homepage FAQ                          | Asymmetric editorial FAQ (D)                                                                                | Confirmed |
+| 31  | Final homepage CTA                    | Signature Madeora composition (D)                                                                           | Confirmed |
+| 32  | Website footer                        | Premium editorial footer (D)                                                                                | Confirmed |
 
 ## Update protocol
 
