@@ -44,6 +44,7 @@ export type DashboardErrorCode =
   | "conflict"
   | "nothing-to-undo"
   | "limit-reached"
+  | "name-taken"
   | "unavailable"
   | "failed";
 
@@ -73,6 +74,7 @@ export type DashboardFailure =
   | "conflict"
   | "nothingToUndo"
   | "limitReached"
+  | "nameTaken"
   | "network"
   | "failed";
 
@@ -103,6 +105,8 @@ function failureFor(code: unknown): DashboardFailure {
       return "nothingToUndo";
     case "limit-reached":
       return "limitReached";
+    case "name-taken":
+      return "nameTaken";
     default:
       return "failed";
   }

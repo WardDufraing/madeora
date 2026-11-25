@@ -607,6 +607,51 @@ describe("DashboardBoard edit mode", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  it("stays in edit mode when the chosen version left the history meanwhile", async () => {
+    const preview = {
+      widgets: [{ id: "a", type: "welcome", hidden: false }],
+      placements: {
+        lg: [{ id: "a", x: 0, y: 0, w: 6, h: 2 }],
+        md: [{ id: "a", x: 0, y: 0, w: 6, h: 2 }],
+        sm: [{ id: "a", x: 0, y: 0, w: 1, h: 2 }],
+      },
+    };
+    historyList = [
+      {
+        id: "v2",
+        revision: 4,
+        reason: "save",
+        savedByMe: true,
+        createdAt: "2026-11-25T10:00:00Z",
+        isCurrent: true,
+        dropped: false,
+        preview,
+      },
+      {
+        id: "v1",
+        revision: 3,
+        reason: "save",
+        savedByMe: true,
+        createdAt: "2026-11-24T10:00:00Z",
+        isCurrent: false,
+        dropped: false,
+        preview,
+      },
+    ];
+    renderBoard({ revision: 4 });
+    const user = await openEditor();
+    await user.click(screen.getByRole("button", { name: "Version history" }));
+    const versions = await screen.findAllByTestId("dashboard-history-version");
+    await user.click(within(versions[1] as HTMLElement).getByRole("button", { name: "Restore" }));
+    answer(404, { error: "not-found" });
+    await user.click(screen.getByRole("button", { name: "Restore version" }));
+    expect(
+      await screen.findByText(/The version history changed since it was opened/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-editor")).toBeInTheDocument();
+    expect(screen.queryByTestId("dashboard-keep-mine")).not.toBeInTheDocument();
+  });
+
   it("offers a template saved from edit mode at once, without reloading", async () => {
     renderBoard();
     const user = await openEditor();

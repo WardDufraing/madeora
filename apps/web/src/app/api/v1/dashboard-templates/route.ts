@@ -13,6 +13,7 @@ import {
 } from "@/dashboard/route-helpers";
 import { createTemplateSchema } from "@/dashboard/schema";
 import { listTemplates, loadTarget } from "@/dashboard/server";
+import { templateNameTaken } from "@/dashboard/template-names";
 import { homeIdSchema } from "@/homes/schema";
 
 /**
@@ -55,6 +56,9 @@ export async function POST(request: Request): Promise<Response> {
   const input = await readDashboardMutation(request, createTemplateSchema, SMALL_BODY_BYTES);
   if (!input.ok) return input.response;
   const { name, from } = input.data;
+  const taken = await templateNameTaken(name);
+  if (taken === null) return failure(500, "unavailable");
+  if (taken) return failure(409, "name-taken");
 
   const current = await loadTarget(from);
   if (current.status === "not-found") return failure(404, "not-found");

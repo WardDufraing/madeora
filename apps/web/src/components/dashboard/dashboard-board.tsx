@@ -152,10 +152,13 @@ export function DashboardBoard({
         router.refresh();
       });
     },
-    onError: (error) => {
+    onError: (error, action) => {
       // Not permitted any more: the fresh render drops Customize. A conflict waits for "Load latest",
       // so the person's draft is not thrown away without them seeing why.
-      if (error.failure === "notPermitted" || error.failure === "notFound") {
+      // A history version that is gone (rotated out of the last 10 by newer saves) is not a lost
+      // right: edit mode and its draft stay, and the history loads fresh when opened again.
+      const versionGone = action.kind === "restore" && error.failure === "notFound";
+      if (error.failure === "notPermitted" || (error.failure === "notFound" && !versionGone)) {
         startRefresh(() => {
           setSession(null);
           returnFocus.current = true;
@@ -278,6 +281,12 @@ export function DashboardBoard({
   }
 
   const error = mutation.error;
+  // A restore against a history that changed since it loaded (UX2c): the version rotated out, or
+  // someone saved. Edit mode stays; reopening the history shows the current versions.
+  const restoreStale =
+    editing &&
+    mutation.variables?.kind === "restore" &&
+    (error?.failure === "notFound" || error?.failure === "conflict");
   const settingsWidget = layout.widgets.find((widget) => widget.id === settingsFor);
   const settingsEntry = widgets.find((entry) => entry.id === settingsFor);
   const noticeText =
@@ -297,7 +306,9 @@ export function DashboardBoard({
     <div className="flex flex-col gap-4" data-testid="dashboard">
       {error && !settingsFor ? (
         <FormAlert tone="error" announce>
-          {editing && error.failure === "conflict" ? (
+          {restoreStale ? (
+            <p>{t("restoreStale")}</p>
+          ) : editing && error.failure === "conflict" ? (
             <>
               <p>{t("conflictWhileEditing")}</p>
               <div className="mt-2 flex flex-wrap gap-2">

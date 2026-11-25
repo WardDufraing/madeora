@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type Ref } from "react";
 
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,25 @@ export function VersionHistory({
   const t = useTranslations("DashboardHistory");
   const failureMessage = useFailureMessage();
   const [confirming, setConfirming] = useState<DashboardVersion | null>(null);
+  // Swapping the dialog's content must not drop keyboard focus to the page: the confirmation takes
+  // focus when it opens, and Back returns it to the Restore button it came from.
+  const confirmRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
+  const returnTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (confirming) {
+      confirmRef.current?.focus();
+      return;
+    }
+    const id = returnTo.current;
+    if (id === null) return;
+    returnTo.current = null;
+    listRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-version-id="${CSS.escape(id)}"] [data-testid="dashboard-history-restore"]`,
+      )
+      ?.focus();
+  }, [confirming]);
   const query = useQuery<readonly DashboardVersion[], DashboardRequestError>({
     queryKey: dashboardHistoryKey(target),
     queryFn: () => fetchHistory(target),
@@ -80,6 +99,7 @@ export function VersionHistory({
             <Button
               variant="secondary"
               onClick={() => {
+                returnTo.current = confirming.id;
                 setConfirming(null);
               }}
             >
@@ -105,7 +125,11 @@ export function VersionHistory({
       }
     >
       {confirming ? (
-        <RestoreConfirmation version={confirming} discardsChanges={discardsChanges} />
+        <RestoreConfirmation
+          ref={confirmRef}
+          version={confirming}
+          discardsChanges={discardsChanges}
+        />
       ) : query.isPending ? (
         <p className="text-body text-fg-muted" role="status">
           {t("loading")}
@@ -117,7 +141,7 @@ export function VersionHistory({
       ) : versions.length === 0 ? (
         <p className="text-body text-fg-muted">{t("empty")}</p>
       ) : (
-        <ol className="flex flex-col gap-3" data-testid="dashboard-history">
+        <ol ref={listRef} className="flex flex-col gap-3" data-testid="dashboard-history">
           {versions.map((version, index) => (
             <li key={version.id}>
               <VersionRow
@@ -177,6 +201,7 @@ function VersionRow({
       aria-labelledby={headingId}
       className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4 text-fg"
       data-testid="dashboard-history-version"
+      data-version-id={version.id}
       data-current={version.isCurrent ? "true" : undefined}
     >
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -250,16 +275,23 @@ function VersionRow({
 }
 
 function RestoreConfirmation({
+  ref,
   version,
   discardsChanges,
 }: {
+  readonly ref: Ref<HTMLDivElement>;
   readonly version: DashboardVersion;
   readonly discardsChanges: boolean;
 }) {
   const t = useTranslations("DashboardHistory");
   const when = useWhen();
   return (
-    <div className="flex flex-col gap-3 text-body" data-testid="dashboard-history-confirm">
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className="flex flex-col gap-3 text-body outline-none"
+      data-testid="dashboard-history-confirm"
+    >
       <p>{t("restoreConfirm", { when: when(version.createdAt) })}</p>
       <LayoutPreviewView
         preview={version.preview}

@@ -135,12 +135,19 @@ describe("VersionHistory", () => {
 
     await user.click(within(items[1] as HTMLElement).getByRole("button", { name: "Restore" }));
     const dialog = screen.getByRole("dialog", { name: "Restore this version?" });
+    expect(screen.getByTestId("dashboard-history-confirm")).toHaveFocus();
     expect(dialog).toHaveTextContent(/stays in the version history/);
     expect(dialog).toHaveTextContent(/unsaved changes in edit mode will be discarded/);
     expect(onRestore).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole("button", { name: "Back" }));
     expect(screen.getByRole("dialog", { name: "Version history" })).toBeInTheDocument();
+    expect(
+      within(screen.getAllByTestId("dashboard-history-version")[1] as HTMLElement).getByRole(
+        "button",
+        { name: "Restore" },
+      ),
+    ).toHaveFocus();
     await user.click(
       within(screen.getAllByTestId("dashboard-history-version")[2] as HTMLElement).getByRole(
         "button",

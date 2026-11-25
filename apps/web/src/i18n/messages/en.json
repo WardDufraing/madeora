@@ -366,7 +366,8 @@
     "galleryAlreadyAdded": "Already on this dashboard. This widget can be added once.",
     "versionHistory": "Version history",
     "templateNameTaken": "You already have a template with this name. Choose another name.",
-    "restoredNotice": "The earlier version was restored. The layout it replaced is still in the version history."
+    "restoredNotice": "The earlier version was restored. The layout it replaced is still in the version history.",
+    "restoreStale": "The version history changed since it was opened: someone saved, or that version is no longer among the last 10. Open the version history again to choose a version."
   },
   "Placeholder": {
     "title": "Not built yet",

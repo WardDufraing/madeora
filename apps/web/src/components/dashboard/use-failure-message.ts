@@ -13,6 +13,7 @@ export function useFailureMessage(): (failure: DashboardFailure) => string {
     conflict: t("errorConflict"),
     nothingToUndo: t("errorNothingToUndo"),
     limitReached: t("errorLimitReached"),
+    nameTaken: t("templateNameTaken"),
     network: t("errorNetwork"),
     failed: t("errorFailed"),
   };

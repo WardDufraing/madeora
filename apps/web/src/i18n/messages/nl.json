@@ -366,7 +366,8 @@
     "galleryAlreadyAdded": "Staat al op dit dashboard. Deze widget kan één keer worden toegevoegd.",
     "versionHistory": "Versiegeschiedenis",
     "templateNameTaken": "Je hebt al een sjabloon met deze naam. Kies een andere naam.",
-    "restoredNotice": "De eerdere versie is teruggezet. De indeling die ze verving, staat nog in de versiegeschiedenis."
+    "restoredNotice": "De eerdere versie is teruggezet. De indeling die ze verving, staat nog in de versiegeschiedenis.",
+    "restoreStale": "De versiegeschiedenis is veranderd sinds je ze opende: iemand heeft bewaard, of die versie hoort niet meer bij de laatste 10. Open de versiegeschiedenis opnieuw om een versie te kiezen."
   },
   "Placeholder": {
     "title": "Nog niet gebouwd",

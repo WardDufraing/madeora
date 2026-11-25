@@ -48,7 +48,8 @@ function send(path: string, method: string, body: unknown): Request {
 
 function answers(map: Record<string, { data: unknown; error?: unknown }>) {
   state.rpc.mockImplementation((name) => {
-    const answer = map[name];
+    // The name check (UX2c) reads the visible templates; none unless a test says otherwise.
+    const answer = map[name] ?? (name === "list_dashboard_templates" ? { data: [] } : undefined);
     if (!answer) throw new Error(`unexpected rpc ${name}`);
     return { data: answer.data, error: answer.error ?? null };
   });
@@ -308,5 +309,80 @@ describe("POST /api/v1/dashboard-templates/:id/duplicate", () => {
       (await duplicate(send(`/${SHARED_ID}/duplicate`, "POST", { name: " " }), params(SHARED_ID)))
         .status,
     ).toBe(400);
+  });
+});
+
+describe("template names (UX2c, decision 31)", () => {
+  const own = {
+    data: [
+      {
+        template_id: TEMPLATE_ID,
+        name: "Morning",
+        kind: "home",
+        layout: homeStarterLayout,
+        is_mine: true,
+        shared_home_ids: [],
+        updated_at: "2026-10-16T08:00:00Z",
+      },
+    ],
+  };
+
+  it("refuses a new template under a name of another own template, of either kind", async () => {
+    answers({
+      list_dashboard_templates: own,
+      get_dashboard: {
+        data: [{ layout: null, revision: 0, can_edit: true, can_undo: false, updated_at: null }],
+      },
+    });
+    const response = await POST(
+      send("", "POST", { name: " morning ", from: { kind: "personal" } }),
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "name-taken" });
+    expect(rpcArgs("create_dashboard_template")).toBeUndefined();
+  });
+
+  it("lets a template keep its own name on rename, but not take another's", async () => {
+    const other = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0109";
+    answers({ list_dashboard_templates: own, rename_dashboard_template: { data: "ok" } });
+    expect(
+      (await PATCH(send(`/${TEMPLATE_ID}`, "PATCH", { name: "MORNING" }), templateParams)).status,
+    ).toBe(200);
+    const refused = await PATCH(send(`/${other}`, "PATCH", { name: "Morning" }), {
+      params: Promise.resolve({ templateId: other }),
+    });
+    expect(refused.status).toBe(409);
+  });
+
+  it("refuses a duplicate under a taken name, and cross-site or signed-out requests", async () => {
+    answers({ list_dashboard_templates: own });
+    const params = { params: Promise.resolve({ templateId: TEMPLATE_ID }) };
+    expect(
+      (await duplicate(send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Morning" }), params))
+        .status,
+    ).toBe(409);
+    const crossSite = new Request(`${base}/${TEMPLATE_ID}/duplicate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://evil.example",
+        host: "madeora.example",
+      },
+      body: JSON.stringify({ name: "Copy" }),
+    });
+    expect((await duplicate(crossSite, params)).status).toBe(403);
+    expect(
+      (
+        await duplicate(
+          send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Copy", extra: 1 }),
+          params,
+        )
+      ).status,
+    ).toBe(400);
+    state.identity = null;
+    expect(
+      (await duplicate(send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Copy" }), params)).status,
+    ).toBe(401);
+    expect(rpcArgs("create_dashboard_template")).toBeUndefined();
   });
 });

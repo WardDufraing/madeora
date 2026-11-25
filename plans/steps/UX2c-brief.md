@@ -55,8 +55,9 @@ carry widget settings; tests pass; one independent review in `reviews/steps/UX2c
 - Restore uses the revision the history showed as current (not the draft's base), so a stale draft never blocks it.
 - Preview draws boxes with widget names only (no content), desktop (`lg`) and phone (`sm`).
 - Copy names are numbered; the original name is shortened to keep 80 characters.
-- Unique template names are checked in the UI only (per kind on the dashboard, all own templates on the templates
-  page); the database still allows duplicates, so older data keeps working.
+- Unique template names: the create, rename and duplicate routes answer `409 name-taken` for a name another own
+  template (either kind) uses, ignoring case and spaces; the UI checks first where it can. No database constraint,
+  so older duplicates keep working (two simultaneous requests can still both pass).
 
 ## Files
 
@@ -75,9 +76,18 @@ No migration. Rollback = revert the PR; the history data keeps being written by 
 ## Local checks (Ward's testing rule)
 
 - Prettier, ESLint (web + e2e spec), `tsc --noEmit` (web, e2e): clean.
-- Vitest, dashboard components, dashboard lib, dashboard + templates routes, i18n: 16 files, 254 tests passed.
+- Vitest, dashboard components, dashboard lib, dashboard + templates routes, i18n: 16 files, 258 tests passed
+  (after the review fixes).
 - E2E (new spec) and the full suite: CI.
 
 ## Review
 
-(pending)
+`reviews/steps/UX2c-review.md`: **PASS**, 0 BLOCKER, 0 HIGH, 3 MEDIUM, 5 LOW. Fixed and verified by the author (no
+second full review, per project rule):
+
+- M1 focus in the history dialog: the confirmation takes focus; Back returns it to the Restore button (tested).
+- M2 duplicate names only checked in the browser: now enforced by the routes (`dashboard/template-names.ts`, 409).
+- M3 a version rotated out of the history ended edit mode: a restore 404 or 409 now keeps edit mode and says to
+  reopen the history (tested; no keep-mine Done offered for a restore).
+- LOW duplicate route cross-site / signed-out / extra-field tests added. Other LOWs accepted: 42501 on the history
+  read maps to 403 (the identity is verified first), preview strings live in the history namespace.

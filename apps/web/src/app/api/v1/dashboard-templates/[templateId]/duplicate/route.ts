@@ -11,6 +11,7 @@ import {
 } from "@/dashboard/route-helpers";
 import { duplicateTemplateSchema, templateIdSchema } from "@/dashboard/schema";
 import { listTemplates } from "@/dashboard/server";
+import { templateNameTaken } from "@/dashboard/template-names";
 
 interface DuplicateRouteContext {
   readonly params: Promise<{ readonly templateId: string }>;
@@ -23,7 +24,7 @@ interface DuplicateRouteContext {
  * shared anywhere until its owner shares it. The interface picks a free name.
  *
  * `POST { name }` → `201 { id, dropped }`; `404` for a template the person may not see; `409
- * limit-reached` at the template limit.
+ * limit-reached` at the template limit; `409 name-taken` for a name another of their templates uses.
  */
 export async function POST(request: Request, { params }: DuplicateRouteContext): Promise<Response> {
   const input = await readDashboardMutation(request, duplicateTemplateSchema, SMALL_BODY_BYTES);
@@ -36,6 +37,9 @@ export async function POST(request: Request, { params }: DuplicateRouteContext):
   const source =
     visible.status === "ok" ? visible.templates.find((entry) => entry.id === id.data) : undefined;
   if (!source) return failure(404, "not-found");
+  const taken = await templateNameTaken(input.data.name);
+  if (taken === null) return failure(500, "unavailable");
+  if (taken) return failure(409, "name-taken");
   const copy = templateCopy(source.layout, newWidgetId);
 
   const supabase = await createSupabaseServerClient();
