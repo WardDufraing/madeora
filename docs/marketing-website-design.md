@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–13 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: In discovery. Decisions 01–14 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -148,6 +148,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Keep the desktop header visually restrained despite the broader information architecture; provide a usable, accessible compact navigation on smaller screens.
 - Exact page routes, whether some items link to homepage sections, and the details of the pricing offering remain open decisions. Do not imply that paid plans or pricing are live without verification.
 
+### Decision 14 — Navigation header behavior (CONFIRMED)
+
+**Selection: D — Adaptive sticky header.**
+
+- At the top of the page, use a spacious header visually integrated with the hero.
+- On scroll, retain the header at the top of the viewport and transition to a slightly more compact presentation with a subtle theme-aware surface and restrained backdrop blur.
+- Keep navigation and account actions accessible throughout scrolling; preserve readable contrast in both themes.
+- Avoid layout shifts, dramatic resizing, and distracting motion; respect reduced-motion preferences and provide a solid surface fallback for blur.
+- Exact scroll threshold, dimensions, transition timing, and mobile menu treatment remain open implementation details.
+
 ## Implementation principles for Claude Code
 
 1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
@@ -187,6 +197,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 11  | Marketing themes                     | Both light and dark, system preference initially, manual toggle (C)                                         | Confirmed |
 | 12  | Marketing typography                 | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
 | 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
+| 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D) | Confirmed |
 
 ## Update protocol
 
