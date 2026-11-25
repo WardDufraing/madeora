@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: In discovery. Decisions 01–14 confirmed on 2026-11-21. This is a design direction, **not authorization to implement unfinished decisions**.
+> Status: First design iteration complete (2026-11-25). Decisions 01–15 confirmed. Ready for Claude Code to implement the confirmed first-iteration scope when instructed; unresolved product and page decisions remain deferred.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -158,9 +158,23 @@ Use this exact supporting paragraph beneath the hero headline:
 - Avoid layout shifts, dramatic resizing, and distracting motion; respect reduced-motion preferences and provide a solid surface fallback for blur.
 - Exact scroll threshold, dimensions, transition timing, and mobile menu treatment remain open implementation details.
 
+### Decision 15 — Solutions dropdown design (CONFIRMED)
+
+**Selection: D — Hybrid premium mega menu.**
+
+- Use a two-column desktop dropdown: a compact audience navigation column with Madeora icons and links for Individuals, Couples, Families, and Housemates; and a featured product-storytelling panel.
+- The featured panel should use a faithful Madeora product preview and introduce Personal spaces and shared Homes, with an action to explore how Madeora works.
+- Illustrative copy from the selected concept: “Madeora for you”, “Life works better together.” and “Discover Personal spaces and shared Homes.” Final menu copy and destination routes are not separately approved.
+- Use existing Madeora tokens, typography and icons in both themes. Provide keyboard-accessible disclosure, focus handling, Escape dismissal, and a compact mobile equivalent; avoid hover-only interaction.
+- Do not create dead links or imply unimplemented audience pages exist. Resolve destinations against existing routes or defer them explicitly.
+
+## First iteration handoff
+
+The user has concluded the first design iteration after Decision 15. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
+
 ## Implementation principles for Claude Code
 
-1. **Do not implement based solely on this partial specification.** Wait for explicit approval of implementation or an implementation-ready milestone.
+1. The first design iteration is complete. Implement confirmed scope when the user instructs Claude Code to build; do not treat deferred decisions as approved or this milestone as launch authorization.
 2. Treat sections marked CONFIRMED as binding design direction; examples and future topics are not decisions.
 3. Inspect the actual repository structure, existing marketing routes/app, design tokens, icon package, and current product features before making implementation choices.
 4. Keep marketing claims grounded in implemented functionality and clearly distinguish available, upcoming, and conceptual features.
@@ -172,7 +186,7 @@ Use this exact supporting paragraph beneath the hero headline:
 ## Open decisions (NOT YET APPROVED)
 
 - Exact CTA destinations and signup/free-plan availability (CTA labels and intended actions confirmed).
-- Exact navigation destinations, Solutions menu structure, and page architecture (top-level navigation confirmed).
+- Exact navigation destinations, final Solutions menu copy, and page architecture (top-level navigation and hybrid mega menu structure confirmed).
 - Illustration/photography strategy and Ora's role (brand colors and font families confirmed as existing Madeora defaults; editorial headline treatment confirmed).
 - Product showcase autoplay timing, exact widget arrangement, mobile presentation, and precise motion timings (balanced premium motion confirmed).
 - Feature storytelling and personal vs. Home use-case presentation.
@@ -198,6 +212,7 @@ Use this exact supporting paragraph beneath the hero headline:
 | 12  | Marketing typography                 | Existing Madeora fonts with editorial headline styling (D)                                                  | Confirmed |
 | 13  | Homepage navigation                  | Features, Solutions, How it works, Pricing, Log in, Get started (D)                                         | Confirmed |
 | 14  | Navigation header behavior           | Adaptive sticky header: spacious initially, compact on scroll (D) | Confirmed |
+| 15  | Solutions dropdown design | Hybrid premium mega menu with audience links and product storytelling (D) | Confirmed |
 
 ## Update protocol
 
