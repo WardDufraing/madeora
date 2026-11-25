@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–28 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–29 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -302,6 +302,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Verify every claim against implemented behavior and applicable policies. Do not advertise unverified encryption guarantees, certifications, compliance or security features. Keep the legal privacy policy separately accessible.
 - Final headlines, illustration, demonstration controls, route and legal/security copy remain open.
 
+### Decision 29 — Homepage pricing presentation (CONFIRMED)
+
+**Selection: D — Premium editorial pricing preview.**
+
+- Use a concise editorial pricing section with benefit-driven messaging, refined plan previews, a verified starting price, registration CTA and direct link to full pricing.
+- Keep complete subscription details, billing options, feature comparisons, plan limitations and billing FAQ on the dedicated pricing page.
+- Integrate the section into the adaptive editorial canvas, using existing design tokens, responsive layouts and accessible contrast.
+- Plan names, number of plans, prices, free offering, billing intervals and entitlements remain unconfirmed. Do not publish invented pricing or benefits; verify approved commercial terms before launch.
+- Final copy, card composition and pricing page design remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -360,6 +370,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 26 | Homepage section order | Balanced six-stage editorial journey (D) | Confirmed |
 | 27 | Section backgrounds and visual rhythm | Adaptive editorial canvas (D) | Confirmed |
 | 28 | Trust, privacy and security | Premium homepage storytelling with dedicated privacy demonstrations (D + C) | Confirmed |
+| 29 | Homepage pricing presentation | Premium editorial pricing preview (D) | Confirmed |
 
 ## Update protocol
 
