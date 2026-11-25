@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–21 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–22 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -229,6 +229,16 @@ Use this exact supporting paragraph beneath the hero headline:
 - Avoid generic corporate stock photography, exaggerated poses, unrealistically perfect households and artificial purple lighting.
 - Reference imagery is moodboard inspiration only; final assets, licensing and production methods remain open.
 
+### Decision 22 — Ora's marketing presence (CONFIRMED)
+
+**Selection: D — Premium brand companion with dedicated storytelling.**
+
+- Give Ora a dedicated homepage storytelling section, individual landing page, featured position in the Features mega menu and subtle contextual appearances on relevant pages.
+- Present Ora as a thoughtful companion supporting personal and household organization, not as the primary AI-first positioning of Madeora.
+- Reuse Ora's actual visual identity and fixed accent; conceptual illustrations are not final assets. Explain capabilities, personality and privacy using verified product behavior only.
+- Keep appearances restrained, accessible and consistent with both themes. An interactive public website chatbot or guide is not approved by this decision.
+- Final copy, visual compositions and exact contextual placements remain open.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -280,6 +290,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 19 | Homepage feature showcase | Premium bento overview followed by editorial storytelling (D) | Confirmed |
 | 20 | Product visualization style | Layered editorial product compositions with selective lifestyle mockups (D + C) | Confirmed |
 | 21 | Lifestyle photography | Warm editorial realism (D) | Confirmed |
+| 22 | Ora marketing presence | Premium brand companion with dedicated storytelling (D) | Confirmed |
 
 ## Update protocol
 
