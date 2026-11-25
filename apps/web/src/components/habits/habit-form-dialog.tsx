@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { HABIT_LIMITS, habitWeekStarts, type HabitWeekStart } from "@madeora/domain/habits";
@@ -52,14 +52,20 @@ const fields: readonly Field[] = [
   "weekStart",
 ];
 
+const advancedFields: readonly Field[] = [
+  "description",
+  "startsOn",
+  "endsOn",
+  "timeZone",
+  "weekStart",
+];
+
 function isField(value: unknown): value is Field {
   return typeof value === "string" && (fields as readonly string[]).includes(value);
 }
 
-export interface HabitFormDialogProps {
-  /** null: a new habit. */
-  readonly habit: HabitSummary | null;
-  readonly homeId: string | null;
+/** What the editor needs besides the habit: defaults and choices of the current context. */
+export interface HabitFormContext {
   /** The context's today, the first default start date. */
   readonly today: string;
   /** The viewer's week start, the default for a new habit. */
@@ -67,13 +73,23 @@ export interface HabitFormDialogProps {
   /** For personal habits: the viewer's effective timezone and the zones to offer. */
   readonly timeZone: string;
   readonly timeZones: readonly string[];
+}
+
+export interface HabitFormDialogProps extends HabitFormContext {
+  /** null: a new habit. */
+  readonly habit: HabitSummary | null;
+  readonly homeId: string | null;
   readonly onClose: () => void;
 }
 
 /**
- * Creates a habit (name, schedule, start and optional end date, description, week start and, for a
- * personal habit, its timezone) or edits one's name, description and timezone. A schedule, end date
- * or pause changes elsewhere, with a preview. Errors are shown at their fields and focus moves to
+ * The progressive habit editor (redesign decision 67). It opens on the name and, for a new habit,
+ * the two choices people make every time: how often and how it is tracked (once, or a daily
+ * target, which reveals only the target fields). Description, start and end date, week start and a
+ * personal habit's timezone wait behind "More options". Editing reuses the layout with the current
+ * values, changing name, description and timezone; a schedule, end date or pause changes elsewhere,
+ * with a preview. It opens as a side drawer, a bottom sheet on small screens, over the unchanged
+ * list, and asks before dropping unsaved changes. Errors show at their fields and focus moves to
  * the first one.
  */
 export function HabitFormDialog({
@@ -91,8 +107,13 @@ export function HabitFormDialog({
   const locale = useLocale();
   const [id] = useState(newId);
   const [tracking, setTracking] = useState<TrackingDraft>(() => defaultTrackingDraft(locale));
+  const [initialTracking] = useState(() => JSON.stringify(tracking));
   const [trackingErrors, setTrackingErrors] = useState<TrackingErrors | undefined>(undefined);
   const [schedule, setSchedule] = useState<ScheduleDraft>(defaultSchedule);
+  const [initialSchedule] = useState(() => JSON.stringify(schedule));
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreId = useId();
+  const pendingFocus = useRef<Field | null>(null);
   const [scheduleError, setScheduleError] = useState<string | undefined>(undefined);
   const personal = (habit ? habit.homeId : homeId) === null;
   const form = useForm<FormValues>({
@@ -118,6 +139,15 @@ export function HabitFormDialog({
       if (!habit) router.push(habitsPath(homeId, id));
     },
   );
+
+  // A field hidden under "More options" is focused once the section has opened.
+  useEffect(() => {
+    const field = pendingFocus.current;
+    if (field && moreOpen) {
+      pendingFocus.current = null;
+      form.setFocus(field);
+    }
+  }, [moreOpen, form]);
 
   const submit = (values: FormValues) => {
     setTrackingErrors(undefined);
@@ -168,108 +198,160 @@ export function HabitFormDialog({
         }
       }
     }
-    if (first) form.setFocus(first);
+    if (first) {
+      if (advancedFields.includes(first) && !moreOpen) {
+        pendingFocus.current = first;
+        setMoreOpen(true);
+      } else {
+        form.setFocus(first);
+      }
+    }
     if (!parsed.success || first) return;
     save.mutate(parsed.data);
   };
+
+  const dirty =
+    form.formState.isDirty ||
+    JSON.stringify(tracking) !== initialTracking ||
+    JSON.stringify(schedule) !== initialSchedule;
 
   return (
     <Dialog
       open
       onClose={onClose}
       title={habit ? t("editTitle") : t("newTitle")}
+      {...(habit ? {} : { description: t("editorIntro") })}
       closeLabel={t("close")}
+      size="side"
+      dirty={dirty}
+      discardPrompt={{
+        title: t("discardTitle"),
+        message: t("discardMessage"),
+        discard: t("discard"),
+        keep: t("keepEditing"),
+      }}
     >
-      <form
-        noValidate
-        className="flex flex-col gap-4"
-        onSubmit={(event) => {
-          void form.handleSubmit(submit)(event);
-        }}
-        data-testid="habit-form"
-      >
-        <TextField
-          label={t("fieldName")}
-          description={t("fieldNameHint", { max: HABIT_LIMITS.name })}
-          autoComplete="off"
-          error={errors.name ? texts.field(errors.name.message) : undefined}
-          data-testid="habit-name"
-          {...form.register("name")}
-        />
-        <TextArea
-          label={t("fieldDescription")}
-          description={t("fieldOptional")}
-          rows={3}
-          error={errors.description ? texts.field(errors.description.message) : undefined}
-          data-testid="habit-description"
-          {...form.register("description")}
-        />
-        {habit ? null : (
-          <>
-            <HabitScheduleFields
-              value={schedule}
-              onChange={setSchedule}
-              weekStart={chosenWeekStart}
-              error={scheduleError}
-            />
-            <TrackingFields
-              value={tracking}
-              onChange={setTracking}
-              weekly={schedule.kind === "weekly"}
-              errors={trackingErrors}
-            />
-            <TextField
-              label={t("fieldStartsOn")}
-              description={t("fieldStartsOnHint", { days: HABIT_LIMITS.startPastDays })}
-              type="date"
-              error={errors.startsOn ? texts.field(errors.startsOn.message) : undefined}
-              data-testid="habit-starts-on"
-              {...form.register("startsOn")}
-            />
-            <TextField
-              label={t("fieldEndsOn")}
-              description={t("fieldEndsOnHint")}
-              type="date"
-              error={errors.endsOn ? texts.field(errors.endsOn.message) : undefined}
-              data-testid="habit-ends-on"
-              {...form.register("endsOn")}
-            />
-            <SelectField
-              label={t("fieldWeekStart")}
-              description={t("fieldWeekStartHint")}
-              options={habitWeekStarts.map((value) => ({
-                value,
-                label: texts.weekStart(value),
-              }))}
-              data-testid="habit-week-start"
-              {...form.register("weekStart")}
-            />
-          </>
-        )}
-        {personal ? (
-          <SelectField
-            label={t("fieldTimeZone")}
-            description={t("fieldTimeZoneHint")}
-            options={timeZones.map((zone) => ({ value: zone, label: zone }))}
-            error={errors.timeZone ? texts.field(errors.timeZone.message) : undefined}
-            data-testid="habit-time-zone"
-            {...form.register("timeZone")}
+      {(requestClose) => (
+        <form
+          noValidate
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            void form.handleSubmit(submit)(event);
+          }}
+          data-testid="habit-form"
+        >
+          <TextField
+            label={t("fieldName")}
+            description={t("fieldNameHint", { max: HABIT_LIMITS.name })}
+            autoComplete="off"
+            error={errors.name ? texts.field(errors.name.message) : undefined}
+            data-testid="habit-name"
+            {...form.register("name")}
           />
-        ) : null}
-        {save.error ? (
-          <FormAlert tone="error" announce>
-            {texts.failure(save.error.failure)}
-          </FormAlert>
-        ) : null}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-          <Button type="submit" loading={save.busy} data-testid="habit-save">
-            {habit ? t("save") : t("create")}
-          </Button>
-        </div>
-      </form>
+          {habit ? (
+            <p className="text-helper text-fg-muted">{t("editorScheduleElsewhere")}</p>
+          ) : (
+            <>
+              <HabitScheduleFields
+                value={schedule}
+                onChange={setSchedule}
+                weekStart={chosenWeekStart}
+                error={scheduleError}
+              />
+              <TrackingFields
+                value={tracking}
+                onChange={setTracking}
+                weekly={schedule.kind === "weekly"}
+                errors={trackingErrors}
+              />
+            </>
+          )}
+          <div className="flex flex-col gap-3">
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={moreOpen}
+                aria-controls={moreId}
+                onClick={() => {
+                  setMoreOpen(!moreOpen);
+                }}
+                data-testid="habit-more-options"
+              >
+                {moreOpen ? t("lessOptions") : t("moreOptions")}
+              </Button>
+            </div>
+            <div
+              id={moreId}
+              hidden={!moreOpen}
+              className="flex flex-col gap-4"
+              data-testid="habit-more-fields"
+            >
+              <TextArea
+                label={t("fieldDescription")}
+                description={t("fieldOptional")}
+                rows={3}
+                error={errors.description ? texts.field(errors.description.message) : undefined}
+                data-testid="habit-description"
+                {...form.register("description")}
+              />
+              {habit ? null : (
+                <>
+                  <TextField
+                    label={t("fieldStartsOn")}
+                    description={t("fieldStartsOnHint", { days: HABIT_LIMITS.startPastDays })}
+                    type="date"
+                    error={errors.startsOn ? texts.field(errors.startsOn.message) : undefined}
+                    data-testid="habit-starts-on"
+                    {...form.register("startsOn")}
+                  />
+                  <TextField
+                    label={t("fieldEndsOn")}
+                    description={t("fieldEndsOnHint")}
+                    type="date"
+                    error={errors.endsOn ? texts.field(errors.endsOn.message) : undefined}
+                    data-testid="habit-ends-on"
+                    {...form.register("endsOn")}
+                  />
+                  <SelectField
+                    label={t("fieldWeekStart")}
+                    description={t("fieldWeekStartHint")}
+                    options={habitWeekStarts.map((value) => ({
+                      value,
+                      label: texts.weekStart(value),
+                    }))}
+                    data-testid="habit-week-start"
+                    {...form.register("weekStart")}
+                  />
+                </>
+              )}
+              {personal ? (
+                <SelectField
+                  label={t("fieldTimeZone")}
+                  description={t("fieldTimeZoneHint")}
+                  options={timeZones.map((zone) => ({ value: zone, label: zone }))}
+                  error={errors.timeZone ? texts.field(errors.timeZone.message) : undefined}
+                  data-testid="habit-time-zone"
+                  {...form.register("timeZone")}
+                />
+              ) : null}
+            </div>
+          </div>
+          {save.error ? (
+            <FormAlert tone="error" announce>
+              {texts.failure(save.error.failure)}
+            </FormAlert>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={requestClose}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" loading={save.busy} data-testid="habit-save">
+              {habit ? t("save") : t("create")}
+            </Button>
+          </div>
+        </form>
+      )}
     </Dialog>
   );
 }

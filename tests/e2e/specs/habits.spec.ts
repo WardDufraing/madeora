@@ -45,6 +45,8 @@ async function createHabit(
   if (schedule.kind === "weekly") {
     await form.getByTestId("habit-target").selectOption(String(schedule.target));
   }
+  // The start date waits behind "More options" in the progressive editor.
+  await form.getByTestId("habit-more-options").click();
   await form.getByTestId("habit-starts-on").fill(startsOn);
   await form.getByTestId("habit-save").click();
   // A new habit opens on its own page.
