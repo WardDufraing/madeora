@@ -108,6 +108,7 @@ test("a Home's points stay separate, and the personal dashboard shows the person
 
   await page.goto("/?context=personal");
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Personal points" })
@@ -119,6 +120,8 @@ test("a Home's points stay separate, and the personal dashboard shows the person
   // The widget is offered on the personal surface only.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
+  await expect(page.getByTestId("dashboard-catalogue")).toBeVisible();
   await expect(
     page.getByTestId("dashboard-catalogue").getByRole("button", { name: "Add Personal points" }),
   ).toHaveCount(0);

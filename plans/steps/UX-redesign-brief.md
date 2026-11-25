@@ -14,7 +14,7 @@ Source of intent: `docs/design/dashboard-ux-ui-redesign.md` (Decisions 1–71; n
 | UX1b     | `feat/redesign-app-shell-navigation`      | **this PR**: sidebar, All modules, shortcuts, mobile bottom bar and Create menu (`UX1b-brief.md`)       |
 | UX1c     | next                                      | hero header (D12/D40), workspace switcher moved into the sidebar (D11/D41), Ora launcher (D13)          |
 | UX2a     | `feat/dashboard-widget-header`            | **PR open**: widget header and menu, settings panel, empty-state modes, size variants (`UX2a-brief.md`) |
-| UX2b     | Opus                                      | edit mode on the drafts API, gallery, presets, reflow preview                                           |
+| UX2b     | `feat/ux-dashboard-edit-mode`             | **PR open**: edit mode on the drafts API, gallery, presets, reflow, list editing (`UX2b-brief.md`)      |
 | UX2c     | Opus                                      | presets and history UI                                                                                  |
 | UX2d     | Opus                                      | Home views and suggestions UI                                                                           |
 | UX3b     | UI on UX3a                                | calendar modal, borderless look, event preview, work-period blocks                                      |

@@ -117,6 +117,7 @@ test("a Home's goals: a member adds progress from the Goals widget and achieves 
   // Ward adds the Goals widget to the Home dashboard.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page.getByTestId("dashboard-catalogue").getByRole("button", { name: "Add Goals" }).click();
   await page.getByTestId("dashboard-save").click();
   await expect(page.getByTestId("dashboard-editor")).toHaveCount(0);

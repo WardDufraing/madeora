@@ -1,47 +1,57 @@
 "use client";
 
 import { DragHandleIcon } from "@madeora/icons";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { Responsive, useContainerWidth, type Layout, type LayoutItem } from "react-grid-layout";
+import {
+  Responsive,
+  useContainerWidth,
+  verticalCompactor,
+  type Compactor,
+  type Layout,
+  type LayoutItem,
+} from "react-grid-layout";
 
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Dialog } from "@/components/ui/dialog";
-import { SelectField } from "@/components/ui/select-field";
-import { TextField } from "@/components/ui/text-field";
-import type { DashboardRequestError } from "@/dashboard/api";
-import { createTemplate, type DashboardFailure } from "@/dashboard/api";
 import {
   canMove,
   canResize,
+  emptySlots,
+  fitsRows,
+  keepsGaps,
+  moveInStack,
   moveWidget,
+  reflow,
   resizeWidget,
+  setSize,
+  sizePresets,
   type MoveDirection,
   type Placement,
   type ResizeDirection,
+  type SizePresetId,
+  type Slot,
 } from "@/dashboard/geometry";
 import {
   addWidget,
   canAddWidget,
   MAX_ROWS,
-  MAX_WIDGETS,
   removeWidget,
   type DashboardLayout,
   type DashboardWidget,
 } from "@/dashboard/layout";
-import { templateNameSchema, type DashboardTarget } from "@/dashboard/schema";
+import type { DashboardTarget } from "@/dashboard/schema";
 import { starterLayout } from "@/dashboard/starter";
 import type { SourceHome, TemplateOption, WidgetEntry } from "@/dashboard/view-types";
 import {
@@ -49,7 +59,6 @@ import {
   breakpointFor,
   breakpointMinWidths,
   breakpoints,
-  catalogueFor,
   defaultConfig,
   emptyStateModeOf,
   GRID_GAP,
@@ -61,17 +70,24 @@ import {
 import { isolate } from "@/invitations/format";
 
 import { WidgetFrame } from "./dashboard-grid";
+import { LayoutTools } from "./layout-tools";
+import { presetKey, StackEditor } from "./stack-editor";
+import { useDraftAutosave, type DraftStatus } from "./use-draft-autosave";
 import { useFailureMessage } from "./use-failure-message";
-import { dashboardTemplatesKey, useTemplateOptions } from "./use-template-options";
+import { useTemplateOptions } from "./use-template-options";
 import { useWidgetLabels } from "./use-widget-labels";
-import { WidgetPreview } from "./widget-preview";
+import { WidgetGallery } from "./widget-gallery";
 import { WidgetSettings } from "./widget-settings";
 
 /**
- * Dashboard edit mode (S17; spec "Confirmed dashboard edit mode"): drag and resize with React Grid
- * Layout, or the same moves with the keyboard and buttons, with every change announced. Edits stay
- * in a draft until Save; Cancel and leaving the page ask first when something changed. Each screen
- * size keeps its own arrangement, and this edits the one that fits the dashboard's width now.
+ * Dashboard edit mode (S17, UX2b; redesign decisions 2–7, 25, 30). Every change (move, resize, add,
+ * remove, hide, settings) stays in a draft that is autosaved to the server for recovery, never
+ * published: Done commits it, Cancel discards it. Undo and Redo step through this session's
+ * changes. Desktop and tablet keep the gaps people leave and move only widgets that would overlap,
+ * with React Grid Layout showing every affected widget's new place live while dragging or resizing
+ * (the same `reflow` the keyboard and buttons use, so every route gives the same result). Each
+ * screen size keeps its own arrangement, and this edits the one that fits the dashboard's width now;
+ * on a phone the same draft can also be arranged as a list.
  *
  * Widget content is inert here: a tap or click arranges, it never opens a widget's links.
  */
@@ -87,10 +103,28 @@ type Confirmation =
   | { readonly kind: "reset" }
   | { readonly kind: "apply"; readonly option: TemplateOption };
 
+interface History {
+  readonly past: readonly DashboardLayout[];
+  readonly present: DashboardLayout;
+  readonly future: readonly DashboardLayout[];
+}
+
+/** Undo steps kept in one edit session. */
+const HISTORY_LIMIT = 50;
+
 const sizeKey = { lg: "sizeWide", md: "sizeMedium", sm: "sizeNarrow" } as const satisfies Record<
   Breakpoint,
   string
 >;
+
+const statusKey = {
+  idle: "draftIdle",
+  unsaved: "draftUnsaved",
+  saving: "draftSaving",
+  saved: "draftSaved",
+  failed: "draftFailed",
+  local: "draftLocal",
+} as const satisfies Record<DraftStatus, string>;
 
 function sameLayout(a: DashboardLayout, b: DashboardLayout): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -111,31 +145,45 @@ function newId(): string {
 
 export function DashboardEditor({
   target,
+  committed,
   initial,
+  resumed,
+  baseRevision,
+  doneRequest = 0,
   entries,
   sourceHomes,
   canUndo,
   pending,
   onAction,
-  onDone,
+  onCancel,
 }: {
   readonly target: DashboardTarget;
-  /** The saved layout this draft starts from. */
+  /** The dashboard as it is saved now: Cancel goes back to it. */
+  readonly committed: DashboardLayout;
+  /** Where this session starts: the saved layout, or a resumed draft. */
   readonly initial: DashboardLayout;
+  /** The session resumed a draft the server already holds. */
+  readonly resumed: boolean;
+  /** The committed revision the draft builds on. */
+  readonly baseRevision: number;
+  /** Changes when the dashboard asks to run Done again (keeping this draft after a conflict). */
+  readonly doneRequest?: number;
   readonly entries: readonly WidgetEntry[];
   readonly sourceHomes: readonly SourceHome[];
   readonly canUndo: boolean;
   /** A save, reset, undo or template is being sent. */
   readonly pending: boolean;
-  readonly onAction: (action: EditorAction) => void;
-  /** Leave edit mode without saving. */
-  readonly onDone: () => void;
+  /** Sends a commit; resolves to whether it succeeded. */
+  readonly onAction: (action: EditorAction) => Promise<boolean>;
+  /** Leave edit mode and discard the draft (already confirmed when something changed). */
+  readonly onCancel: () => void;
 }) {
   const t = useTranslations("Dashboard");
   const labels = useWidgetLabels();
   const failureMessage = useFailureMessage();
   const helpId = useId();
-  const [draft, setDraft] = useState(initial);
+  const [history, setHistory] = useState<History>({ past: [], present: initial, future: [] });
+  const draft = history.present;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [announcement, setAnnouncementText] = useState("");
   // The same message twice (another "cannot move", or the same position) would not be announced
@@ -146,19 +194,64 @@ export function DashboardEditor({
     setAnnouncementText(text === "" ? "" : repeat.current ? `${text}\u00a0` : text);
   }, []);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  // Where keyboard focus goes after a widget is removed: the next widget's handle, or the catalogue
-  // when none is left, so focus never falls back to the top of the page.
-  const focusAfterRemove = useRef<{ readonly id: string | null } | null>(null);
+  const [gallery, setGallery] = useState<{ readonly slot: Slot | null } | null>(null);
+  const [listView, setListView] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  // Where keyboard focus goes after the arrangement changes: a widget's handle (after a remove, the
+  // next one; after an add, the new one), or the Add widget button when none is left, so focus never
+  // falls back to the top of the page.
+  const focusRequest = useRef<{ readonly id: string | null } | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
   const templates = useTemplateOptions(target);
   const { width, containerRef, mounted } = useContainerWidth({ measureBeforeMount: true });
   const breakpoint = breakpointFor(width);
-  const dirty = !sameLayout(draft, initial);
+  const dirty = !sameLayout(draft, committed);
   const kind = target.kind;
+  const autosave = useDraftAutosave({ target, layout: draft, baseRevision, startedSaved: resumed });
+  // The drag or resize in progress: the arrangement it started from, so the live preview is always
+  // computed from there and never drifts while the pointer moves back and forth.
+  const gesture = useRef<{ readonly id: string; readonly base: readonly Placement[] } | null>(null);
 
-  // Leaving the page (closing the tab, reloading, following a link) asks first while the draft has
-  // unsaved changes. Links inside the app do not unload the page, so they are asked about here too.
+  function commit(change: (current: DashboardLayout) => DashboardLayout) {
+    setHistory((current) => {
+      const next = change(current.present);
+      if (next === current.present || sameLayout(next, current.present)) return current;
+      return {
+        past: [...current.past, current.present].slice(-HISTORY_LIMIT),
+        present: next,
+        future: [],
+      };
+    });
+  }
+
+  function undoEdit() {
+    setHistory((current) => {
+      const previous = current.past.at(-1);
+      if (!previous) return current;
+      return {
+        past: current.past.slice(0, -1),
+        present: previous,
+        future: [current.present, ...current.future],
+      };
+    });
+    setAnnouncement(t("announceUndone"));
+  }
+
+  function redoEdit() {
+    setHistory((current) => {
+      const [next, ...rest] = current.future;
+      if (!next) return current;
+      return { past: [...current.past, current.present], present: next, future: rest };
+    });
+    setAnnouncement(t("announceRedone"));
+  }
+
+  // Leaving the page (closing the tab, reloading, following a link) asks first while a change is not
+  // safely stored: edited but not yet autosaved, a failed autosave, or no server draft at all. A
+  // stored draft is offered again next time, so leaving then is safe (decision 6).
+  const unsafe = dirty && !autosave.persisted;
   useEffect(() => {
-    if (!dirty) return;
+    if (!unsafe) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
@@ -177,7 +270,7 @@ export function DashboardEditor({
       window.removeEventListener("beforeunload", beforeUnload);
       document.removeEventListener("click", click, true);
     };
-  }, [dirty, t]);
+  }, [unsafe, t]);
 
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   const homeName = (homeId: string) => sourceHomes.find((home) => home.id === homeId)?.name;
@@ -201,10 +294,10 @@ export function DashboardEditor({
     return pa.y - pb.y || pa.x - pb.x;
   });
 
-  function updatePlacements(next: Placement[]) {
-    setDraft((current) => ({
+  function updatePlacements(next: Placement[], at: Breakpoint = breakpoint) {
+    commit((current) => ({
       ...current,
-      placements: { ...current.placements, [breakpoint]: next },
+      placements: { ...current.placements, [at]: next },
     }));
   }
 
@@ -242,6 +335,18 @@ export function DashboardEditor({
     setAnnouncement(describePosition(id, next));
   }
 
+  function applyPreset(widget: DashboardWidget, preset: SizePresetId) {
+    const size = sizePresets(widget.type, breakpoint).find((candidate) => candidate.id === preset);
+    if (!size) return;
+    const next = setSize(placements, widget.id, widget.type, size.w, size.h, breakpoint);
+    if (!fitsRows(next)) {
+      setAnnouncement(t("announceCannotResize"));
+      return;
+    }
+    updatePlacements(next);
+    setAnnouncement(describePosition(widget.id, next));
+  }
+
   function handleKey(event: ReactKeyboardEvent, widget: DashboardWidget) {
     const moves: Record<string, MoveDirection> = {
       ArrowUp: "up",
@@ -263,6 +368,45 @@ export function DashboardEditor({
     else move(widget.id, direction as MoveDirection);
   }
 
+  // Desktop and tablet: no compaction, overlaps allowed while React Grid Layout moves the dragged
+  // widget, and every frame resolved by `reflow` from where the gesture started (decision 5's live
+  // preview). The phone keeps React Grid Layout's vertical stacking.
+  const compactor = useMemo<Compactor>(
+    () =>
+      keepsGaps(breakpoint)
+        ? {
+            type: null,
+            allowOverlap: true,
+            compact(layout: Layout): Layout {
+              const active = gesture.current;
+              if (!active) return layout;
+              const item = layout.find((candidate) => candidate.i === active.id);
+              if (!item) return layout;
+              const next = reflow(active.base, [
+                { id: item.i, x: item.x, y: item.y, w: item.w, h: item.h },
+              ]);
+              const byId = new Map(next.map((p) => [p.id, p]));
+              return layout.map((candidate) => {
+                const p = byId.get(candidate.i);
+                return p ? { ...candidate, x: p.x, y: p.y, w: p.w, h: p.h } : candidate;
+              });
+            },
+          }
+        : verticalCompactor,
+    [breakpoint],
+  );
+
+  function startGesture(_layout: Layout, item: LayoutItem | null) {
+    if (!item) return;
+    gesture.current = { id: item.i, base: placements };
+    setDragging(true);
+  }
+
+  function endGesture() {
+    gesture.current = null;
+    setDragging(false);
+  }
+
   // A drag or resize ended: keep the arrangement for this screen size only.
   function handleLayoutChange(layout: Layout) {
     const byId = new Map(layout.map((item) => [item.i, item]));
@@ -271,12 +415,18 @@ export function DashboardEditor({
       return item ? [{ id: p.id, x: item.x, y: item.y, w: item.w, h: item.h }] : [];
     });
     if (next.length === placements.length && !samePlacements(next, placements)) {
+      if (!fitsRows(next)) {
+        // Past the last row: the server would refuse it, so keep what was there.
+        setAnnouncement(t("announceCannotMove"));
+        setHistory((current) => ({ ...current }));
+        return;
+      }
       updatePlacements(next);
     }
   }
 
   function updateWidget(id: string, change: Partial<Pick<DashboardWidget, "hidden" | "config">>) {
-    setDraft((current) => ({
+    commit((current) => ({
       ...current,
       widgets: current.widgets.map((widget) =>
         widget.id === id ? { ...widget, ...change } : widget,
@@ -284,33 +434,52 @@ export function DashboardEditor({
     }));
   }
 
+  function toggleHidden(widget: DashboardWidget) {
+    updateWidget(widget.id, { hidden: !widget.hidden });
+    setAnnouncement(
+      t(widget.hidden ? "announceShown" : "announceHidden", { widget: titleOf(widget) }),
+    );
+  }
+
   useEffect(() => {
-    const request = focusAfterRemove.current;
+    const request = focusRequest.current;
     if (!request) return;
-    focusAfterRemove.current = null;
-    const handle = request.id
-      ? document.querySelector<HTMLElement>(
-          `[data-testid="dashboard-edit-widget"][data-widget-id="${request.id}"] [data-testid="dashboard-arrange"]`,
-        )
-      : null;
-    (
-      handle ??
-      document.querySelector<HTMLElement>(
-        '[data-testid="dashboard-catalogue"] button:not(:disabled)',
-      )
-    )?.focus();
-  }, [draft]);
+    focusRequest.current = null;
+    const find = () =>
+      request.id
+        ? (document.querySelector<HTMLElement>(
+            `[data-testid="dashboard-edit-widget"][data-widget-id="${request.id}"] [data-testid="dashboard-arrange"]`,
+          ) ??
+          document.querySelector<HTMLElement>(
+            `[data-testid="dashboard-stack-row"][data-widget-id="${request.id}"] button:not(:disabled)`,
+          ))
+        : null;
+    const handle = find();
+    if (handle || !request.id) {
+      (handle ?? addButton.current)?.focus();
+      return;
+    }
+    // A widget just added appears once the grid has laid it out: try again on the next frame.
+    const frame = window.requestAnimationFrame(() => {
+      (find() ?? addButton.current)?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [draft, listView]);
 
   function remove(widget: DashboardWidget) {
     const index = ordered.findIndex((w) => w.id === widget.id);
     const next = ordered[index + 1] ?? ordered[index - 1];
-    focusAfterRemove.current = { id: next?.id ?? null };
-    setDraft((current) => removeWidget(current, widget.id));
+    focusRequest.current = { id: next?.id ?? null };
+    commit((current) => removeWidget(current, widget.id));
     setSelectedId(null);
     setAnnouncement(t("announceRemoved", { widget: titleOf(widget) }));
   }
 
   function add(type: WidgetType, sourceHomeId: string | null) {
+    const slot = gallery?.slot ?? null;
+    setGallery(null);
     if (!canAddWidget(draft, type)) {
       setAnnouncement(t("addRowsFull", { max: MAX_ROWS }));
       return;
@@ -322,9 +491,48 @@ export function DashboardEditor({
       config: defaultConfig(type),
       ...(sourceHomeId ? { source: { homeId: sourceHomeId } } : {}),
     };
-    setDraft((current) => addWidget(current, widget));
+    const next = addWidget(draft, widget, slot ? { breakpoint, slot } : undefined);
+    commit(() => next);
     setSelectedId(widget.id);
-    setAnnouncement(t("announceAdded", { widget: titleOf(widget) }));
+    // The new widget is outlined and focused, so it is easy to find (decision 7).
+    focusRequest.current = { id: widget.id };
+    const placed = next.placements[breakpoint].find((p) => p.id === widget.id);
+    setAnnouncement(
+      slot && placed
+        ? t("announceAddedHere", {
+            widget: titleOf(widget),
+            row: placed.y + 1,
+            column: placed.x + 1,
+          })
+        : t("announceAdded", { widget: titleOf(widget) }),
+    );
+  }
+
+  async function done() {
+    if (!dirty) {
+      // Nothing to commit: leave, dropping a resumed draft that matches the saved layout.
+      await autosave.stop();
+      onCancel();
+      return;
+    }
+    await autosave.stop();
+    const ok = await onAction({ kind: "save", layout: draft });
+    if (!ok) autosave.resume();
+  }
+
+  // "Replace it with my version" after a conflict: Done again, on the newer revision.
+  const doneRef = useRef(done);
+  useEffect(() => {
+    doneRef.current = done;
+  });
+  useEffect(() => {
+    if (doneRequest > 0) void doneRef.current();
+  }, [doneRequest]);
+
+  async function commitNow(action: EditorAction) {
+    await autosave.stop();
+    const ok = await onAction(action);
+    if (!ok) autosave.resume();
   }
 
   const rglLayouts = Object.fromEntries(
@@ -351,6 +559,11 @@ export function DashboardEditor({
       return [bp, items];
     }),
   );
+
+  // "Add widget here" (decision 3): the free areas inside the arrangement, edit mode only.
+  const slots = !dragging && draft.widgets.length > 0 ? emptySlots(placements, breakpoint) : [];
+  const cols = breakpointColumns[breakpoint];
+  const colWidth = (width - GRID_GAP * (cols - 1)) / cols;
 
   const confirmTitle =
     confirmation?.kind === "cancel"
@@ -379,7 +592,7 @@ export function DashboardEditor({
       <div className="flex flex-col gap-3 text-body">
         <p>{confirmation.kind === "reset" ? t("resetConfirm") : t("applyConfirm")}</p>
         <p>{t("replaceWith", { widgets: widgets.map(labels.name).join(", ") })}</p>
-        {dirty ? <p>{t("discardUnsaved")}</p> : null}
+        {dirty || resumed ? <p>{t("discardUnsaved")}</p> : null}
         <p>{t("undoOnce")}</p>
       </div>
     );
@@ -389,10 +602,16 @@ export function DashboardEditor({
     const current = confirmation;
     setConfirmation(null);
     if (!current) return;
-    if (current.kind === "cancel") onDone();
-    else if (current.kind === "reset") onAction({ kind: "reset" });
-    else onAction({ kind: "apply", option: current.option });
+    if (current.kind === "cancel") {
+      void autosave.stop().then(onCancel);
+    } else if (current.kind === "reset") {
+      void commitNow({ kind: "reset" });
+    } else {
+      void commitNow({ kind: "apply", option: current.option });
+    }
   }
+
+  const listEditing = breakpoint === "sm" && listView;
 
   return (
     <div className="flex flex-col gap-6" data-testid="dashboard-editor">
@@ -403,35 +622,84 @@ export function DashboardEditor({
         {t("keyboardHelp")}
       </p>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div
+        role="toolbar"
+        aria-label={t("editToolbar")}
+        className={cx(
+          "sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-card border border-line",
+          "bg-surface p-2 text-fg shadow-raised",
+        )}
+        data-testid="dashboard-edit-toolbar"
+      >
         <Button
+          ref={addButton}
+          size="sm"
           onClick={() => {
-            onAction({ kind: "save", layout: draft });
+            setGallery({ slot: null });
           }}
-          loading={pending}
-          disabled={!dirty}
-          data-testid="dashboard-save"
+          data-testid="dashboard-add-widget"
         >
-          {t("save")}
+          {t("galleryOpen")}
         </Button>
         <Button
+          size="sm"
+          variant="secondary"
+          disabled={history.past.length === 0 || pending}
+          onClick={undoEdit}
+          data-testid="dashboard-edit-undo"
+        >
+          {t("undoEdit")}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={history.future.length === 0 || pending}
+          onClick={redoEdit}
+          data-testid="dashboard-edit-redo"
+        >
+          {t("redoEdit")}
+        </Button>
+        <p
+          className="min-w-0 flex-1 text-helper text-fg-muted"
+          data-testid="dashboard-draft-status"
+          data-status={autosave.status}
+        >
+          {autosave.status === "idle" && !dirty ? t("noChanges") : t(statusKey[autosave.status])}
+          {autosave.status === "failed" ? (
+            <Button size="sm" variant="ghost" className="ms-2" onClick={autosave.retry}>
+              {t("draftRetry")}
+            </Button>
+          ) : null}
+        </p>
+        <Button
+          size="sm"
           variant="secondary"
           disabled={pending}
           onClick={() => {
-            if (dirty) setConfirmation({ kind: "cancel" });
-            else onDone();
+            if (dirty || resumed) setConfirmation({ kind: "cancel" });
+            else void autosave.stop().then(onCancel);
           }}
         >
           {t("cancel")}
         </Button>
-        <p className="text-helper text-fg-muted">{dirty ? t("unsavedChanges") : t("noChanges")}</p>
+        {/* The test id predates the redesign's "Done" label; it is the commit button. */}
+        <Button
+          size="sm"
+          onClick={() => {
+            void done();
+          }}
+          loading={pending}
+          data-testid="dashboard-save"
+        >
+          {t("done")}
+        </Button>
       </div>
 
       <FormAlert tone="info">
         {t("editingSize", { size: t(sizeKey[breakpoint]) })} {t("editHelp")}
       </FormAlert>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <EditorPanel title={t("panelSelected")}>
           {selected ? (
             <SelectedWidget
@@ -448,16 +716,14 @@ export function DashboardEditor({
               onResize={(direction) => {
                 resize(selected.id, selected.type, direction);
               }}
+              onPreset={(preset) => {
+                applyPreset(selected, preset);
+              }}
               onConfig={(config) => {
                 updateWidget(selected.id, { config });
               }}
               onToggleHidden={() => {
-                updateWidget(selected.id, { hidden: !selected.hidden });
-                setAnnouncement(
-                  t(selected.hidden ? "announceShown" : "announceHidden", {
-                    widget: titleOf(selected),
-                  }),
-                );
+                toggleHidden(selected);
               }}
               onRemove={() => {
                 remove(selected);
@@ -466,16 +732,6 @@ export function DashboardEditor({
           ) : (
             <p className="text-body text-fg-muted">{t("selectHint")}</p>
           )}
-        </EditorPanel>
-
-        <EditorPanel title={t("panelAdd")}>
-          <AddWidgets
-            kind={kind}
-            sourceHomes={sourceHomes}
-            full={draft.widgets.length >= MAX_WIDGETS}
-            fits={(type) => canAddWidget(draft, type)}
-            onAdd={add}
-          />
         </EditorPanel>
 
         <EditorPanel title={t("panelLayout")}>
@@ -496,13 +752,55 @@ export function DashboardEditor({
               setConfirmation({ kind: "reset" });
             }}
             onUndo={() => {
-              onAction({ kind: "undo" });
+              void commitNow({ kind: "undo" });
             }}
           />
         </EditorPanel>
       </div>
 
-      <div ref={containerRef} data-testid="dashboard-edit-grid">
+      {breakpoint === "sm" ? (
+        <div role="group" aria-label={t("arrangeAs")} className="flex gap-2">
+          {[false, true].map((list) => (
+            <Button
+              key={String(list)}
+              size="sm"
+              variant={listView === list ? "primary" : "secondary"}
+              aria-pressed={listView === list}
+              onClick={() => {
+                setListView(list);
+              }}
+              data-testid={list ? "dashboard-view-list" : "dashboard-view-grid"}
+            >
+              {list ? t("viewList") : t("viewGrid")}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
+      {listEditing ? (
+        <StackEditor
+          widgets={draft.widgets}
+          placements={draft.placements.sm}
+          titleOf={titleOf}
+          onMove={(widget, direction) => {
+            const next = moveInStack(draft.placements.sm, widget.id, direction);
+            updatePlacements(next, "sm");
+            focusRequest.current = { id: widget.id };
+            setAnnouncement(describePosition(widget.id, next));
+          }}
+          onSize={(widget, preset) => {
+            applyPreset(widget, preset);
+          }}
+          onToggleHidden={toggleHidden}
+          onRemove={remove}
+        />
+      ) : null}
+
+      <div
+        ref={containerRef}
+        className={cx("relative", listEditing && "hidden")}
+        data-testid="dashboard-edit-grid"
+      >
         {mounted ? (
           <Responsive
             width={width}
@@ -514,8 +812,13 @@ export function DashboardEditor({
             maxRows={MAX_ROWS}
             margin={[GRID_GAP, GRID_GAP]}
             containerPadding={[0, 0]}
+            compactor={compactor}
             dragConfig={{ enabled: true, handle: ".dash-drag-handle" }}
             resizeConfig={{ enabled: true, handles: ["se"] }}
+            onDragStart={startGesture}
+            onResizeStart={startGesture}
+            onDragStop={endGesture}
+            onResizeStop={endGesture}
             onLayoutChange={handleLayoutChange}
           >
             {ordered.map((widget) => {
@@ -585,10 +888,50 @@ export function DashboardEditor({
             })}
           </Responsive>
         ) : null}
+        {mounted && width > 0
+          ? slots.map((slot) => (
+              <button
+                key={`${String(slot.x)}:${String(slot.y)}`}
+                type="button"
+                className={cx(
+                  "absolute flex items-center justify-center rounded-card border-2 border-dashed border-line",
+                  "text-helper font-medium text-fg-muted hover:border-accent hover:text-accent-fg",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                )}
+                style={{
+                  // React Grid Layout positions from the left in every direction; so do the slots.
+                  left: slot.x * (colWidth + GRID_GAP),
+                  top: slot.y * (ROW_HEIGHT + GRID_GAP),
+                  width: slot.w * colWidth + (slot.w - 1) * GRID_GAP,
+                  height: slot.h * ROW_HEIGHT + (slot.h - 1) * GRID_GAP,
+                }}
+                aria-label={t("addHereNamed", { row: slot.y + 1, column: slot.x + 1 })}
+                onClick={() => {
+                  setGallery({ slot });
+                }}
+                data-testid="dashboard-add-here"
+              >
+                {t("addHere")}
+              </button>
+            ))
+          : null}
         {draft.widgets.length === 0 ? (
           <p className="text-body text-fg-muted">{t("editEmpty")}</p>
         ) : null}
       </div>
+
+      <WidgetGallery
+        open={gallery !== null}
+        target={target}
+        layout={draft}
+        sourceHomes={sourceHomes}
+        here={gallery?.slot ? { row: gallery.slot.y + 1, column: gallery.slot.x + 1 } : null}
+        fits={(type) => canAddWidget(draft, type)}
+        onAdd={add}
+        onClose={() => {
+          setGallery(null);
+        }}
+      />
 
       <Dialog
         open={confirmation !== null}
@@ -655,6 +998,7 @@ function SelectedWidget({
   breakpoint,
   onMove,
   onResize,
+  onPreset,
   onConfig,
   onToggleHidden,
   onRemove,
@@ -667,6 +1011,7 @@ function SelectedWidget({
   readonly breakpoint: Breakpoint;
   readonly onMove: (direction: MoveDirection) => void;
   readonly onResize: (direction: ResizeDirection) => void;
+  readonly onPreset: (preset: SizePresetId) => void;
   readonly onConfig: (config: Record<string, unknown>) => void;
   readonly onToggleHidden: () => void;
   readonly onRemove: () => void;
@@ -684,6 +1029,8 @@ function SelectedWidget({
     ["taller", t("resizeTaller")],
     ["shorter", t("resizeShorter")],
   ];
+  const presets = sizePresets(widget.type, breakpoint);
+  const current = placements.find((p) => p.id === widget.id);
   return (
     <div className="flex flex-col gap-4" data-testid="dashboard-selected">
       <p className="text-body font-medium break-words">{title}</p>
@@ -720,6 +1067,31 @@ function SelectedWidget({
             </Button>
           ))}
         </div>
+        {presets.length > 1 ? (
+          <div
+            role="group"
+            aria-label={t("sizePresets")}
+            className="flex flex-wrap gap-2"
+            data-testid="dashboard-size-presets"
+          >
+            {presets.map((preset) => {
+              const active = current?.w === preset.w && current.h === preset.h;
+              return (
+                <Button
+                  key={preset.id}
+                  size="sm"
+                  variant={active ? "primary" : "secondary"}
+                  aria-pressed={active}
+                  onClick={() => {
+                    onPreset(preset.id);
+                  }}
+                >
+                  {t(presetKey[preset.id])}
+                </Button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={onToggleHidden}>
@@ -730,250 +1102,6 @@ function SelectedWidget({
         </Button>
       </div>
       <p className="text-helper text-fg-muted">{t("settingsAfterSave")}</p>
-    </div>
-  );
-}
-
-function AddWidgets({
-  kind,
-  sourceHomes,
-  full,
-  fits,
-  onAdd,
-}: {
-  readonly kind: DashboardTarget["kind"];
-  readonly sourceHomes: readonly SourceHome[];
-  readonly full: boolean;
-  /** Whether a widget of this type still fits within the row limit at every width (S17-L1). */
-  readonly fits: (type: WidgetType) => boolean;
-  readonly onAdd: (type: WidgetType, sourceHomeId: string | null) => void;
-}) {
-  const t = useTranslations("Dashboard");
-  const labels = useWidgetLabels();
-  const [sourceHomeId, setSourceHomeId] = useState(sourceHomes[0]?.id ?? "");
-  const catalogue = catalogueFor(kind);
-  const needsSource = catalogue.some((item) => item.needsSource);
-  const chosenHome = sourceHomes.find((home) => home.id === sourceHomeId) ?? sourceHomes[0];
-
-  return (
-    <div className="flex flex-col gap-4">
-      {full ? <FormAlert tone="info">{t("addFull", { count: MAX_WIDGETS })}</FormAlert> : null}
-      {needsSource && sourceHomes.length > 0 ? (
-        <SelectField
-          label={t("sourceHome")}
-          description={t("sourceHomeDescription")}
-          value={chosenHome?.id ?? ""}
-          options={sourceHomes.map((home) => ({ value: home.id, label: home.name }))}
-          onChange={(event) => {
-            setSourceHomeId(event.currentTarget.value);
-          }}
-        />
-      ) : null}
-      <ul className="flex flex-col gap-3" data-testid="dashboard-catalogue">
-        {catalogue.map(({ type, needsSource: bound }) => {
-          const unavailable = bound && !chosenHome;
-          const tooTall = !full && !fits(type);
-          return (
-            <li key={`${type}:${String(bound)}`} className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <WidgetPreview type={type} />
-                <p className="min-w-0 flex-1 text-body font-medium">
-                  {bound && chosenHome
-                    ? t("widgetFromHome", {
-                        widget: labels.name(type),
-                        home: isolate(chosenHome.name),
-                      })
-                    : kind === "personal" && !bound
-                      ? labels.personalName(type)
-                      : labels.name(type)}
-                </p>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={full || unavailable || tooTall}
-                  onClick={() => {
-                    onAdd(type, bound && chosenHome ? chosenHome.id : null);
-                  }}
-                  aria-label={t("addWidgetNamed", {
-                    widget:
-                      bound && chosenHome
-                        ? t("widgetFromHome", {
-                            widget: labels.name(type),
-                            home: isolate(chosenHome.name),
-                          })
-                        : kind === "personal" && !bound
-                          ? labels.personalName(type)
-                          : labels.name(type),
-                  })}
-                >
-                  {t("addWidget")}
-                </Button>
-              </div>
-              <p className="text-helper text-fg-muted">{labels.description(type)}</p>
-              {unavailable ? <p className="text-helper text-fg-muted">{t("needsHome")}</p> : null}
-              {tooTall ? (
-                <p className="text-helper text-fg-muted">{t("addRowsFull", { max: MAX_ROWS })}</p>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function LayoutTools({
-  target,
-  templates,
-  templatesLoading,
-  templatesFailed,
-  templateName,
-  dirty,
-  canUndo,
-  pending,
-  failureMessage,
-  onApply,
-  onReset,
-  onUndo,
-}: {
-  readonly target: DashboardTarget;
-  readonly templates: readonly TemplateOption[];
-  readonly templatesLoading: boolean;
-  readonly templatesFailed: boolean;
-  readonly templateName: (option: TemplateOption) => string;
-  readonly dirty: boolean;
-  readonly canUndo: boolean;
-  readonly pending: boolean;
-  readonly failureMessage: (failure: DashboardFailure) => string;
-  readonly onApply: (option: TemplateOption) => void;
-  readonly onReset: () => void;
-  readonly onUndo: () => void;
-}) {
-  const t = useTranslations("Dashboard");
-  const labels = useWidgetLabels();
-  const queryClient = useQueryClient();
-  const [templateKey, setTemplateKey] = useState(templates[0]?.key ?? "");
-  const chosen = templates.find((option) => option.key === templateKey) ?? templates[0];
-  const [name, setName] = useState("");
-  const [nameError, setNameError] = useState<string | undefined>(undefined);
-  const [saved, setSaved] = useState<{ name: string; dropped: number } | null>(null);
-
-  const create = useMutation<{ id: string; dropped: number }, DashboardRequestError, string>({
-    mutationFn: (templateName) => createTemplate(templateName, target),
-    onSuccess: ({ dropped }, templateName) => {
-      setSaved({ name: templateName, dropped });
-      setName("");
-      // The new template is offered at once, without reloading the page.
-      void queryClient.invalidateQueries({ queryKey: dashboardTemplatesKey });
-    },
-  });
-
-  return (
-    <div className="flex flex-col gap-5">
-      {templatesLoading ? (
-        <p className="text-helper text-fg-muted" role="status">
-          {t("templatesLoading")}
-        </p>
-      ) : null}
-      {templatesFailed ? <FormAlert tone="info">{t("templatesFailed")}</FormAlert> : null}
-      {templates.length > 0 && chosen ? (
-        <div className="flex flex-col gap-2">
-          <SelectField
-            label={t("templateLabel")}
-            value={chosen.key}
-            options={templates.map((option) => ({
-              value: option.key,
-              label: templateName(option),
-            }))}
-            onChange={(event) => {
-              setTemplateKey(event.currentTarget.value);
-            }}
-          />
-          <p className="text-helper text-fg-muted">
-            {t("templateContains", { widgets: chosen.widgets.map(labels.name).join(", ") })}
-          </p>
-          <div>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={pending}
-              onClick={() => {
-                onApply(chosen);
-              }}
-              data-testid="dashboard-apply-template"
-            >
-              {t("applyTemplate")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" disabled={pending} onClick={onReset}>
-          {t("resetToStarter")}
-        </Button>
-        {canUndo ? (
-          <Button size="sm" variant="secondary" disabled={pending || dirty} onClick={onUndo}>
-            {t("undoLastChange")}
-          </Button>
-        ) : null}
-      </div>
-
-      <form
-        className="flex flex-col gap-2"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          const parsed = templateNameSchema.safeParse(name);
-          if (!parsed.success) {
-            setNameError(t("templateNameInvalid"));
-            return;
-          }
-          setNameError(undefined);
-          setSaved(null);
-          create.mutate(parsed.data);
-        }}
-      >
-        <TextField
-          label={t("templateName")}
-          description={dirty ? t("saveTemplateFirst") : t("templateNameDescription")}
-          value={name}
-          maxLength={80}
-          error={nameError}
-          onChange={(event) => {
-            setName(event.currentTarget.value);
-          }}
-          disabled={dirty}
-        />
-        <div>
-          <Button
-            type="submit"
-            size="sm"
-            variant="secondary"
-            loading={create.isPending}
-            disabled={dirty}
-          >
-            {t("saveAsTemplate")}
-          </Button>
-        </div>
-        {create.isError ? (
-          <FormAlert tone="error" announce>
-            {failureMessage(create.error.failure)}
-          </FormAlert>
-        ) : null}
-        {saved ? (
-          <FormAlert tone="success" announce>
-            {t("templateSaved", { name: isolate(saved.name) })}{" "}
-            {saved.dropped > 0 ? `${t("templateDropped", { count: saved.dropped })} ` : ""}
-            <Link
-              href="/settings/dashboard-templates"
-              className="font-medium text-accent-fg underline"
-            >
-              {t("manageTemplates")}
-            </Link>
-          </FormAlert>
-        ) : null}
-      </form>
     </div>
   );
 }

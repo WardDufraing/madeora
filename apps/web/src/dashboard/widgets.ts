@@ -649,3 +649,48 @@ export function emptyStateModeOf(type: WidgetType, config: unknown): EmptyStateM
   const mode = (parsed.data as { emptyState?: unknown }).emptyState;
   return emptyStateModes.find((candidate) => candidate === mode) ?? "full";
 }
+
+/** Gallery categories (UX2b; redesign "Widget gallery": Today, Planning, Home, Personal, Lifestyle). */
+export const widgetCategories = ["today", "planning", "home", "personal", "lifestyle"] as const;
+export type WidgetCategory = (typeof widgetCategories)[number];
+
+/** Where each widget type sits in the gallery. Code metadata only; nothing stored changes. */
+export const widgetCategory: { readonly [T in WidgetType]: WidgetCategory } = {
+  welcome: "today",
+  "quick-actions": "today",
+  notifications: "today",
+  ora: "today",
+  tasks: "planning",
+  "upcoming-events": "planning",
+  "meal-planner": "planning",
+  "home-members": "home",
+  "my-chores": "home",
+  "home-chores": "home",
+  "chore-approvals": "home",
+  "chore-schedule": "home",
+  "home-vacation": "home",
+  "weekly-points": "home",
+  "points-leaderboard": "home",
+  "my-points": "home",
+  "personal-points": "personal",
+  habits: "personal",
+  "habit-insights": "personal",
+  "habit-progress": "personal",
+  goals: "personal",
+  "goal-progress": "personal",
+  recipes: "lifestyle",
+  shopping: "lifestyle",
+  "pet-care": "lifestyle",
+  photos: "lifestyle",
+};
+
+/**
+ * Whether a dashboard may hold more than one widget of a type (redesign: "allow multiple instances
+ * only for widgets that support meaningful independent configurations"): types with settings, so
+ * two copies can show different things. The greeting and types without settings are offered once
+ * (once per source Home for Home-bound widgets on the personal dashboard). Layouts saved earlier
+ * with duplicates stay valid; the gallery only stops offering another copy.
+ */
+export function allowsMultiple(type: WidgetType): boolean {
+  return type !== "welcome" && hasSettings(type);
+}

@@ -177,6 +177,7 @@ test("Pet care: schedule, assign, complete, correct, change, pause, widget and c
   // The Pet care widget on the Home dashboard: Bea marks the overdue grooming done there.
   await page.goto(`/homes/${homeId}`);
   await page.getByTestId("dashboard-customize").click();
+  await page.getByTestId("dashboard-add-widget").click();
   await page
     .getByTestId("dashboard-catalogue")
     .getByRole("button", { name: "Add Pet care" })

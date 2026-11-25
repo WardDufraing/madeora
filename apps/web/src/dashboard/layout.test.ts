@@ -342,17 +342,65 @@ describe("readLayout", () => {
 });
 
 describe("editing", () => {
-  it("adds at the bottom and removes without leaving a gap", () => {
+  it("adds at the bottom; removing keeps the gap on desktop and closes it on the phone", () => {
     let layout = withWidget(emptyLayout(), "welcome");
     layout = withWidget(layout, "notifications");
     expect(layout.placements.lg[1]).toMatchObject({ x: 0, y: 2 });
     const firstId = layout.widgets[0]?.id ?? "";
     layout = removeWidget(layout, firstId);
-    expect(layout.placements.lg).toEqual([expect.objectContaining({ x: 0, y: 0 })]);
+    // Ward, 2026-11-25: keep gaps. Only the phone list closes up.
+    expect(layout.placements.lg).toEqual([expect.objectContaining({ x: 0, y: 2 })]);
+    expect(layout.placements.md).toEqual([expect.objectContaining({ x: 0, y: 2 })]);
+    expect(layout.placements.sm).toEqual([expect.objectContaining({ x: 0, y: 0 })]);
     expect(checkLayout(layout, personal).ok).toBe(true);
   });
 
-  it("leaves hidden widgets out of normal view and closes their space", () => {
+  it("adds into a free slot on one breakpoint and at the bottom of the others", () => {
+    let layout = withWidget(emptyLayout(), "welcome");
+    layout = withWidget(layout, "notifications");
+    const firstId = layout.widgets[0]?.id ?? "";
+    layout = removeWidget(layout, firstId);
+    const widget = {
+      id: id(),
+      type: "welcome" as const,
+      hidden: false,
+      config: defaultConfig("welcome"),
+    };
+    const added = addWidget(layout, widget, {
+      breakpoint: "lg",
+      slot: { x: 0, y: 0, w: 12, h: 2 },
+    });
+    expect(added.placements.lg.find((p) => p.id === widget.id)).toMatchObject({ x: 0, y: 0 });
+    // Nothing had to move on the desktop grid.
+    expect(added.placements.lg.find((p) => p.id !== widget.id)).toMatchObject({ x: 0, y: 2 });
+    expect(added.placements.md.find((p) => p.id === widget.id)).toMatchObject({ y: 6 });
+    expect(checkLayout(added, personal).ok).toBe(true);
+  });
+
+  it("keeps a saved gap when reading a layout, and settles overlaps by moving only one widget", () => {
+    const layout = withWidget(withWidget(emptyLayout(), "welcome"), "notifications");
+    const [first, second] = layout.widgets.map((w) => w.id);
+    const gapped = {
+      ...layout,
+      placements: {
+        ...layout.placements,
+        lg: layout.placements.lg.map((p) => (p.id === second ? { ...p, y: 7 } : p)),
+      },
+    };
+    expect(readLayout(gapped, "personal").layout.placements.lg).toEqual(gapped.placements.lg);
+    const overlapping = {
+      ...layout,
+      placements: {
+        ...layout.placements,
+        lg: layout.placements.lg.map((p) => (p.id === second ? { ...p, y: 1 } : p)),
+      },
+    };
+    const read = readLayout(overlapping, "personal").layout.placements.lg;
+    expect(read.find((p) => p.id === first)).toMatchObject({ y: 0 });
+    expect(read.find((p) => p.id === second)).toMatchObject({ y: 2 });
+  });
+
+  it("leaves hidden widgets out of normal view: the phone closes up, desktop keeps the space", () => {
     const layout = personalStarterLayout;
     const hidden = {
       ...layout,
@@ -361,6 +409,9 @@ describe("editing", () => {
     const visible = visiblePlacements(hidden, "sm");
     expect(visible).toHaveLength(4);
     expect(visible[0]).toMatchObject({ y: 0 });
+    const desktop = visiblePlacements(hidden, "lg");
+    expect(desktop).toHaveLength(4);
+    expect(desktop).toEqual(layout.placements.lg.filter((p) => p.id !== layout.widgets[0]?.id));
   });
 
   it("copies a template with new ids and without Home bindings", () => {

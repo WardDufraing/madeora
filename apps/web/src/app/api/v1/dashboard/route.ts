@@ -15,11 +15,13 @@ import { layoutContextFor, loadTarget } from "@/dashboard/server";
  * settings, every widget placed inside the grid without overlaps), and a personal widget may only be
  * bound to a Home the person belongs to. The database checks membership, authority and the revision
  * again: a save from an outdated copy answers 409 instead of overwriting someone else's change.
+ * `commitDraft` (Done in edit mode, UX2b) also discards the person's draft in the same transaction
+ * when the save succeeds; after a 409 the draft is still there to keep or discard.
  */
 export async function PUT(request: Request): Promise<Response> {
   const input = await readDashboardMutation(request, saveDashboardSchema, SAVE_BODY_BYTES);
   if (!input.ok) return input.response;
-  const { target, layout, expectedRevision } = input.data;
+  const { target, layout, expectedRevision, commitDraft } = input.data;
 
   const current = await loadTarget(target);
   if (current.status === "not-found") return failure(404, "not-found");
@@ -31,5 +33,13 @@ export async function PUT(request: Request): Promise<Response> {
   const checked = checkLayout(layout, context);
   if (!checked.ok) return failure(400, "invalid", { fields: [`layout.${checked.issue}`] });
 
-  return persistLayout("dashboard.save_failed", target, checked.layout, expectedRevision, null);
+  return persistLayout(
+    "dashboard.save_failed",
+    target,
+    checked.layout,
+    expectedRevision,
+    null,
+    {},
+    { commitDraft: commitDraft === true },
+  );
 }
