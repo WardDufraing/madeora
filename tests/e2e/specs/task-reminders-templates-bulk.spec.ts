@@ -32,17 +32,20 @@ async function start(page: Page, baseURL: string | undefined): Promise<string> {
     await page.getByRole("button", { name: "Create list" }).click();
     await expect(page.getByTestId("manage-list").filter({ hasText: name })).toBeVisible();
   }
-  await page.goto("/tasks");
+  await page.goto("/tasks?view=all");
   return account.email;
 }
 
 async function addTask(page: Page, title: string, due?: string): Promise<void> {
-  // After adding a task the form stays open for the next one.
-  const opener = page.getByTestId("new-task-open");
-  if (await opener.isVisible()) await opener.click();
+  // + New Task opens a dialog; closed again once the task is added.
+  const form = page.getByTestId("new-task-form");
+  if (!(await form.isVisible())) await page.getByTestId("new-task-open").click();
   await page.getByLabel("Title").fill(title);
   if (due) await page.getByLabel("Due date").fill(due);
   await page.getByRole("button", { name: "Add task" }).click();
+  await expect(page.getByTestId("task-added")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(form).toBeHidden();
   await expect(page.getByTestId("task-row").filter({ hasText: title })).toHaveCount(1);
 }
 
@@ -159,7 +162,7 @@ test("save a task as a template, then create a task from it with its checklist",
     "1 checklist item",
   );
 
-  await page.goto("/tasks");
+  await page.goto("/tasks?view=all");
   await page.getByTestId("new-task-from-template").click();
   await page.getByLabel("Template", { exact: true }).selectOption({ label: "Autumn gutters" });
   const form = page.getByRole("form", { name: "New task from Autumn gutters" });
@@ -256,7 +259,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.getByTestId("bulk-review")).toBeFocused();
     expect(await axeViolations(page)).toEqual([]);
 
-    await page.goto("/tasks");
+    await page.goto("/tasks?view=all");
     await page
       .getByTestId("task-row")
       .filter({ hasText: "Feed the cat" })

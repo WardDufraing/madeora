@@ -1,5 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
 
 import type { DateTimeFormats } from "@/invitations/format";
 import type { TaskDetail, TaskListSummary, TaskRow } from "@/tasks/api";
@@ -122,7 +123,11 @@ function detail(extra: Partial<TaskDetail> = {}): TaskDetail {
   };
 }
 
-function taskList(rows: readonly TaskRow[], total = rows.length) {
+function taskList(
+  rows: readonly TaskRow[],
+  total = rows.length,
+  extra: Partial<ComponentProps<typeof TaskList>> = {},
+) {
   return renderWithQuery(
     <TaskList
       userId="user-a"
@@ -136,6 +141,7 @@ function taskList(rows: readonly TaskRow[], total = rows.length) {
       showListName
       filtered={false}
       pageSize={50}
+      {...extra}
     />,
   );
 }
@@ -180,7 +186,8 @@ describe("TaskList", () => {
         "Fix the tap⁩ was already completed by Bea.",
       );
     });
-    expect(screen.getByRole("heading", { name: "1 task" })).toHaveFocus();
+    // The row stays where it is, so the keyboard stays on its checkbox (decision 50).
+    expect(screen.getByRole("checkbox", { name: "Completed: Fix the tap" })).toHaveFocus();
     expect(router.refresh).toHaveBeenCalled();
   });
 
@@ -207,6 +214,72 @@ describe("TaskList", () => {
     await waitFor(() => {
       expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toEqual({ completed: true });
     });
+  });
+
+  it("says how late a task is, links the row to the side panel and marks the open one", async () => {
+    taskList([row({ id: LABEL, title: "Second" }), row()], 2, {
+      today: "2026-10-16",
+      panelQuery: "view=all",
+      selectedId: TASK,
+    });
+    const rows = await screen.findAllByTestId("task-row");
+    expect(rows[1]).toHaveTextContent("Overdue · 2 days (due 14/10/2026)");
+    const link = within(rows[1] as HTMLElement).getByRole("link", { name: "Fix the tap" });
+    expect(link).toHaveAttribute("href", `/homes/${HOME}/tasks?view=all&task=${TASK}`);
+    expect(link).toHaveAttribute("aria-current", "true");
+    expect(within(rows[0] as HTMLElement).getByRole("link")).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps a completed task in place with Undo, and reopens it from there", async () => {
+    const user = userEvent.setup();
+    taskList([row({ subtasksDone: 2 })]);
+    // A completion refreshes the pages, so listing requests may interleave with the changes.
+    const answers = [
+      {
+        outcome: "completed",
+        completedAt: "2026-10-16T09:00:00Z",
+        completedBy: { me: true, member: ME },
+      },
+      { outcome: "reopened", completedAt: null, completedBy: null },
+    ];
+    fetchMock.mockImplementation((_url: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === "PUT"
+          ? Response.json(answers.shift())
+          : Response.json({ tasks: [], total: 0 }),
+      ),
+    );
+    await user.click(await screen.findByRole("checkbox", { name: "Completed: Fix the tap" }));
+    const undo = await screen.findByTestId("task-undo");
+    expect(screen.getByTestId("task-row")).toHaveTextContent("Completed");
+    await user.click(undo);
+    const puts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+    await waitFor(() => {
+      expect(puts()).toHaveLength(2);
+    });
+    expect(bodyOf(puts()[1]?.[1])).toEqual({ completed: false });
+    await waitFor(() => {
+      expect(screen.queryByTestId("task-undo")).not.toBeInTheDocument();
+    });
+  });
+
+  it("collapses finished work into a Completed section that can be opened", async () => {
+    const user = userEvent.setup();
+    taskList([row()], 1, {
+      completed: { tasks: [row({ id: LABEL, title: "Old job", completed: true })], total: 1 },
+    });
+    const toggle = await screen.findByRole("button", { name: /Completed · 1 task/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Old job")).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Old job")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Completed: Old job" })).toBeChecked();
+  });
+
+  it("draws nothing for an empty group that hides itself", () => {
+    const { container } = taskList([], 0, { heading: "Overdue", hideWhenEmpty: true });
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("loads the next page only when asked", async () => {
@@ -236,7 +309,12 @@ describe("NewTask", () => {
       />,
     );
     await user.click(screen.getByTestId("new-task-open"));
-    expect(screen.getByLabelText(/Title/)).toHaveFocus();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Title/)).toHaveFocus();
+    });
+    // Quick first: the start date, labels and assignees wait behind "More options".
+    expect(screen.queryByLabelText("Start date")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("task-more-options"));
     await user.click(screen.getByRole("button", { name: "Add task" }));
     expect(await screen.findByText("Enter a name or text.")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Title/), "Paint the hall");
@@ -274,7 +352,7 @@ describe("NewTask", () => {
     });
   });
 
-  it("cannot be opened without a list", () => {
+  it("cannot be opened without a list by someone who may not create one", () => {
     renderWithQuery(
       <NewTask
         homeId={null}
@@ -283,9 +361,77 @@ describe("NewTask", () => {
         labels={[]}
         members={[]}
         dateFormat="dmy-slash"
+        canCreateList={false}
       />,
     );
     expect(screen.getByTestId("new-task-open")).toBeDisabled();
+  });
+
+  it("creates the first list together with the first task, after its name is given", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(
+      <NewTask
+        homeId={HOME}
+        lists={[]}
+        defaultListId={null}
+        labels={[]}
+        members={[]}
+        dateFormat="dmy-slash"
+      />,
+    );
+    await user.click(screen.getByTestId("new-task-open"));
+    expect(screen.getByTestId("first-list-note")).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Title/), "Buy bulbs");
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    // No list is created without a name.
+    expect(await screen.findByText(/Give the list a name/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await user.type(screen.getByLabelText(/Name of your first list/), "Household");
+    fetchMock.mockResolvedValueOnce(
+      Response.json(
+        { listId: LIST, taskId: TASK, listRevision: 1, taskRevision: 1 },
+        { status: 201 },
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/task-lists/with-first-task");
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toMatchObject({
+      homeId: HOME,
+      list: { name: "Household" },
+      task: { title: "Buy bulbs", dueDate: null, priority: null, labelIds: [], assigneeIds: [] },
+    });
+  });
+
+  it("offers a quick inline field in a group, presetting its due date", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(
+      <NewTask
+        homeId={null}
+        lists={[{ id: LIST, name: "House" }]}
+        defaultListId={null}
+        labels={[]}
+        members={[]}
+        dateFormat="ymd-dash"
+        placement="inline"
+        defaultDueDate="2026-10-16"
+      />,
+    );
+    await user.click(screen.getByTestId("inline-add-open"));
+    expect(screen.getByLabelText("Due date")).toHaveValue("2026-10-16");
+    fetchMock.mockResolvedValueOnce(Response.json({ id: "x", revision: 1 }, { status: 201 }));
+    await user.type(screen.getByLabelText(/Title/), "Sweep");
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(bodyOf(fetchMock.mock.calls[0]?.[1])).toMatchObject({
+      title: "Sweep",
+      dueDate: "2026-10-16",
+      listId: LIST,
+    });
   });
 });
 

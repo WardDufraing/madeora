@@ -35,12 +35,16 @@ async function start(page: Page, baseURL: string | undefined): Promise<string> {
 async function addWeekly(page: Page, title: string): Promise<void> {
   await page.getByTestId("new-task-open").click();
   await page.getByLabel("Title").fill(title);
+  await page.getByTestId("task-more-options").click();
   await page.getByLabel("Due date").fill(londonToday());
   await page.getByTestId("repeat-frequency").selectOption("weekly");
   await expect(page.getByTestId("repeat-summary")).toContainText("Every week on");
   await expect(page.getByTestId("repeat-summary")).toContainText("Next dates:");
   await page.getByRole("button", { name: "Add task" }).click();
-  // Creating it makes today's occurrence and the next one.
+  await expect(page.getByTestId("task-added")).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Creating it makes today's occurrence and the next one (All tasks shows both).
+  await page.goto("/tasks?view=all");
   const rows = page.getByTestId("task-row").filter({ hasText: title });
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("Repeats");
@@ -99,13 +103,14 @@ test("weekly task: complete, change following, history, delete the series and re
   expect(await axeViolations(page)).toEqual([]);
 
   // From next week's occurrence, change it and the following ones, after the preview.
-  await page.goto("/tasks");
+  await page.goto("/tasks?view=all");
   await page
     .getByTestId("task-row")
     .filter({ hasText: "Water the plants" })
     .filter({ hasNotText: "Overdue" })
     .getByRole("link")
     .click();
+  await page.getByRole("link", { name: "Open full page" }).click();
   await page.getByTestId("task-edit").click();
   await page.getByLabel("Title").fill("Water all the plants");
   await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -163,6 +168,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.keyboard.press("Enter");
     await expect(page.getByLabel("Title")).toBeFocused();
     await page.keyboard.type("Take out the bins");
+    await page.getByTestId("task-more-options").click();
     await page.getByLabel("Due date").fill(londonToday());
     await page.getByTestId("repeat-frequency").focus();
     await page.getByTestId("repeat-frequency").selectOption("daily");

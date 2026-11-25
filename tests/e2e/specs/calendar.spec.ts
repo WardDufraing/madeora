@@ -127,7 +127,7 @@ test("Calendar: sharing a personal event, privacy of unshared ones, and calendar
   await page.getByTestId("list-new").fill("House");
   await page.getByRole("button", { name: "Create list" }).click();
   await expect(page.getByTestId("manage-list").filter({ hasText: "House" })).toBeVisible();
-  await page.goto("/tasks");
+  await page.goto("/tasks?view=all");
   const opener = page.getByTestId("new-task-open");
   await expect(opener.or(page.getByTestId("new-task-form"))).toBeVisible();
   if (await opener.isVisible()) await opener.click();

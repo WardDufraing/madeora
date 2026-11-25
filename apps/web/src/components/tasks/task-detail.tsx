@@ -37,6 +37,11 @@ export interface TaskDetailPageProps {
   readonly taskId: string;
   /** The context the address names; a task of another context is not found here. */
   readonly homeId: string | null;
+  /**
+   * `panel` (UX4b): the same sections inside the Tasks side panel / bottom sheet: the title is a
+   * level-2 heading the panel focuses, and the page's "Back to tasks" gives way to "Open full page".
+   */
+  readonly variant?: "page" | "panel";
 }
 
 /**
@@ -46,7 +51,12 @@ export interface TaskDetailPageProps {
  * S19: an occurrence of a recurring series also shows the series (Repeats) and its history.
  * S19c: its attachments.
  */
-export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageProps) {
+export async function TaskDetailPage({
+  userId,
+  taskId,
+  homeId,
+  variant = "page",
+}: TaskDetailPageProps) {
   // S19: due occurrences of the context's series exist before the task is read.
   await advanceSeries(homeId);
   const [t, formats, task] = await Promise.all([
@@ -54,11 +64,17 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
     getDateTimeFormats(),
     getTask(taskId),
   ]);
+  const panel = variant === "panel";
+  // In the side panel a missing task is a message beside the list, not a 404 for the whole page.
+  if (panel && task.status === "not-found") return <PanelUnavailable />;
   if (task.status === "not-found") notFound();
   if (task.status === "unavailable") {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
-  if (task.value.homeId !== homeId) notFound();
+  if (task.value.homeId !== homeId) {
+    if (panel) return <PanelUnavailable />;
+    notFound();
+  }
   const detail = task.value;
   const [lists, labels, members, comments, history, reminder, context, attachments] =
     await Promise.all([
@@ -103,11 +119,27 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
 
   return (
     <>
-      <PageHeader title={detail.title} />
+      {panel ? (
+        <h2
+          id="task-panel-title" /* the side panel focuses and is named by it (task-panel.tsx) */
+          tabIndex={-1}
+          className="mb-2 pe-10 text-section-title font-semibold text-fg outline-none"
+        >
+          <bdi>{detail.title}</bdi>
+        </h2>
+      ) : (
+        <PageHeader title={detail.title} />
+      )}
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
-        <Link href={base} className="font-medium text-accent-fg underline">
-          {t("backToTasks")}
-        </Link>
+        {panel ? (
+          <Link href={`${base}/${detail.id}`} className="font-medium text-accent-fg underline">
+            {t("openFullPage")}
+          </Link>
+        ) : (
+          <Link href={base} className="font-medium text-accent-fg underline">
+            {t("backToTasks")}
+          </Link>
+        )}
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <span>
           {t("inList")}{" "}
@@ -120,7 +152,7 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
           {detail.list.archived ? ` (${t("archived")})` : null}
         </span>
       </p>
-      <div className="flex max-w-3xl flex-col gap-8">
+      <div className={panel ? "flex flex-col gap-8" : "flex max-w-3xl flex-col gap-8"}>
         <TaskCompletion task={detail} members={memberOptions} formats={formats} />
         <TaskContent
           task={detail}
@@ -223,5 +255,14 @@ export async function TaskDetailPage({ userId, taskId, homeId }: TaskDetailPageP
         <TaskDelete task={detail} dateFormat={formats.dateFormat} />
       </div>
     </>
+  );
+}
+
+async function PanelUnavailable() {
+  const t = await getTranslations("Tasks");
+  return (
+    <p className="pe-10 text-body text-fg-muted" id="task-panel-title" tabIndex={-1}>
+      {t("panelUnavailable")}
+    </p>
   );
 }

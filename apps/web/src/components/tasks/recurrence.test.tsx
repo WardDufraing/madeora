@@ -138,6 +138,7 @@ describe("NewTask with repeat fields", () => {
       />,
     );
     await user.click(screen.getByTestId("new-task-open"));
+    await user.click(screen.getByTestId("task-more-options"));
     await user.type(screen.getByLabelText(/Title/), "Water the plants");
     await user.selectOptions(screen.getByLabelText("Repeats"), "weekly");
     expect(screen.getByTestId("repeat-summary")).toHaveTextContent(
@@ -197,6 +198,7 @@ describe("NewTask with repeat fields", () => {
       />,
     );
     await user.click(screen.getByTestId("new-task-open"));
+    await user.click(screen.getByTestId("task-more-options"));
     await user.type(screen.getByLabelText(/Title/), "Water");
     await user.type(screen.getByLabelText("Due date"), "2026-10-15");
     await user.selectOptions(screen.getByLabelText("Repeats"), "weekly");

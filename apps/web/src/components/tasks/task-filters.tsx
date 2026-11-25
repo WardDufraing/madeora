@@ -18,6 +18,8 @@ export interface TaskFiltersProps {
   readonly isHome: boolean;
   /** Whether any filter differs from the defaults, for "Clear filters". */
   readonly filtered: boolean;
+  /** The workspace view the filters belong to (All or Lists), kept when they are applied. */
+  readonly view?: string;
 }
 
 /**
@@ -33,6 +35,7 @@ export async function TaskFilters({
   members,
   isHome,
   filtered,
+  view,
 }: TaskFiltersProps) {
   const t = await getTranslations("Tasks");
   const priorityKey = {
@@ -42,6 +45,11 @@ export async function TaskFilters({
     urgent: "priorityUrgent",
   } as const;
 
+  const clear = new URLSearchParams();
+  if (view) clear.set("view", view);
+  if (query.list) clear.set("list", query.list);
+  const clearHref = clear.size > 0 ? `${action}?${clear.toString()}` : action;
+
   return (
     <form
       method="get"
@@ -50,6 +58,7 @@ export async function TaskFilters({
       aria-label={t("filtersLabel")}
       data-testid="task-filters"
     >
+      {view ? <input type="hidden" name="view" value={view} /> : null}
       {query.list ? <input type="hidden" name="list" value={query.list} /> : null}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SelectField
@@ -152,10 +161,7 @@ export async function TaskFilters({
           {t("applyFilters")}
         </Button>
         {filtered ? (
-          <Link
-            href={query.list ? `${action}?list=${query.list}` : action}
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href={clearHref} className="text-body font-medium text-accent-fg underline">
             {t("clearFilters")}
           </Link>
         ) : null}
