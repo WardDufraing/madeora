@@ -1,6 +1,6 @@
 # Madeora Marketing Website — Living Design Specification
 
-> Status: Design discovery reopened (2026-11-25). Decisions 01–25 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
+> Status: Design discovery reopened (2026-11-25). Decisions 01–26 confirmed. First iteration retained as a milestone; further marketing design decisions are in progress. Await explicit implementation instruction.
 > Product: Madeora | Marketing domain: madeora.studio | Repository: WardDufraing/madeora
 
 ## Purpose
@@ -270,6 +270,19 @@ Use this exact supporting paragraph beneath the hero headline:
 - Use synthetic preview data and verify feature availability. Sample headlines, household names, feature assignments and reference photography are illustrative only.
 - Final default audience, copy, assets and exact layout remain open.
 
+### Decision 26 — Homepage section order (CONFIRMED)
+
+**Selection: D — Balanced editorial journey.**
+
+- Introduce: interactive Personal/Home hero with approved headline and CTAs, followed by a short value proposition transition.
+- Discover: premium feature bento overview, then Personal & Home connected-spaces storytelling.
+- Connect: editorial audience selector with product storytelling.
+- Experience: interactive customization playground, then dedicated Ora storytelling.
+- Build confidence: privacy/security/transparency section, pricing preview, then FAQ.
+- Convert: final registration CTA followed by footer.
+- Vary section heights, backgrounds, spacing and composition to create editorial rhythm. Preserve responsive reading order and avoid unnecessary repetition.
+- Wireframe headlines beyond previously approved copy, pricing tiers, security claims and FAQ content remain unapproved. Do not fabricate testimonials or customer statistics.
+
 ## First iteration handoff
 
 The user concluded the first design iteration after Decision 15, then reopened design discovery at Decision 16 while the application redesign is being implemented. This handoff is a historical milestone, not the final marketing implementation scope. When instructed to build, Claude Code may implement the confirmed visual foundation, responsive hero and Personal/Home showcase, theme handling, adaptive header, and Solutions mega menu. Keep the existing app intact. Review current repository conventions before coding. Treat unresolved page architecture, pricing, signup availability, and remaining marketing content as deferred; do not fabricate claims or publish incomplete navigation. Where a safe implementation detail is necessary (e.g. motion timing, responsive layout), choose a reasonable accessible default and document it. Validate both themes, mobile and desktop layouts, keyboard interaction, reduced motion, and relevant repository checks. Report remaining gaps before launch.
@@ -325,6 +338,7 @@ The user concluded the first design iteration after Decision 15, then reopened d
 | 23 | Personal & Home storytelling | Connected spaces visualization with lifestyle storytelling (D + C) | Confirmed |
 | 24 | Customization storytelling | Editorial storytelling with embedded interactive playground (D) | Confirmed |
 | 25 | Homepage audience showcase | Editorial audience selector with product storytelling (D) | Confirmed |
+| 26 | Homepage section order | Balanced six-stage editorial journey (D) | Confirmed |
 
 ## Update protocol
 
