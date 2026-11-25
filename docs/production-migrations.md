@@ -93,6 +93,9 @@ Each link opens one standalone migration file. Apply each file once, oldest firs
 - [`supabase/migrations/20261217090000_review_low_db_followup_2.sql`](../supabase/migrations/20261217090000_review_low_db_followup_2.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261218090000_review_decisions_final.sql`](../supabase/migrations/20261218090000_review_decisions_final.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 - [`supabase/migrations/20261219090000_dashboard_drafts_history.sql`](../supabase/migrations/20261219090000_dashboard_drafts_history.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261220090000_atomic_list_first_task.sql`](../supabase/migrations/20261220090000_atomic_list_first_task.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261221090000_work_periods.sql`](../supabase/migrations/20261221090000_work_periods.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
+- [`supabase/migrations/20261222090000_display_protected_sessions.sql`](../supabase/migrations/20261222090000_display_protected_sessions.sql) — apply this file by itself, in this order. The linked file is the exact source SQL.
 
 ## One copyable migration for an empty database
 
@@ -80860,6 +80863,687 @@ $$;
 -- collect_data_export keeps its original grants (create or replace keeps them); restate them.
 revoke all on function public.collect_data_export(uuid, text) from public, anon, authenticated;
 grant execute on function public.collect_data_export(uuid, text) to service_role;
+
+-- ============================================================================
+-- supabase/migrations/20261220090000_atomic_list_first_task.sql
+-- ============================================================================
+-- UX4a: create a task list and its first task in one transaction, for the explicit
+-- "no list yet, create one for this task" confirmation. `tasks_list_check` needs a list for every
+-- active task and lists are never created silently, so the web app calls this after the person
+-- confirmed the list name. It reuses create_task_list and create_task unchanged (same permissions,
+-- limits, name rules, labels, assignees and audit entries); a refusal of the task undoes the list.
+--
+-- Outcomes: 'created', 'exists' (a retry of the caller's own earlier call: list and task both exist),
+-- 'list_id_taken' (the list id exists and is not that earlier call), 'task_id_taken',
+-- 'duplicate_name', 'limit_reached', 'not_permitted' (lists need a task manager),
+-- 'invalid_label', 'invalid_assignee'. 22023 for invalid fields.
+--
+-- Rollback: drop function public.create_task_list_with_task(uuid, text, uuid, text, text, date, date,
+-- text, uuid[], uuid[], uuid). Nothing else changes; lists and tasks it created are ordinary rows.
+
+create function public.create_task_list_with_task(
+  p_list_id uuid, p_list_name text, p_task_id uuid, p_title text, p_description text default null,
+  p_start_date date default null, p_due_date date default null, p_priority text default null,
+  p_label_ids uuid[] default '{}', p_assignee_ids uuid[] default '{}', p_home_id uuid default null
+) returns table (outcome text, list_revision integer, task_revision integer)
+  language plpgsql volatile security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_list_outcome text;
+    v_list_revision integer;
+    v_task_outcome text;
+    v_task_revision integer;
+    v_task private.tasks;
+  begin
+    if p_list_id is null or p_task_id is null then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    begin
+      select l.outcome, l.revision into v_list_outcome, v_list_revision
+        from public.create_task_list(p_list_id, p_list_name, p_home_id) l;
+      if v_list_outcome = 'exists' then
+        -- A retry only when the first call also made this task, in this list.
+        select * into v_task from private.tasks t
+          where t.id = p_task_id and t.created_by = v_user_id and t.list_id = p_list_id
+            and t.deleted_at is null;
+        if found then
+          return query select 'exists', v_list_revision, v_task.revision;
+        else
+          return query select 'list_id_taken', null::integer, null::integer;
+        end if;
+        return;
+      elsif v_list_outcome = 'id_taken' then
+        return query select 'list_id_taken', null::integer, null::integer;
+        return;
+      elsif v_list_outcome <> 'created' then
+        -- duplicate_name, limit_reached, not_permitted: nothing was written.
+        return query select v_list_outcome, null::integer, null::integer;
+        return;
+      end if;
+      select t.outcome, t.revision into v_task_outcome, v_task_revision
+        from public.create_task(
+          p_task_id, p_list_id, p_title, p_description, p_start_date, p_due_date, p_priority,
+          p_label_ids, p_assignee_ids, p_home_id) t;
+      if v_task_outcome <> 'created' then
+        -- create_task answers 'exists' for the caller's own task id (it ignores the list), which
+        -- here means the id is taken by a task that is not in this new list.
+        if v_task_outcome not in ('exists', 'id_taken', 'invalid_label', 'invalid_assignee', 'not_permitted') then
+          raise exception 'unexpected create_task outcome' using errcode = 'XX000';
+        end if;
+        -- Undo the list (and its audit entry) created a moment ago in this call.
+        raise exception 'first task refused' using errcode = 'MD001';
+      end if;
+    exception when sqlstate 'MD001' then
+      return query select case when v_task_outcome in ('exists', 'id_taken') then 'task_id_taken' else v_task_outcome end,
+        null::integer, null::integer;
+      return;
+    end;
+    return query select 'created', v_list_revision, v_task_revision;
+  end
+  $$;
+
+revoke all on function public.create_task_list_with_task(
+  uuid, text, uuid, text, text, date, date, text, uuid[], uuid[], uuid) from public, anon;
+grant execute on function public.create_task_list_with_task(
+  uuid, text, uuid, text, text, date, date, text, uuid[], uuid[], uuid) to authenticated;
+
+-- ============================================================================
+-- supabase/migrations/20261221090000_work_periods.sql
+-- ============================================================================
+-- UX3a: work periods as flagged native recurring calendar events (brief plans/steps/UX3a-brief.md;
+-- plans/steps/UX00-redesign-plan-brief.md, Ward's answer of 2026-11-19; Modules.md §4.2).
+--
+-- A work period is a personal calendar event with `work_period = true`: a shift pattern is a recurring
+-- event, a changed or cancelled shift is a native recurrence exception, and the flag lets the interface
+-- draw it as a background block. Everything else (recurrence, exceptions, reminders, trash, export,
+-- limits, permissions) is the existing event machinery.
+--
+-- Privacy (§4.2 / §11.2): a work period is visible to its owner only. It cannot belong to a Home and
+-- cannot be shared with a Home, so it never reaches another member, not even as a busy block.
+--
+-- Rollback: drop the two triggers and the `work_period` column, then restore
+-- private.calendar_values and private.calendar_occurrence_json from 20261118090000_calendar.sql, and
+-- private.copy_item_eligible from 20261128090000_category_deletion_home_copies.sql.
+-- Rows flagged as work periods turn into ordinary personal events.
+
+alter table private.calendar_events
+  add column work_period boolean not null default false,
+  add constraint calendar_events_work_period_personal check (not work_period or (home_id is null and owner_user_id is not null));
+
+-- The flag is fixed when the event is created.
+create function private.calendar_work_period_fixed() returns trigger
+  language plpgsql set search_path = '' as $$
+  begin
+    if new.work_period is distinct from old.work_period then
+      raise exception 'work period flag cannot change' using errcode = '22023';
+    end if;
+    return new;
+  end
+  $$;
+create trigger calendar_events_work_period_fixed before update of work_period on private.calendar_events
+  for each row execute function private.calendar_work_period_fixed();
+
+-- A work period is never shared with a Home.
+create function private.calendar_work_period_unshared() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    if exists (select 1 from private.calendar_events e where e.id = new.event_id and e.work_period) then
+      raise exception 'work periods cannot be shared' using errcode = '22023';
+    end if;
+    return new;
+  end
+  $$;
+create trigger calendar_event_shares_no_work_period before insert on private.calendar_event_shares
+  for each row execute function private.calendar_work_period_unshared();
+
+-- Reading: every occurrence says whether it is a work period (series and detail reads build on it).
+create or replace function private.calendar_occurrence_json(
+  p_event private.calendar_events, p_occurrence private.calendar_occurrence, p_viewer uuid, p_home_id uuid,
+  p_zone text
+) returns jsonb
+  language sql stable security definer set search_path = '' as $$
+  select pg_catalog.jsonb_build_object(
+    'eventId', p_event.id,
+    'on', case when p_event.frequency is not null then p_occurrence.original_date end,
+    'kind', private.calendar_kind(p_event, p_viewer),
+    'sharedBy', case when private.calendar_kind(p_event, p_viewer) = 'shared'
+      then private.member_ref(p_home_id, p_event.owner_user_id) end,
+    'title', p_occurrence.title,
+    'location', p_occurrence.location,
+    'allDay', p_occurrence.all_day,
+    'from', case when p_occurrence.all_day then p_occurrence.starts_on
+      else (private.calendar_start_at(p_occurrence, p_event.timezone) at time zone p_zone)::date end,
+    'to', case when p_occurrence.all_day then p_occurrence.ends_on
+      else ((private.calendar_end_at(p_occurrence, p_event.timezone) - interval '1 microsecond')
+        at time zone p_zone)::date end,
+    'startsAt', private.calendar_start_at(p_occurrence, p_event.timezone),
+    'endsAt', private.calendar_end_at(p_occurrence, p_event.timezone),
+    'timezone', p_event.timezone,
+    'recurring', p_event.frequency is not null,
+    'changed', p_occurrence.is_exception,
+    'participants', private.calendar_participants_json(p_event.home_id, p_occurrence.participants),
+    'workPeriod', p_event.work_period
+  );
+  $$;
+
+-- Reading request values: `workPeriod` (boolean, default false). The create call and a "this and following" change take it from the body.
+create or replace function private.calendar_values(p_body jsonb, p_with_repeat boolean) returns private.calendar_events
+  language plpgsql stable set search_path = '' as $$
+  declare
+    v private.calendar_events;
+    v_repeat jsonb;
+    v_weekdays smallint[];
+    v_reminder numeric;
+  begin
+    if p_body is null or pg_catalog.jsonb_typeof(p_body) <> 'object' then
+      raise exception 'invalid request' using errcode = '22023';
+    end if;
+    v.title := private.pet_json_text(p_body, 'title', 200, true);
+    if v.title is null then
+      raise exception 'invalid title' using errcode = '22023';
+    end if;
+    v.location := private.pet_json_text(p_body, 'location', 200, true);
+    v.description := private.pet_json_text(p_body, 'description', 4000, false);
+    v.all_day := private.pet_json_bool(p_body, 'allDay');
+    v.starts_on := private.pet_json_date(p_body, 'startsOn');
+    v.ends_on := private.pet_json_date(p_body, 'endsOn');
+    v.start_time := private.calendar_json_time(p_body, 'startTime');
+    v.end_time := private.calendar_json_time(p_body, 'endTime');
+    v.timezone := case when pg_catalog.jsonb_typeof(p_body -> 'timezone') = 'string' then p_body ->> 'timezone' end;
+    if v.all_day is null or v.starts_on is null or v.ends_on is null
+       or not private.calendar_valid_zone(v.timezone)
+       or (v.all_day and (v.start_time is not null or v.end_time is not null))
+       or (not v.all_day and (v.start_time is null or v.end_time is null)) then
+      raise exception 'invalid time' using errcode = '22023';
+    end if;
+    if p_with_repeat and pg_catalog.jsonb_typeof(p_body -> 'repeat') = 'object' then
+      v_repeat := p_body -> 'repeat';
+      v.frequency := private.pet_json_choice(v_repeat, 'frequency', array['daily', 'weekly', 'monthly', 'yearly']);
+      if pg_catalog.jsonb_typeof(v_repeat -> 'interval') <> 'number' or (v_repeat ->> 'interval') !~ '^[0-9]{1,2}$' then
+        raise exception 'invalid interval' using errcode = '22023';
+      end if;
+      v.interval_count := (v_repeat ->> 'interval')::integer;
+      if pg_catalog.jsonb_typeof(v_repeat -> 'weekdays') = 'array' then
+        if exists (select 1 from pg_catalog.jsonb_array_elements(v_repeat -> 'weekdays') d
+            where pg_catalog.jsonb_typeof(d) <> 'number' or (d #>> '{}') !~ '^[1-7]$') then
+          raise exception 'invalid weekdays' using errcode = '22023';
+        end if;
+        select pg_catalog.array_agg(d::smallint order by d::smallint) into v_weekdays
+          from pg_catalog.jsonb_array_elements_text(v_repeat -> 'weekdays') d;
+        v.weekdays := v_weekdays;
+      elsif v_repeat ? 'weekdays' and pg_catalog.jsonb_typeof(v_repeat -> 'weekdays') <> 'null' then
+        raise exception 'invalid weekdays' using errcode = '22023';
+      end if;
+      v.repeat_ends_on := private.pet_json_date(v_repeat, 'endsOn');
+      if v_repeat ? 'count' and pg_catalog.jsonb_typeof(v_repeat -> 'count') <> 'null' then
+        if pg_catalog.jsonb_typeof(v_repeat -> 'count') <> 'number'
+           or (v_repeat ->> 'count') !~ '^[0-9]{1,4}$' then
+          raise exception 'invalid count' using errcode = '22023';
+        end if;
+        v.max_count := (v_repeat ->> 'count')::integer;
+      end if;
+      if not private.valid_series_rule(v.frequency, v.interval_count, v.weekdays, v.starts_on, v.repeat_ends_on,
+          v.max_count) then
+        raise exception 'invalid repeat' using errcode = '22023';
+      end if;
+      v.until_date := private.series_until(v.frequency, v.interval_count, v.weekdays, v.starts_on,
+        v.repeat_ends_on, v.max_count);
+    elsif p_with_repeat and p_body ? 'repeat' and pg_catalog.jsonb_typeof(p_body -> 'repeat') <> 'null' then
+      raise exception 'invalid repeat' using errcode = '22023';
+    end if;
+    -- The reminder belongs to the whole event (one occurrence's change keeps it).
+    if p_with_repeat then
+      v_reminder := private.pet_json_number(p_body, 'reminder');
+      if v_reminder is not null and v_reminder not in (0, 15, 60, 1440) then
+        raise exception 'invalid reminder' using errcode = '22023';
+      end if;
+      v.reminder_minutes := v_reminder::integer;
+    end if;
+    v.work_period := coalesce(private.pet_json_bool(p_body, 'workPeriod'), false);
+    return v;
+  end
+  $$;
+
+-- A work period is never copied into a Home (the copy would be an ordinary event every member sees).
+create or replace function private.copy_item_eligible(p_item_type text, p_id uuid, p_user_id uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select p_user_id is not null and coalesce(case p_item_type
+    when 'recipe' then exists (select 1 from private.recipes r
+      where r.id = p_id and r.owner_user_id = p_user_id and r.deleted_at is null and r.status = 'published')
+    when 'calendar_event' then exists (select 1 from private.calendar_events e
+      where e.id = p_id and e.owner_user_id = p_user_id and e.deleted_at is null and not e.work_period)
+    when 'photo_album' then exists (select 1 from private.photo_albums a
+      where a.id = p_id and a.owner_user_id = p_user_id and a.deleted_at is null)
+  end, false);
+  $$;
+
+-- ============================================================================
+-- supabase/migrations/20261222090000_display_protected_sessions.sql
+-- ============================================================================
+-- UX8a: protected-action sessions and ambient timing on Household Displays (redesign decisions 36
+-- and 37, Ward's answer of 19 Nov 2026; brief plans/steps/UX8a-brief.md).
+--
+-- - A member's PIN that matches on a display opens a five-minute protected-actions session for that
+--   member on that display. While it lasts, actions that would ask that member for their PIN on that
+--   display (completing a chore that needs a PIN, locking the display into privacy mode for a
+--   manager) are taken without asking again. Every other check still runs on every action: the
+--   display is active and unlocked, the member is still a member, eligible for the chore, a manager
+--   for locking. The session never widens what the member may do.
+-- - One session per display (the newest PIN replaces it). It lasts five minutes from the PIN and is
+--   never extended. It ends early when someone taps Lock now, when the display goes ambient, when
+--   the display is privacy-locked or revoked, and it stops counting when the member leaves the
+--   Home or their PIN is removed, changed or locked.
+-- - The privacy lock is unchanged (S44): only a manager's own signed-in session unlocks it. A
+--   session cannot unlock it, and locking a display ends its session.
+-- - No-lockout rule (13 Nov 2026) unchanged: wrong tries on a display never count toward a member's
+--   PIN lock. Sessions are opened only after the existing PIN check, with its display and client
+--   throttles.
+-- - Ambient timing: each Home has one setting for how long its displays wait without a touch before
+--   showing the ambient view (default five minutes). Its managers change it.
+--
+-- Rollback: drop the two new tables and the new functions, and restore display_chore_attempt
+-- (20261205090000) and display_chore_verified (20261204090000). Rows of
+-- private.display_actions with verification 'session' must be updated to 'pin' before restoring the
+-- old check constraint.
+
+-- 1. Sessions ------------------------------------------------------------------------------------------------
+
+alter table private.display_actions drop constraint display_actions_verification_check;
+alter table private.display_actions add constraint display_actions_verification_check
+  check (verification in ('attributed', 'pin', 'session'));
+
+-- The open protected-actions session of a display, if any. Expired rows are harmless (every reader
+-- checks expires_at) and are deleted when the display's state is read or a session is opened.
+create table private.display_unlock_sessions (
+  display_id uuid primary key references private.household_displays (id) on delete cascade,
+  home_id uuid not null references public.homes (id) on delete cascade,
+  member_user_id uuid not null references auth.users (id) on delete cascade,
+  opened_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  constraint display_unlock_sessions_expiry_check
+    check (expires_at > opened_at and expires_at <= opened_at + interval '5 minutes')
+);
+
+create index display_unlock_sessions_member_idx on private.display_unlock_sessions (member_user_id);
+
+revoke all on table private.display_unlock_sessions from public;
+
+comment on table private.display_unlock_sessions is
+  'UX8a: a member''s five-minute protected-actions session on one Household Display.';
+
+-- How long a session lasts.
+create function private.display_unlock_duration() returns interval
+  language sql immutable set search_path = '' as $$ select interval '5 minutes' $$;
+
+revoke all on function private.display_unlock_duration() from public;
+
+-- The member whose session on this display counts now, or null. It counts while it has not expired,
+-- the display is active and not privacy-locked, the member is still a member of the display's Home,
+-- and their PIN for this Home's shared devices still exists, is not locked and was not changed
+-- since the session opened.
+create function private.display_unlocked_member(p_display_id uuid) returns uuid
+  language sql stable security definer set search_path = '' as $$
+    select s.member_user_id
+    from private.display_unlock_sessions s
+    join private.household_displays d on d.id = s.display_id and d.home_id = s.home_id
+    where s.display_id = p_display_id
+      and s.expires_at > pg_catalog.now()
+      and d.revoked_at is null and d.user_id is not null and private.home_is_open(d.home_id)
+      and not coalesce((select c.locked from private.display_configs c
+                        where c.display_id = s.display_id), false)
+      and private.is_home_member(s.home_id, s.member_user_id)
+      and case when private.is_child(s.member_user_id) then
+            exists (select 1 from private.child_home_pins hp
+                    where hp.home_id = s.home_id and hp.child_user_id = s.member_user_id
+                      and hp.pin_set_at <= s.opened_at
+                      and (hp.pin_locked_until is null or hp.pin_locked_until <= pg_catalog.now()))
+          else
+            exists (select 1 from private.member_device_pins dp
+                    where dp.user_id = s.member_user_id
+                      and dp.pin_set_at <= s.opened_at
+                      and (dp.pin_locked_until is null or dp.pin_locked_until <= pg_catalog.now()))
+          end
+  $$;
+
+revoke all on function private.display_unlocked_member(uuid) from public;
+
+-- Opens (or replaces) the display's session for a member whose PIN just matched. Callers checked the
+-- display and the member.
+create function private.open_display_unlock(p_display private.household_displays, p_member uuid)
+returns void
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from private.display_unlock_sessions s
+      where s.expires_at < pg_catalog.now() - interval '1 day';
+    insert into private.display_unlock_sessions as s (display_id, home_id, member_user_id,
+                                                      opened_at, expires_at)
+      values (p_display.id, p_display.home_id, p_member, pg_catalog.now(),
+              pg_catalog.now() + private.display_unlock_duration())
+      on conflict (display_id) do update
+        set home_id = excluded.home_id, member_user_id = excluded.member_user_id,
+            opened_at = excluded.opened_at, expires_at = excluded.expires_at;
+    perform private.audit('display.unlock_opened', p_display.home_id, 'household_display',
+      p_display.id, pg_catalog.jsonb_build_object(
+        'member', private.member_ref(p_display.home_id, p_member)));
+  end
+  $$;
+
+revoke all on function private.open_display_unlock(private.household_displays, uuid) from public;
+
+-- Locking a display (privacy mode) or revoking it ends its session at once.
+create function private.end_display_unlock_on_lock() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from private.display_unlock_sessions s where s.display_id = new.display_id;
+    return null;
+  end
+  $$;
+
+revoke all on function private.end_display_unlock_on_lock() from public;
+
+create trigger display_unlock_end_on_lock
+  after update on private.display_configs
+  for each row when (new.locked and not old.locked)
+  execute function private.end_display_unlock_on_lock();
+
+create function private.end_display_unlock_on_revoke() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+  begin
+    delete from private.display_unlock_sessions s where s.display_id = new.id;
+    return null;
+  end
+  $$;
+
+revoke all on function private.end_display_unlock_on_revoke() from public;
+
+create trigger display_unlock_end_on_revoke
+  after update on private.household_displays
+  for each row when (new.revoked_at is not null and old.revoked_at is null)
+  execute function private.end_display_unlock_on_revoke();
+
+-- 2. Ambient timing (one setting per Home) ---------------------------------------------------------------------
+
+create table private.home_display_settings (
+  home_id uuid primary key references public.homes (id) on delete cascade,
+  ambient_after_seconds integer not null default 300
+    constraint home_display_settings_ambient_check
+      check (ambient_after_seconds in (60, 120, 300, 600, 900, 1800)),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+revoke all on table private.home_display_settings from public;
+
+comment on table private.home_display_settings is
+  'UX8a: how long a Home''s displays wait without a touch before showing the ambient view.';
+
+-- A change reaches the Home's displays through their Realtime signal.
+create trigger display_signals_from_home_settings
+  after insert or update on private.home_display_settings
+  for each row execute function private.bump_home_display_signals();
+
+-- The seconds a Home's displays wait before the ambient view (the default when never set).
+create function private.home_ambient_after(p_home_id uuid) returns integer
+  language sql stable security definer set search_path = '' as $$
+    select coalesce((select s.ambient_after_seconds from private.home_display_settings s
+                     where s.home_id = p_home_id), 300)
+  $$;
+
+revoke all on function private.home_ambient_after(uuid) from public;
+
+-- The Home's display settings, for the same managers as S43/S44.
+create function public.home_display_settings(p_home_id uuid) returns jsonb
+  language plpgsql stable security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+  begin
+    if private.display_manager_check(p_home_id, v_user_id, false) <> 'ok' then
+      raise exception 'not a manager of this Home' using errcode = '42501';
+    end if;
+    return pg_catalog.jsonb_build_object('ambient_after_seconds',
+                                         private.home_ambient_after(p_home_id));
+  end
+  $$;
+
+revoke all on function public.home_display_settings(uuid) from public, anon;
+grant execute on function public.home_display_settings(uuid) to authenticated;
+
+-- Saves the Home's ambient timing. Outcomes: 'saved', 'unchanged', 'not_permitted', 'not_found'.
+create function public.save_home_display_settings(p_home_id uuid, p_ambient_after_seconds integer)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_user_id uuid := private.require_confirmed_caller();
+    v_check text;
+  begin
+    if p_ambient_after_seconds is null
+       or p_ambient_after_seconds not in (60, 120, 300, 600, 900, 1800) then
+      raise exception 'invalid display settings' using errcode = '22023';
+    end if;
+    v_check := private.display_manager_check(p_home_id, v_user_id, true);
+    if v_check <> 'ok' then
+      return v_check;
+    end if;
+    if private.home_ambient_after(p_home_id) = p_ambient_after_seconds then
+      return 'unchanged';
+    end if;
+    insert into private.home_display_settings as s (home_id, ambient_after_seconds, updated_by)
+      values (p_home_id, p_ambient_after_seconds, v_user_id)
+      on conflict (home_id) do update
+        set ambient_after_seconds = excluded.ambient_after_seconds,
+            updated_by = excluded.updated_by, updated_at = pg_catalog.now();
+    perform private.audit('display.settings_changed', p_home_id, 'home', p_home_id,
+      pg_catalog.jsonb_build_object('ambient_after_seconds', p_ambient_after_seconds));
+    return 'saved';
+  end
+  $$;
+
+revoke all on function public.save_home_display_settings(uuid, integer) from public, anon;
+grant execute on function public.save_home_display_settings(uuid, integer) to authenticated;
+
+-- 3. The display's state and Lock now (the web server only, as service_role) ----------------------------------
+
+-- What the display's screen needs beyond its board: the Home's ambient timing, and who has a
+-- session on it now with how many seconds are left (seconds, so the tablet's clock does not
+-- matter). No row for a display that is not active.
+create function public.display_session_state(p_display_id uuid)
+returns table (ambient_after_seconds integer, unlocked_membership_id uuid, unlock_seconds_left integer)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays := private.active_display(p_display_id);
+    v_member uuid;
+  begin
+    if v_display.id is null then
+      return;
+    end if;
+    delete from private.display_unlock_sessions s
+      where s.display_id = v_display.id and s.expires_at <= pg_catalog.now();
+    v_member := private.display_unlocked_member(v_display.id);
+    return query
+      select private.home_ambient_after(v_display.home_id),
+             case when v_member is null then null
+                  else private.member_ref(v_display.home_id, v_member) end,
+             case when v_member is null then null
+                  else (select greatest(1, ceil(extract(epoch from s.expires_at - pg_catalog.now()))::integer)
+                        from private.display_unlock_sessions s where s.display_id = v_display.id) end;
+  end
+  $$;
+
+revoke all on function public.display_session_state(uuid) from public, anon, authenticated;
+grant execute on function public.display_session_state(uuid) to service_role;
+
+-- Lock now: ends the display's session. Returns 'ended' or 'none'.
+create function public.display_end_unlock(p_display_id uuid) returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_session private.display_unlock_sessions;
+  begin
+    delete from private.display_unlock_sessions s where s.display_id = p_display_id
+      returning * into v_session;
+    if v_session.display_id is null then
+      return 'none';
+    end if;
+    if v_session.expires_at > pg_catalog.now() then
+      perform private.audit('display.unlock_ended', v_session.home_id, 'household_display',
+        p_display_id, pg_catalog.jsonb_build_object(
+          'member', private.member_ref(v_session.home_id, v_session.member_user_id)));
+    end if;
+    return 'ended';
+  end
+  $$;
+
+revoke all on function public.display_end_unlock(uuid) from public, anon, authenticated;
+grant execute on function public.display_end_unlock(uuid) to service_role;
+
+-- 4. Actions use the session ------------------------------------------------------------------------------------
+
+-- As 20261205090000, plus: when the chore needs a PIN and none is given, the member's open session on
+-- this display stands in for it (recorded as 'session').
+create or replace function public.display_chore_attempt(
+  p_display_id uuid, p_occurrence_id uuid, p_membership_id uuid, p_pin boolean, p_client_key text
+) returns table (outcome text, action_id uuid, check_id uuid, pin_hash text, locked_until timestamptz)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays;
+    v_config private.display_configs;
+    v_member uuid;
+    v_pin record;
+    v_check uuid;
+    v_done record;
+    v_verification text := 'attributed';
+  begin
+    perform private.check_child_client_key(p_client_key);
+    v_display := private.active_display(p_display_id);
+    if v_display.id is null then
+      return query select 'display_not_active'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_config := private.display_config(v_display.id);
+    if v_config.locked then
+      return query select 'display_locked'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if not private.display_actions_enabled(v_config.layout) then
+      return query select 'actions_off'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_member := private.display_member(v_display.home_id, p_occurrence_id, p_membership_id);
+    if v_member is null then
+      return query select 'not_eligible'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if not coalesce(p_pin, false) then
+      if private.shared_device_pin_needed(v_display.home_id, v_member, p_occurrence_id) then
+        if private.display_unlocked_member(v_display.id) is distinct from v_member then
+          return query select 'pin_required'::text, null::uuid, null::uuid, null::text,
+            null::timestamptz;
+          return;
+        end if;
+        v_verification := 'session';
+      end if;
+      select * into v_done from private.display_complete(v_display, p_occurrence_id, v_member,
+                                                         v_verification);
+      return query select v_done.outcome, v_done.action_id, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if private.display_checks_throttled(v_display.id, p_client_key) then
+      return query select 'rate_limited'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    v_pin := private.display_member_pin(v_display.home_id, v_member);
+    if v_pin.pin_hash is null then
+      return query select 'pin_not_set'::text, null::uuid, null::uuid, null::text,
+        null::timestamptz;
+      return;
+    end if;
+    if v_pin.locked_until > pg_catalog.now() then
+      return query select 'locked'::text, null::uuid, null::uuid, null::text, v_pin.locked_until;
+      return;
+    end if;
+    insert into private.display_checks (display_id, home_id, purpose, occurrence_id, member_user_id,
+                                        client_key)
+      values (v_display.id, v_display.home_id, 'chore', p_occurrence_id, v_member, p_client_key)
+      returning id into v_check;
+    return query select 'check'::text, null::uuid, v_check, v_pin.pin_hash, null::timestamptz;
+  end
+  $$;
+
+-- As 20261204090000, plus: the matched PIN opens the member's session on this display (once the
+-- display is still unlocked and offering actions and the member still eligible).
+create or replace function public.display_chore_verified(p_display_id uuid, p_check_id uuid)
+returns table (outcome text, action_id uuid)
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays := private.active_display(p_display_id);
+    v_config private.display_configs;
+    v_check private.display_checks;
+  begin
+    if v_display.id is null then
+      return query select 'invalid'::text, null::uuid;
+      return;
+    end if;
+    v_check := private.use_display_check(v_display.id, p_check_id, 'chore');
+    if v_check.id is null then
+      return query select 'invalid'::text, null::uuid;
+      return;
+    end if;
+    v_config := private.display_config(v_display.id);
+    if v_config.locked then
+      return query select 'display_locked'::text, null::uuid;
+      return;
+    end if;
+    if not private.display_actions_enabled(v_config.layout) then
+      return query select 'actions_off'::text, null::uuid;
+      return;
+    end if;
+    if private.display_member(v_display.home_id, v_check.occurrence_id,
+                              private.member_ref(v_display.home_id, v_check.member_user_id)) is null then
+      return query select 'not_eligible'::text, null::uuid;
+      return;
+    end if;
+    perform private.open_display_unlock(v_display, v_check.member_user_id);
+    return query select * from private.display_complete(v_display, v_check.occurrence_id,
+                                                        v_check.member_user_id, 'pin');
+  end
+  $$;
+
+-- Locking the display (privacy mode) on the display with a manager's open session instead of their
+-- PIN. Outcomes: 'saved', 'unchanged' (already locked), 'not_permitted' (not a manager here),
+-- 'pin_required' (no session of theirs on this display), 'display_not_active'.
+create function public.display_lock_by_session(p_display_id uuid, p_membership_id uuid)
+returns text
+  language plpgsql security definer set search_path = '' as $$
+  declare
+    v_display private.household_displays := private.active_display(p_display_id);
+    v_member uuid;
+  begin
+    if v_display.id is null then
+      return 'display_not_active';
+    end if;
+    if (private.display_config(v_display.id)).locked then
+      return 'unchanged';
+    end if;
+    select m.user_id into v_member from public.home_memberships m
+      where m.id = p_membership_id and m.home_id = v_display.home_id;
+    if v_member is null or not private.display_lock_manager(v_display.home_id, v_member) then
+      return 'not_permitted';
+    end if;
+    if private.display_unlocked_member(v_display.id) is distinct from v_member then
+      return 'pin_required';
+    end if;
+    return private.apply_display_lock(v_display.id, v_display.home_id, true,
+      (private.display_config(v_display.id)).lock_message, v_member, 'display_session');
+  end
+  $$;
+
+revoke all on function public.display_lock_by_session(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.display_lock_by_session(uuid, uuid) to service_role;
 ```
 
 ## Destructive reset: remove these migrations from the database
@@ -81055,7 +81739,7 @@ begin
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute
       'delete from supabase_migrations.schema_migrations where version = any ($1)'
-      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000', '20261203090000', '20261204090000', '20261205090000', '20261206090000', '20261207090000', '20261208090000', '20261209090000', '20261210090000', '20261211090000', '20261212090000', '20261213090000', '20261214090000', '20261216090000', '20261217090000', '20261218090000', '20261219090000']::text[];
+      using array['20261013000000', '20261014120000', '20261015090000', '20261016090000', '20261017090000', '20261018090000', '20261019090000', '20261020090000', '20261021090000', '20261022090000', '20261023090000', '20261024090000', '20261025090000', '20261026090000', '20261027090000', '20261028090000', '20261029090000', '20261030090000', '20261031090000', '20261101090000', '20261102090000', '20261103090000', '20261104090000', '20261105090000', '20261106090000', '20261107090000', '20261108090000', '20261109090000', '20261110090000', '20261111090000', '20261112090000', '20261113090000', '20261114090000', '20261115090000', '20261116090000', '20261117090000', '20261118090000', '20261119090000', '20261120090000', '20261121090000', '20261122090000', '20261123090000', '20261123090100', '20261124090000', '20261125090000', '20261126090000', '20261127090000', '20261128090000', '20261129090000', '20261130090000', '20261201090000', '20261202090000', '20261203090000', '20261204090000', '20261205090000', '20261206090000', '20261207090000', '20261208090000', '20261209090000', '20261210090000', '20261211090000', '20261212090000', '20261213090000', '20261214090000', '20261216090000', '20261217090000', '20261218090000', '20261219090000', '20261220090000', '20261221090000', '20261222090000']::text[];
   end if;
 end
 $reset$;
