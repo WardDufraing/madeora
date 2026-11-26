@@ -1,6 +1,16 @@
 # Review: Mobile bottom tab bar pill (feat/ui-mobile-tab-bar)
 
-Verdict: CHANGES_REQUIRED
+Verdict: PASS (re-review of the final diff; first pass was CHANGES_REQUIRED)
+
+## Re-review
+
+- Earlier HIGH-1 (overflow at 320px): resolved. Each tab `li` now has `min-w-0 flex-1` and the pill is `w-full max-w-14`, so the pill shrinks instead of forcing 64px per tab. The Create `li` keeps its natural width (about 64-68px), leaving about 55px per tab at 320px.
+- Earlier MEDIUM-1 (forced-colors outlines on every pill): resolved. `border border-transparent` and `forced-colors:border-[Highlight]` now apply only to the current pill, so inactive pills and More have no forced-colors outline.
+- New LOW-5: the link keeps `min-width: auto`, so a label wider than its slot (English "Dashboard", about 60px at 13px against about 55px at 320px) may spill 2-3px each side of its centred box. Neighbouring labels are shorter, so no collision is expected; the label is not clipped (no overflow hidden). Confirm visually at 320px in `en` and `nl`, or add `min-w-0` and `truncate`-free wrapping if it looks tight.
+- The earlier LOW-1 to LOW-4 are unchanged and non-blocking. The 320px Playwright check suggested in LOW-2 is still recommended.
+- Not run: browser, tests, lint, typecheck.
+
+## Original review (first pass)
 
 Scope: `apps/web/src/components/shell/mobile-nav.tsx` (diff `origin/main...origin/feat/ui-mobile-tab-bar`, one file, +17/-10). No test files changed.
 
