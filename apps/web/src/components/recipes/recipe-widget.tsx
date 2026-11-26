@@ -43,14 +43,11 @@ export async function RecipesWidget({
         initial={data.value}
       />
       <p className="flex flex-wrap gap-x-4 gap-y-1">
-        <Link href={recipesPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={recipesPath(homeId)} className="text-body link-action">
           {t("openLibrary")}
         </Link>
         {data.value.available === 0 && config.mode === "recent" ? (
-          <Link
-            href={newRecipePath(homeId)}
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href={newRecipePath(homeId)} className="text-body link-action">
             {t("addRecipe")}
           </Link>
         ) : null}

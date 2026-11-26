@@ -318,7 +318,7 @@ function MonthCalendar({
             })}
           </p>
           <details>
-            <summary className="cursor-pointer text-body text-accent-fg underline">
+            <summary className="cursor-pointer text-body link-action">
               {t("calendarAsList")}
             </summary>
             <ul className="mt-2 flex flex-col gap-1 text-body text-fg">

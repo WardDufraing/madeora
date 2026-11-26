@@ -41,7 +41,7 @@ export function ClaimConfirm({
           {email ? t("choosePasswordFor", { email }) : t("choosePassword")}
         </p>
         <p>
-          <Link href="/forgot-password" className="font-medium text-accent-fg underline">
+          <Link href="/forgot-password" className="link-action">
             {t("choosePasswordLink")}
           </Link>
         </p>

@@ -453,7 +453,7 @@ function HistoryRow({
             {date} <span className="text-fg-muted">{t("historyThis")}</span>
           </>
         ) : (
-          <Link href={`${base}/${row.id}`} className="text-accent-fg underline">
+          <Link href={`${base}/${row.id}`} className="link-action">
             {date}
           </Link>
         )}

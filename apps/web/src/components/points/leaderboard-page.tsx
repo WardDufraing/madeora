@@ -102,7 +102,7 @@ export async function LeaderboardPage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={pointsPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={pointsPath(home.id)} className="link-action">
           {t("backToPoints")}
         </Link>
       </p>
@@ -157,7 +157,7 @@ export async function LeaderboardPage({
             {value.participates === false ? (
               <p className="text-body text-fg" data-testid="leaderboard-opted-out">
                 {t("leaderboardOptedOut")}{" "}
-                <Link href={pointsPath(home.id)} className="font-medium text-accent-fg underline">
+                <Link href={pointsPath(home.id)} className="link-inline">
                   {t("changeChoice")}
                 </Link>
               </p>

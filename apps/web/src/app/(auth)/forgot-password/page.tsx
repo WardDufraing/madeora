@@ -23,12 +23,12 @@ export default async function ForgotPasswordPage() {
       <ForgotPasswordForm />
       <p className="mt-6 text-body">
         {/* S37: when the sign-in mailbox is lost too, the backup address is the way back in. */}
-        <Link href="/account-recovery" className="font-medium text-accent-fg underline">
+        <Link href="/account-recovery" className="link-action">
           {tRecovery("forgotLink")}
         </Link>
       </p>
       <p className="mt-2 text-body">
-        <Link href="/sign-in" className="font-medium text-accent-fg underline">
+        <Link href="/sign-in" className="link-action">
           {t("backToSignIn")}
         </Link>
       </p>

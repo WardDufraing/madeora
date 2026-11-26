@@ -72,7 +72,7 @@ export function Button({
       aria-busy={loading || undefined}
       onClick={handleClick}
       className={cx(
-        "inline-flex items-center justify-center rounded-pill font-semibold",
+        "inline-flex items-center justify-center rounded-pill font-semibold whitespace-nowrap",
         "press-feedback",
         sizes[size],
         variants[variant],

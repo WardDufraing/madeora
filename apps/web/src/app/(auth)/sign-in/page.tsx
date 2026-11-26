@@ -126,18 +126,18 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         </>
       ) : null}
       <div className="mt-6 flex flex-col gap-2 text-body">
-        <Link href="/accounts" className="font-medium text-accent-fg underline">
+        <Link href="/accounts" className="link-action">
           {tAccounts("chooserLink")}
         </Link>
-        <Link href="/forgot-password" className="font-medium text-accent-fg underline">
+        <Link href="/forgot-password" className="link-action">
           {t("forgotPasswordLink")}
         </Link>
-        <Link href={CHILD_SIGN_IN_PATH} className="font-medium text-accent-fg underline">
+        <Link href={CHILD_SIGN_IN_PATH} className="link-action">
           {t("childSignInLink")}
         </Link>
         <p className="text-fg-muted">
           {t("noAccount")}{" "}
-          <Link href="/sign-up" className="font-medium text-accent-fg underline">
+          <Link href="/sign-up" className="link-inline">
             {t("signUpLink")}
           </Link>
         </p>

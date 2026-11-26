@@ -64,7 +64,7 @@ export default async function LeavePage({ params }: LeavePageProps) {
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
+        <Link href={`/homes/${home.id}`} className="link-action">
           {tHomes("backToHome")}
         </Link>
       </p>
@@ -136,7 +136,7 @@ export default async function LeavePage({ params }: LeavePageProps) {
           ) : pending ? (
             <p className="text-body text-fg" data-testid="owner-pending-transfer">
               {t("ownerPending", { name: pendingName ?? "" })}{" "}
-              <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
+              <Link href={`/homes/${home.id}`} className="link-inline">
                 {tHomes("backToHome")}
               </Link>
             </p>
@@ -174,7 +174,7 @@ export default async function LeavePage({ params }: LeavePageProps) {
           <p className="mb-3 text-body text-fg-muted">{t("ownerCloseText")}</p>
           <Link
             href={`/homes/${home.id}/close`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="owner-close-link"
           >
             {t("ownerCloseLink")}

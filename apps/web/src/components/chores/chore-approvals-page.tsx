@@ -42,7 +42,7 @@ export async function ChoreApprovalsPage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={base} className="font-medium text-accent-fg underline">
+        <Link href={base} className="link-action">
           {t("backToChores")}
         </Link>
       </p>

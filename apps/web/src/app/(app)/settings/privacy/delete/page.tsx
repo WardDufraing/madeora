@@ -56,7 +56,7 @@ export default async function DeleteAccountPage({ searchParams }: DeleteAccountP
     <>
       <PageHeader title={t("accountTitle")} />
       <p className="mb-4">
-        <Link href="/settings/privacy" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/privacy" className="text-body link-action">
           {t("backToPrivacy")}
         </Link>
       </p>
@@ -75,7 +75,7 @@ export default async function DeleteAccountPage({ searchParams }: DeleteAccountP
         <Card title={t("accountExportTitle")}>
           <p className="text-body">
             {t("accountExportText")}{" "}
-            <Link href="/settings/privacy/export" className="font-medium text-accent-fg underline">
+            <Link href="/settings/privacy/export" className="link-inline">
               {t("accountExportLink")}
             </Link>
           </p>

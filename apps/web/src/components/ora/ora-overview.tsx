@@ -436,7 +436,7 @@ function OverviewBody({
               aria-expanded={showItems}
               aria-controls="ora-overview-items"
               onClick={onToggleItems}
-              className="inline-flex min-h-8 items-center rounded-control text-helper font-medium text-accent-fg hover:underline"
+              className="inline-flex min-h-8 items-center rounded-control text-helper hover:underline link-action"
             >
               {showItems ? t("hideItems") : t("showItems")}
             </button>
@@ -589,7 +589,7 @@ function ItemRow({
         <Link
           href={item.href}
           onClick={onNavigated}
-          className="w-fit text-accent-fg underline"
+          className="w-fit link-action"
           aria-label={t("completeIn", { title: item.title })}
         >
           {t("completeInShort")}

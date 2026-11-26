@@ -134,10 +134,7 @@ export async function MemberDirectory({
             {t("apply")}
           </button>
           {isCustomized(query) ? (
-            <Link
-              href={`/homes/${homeId}/members`}
-              className="text-body font-medium text-accent-fg underline"
-            >
+            <Link href={`/homes/${homeId}/members`} className="text-body link-action">
               {t("reset")}
             </Link>
           ) : null}
@@ -153,10 +150,7 @@ export async function MemberDirectory({
             title={t("noMatchTitle")}
             description={t("noMatchDescription")}
             action={
-              <Link
-                href={`/homes/${homeId}/members`}
-                className="text-body font-medium text-accent-fg underline"
-              >
+              <Link href={`/homes/${homeId}/members`} className="text-body link-action">
                 {t("reset")}
               </Link>
             }
@@ -201,14 +195,14 @@ export async function MemberDirectory({
                 {member.isSelf ? (
                   <Link
                     href={`/homes/${homeId}/profile`}
-                    className="shrink-0 text-body font-medium text-accent-fg underline"
+                    className="shrink-0 text-body link-action"
                   >
                     {t("editYours")}
                   </Link>
                 ) : member.isChild === true ? (
                   <Link
                     href={`/homes/${homeId}/children/${member.membershipId}`}
-                    className="shrink-0 text-body font-medium text-accent-fg underline"
+                    className="shrink-0 text-body link-action"
                     data-testid="child-link"
                     aria-label={t("childLinkLabel", { name: member.name ?? t("noName") })}
                   >
@@ -217,7 +211,7 @@ export async function MemberDirectory({
                 ) : manageable.has(member.membershipId) ? (
                   <Link
                     href={`/homes/${homeId}/members/${member.membershipId}`}
-                    className="shrink-0 text-body font-medium text-accent-fg underline"
+                    className="shrink-0 text-body link-action"
                     data-testid="manage-member-link"
                     aria-label={tManage("manageLinkLabel", { name: member.name ?? t("noName") })}
                   >

@@ -48,7 +48,7 @@ export default async function CopyToHomePage({ searchParams }: CopyToHomePagePro
     <>
       <PageHeader title={t("title")} />
       <p className="mb-4">
-        <Link href={backHref} className="text-body font-medium text-accent-fg underline">
+        <Link href={backHref} className="text-body link-action">
           {t("backToItem")}
         </Link>
       </p>

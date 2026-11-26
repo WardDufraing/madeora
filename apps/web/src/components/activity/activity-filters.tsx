@@ -84,7 +84,7 @@ export async function ActivityFiltersForm({
           {t("filterApply")}
         </Button>
         {hasActivityFilters(filters) ? (
-          <Link href={action} className="text-body font-medium text-accent-fg underline">
+          <Link href={action} className="text-body link-action">
             {t("filterClear")}
           </Link>
         ) : null}

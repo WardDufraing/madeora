@@ -132,21 +132,18 @@ export async function TaskDetailPage({
       )}
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         {panel ? (
-          <Link href={`${base}/${detail.id}`} className="font-medium text-accent-fg underline">
+          <Link href={`${base}/${detail.id}`} className="link-action">
             {t("openFullPage")}
           </Link>
         ) : (
-          <Link href={base} className="font-medium text-accent-fg underline">
+          <Link href={base} className="link-action">
             {t("backToTasks")}
           </Link>
         )}
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <span>
           {t("inList")}{" "}
-          <Link
-            href={`${base}?list=${detail.list.id}`}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={`${base}?list=${detail.list.id}`} className="link-inline">
             <bdi>{detail.list.name}</bdi>
           </Link>
           {detail.list.archived ? ` (${t("archived")})` : null}

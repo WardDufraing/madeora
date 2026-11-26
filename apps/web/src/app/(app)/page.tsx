@@ -73,6 +73,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         clearParams={["context", "notice"]}
       />
       <PageHeader
+        centered
         title={tNav("dashboard")}
         subtitle={new Intl.DateTimeFormat(locale, {
           weekday: "long",

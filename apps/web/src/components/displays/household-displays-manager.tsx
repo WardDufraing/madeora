@@ -415,7 +415,7 @@ export function HouseholdDisplaysManager({
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={`/homes/${encodeURIComponent(homeId)}/displays/${encodeURIComponent(display.id)}`}
-                    className="text-body font-medium text-accent-fg underline"
+                    className="text-body link-action"
                     aria-label={t("configureNamed", { name: display.name })}
                   >
                     {t("configure")}

@@ -161,7 +161,7 @@ export async function TaskFilters({
           {t("applyFilters")}
         </Button>
         {filtered ? (
-          <Link href={clearHref} className="text-body font-medium text-accent-fg underline">
+          <Link href={clearHref} className="text-body link-action">
             {t("clearFilters")}
           </Link>
         ) : null}

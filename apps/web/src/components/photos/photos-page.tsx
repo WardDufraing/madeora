@@ -86,7 +86,7 @@ export async function PhotosPage({
         {usage.status === "ok" && managed.status === "ok" ? (
           <Link
             href={home ? `/homes/${home.id}/storage` : "/settings/storage"}
-            className="text-body font-semibold text-accent-fg underline"
+            className="text-body link-action"
           >
             {t("storageLink")}
           </Link>

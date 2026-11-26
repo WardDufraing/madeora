@@ -32,7 +32,7 @@ export async function TaskManagePage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={base} className="font-medium text-accent-fg underline">
+        <Link href={base} className="link-action">
           {t("backToTasks")}
         </Link>
       </p>

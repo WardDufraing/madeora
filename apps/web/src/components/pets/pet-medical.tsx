@@ -184,7 +184,7 @@ function EntryList({
         <li key={entry.id} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0">
           <Link
             href={medicalEntryPath(homeId, petId, entry.id)}
-            className="text-body font-semibold text-accent-fg underline"
+            className="text-body link-action"
             data-testid="pet-entry-link"
           >
             <bdi>{entry.title ?? texts.eventType(entry.type)}</bdi>

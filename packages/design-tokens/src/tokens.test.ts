@@ -111,8 +111,8 @@ describe("generated CSS", () => {
 
   it("uses the generous radii of the UI makeover (supersedes redesign decision 16)", () => {
     const px = (rem: string) => Number.parseFloat(rem) * 16;
-    expect(px(radius.card)).toBeGreaterThanOrEqual(20);
-    expect(px(radius.card)).toBeLessThanOrEqual(28);
+    expect(px(radius.card)).toBeGreaterThanOrEqual(18);
+    expect(px(radius.card)).toBeLessThanOrEqual(24);
     expect(px(radius.control)).toBeGreaterThanOrEqual(10);
     expect(px(radius.control)).toBeLessThanOrEqual(14);
     expect(px(radius.overlay)).toBeGreaterThan(px(radius.card));

@@ -24,7 +24,7 @@ export function PrivacyItemList({ items }: { readonly items: readonly PrivacyIte
           <p className="text-helper text-fg-muted">{item.who}</p>
           {item.href ? (
             <p>
-              <Link href={item.href} className="text-helper font-medium text-accent-fg underline">
+              <Link href={item.href} className="text-helper link-action">
                 {t("openSetting", { setting: item.title })}
               </Link>
             </p>

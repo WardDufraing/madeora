@@ -557,8 +557,8 @@ test.describe("sessions", () => {
       second.getByRole("main").getByRole("heading", { level: 1, name: "Settings" }),
     ).toBeVisible();
     // Wait until the second tab is interactive (hydrated), so it is listening for sign-outs.
-    await second.getByRole("button", { name: "Collapse sidebar" }).click();
-    await expect(second.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+    await second.getByRole("button", { name: "Expand sidebar" }).click();
+    await expect(second.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 
     await first.getByRole("button", { name: "Sign out" }).click();
     await expect(first).toHaveURL(`${baseURL ?? ""}/sign-in?status=signed-out`);

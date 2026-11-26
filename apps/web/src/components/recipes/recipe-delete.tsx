@@ -191,7 +191,7 @@ function ImpactDetails({
           </ul>
           {sharePath ? (
             <p className="text-body">
-              <Link href={sharePath} className="font-medium text-accent-fg underline">
+              <Link href={sharePath} className="link-action">
                 {t("impactUnshareInstead")}
               </Link>
             </p>

@@ -51,7 +51,7 @@ export async function ShoppingOverview({ userId, home, searchParams }: ShoppingO
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
           href={archived ? shoppingPath(homeId) : shoppingPath(homeId, "archived")}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="shopping-archive-toggle"
         >
           {archived ? t("showActive") : t("showArchived")}
@@ -60,10 +60,7 @@ export async function ShoppingOverview({ userId, home, searchParams }: ShoppingO
       {searchParams.deleted === "1" ? (
         <TaskNotice>
           {t("listDeletedNotice")}{" "}
-          <Link
-            href={home ? `/homes/${home.id}/trash` : "/settings/trash"}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={home ? `/homes/${home.id}/trash` : "/settings/trash"} className="link-inline">
             {t("openTrash")}
           </Link>
         </TaskNotice>

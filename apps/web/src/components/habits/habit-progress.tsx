@@ -325,7 +325,7 @@ export function NumericToday({
       {may ? (
         <Link
           href={habitsPath(habit.homeId, habit.id)}
-          className="text-body font-medium text-accent-fg underline"
+          className="text-body link-action"
           aria-label={t("openHabit", { habit: habit.name })}
           data-testid="habit-open"
         >

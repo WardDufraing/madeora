@@ -88,7 +88,7 @@ export function MealPlanner({
       <p className="flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{context}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={recipesPath(homeId)} className="font-medium text-accent-fg underline">
+        <Link href={recipesPath(homeId)} className="link-action">
           {t("recipesLink")}
         </Link>
         {plan.access === "view" ? (

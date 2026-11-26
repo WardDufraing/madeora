@@ -160,7 +160,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Card title={t("securityTitle")} description={t("securityHint")}>
           <Link
             href="/settings/security"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="security-link"
           >
             {t("securityLink")}
@@ -169,7 +169,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Card title={tPrivacy("settingsCardTitle")} description={tPrivacy("settingsCardHint")}>
           <Link
             href="/settings/privacy"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="privacy-link"
           >
             {tPrivacy("settingsCardLink")}
@@ -178,24 +178,21 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Card title={tActivity("settingsCardTitle")} description={tActivity("settingsCardHint")}>
           <Link
             href="/settings/activity"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="activity-link"
           >
             {tActivity("settingsCardLink")}
           </Link>
         </Card>
         <Card title={t("notificationsTitle")} description={t("notificationsHint")}>
-          <Link
-            href="/settings/notifications"
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href="/settings/notifications" className="text-body link-action">
             {t("notificationsLink")}
           </Link>
         </Card>
         <Card title={tOra("cardTitle")} description={tOra("cardHint")}>
           <Link
             href="/settings/ora"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="ora-settings-link"
           >
             {tOra("cardLink")}
@@ -204,7 +201,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Card title={tGoogle("settingsCardTitle")} description={tGoogle("settingsCardHint")}>
           <Link
             href="/settings/google-calendar"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="google-calendar-link"
           >
             {tGoogle("settingsCardLink")}
@@ -213,25 +210,21 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Card title={tStorage("settingsCardTitle")} description={tStorage("settingsCardHint")}>
           <Link
             href="/settings/storage"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="storage-link"
           >
             {tStorage("settingsCardLink")}
           </Link>
         </Card>
         <Card title={tTrash("settingsCardTitle")} description={tTrash("settingsCardHint")}>
-          <Link
-            href="/settings/trash"
-            className="text-body font-medium text-accent-fg underline"
-            data-testid="trash-link"
-          >
+          <Link href="/settings/trash" className="text-body link-action" data-testid="trash-link">
             {tTrash("settingsCardLink")}
           </Link>
         </Card>
         <Card title={tTemplates("settingsCardTitle")} description={tTemplates("settingsCardHint")}>
           <Link
             href="/settings/dashboard-templates"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="dashboard-templates-link"
           >
             {tTemplates("settingsCardLink")}
@@ -242,10 +235,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </Card>
         {hasRecovered ? (
           <Card title={tRecovery("recoveredTitle")}>
-            <Link
-              href="/settings/recoveries"
-              className="text-body font-medium text-accent-fg underline"
-            >
+            <Link href="/settings/recoveries" className="text-body link-action">
               {tRecovery("recoveredLink")}
             </Link>
           </Card>
@@ -255,7 +245,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <Card title={tRecovery("staffTitle")}>
             <Link
               href="/staff/ownership-recoveries"
-              className="text-body font-medium text-accent-fg underline"
+              className="text-body link-action"
               data-testid="staff-link"
             >
               {tRecovery("staffQueueLink")}

@@ -98,7 +98,7 @@ export function OraOverviewShare({
         onClick={() => {
           setOpen((value) => !value);
         }}
-        className="inline-flex min-h-8 w-fit items-center rounded-control text-helper font-medium text-accent-fg hover:underline"
+        className="inline-flex min-h-8 w-fit items-center rounded-control text-helper hover:underline link-action"
       >
         {open ? t("share.close") : t("share.open")}
       </button>

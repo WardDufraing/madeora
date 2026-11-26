@@ -174,7 +174,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
             <span aria-hidden="true">{"\u{00B7}"}</span>
             <Link
               href={`${base}/approvals`}
-              className="font-medium text-accent-fg underline"
+              className="link-action"
               data-testid="chores-approvals-link"
             >
               {t("approvalsLink", { count: context.value.pendingCount })}
@@ -184,7 +184,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
           href={`${base}/proposals`}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="chores-proposals-link"
         >
           {proposals.status === "ok" && proposals.value.pendingCount !== null
@@ -192,11 +192,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
             : t("proposeLink")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link
-          href={`${base}/calendar`}
-          className="font-medium text-accent-fg underline"
-          data-testid="chores-calendar-link"
-        >
+        <Link href={`${base}/calendar`} className="link-action" data-testid="chores-calendar-link">
           {t("calendarLink")}
         </Link>
         {context.value.canManage ? (
@@ -204,7 +200,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
             <span aria-hidden="true">{"\u{00B7}"}</span>
             <Link
               href={`${base}/summary`}
-              className="font-medium text-accent-fg underline"
+              className="link-action"
               data-testid="chores-summary-link"
             >
               {t("summaryLink")}
@@ -212,29 +208,21 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           </>
         ) : null}
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={`${base}/history`} className="font-medium text-accent-fg underline">
+        <Link href={`${base}/history`} className="link-action">
           {t("homeHistoryLink")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link
-          href={pointsPath(home.id)}
-          className="font-medium text-accent-fg underline"
-          data-testid="chores-points-link"
-        >
+        <Link href={pointsPath(home.id)} className="link-action" data-testid="chores-points-link">
           {t("pointsLink")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link
-          href={rewardsPath(home.id)}
-          className="font-medium text-accent-fg underline"
-          data-testid="chores-rewards-link"
-        >
+        <Link href={rewardsPath(home.id)} className="link-action" data-testid="chores-rewards-link">
           {t("rewardsLink")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
           href={vacationsPath(home.id)}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="chores-vacations-link"
         >
           {t("vacationsLink")}
@@ -242,7 +230,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
           href={absencesPath(home.id)}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="chores-absences-link"
         >
           {t("absencesLink")}
@@ -250,7 +238,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         {context.value.canManage ? (
           <>
             <span aria-hidden="true">{"\u{00B7}"}</span>
-            <Link href={`${base}/manage`} className="font-medium text-accent-fg underline">
+            <Link href={`${base}/manage`} className="link-action">
               {t("manageLink")}
             </Link>
           </>
@@ -263,7 +251,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           data-testid="chores-paused-today"
         >
           {t("pausedTodayNotice")}{" "}
-          <Link href={vacationsPath(home.id)} className="font-medium text-accent-fg underline">
+          <Link href={vacationsPath(home.id)} className="link-inline">
             {t("openVacations")}
           </Link>
         </p>
@@ -274,7 +262,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
           className="mb-4 rounded-card border border-line bg-surface-sunken p-3 text-body text-fg"
         >
           {t("deletedNotice")}{" "}
-          <Link href={`/homes/${home.id}/trash`} className="font-medium text-accent-fg underline">
+          <Link href={`/homes/${home.id}/trash`} className="link-inline">
             {t("openTrash")}
           </Link>
         </p>

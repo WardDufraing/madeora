@@ -383,7 +383,7 @@ function PreviewBody({
               setExpanded((value) => !value);
             }}
             data-testid="event-peek-more"
-            className="inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium text-accent-fg underline"
+            className="inline-flex min-h-10 items-center rounded-control px-3 text-body link-action"
           >
             {expanded ? t("peekFewerDetails") : t("peekMoreDetails")}
           </button>

@@ -48,7 +48,7 @@ export async function NewRecipePage({ homeId }: { readonly homeId: string | null
   return (
     <>
       <p className="mb-2">
-        <Link href={recipesPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={recipesPath(homeId)} className="text-body link-action">
           {t("backToLibrary")}
         </Link>
       </p>
@@ -91,7 +91,7 @@ export async function ImportRecipePage({ homeId }: { readonly homeId: string | n
   return (
     <>
       <p className="mb-2">
-        <Link href={recipesPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={recipesPath(homeId)} className="text-body link-action">
           {t("backToLibrary")}
         </Link>
       </p>
@@ -114,10 +114,7 @@ export async function ShareRecipePage({
   if (!recipe) return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   const back = (
     <p className="mb-2">
-      <Link
-        href={recipePath(homeId, recipe.id)}
-        className="text-body font-medium text-accent-fg underline"
-      >
+      <Link href={recipePath(homeId, recipe.id)} className="text-body link-action">
         {t("backToRecipe")}
       </Link>
     </p>
@@ -165,7 +162,7 @@ export async function DraftsPage({
   return (
     <>
       <p className="mb-2">
-        <Link href="/recipes" className="text-body font-medium text-accent-fg underline">
+        <Link href="/recipes" className="text-body link-action">
           {t("backToPersonalLibrary")}
         </Link>
       </p>
@@ -174,7 +171,7 @@ export async function DraftsPage({
       {searchParams.deleted === "1" ? (
         <TaskNotice>
           {t("draftDiscardedNotice")}{" "}
-          <Link href="/settings/trash" className="font-medium text-accent-fg underline">
+          <Link href="/settings/trash" className="link-inline">
             {t("openTrash")}
           </Link>
         </TaskNotice>
@@ -245,7 +242,7 @@ export async function DraftPage({ draftId }: { readonly draftId: string }) {
   return (
     <>
       <p className="mb-2">
-        <Link href={DRAFTS_PATH} className="text-body font-medium text-accent-fg underline">
+        <Link href={DRAFTS_PATH} className="text-body link-action">
           {t("backToDrafts")}
         </Link>
       </p>
@@ -315,10 +312,7 @@ export async function EditRecipePage({
   return (
     <>
       <p className="mb-2">
-        <Link
-          href={recipePath(homeId, recipe.id)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={recipePath(homeId, recipe.id)} className="text-body link-action">
           {t("backToRecipe")}
         </Link>
       </p>

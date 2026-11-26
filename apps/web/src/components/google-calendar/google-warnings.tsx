@@ -55,7 +55,7 @@ export function GoogleWarnings({
         })}
       </ul>
       {ownProblem && !compact ? (
-        <Link href={settingsPath} className="mt-2 inline-flex font-medium text-accent-fg underline">
+        <Link href={settingsPath} className="mt-2 inline-flex link-action">
           {t("openSettings")}
         </Link>
       ) : null}

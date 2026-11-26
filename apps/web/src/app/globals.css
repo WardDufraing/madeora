@@ -174,3 +174,41 @@
     overflow-wrap: anywhere;
   }
 }
+
+/* Links and link-like actions (UI makeover). A link inside a sentence stays quiet text with a
+   thin underline; a standalone link or text button becomes a soft pill, so it reads as something
+   to press. Both draw only from accent tokens (accent-fg on accent-subtle is contrast-checked). */
+@utility link-inline {
+  color: var(--color-accent-fg);
+  font-weight: 600;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+@utility link-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding-inline: 1rem;
+  white-space: nowrap;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent-fg);
+  font-weight: 600;
+  text-decoration-line: none;
+  transition-property: color, background-color, transform;
+  transition-duration: var(--md-duration-fast);
+  transition-timing-function: var(--md-ease-standard);
+  &:hover {
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  &:active {
+    transform: scale(var(--md-motion-press-scale));
+  }
+}

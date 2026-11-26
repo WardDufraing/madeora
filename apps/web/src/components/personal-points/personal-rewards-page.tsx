@@ -40,7 +40,7 @@ export async function PersonalRewardsPage({ archived }: { readonly archived: boo
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <span>{t("personalContext")}</span>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={PERSONAL_POINTS_PATH} className="font-medium text-accent-fg underline">
+        <Link href={PERSONAL_POINTS_PATH} className="link-action">
           {t("pointsLink")}
         </Link>
       </p>
@@ -166,7 +166,7 @@ export async function PersonalRewardsPage({ archived }: { readonly archived: boo
           )}
           <Link
             href={archived ? "/rewards" : "/rewards?archived=true"}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
           >
             {archived ? t("hideArchived") : t("showArchived")}
           </Link>

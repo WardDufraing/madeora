@@ -71,7 +71,7 @@ export default async function GoogleCalendarSettingsPage({
     <>
       <PageHeader title={t("pageTitle")} />
       <p className="mb-4">
-        <Link href="/settings" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings" className="text-body link-action">
           {t("backToSettings")}
         </Link>
       </p>
@@ -240,10 +240,7 @@ function Connected({
               >
                 <p className="text-body">
                   {change.eventId ? (
-                    <Link
-                      href={googleEventPath(null, change.eventId)}
-                      className="font-medium text-accent-fg underline"
-                    >
+                    <Link href={googleEventPath(null, change.eventId)} className="link-action">
                       <bdi>{change.title || t("untitled")}</bdi>
                     </Link>
                   ) : (

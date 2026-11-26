@@ -52,7 +52,7 @@ export default async function StaffRecoveriesPage() {
               >
                 <Link
                   href={`/staff/ownership-recoveries/${item.id}`}
-                  className="min-w-0 flex-1 text-body font-medium text-accent-fg underline"
+                  className="min-w-0 flex-1 text-body link-action"
                 >
                   <bdi>{item.homeName}</bdi>
                 </Link>

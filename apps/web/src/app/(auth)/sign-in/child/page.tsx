@@ -47,7 +47,7 @@ export default async function ChildSignInPage({
         <FormAlert tone="info">{t("unavailable")}</FormAlert>
       )}
       <p className="mt-6 text-body">
-        <Link href="/sign-in" className="font-medium text-accent-fg underline">
+        <Link href="/sign-in" className="link-action">
           {t("adultSignInLink")}
         </Link>
       </p>

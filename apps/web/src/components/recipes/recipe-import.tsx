@@ -179,7 +179,7 @@ export function RecipeImport({ homeId, homes }: RecipeImportProps) {
                           ? draftPath(duplicate.id)
                           : recipePath(preview.homeId, duplicate.id)
                       }
-                      className="font-medium text-accent-fg underline"
+                      className="link-action"
                     >
                       <bdi>{duplicate.name ?? t("untitled")}</bdi>
                     </Link>{" "}
@@ -266,7 +266,7 @@ export function RecipeImport({ homeId, homes }: RecipeImportProps) {
               <p className="mt-2">
                 <Link
                   href={newRecipePath(target)}
-                  className="font-medium text-accent-fg underline"
+                  className="link-action"
                   data-testid="recipe-import-manual"
                 >
                   {t("importManual")}

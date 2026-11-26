@@ -80,7 +80,7 @@ export function HabitsWidgetBody({
           ))}
         </ul>
       )}
-      <Link href={habitsPath(homeId)} className="text-body font-medium text-accent-fg underline">
+      <Link href={habitsPath(homeId)} className="text-body link-action">
         {habits.length > shown.length
           ? t("widgetMore", { count: habits.length - shown.length })
           : t("widgetOpenHabits")}
@@ -122,10 +122,7 @@ export function HabitInsightsWidgetBody({ insights }: { readonly insights: Habit
           values: trend.map((value) => (value === null ? "–" : `${String(value)}%`)).join(", "),
         })}
       </p>
-      <Link
-        href={habitsPath(habit.homeId, habit.id)}
-        className="text-body font-medium text-accent-fg underline"
-      >
+      <Link href={habitsPath(habit.homeId, habit.id)} className="text-body link-action">
         {t("viewInsights")}
       </Link>
     </div>
@@ -172,10 +169,7 @@ export function HabitProgressWidgetBody({ initialHabit }: { readonly initialHabi
       )}
       {may ? <QuickAddButtons habit={habit} source="widget" compact /> : null}
       {may ? (
-        <Link
-          href={habitsPath(habit.homeId, habit.id)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={habitsPath(habit.homeId, habit.id)} className="text-body link-action">
           {tn("widgetAddOther")}
         </Link>
       ) : null}

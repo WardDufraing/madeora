@@ -63,7 +63,7 @@ export async function HabitPage({ homeId, habitId, searchParams }: HabitPageProp
   return (
     <>
       <p className="mb-2">
-        <Link href={habitsPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={habitsPath(homeId)} className="text-body link-action">
           {t("backToHabits")}
         </Link>
       </p>

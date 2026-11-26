@@ -44,7 +44,7 @@ export async function UpcomingEventsWidget({
   const add = value.canCreate ? (
     <Link
       href={newEventPath(homeId)}
-      className="text-body font-medium text-accent-fg underline"
+      className="text-body link-action"
       data-testid="upcoming-add-event"
     >
       {t("addEvent")}
@@ -107,10 +107,7 @@ export async function UpcomingEventsWidget({
       </ul>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         {value.more ? (
-          <Link
-            href={calendarHref(homeId, "agenda")}
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href={calendarHref(homeId, "agenda")} className="text-body link-action">
             {t("widgetMore")}
           </Link>
         ) : null}

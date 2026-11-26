@@ -54,11 +54,11 @@ export async function VacationsPage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={choresPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={choresPath(home.id)} className="link-action">
           {t("backToChores")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={absencesPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={absencesPath(home.id)} className="link-action">
           {t("absencesLink")}
         </Link>
       </p>
@@ -140,10 +140,7 @@ export async function VacationsPage({
                       name: name(invitation.name),
                       dates: rangeText(invitation.startsOn, invitation.endsOn, formats),
                     })}{" "}
-                    <Link
-                      href={`${base}/${invitation.vacationId}`}
-                      className="font-medium text-accent-fg underline"
-                    >
+                    <Link href={`${base}/${invitation.vacationId}`} className="link-inline">
                       {t("openVacation")}
                     </Link>
                   </p>

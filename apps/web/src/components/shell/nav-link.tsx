@@ -45,7 +45,7 @@ export function NavLink({
         "group relative flex h-11 items-center rounded-pill text-body transition-colors duration-(--md-duration-fast)",
         // The current page is marked by weight and an inverted fill, not by colour alone.
         active
-          ? "bg-fg font-semibold text-surface shadow-selected forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
+          ? "bg-accent font-semibold text-on-accent forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
           : "font-medium text-fg-muted hover:bg-accent-subtle hover:text-fg",
         collapsed ? "mx-auto w-11 justify-center" : "gap-3 px-4",
       )}

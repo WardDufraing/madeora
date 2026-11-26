@@ -76,10 +76,7 @@ export async function ActivityList({
         title={t("unavailableTitle")}
         description={t("unavailableHint")}
         action={
-          <Link
-            href={newestPageHref(path, filters)}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={newestPageHref(path, filters)} className="link-action">
             {t("retry")}
           </Link>
         }
@@ -104,7 +101,7 @@ export async function ActivityList({
             title={t("beyondRetentionTitle")}
             description={t("beyondRetentionHint")}
             action={
-              <Link href={path} className="font-medium text-accent-fg underline">
+              <Link href={path} className="link-action">
                 {t("filterClear")}
               </Link>
             }
@@ -114,7 +111,7 @@ export async function ActivityList({
             title={t("noMatchTitle")}
             description={filters.category === "privacy" ? t("privacyEmptyHint") : t("noMatchHint")}
             action={
-              <Link href={path} className="font-medium text-accent-fg underline">
+              <Link href={path} className="link-action">
                 {t("filterClear")}
               </Link>
             }
@@ -239,14 +236,14 @@ function Paging({
   return (
     <nav aria-label={navLabel} className="mt-4 flex flex-wrap gap-4">
       {label ? (
-        <Link href={newestPageHref(path, filters)} className="font-medium text-accent-fg underline">
+        <Link href={newestPageHref(path, filters)} className="link-action">
           {label}
         </Link>
       ) : null}
       {next && olderLabel ? (
         <Link
           href={olderPageHref(path, filters, next)}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="activity-older"
         >
           {olderLabel}

@@ -141,7 +141,7 @@ export function ChoreReminder({
       {!view.channels.inApp && !view.channels.email ? (
         <p className="text-helper text-fg-muted">
           {t("reminderChannelsOff")}{" "}
-          <Link href="/settings/notifications" className="font-medium text-accent-fg underline">
+          <Link href="/settings/notifications" className="link-inline">
             {t("reminderChannelsLink")}
           </Link>
         </p>

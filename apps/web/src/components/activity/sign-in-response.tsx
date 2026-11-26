@@ -108,10 +108,10 @@ function SecureLinks() {
   const t = useTranslations("Activity");
   return (
     <p className="flex flex-wrap gap-4 text-helper">
-      <Link href="/settings/security#password" className="font-medium text-accent-fg underline">
+      <Link href="/settings/security#password" className="link-action">
         {t("changePasswordLink")}
       </Link>
-      <Link href="/settings/security#sessions" className="font-medium text-accent-fg underline">
+      <Link href="/settings/security#sessions" className="link-action">
         {t("reviewSessionsLink")}
       </Link>
     </p>

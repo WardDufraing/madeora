@@ -50,7 +50,7 @@ export default async function HouseholdPage() {
           {t("deviceNotApprovedText")}
         </p>
         <p className="mt-6 text-body">
-          <Link href="/sign-in/child" className="font-medium text-accent-fg underline">
+          <Link href="/sign-in/child" className="link-action">
             {t("passwordSignInLink")}
           </Link>
         </p>
@@ -81,7 +81,7 @@ export default async function HouseholdPage() {
         <HouseholdPinSignIn childrenOfHome={screen.children} />
       )}
       <p className="mt-6 text-body">
-        <Link href="/household/chores" className="font-medium text-accent-fg underline">
+        <Link href="/household/chores" className="link-action">
           {t("choresLink")}
         </Link>
       </p>

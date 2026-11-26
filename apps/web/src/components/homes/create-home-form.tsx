@@ -86,7 +86,7 @@ export function CreateHomeForm({ defaultTimeZone, timeZoneChoices }: CreateHomeF
         >
           {t("createSubmit")}
         </Button>
-        <Link href="/?context=personal" className="text-body font-medium text-accent-fg underline">
+        <Link href="/?context=personal" className="text-body link-action">
           {t("cancel")}
         </Link>
       </div>

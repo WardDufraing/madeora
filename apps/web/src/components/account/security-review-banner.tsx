@@ -14,7 +14,7 @@ export async function SecurityReviewBanner() {
       data-testid="security-review-banner"
     >
       <p className="min-w-0 flex-1">{t("reviewBanner")}</p>
-      <Link href="/settings/security/review" className="font-medium text-accent-fg underline">
+      <Link href="/settings/security/review" className="link-action">
         {t("reviewBannerLink")}
       </Link>
     </aside>

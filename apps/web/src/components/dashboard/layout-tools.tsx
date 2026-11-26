@@ -186,10 +186,7 @@ export function LayoutTools({
           <FormAlert tone="success" announce>
             {t("templateSaved", { name: isolate(saved.name) })}{" "}
             {saved.dropped > 0 ? `${t("templateDropped", { count: saved.dropped })} ` : ""}
-            <Link
-              href="/settings/dashboard-templates"
-              className="font-medium text-accent-fg underline"
-            >
+            <Link href="/settings/dashboard-templates" className="link-action">
               {t("manageTemplates")}
             </Link>
           </FormAlert>

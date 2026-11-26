@@ -35,7 +35,7 @@ export async function OraWidget({
         title={t("offTitle")}
         description={t("offDescription")}
         action={
-          <Link href="/settings/ora" className="text-body font-medium text-accent-fg underline">
+          <Link href="/settings/ora" className="text-body link-action">
             {t("settings")}
           </Link>
         }

@@ -49,7 +49,7 @@ export default async function ActivityHistoryPage({ searchParams }: ActivityPage
       <PageHeader title={t("title")} />
       <p className="mb-2 max-w-2xl text-body text-fg-muted">{t("hint")}</p>
       <p className="mb-4">
-        <Link href="/settings" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings" className="text-body link-action">
           {t("back")}
         </Link>
       </p>

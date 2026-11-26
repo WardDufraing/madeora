@@ -101,10 +101,7 @@ export function CancelPendingCopies({ rows }: { readonly rows: readonly OpenCopy
           </Button>
         </>
       ) : null}
-      <Link
-        href="/settings/privacy/copies"
-        className="text-body font-medium text-accent-fg underline"
-      >
+      <Link href="/settings/privacy/copies" className="text-body link-action">
         {t("myRequestsLink")}
       </Link>
     </div>

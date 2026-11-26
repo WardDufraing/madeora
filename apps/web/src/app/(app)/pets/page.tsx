@@ -38,7 +38,7 @@ export default async function PersonalPetsPage() {
               <li key={home.id} className="p-3">
                 <Link
                   href={petsPath(home.id)}
-                  className="text-body font-semibold text-accent-fg underline"
+                  className="text-body link-action"
                   data-testid="personal-pets-home"
                 >
                   {t("homePetsLink", { home: home.name })}

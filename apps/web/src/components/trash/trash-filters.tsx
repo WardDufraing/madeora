@@ -90,7 +90,7 @@ export async function TrashFiltersForm({ action, filters }: TrashFiltersFormProp
           {t("filterApply")}
         </Button>
         {hasTrashFilters(filters) ? (
-          <Link href={action} className="text-body font-medium text-accent-fg underline">
+          <Link href={action} className="text-body link-action">
             {t("filterClear")}
           </Link>
         ) : null}

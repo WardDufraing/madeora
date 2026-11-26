@@ -41,7 +41,7 @@ export default async function RecoveredHomesPage({ searchParams }: RecoveredPage
     <>
       <PageHeader title={t("recoveredTitle")} />
       <p className="mb-6 text-body text-fg-muted">
-        <Link href="/settings" className="font-medium text-accent-fg underline">
+        <Link href="/settings" className="link-action">
           {tNav("settings")}
         </Link>
       </p>

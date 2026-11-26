@@ -51,7 +51,7 @@ export default async function ExportPage({ searchParams }: ExportPageProps) {
       <PageHeader title={t("exportTitle")} />
       <p className="mb-2 max-w-2xl text-body text-fg-muted">{t("exportIntro")}</p>
       <p className="mb-4">
-        <Link href="/settings/privacy" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/privacy" className="text-body link-action">
           {t("backToPrivacy")}
         </Link>
       </p>

@@ -306,10 +306,7 @@ export function TaskReminderSection({ view, members, formats, today }: TaskRemin
               <FormAlert tone="info">
                 <p data-testid="reminder-channel">
                   {t("channelOff")}{" "}
-                  <Link
-                    href="/settings/notifications"
-                    className="font-medium text-accent-fg underline"
-                  >
+                  <Link href="/settings/notifications" className="link-inline">
                     {t("channelSettings")}
                   </Link>
                 </p>

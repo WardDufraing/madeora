@@ -44,7 +44,7 @@ export default async function DeleteDataPage({ searchParams }: DeleteDataPagePro
     <>
       <PageHeader title={t("title")} />
       <p className="mb-4">
-        <Link href="/settings/privacy" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/privacy" className="text-body link-action">
           {t("backToPrivacy")}
         </Link>
       </p>
@@ -56,10 +56,7 @@ export default async function DeleteDataPage({ searchParams }: DeleteDataPagePro
             <li>{t("aboutHomes")}</li>
             <li>
               {t("aboutAccount")}{" "}
-              <Link
-                href="/settings/privacy/delete"
-                className="font-medium text-accent-fg underline"
-              >
+              <Link href="/settings/privacy/delete" className="link-inline">
                 {t("aboutAccountLink")}
               </Link>
             </li>

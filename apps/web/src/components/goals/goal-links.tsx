@@ -623,10 +623,7 @@ export function GoalLinksSection({
           <li key={link.id} className="flex flex-col gap-1" data-testid="goal-link">
             <p className="text-body text-fg">
               {link.habit ? (
-                <Link
-                  href={habitsPath(homeId, link.habit.id)}
-                  className="font-medium text-accent-fg underline"
-                >
+                <Link href={habitsPath(homeId, link.habit.id)} className="link-action">
                   <bdi>{link.habit.name}</bdi>
                 </Link>
               ) : (
@@ -739,7 +736,7 @@ export function HabitLinkedGoals({
                   ? goalSeriesPath(homeId, link.destination.id)
                   : goalsPath(homeId, link.destination.id)
               }
-              className="text-accent-fg underline"
+              className="link-action"
             >
               <bdi>{link.destination.title}</bdi>
             </Link>

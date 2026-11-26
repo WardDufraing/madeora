@@ -49,9 +49,9 @@ export default async function ShellPreviewPage() {
 
   return (
     <PreviewProvider>
-      <AppShell sidebar="expanded" homes={[]} unreadNotifications={3}>
+      <AppShell sidebar="collapsed" homes={[]} unreadNotifications={3}>
         <div lang="en" className="mx-auto w-full max-w-(--md-canvas-max-width)">
-          <PageHeader title="Good evening, Sam" subtitle="Thursday 26 November" />
+          <PageHeader centered title="Good evening, Sam" subtitle="Thursday 26 November" />
           <div className="grid grid-cols-1 gap-(--md-space-grid-gap) md:grid-cols-3">
             {stats.map(([label, value]) => (
               <WidgetFrame key={label} widget={{ title: label, unavailable: false }}>
@@ -85,6 +85,15 @@ export default async function ShellPreviewPage() {
               </ul>
               <div className="mt-5 flex gap-2">
                 <Button size="sm">Add chore</Button>
+                <a href="#x" className="link-action">
+                  Back to chores
+                </a>
+                <p className="text-helper text-fg-muted">
+                  Reminders are off.{" "}
+                  <a href="#x" className="link-inline">
+                    Turn them on
+                  </a>
+                </p>
                 <Button size="sm" variant="secondary">
                   View all
                 </Button>

@@ -203,7 +203,7 @@ function Attachments({
               {" "}
               <button
                 type="button"
-                className="font-medium text-accent-fg underline"
+                className="link-inline"
                 onClick={() => {
                   void upload(retryable);
                 }}
@@ -281,7 +281,7 @@ function AttachmentRow({
           href={fileContentPath(attachment.fileId)}
           target="_blank"
           rel="noopener noreferrer"
-          className="truncate text-body font-medium text-accent-fg underline"
+          className="truncate text-body link-action"
           data-testid="pet-attachment-link"
         >
           <bdi>{attachment.name}</bdi>

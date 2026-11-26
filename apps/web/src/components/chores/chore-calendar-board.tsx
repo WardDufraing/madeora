@@ -298,7 +298,7 @@ export function ChoreCalendarBoard({
                       {entries.length > shown.length ? (
                         <Link
                           href={href({ date: anchor, day: date })}
-                          className="text-helper font-medium text-accent-fg underline"
+                          className="text-helper link-action"
                           tabIndex={-1}
                           aria-hidden="true"
                         >

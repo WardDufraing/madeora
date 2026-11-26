@@ -82,13 +82,10 @@ export default async function SecurityActivityPage({ searchParams }: SecurityAct
       <PageHeader title={t("securityTitle")} />
       <p className="mb-2 max-w-2xl text-body text-fg-muted">{t("securityHint")}</p>
       <p className="mb-4 flex flex-wrap gap-4">
-        <Link href="/settings/security" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/security" className="text-body link-action">
           {t("securityBack")}
         </Link>
-        <Link
-          href="/settings/security/notifications"
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href="/settings/security/notifications" className="text-body link-action">
           {t("alertsLink")}
         </Link>
       </p>

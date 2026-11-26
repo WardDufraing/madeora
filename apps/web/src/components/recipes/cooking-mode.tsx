@@ -165,7 +165,7 @@ export function CookingMode({ recipe, homeId, initialServings }: CookingModeProp
         <FormAlert tone="error" announce>
           {t("cookingUnavailable")}
         </FormAlert>
-        <Link href={recipesPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={recipesPath(homeId)} className="text-body link-action">
           {t("backToLibrary")}
         </Link>
       </div>
@@ -197,7 +197,7 @@ export function CookingMode({ recipe, homeId, initialServings }: CookingModeProp
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Link href={back} className="text-body font-medium text-accent-fg underline">
+        <Link href={back} className="text-body link-action">
           {t("exitCooking")}
         </Link>
         <Button
@@ -218,7 +218,7 @@ export function CookingMode({ recipe, homeId, initialServings }: CookingModeProp
       {steps.length === 0 ? (
         <p className="text-body text-fg-muted">
           {t("cookingNoSteps")}{" "}
-          <Link href={back} className="font-medium text-accent-fg underline">
+          <Link href={back} className="link-inline">
             {t("backToRecipe")}
           </Link>
         </p>
