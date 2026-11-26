@@ -18,10 +18,10 @@ export default async function AuthLayout({ children }: Readonly<{ children: Reac
     <div className="flex min-h-dvh flex-col items-center px-4 py-10 sm:justify-center">
       <main id="main" className="flex w-full max-w-md flex-col gap-8">
         <div className="flex items-center justify-center gap-3" aria-hidden="true">
-          <span className="flex size-10 items-center justify-center rounded-card border border-accent-edge bg-accent-subtle text-section-title font-bold text-accent-fg">
+          <span className="flex size-10 items-center justify-center rounded-control border border-accent-edge bg-accent-subtle text-section-title font-bold text-accent-fg">
             M
           </span>
-          <span className="text-page-title font-semibold text-fg">Madeora</span>
+          <span className="text-section-title font-semibold text-fg">Madeora</span>
         </div>
         <div className="rounded-card border border-line bg-surface p-6 text-fg shadow-raised sm:p-10">
           {children}
