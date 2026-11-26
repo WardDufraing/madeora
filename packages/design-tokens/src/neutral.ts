@@ -24,23 +24,23 @@ export interface NeutralTokens {
 
 export const neutral: Readonly<Record<Theme, NeutralTokens>> = {
   light: {
-    page: "#f7f8fc",
+    page: "#eef0f6",
     sidebar: "#ffffff",
     surface: "#ffffff",
     surfaceElevated: "#ffffff",
     fg: "#151a29",
-    fgMuted: "#667085",
-    line: "#e6e9f1",
-    lineControl: "#868ea3",
+    fgMuted: "#586075",
+    line: "#e8ebf2",
+    lineControl: "#737b91",
   },
   dark: {
-    page: "#10141d",
-    sidebar: "#11151e",
-    surface: "#1a1f2a",
-    surfaceElevated: "#222836",
+    page: "#0b0e15",
+    sidebar: "#10141d",
+    surface: "#171d29",
+    surfaceElevated: "#212839",
     fg: "#f7f8fc",
     fgMuted: "#aab3c5",
-    line: "#303746",
+    line: "#262d3b",
     lineControl: "#737d92",
   },
 };

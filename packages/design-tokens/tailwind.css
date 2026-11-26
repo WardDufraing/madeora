@@ -54,6 +54,7 @@
   --radius-control: var(--md-radius-control);
   --radius-card: var(--md-radius-card);
   --radius-overlay: var(--md-radius-overlay);
+  --radius-pill: var(--md-radius-pill);
   --radius-checkbox: var(--md-radius-checkbox);
   --shadow-raised: var(--md-shadow-raised);
   --shadow-overlay: var(--md-shadow-overlay);

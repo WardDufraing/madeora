@@ -78,7 +78,7 @@ export function Sidebar({ initialState }: SidebarProps) {
       type="button"
       onClick={toggle}
       aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-control text-fg-muted hover:bg-accent-subtle hover:text-fg"
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-pill text-fg-muted hover:bg-accent-subtle hover:text-fg"
     >
       {/* The arrow points towards the edge it moves to, so it mirrors in right-to-left layouts. */}
       <ToggleIcon className="rtl:-scale-x-100" />
@@ -115,7 +115,7 @@ export function Sidebar({ initialState }: SidebarProps) {
       data-state={state}
       className={cx(
         "sticky top-0 hidden h-dvh shrink-0 md:flex",
-        collapsed ? "p-2" : "p-3",
+        collapsed ? "p-3" : "p-4",
         "transition-[width] duration-(--md-duration-slow) ease-standard",
         collapsed ? "w-(--md-shell-sidebar-collapsed)" : "w-(--md-shell-sidebar-expanded)",
       )}

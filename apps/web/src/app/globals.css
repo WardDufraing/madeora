@@ -3,11 +3,26 @@
    Tailwind theme that exposes only those tokens (Tailwind's own colour palette is removed). */
 @import "@madeora/design-tokens/tokens.css";
 @import "@madeora/design-tokens/tailwind.css";
+@import "@fontsource-variable/plus-jakarta-sans/wght.css";
 @import "../components/ora/ora-character.css";
 
 @layer base {
   html {
     font-family: var(--md-font-sans);
+  }
+
+  /* Headings are set tight and bold: the hierarchy comes from size and weight, not from lines. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+  }
+
+  /* Negative tracking breaks the joined letters of cursive scripts. */
+  :lang(ar) :is(h1, h2, h3),
+  :lang(fa) :is(h1, h2, h3),
+  :lang(he) :is(h1, h2, h3) {
+    letter-spacing: normal;
   }
 
   body {

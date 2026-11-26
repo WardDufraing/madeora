@@ -10,7 +10,7 @@ export function NotificationBell({ unread }: { readonly unread: number }) {
       href="/notifications"
       aria-label={unread > 0 ? t("notificationsUnread", { count: unread }) : t("notificationsLink")}
       data-testid="notification-bell"
-      className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-control text-fg hover:bg-accent-subtle"
+      className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-pill text-fg hover:bg-surface hover:shadow-selected"
     >
       <BellIcon />
       {unread > 0 ? (
