@@ -8927,6 +8927,7 @@
     "core": "Always in the menu",
     "others": "Modules",
     "resultCount": "{count, plural, one {# module} other {# modules}}",
-    "pinToggle": "Pin {module} to shortcuts"
+    "pinToggle": "Pin {module} to shortcuts",
+    "shortcut": "Shortcut"
   }
 }

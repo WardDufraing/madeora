@@ -450,13 +450,13 @@ test.describe("all modules and shortcuts", () => {
     expect(await axeViolations(page)).toEqual([]);
 
     await expect(mainNav(page).getByRole("link", { name: "Pets" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Pin Pets to shortcuts" }).click();
+    await page.getByRole("switch", { name: "Pin Pets to shortcuts" }).click();
     await expect(mainNav(page).getByRole("link", { name: "Pets" })).toBeVisible();
 
     await page.reload();
     await expect(mainNav(page).getByRole("link", { name: "Pets" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
-      "aria-pressed",
+    await expect(page.getByRole("switch", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
+      "aria-checked",
       "true",
     );
   });

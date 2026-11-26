@@ -30,12 +30,12 @@ describe("AllModules", () => {
     // Core destinations cannot be pinned or unpinned.
     expect(screen.queryByRole("button", { name: /Calendar/ })).not.toBeInTheDocument();
     // Personal defaults are shown as pinned.
-    expect(screen.getByRole("button", { name: "Pin Shopping to shortcuts" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.getByRole("switch", { name: "Pin Shopping to shortcuts" })).toHaveAttribute(
+      "aria-checked",
       "true",
     );
-    expect(screen.getByRole("button", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.getByRole("switch", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
+      "aria-checked",
       "false",
     );
   });
@@ -79,15 +79,15 @@ describe("AllModules", () => {
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(within(nav).queryByRole("link", { name: "Pets" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Pin Pets to shortcuts" }));
+    await user.click(screen.getByRole("switch", { name: "Pin Pets to shortcuts" }));
     expect(within(nav).getByRole("link", { name: "Pets" })).toBeInTheDocument();
     expect(document.cookie).toContain("md-favorites=shopping%2Chabits%2Cgoals%2Cpets");
-    expect(screen.getByRole("button", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.getByRole("switch", { name: "Pin Pets to shortcuts" })).toHaveAttribute(
+      "aria-checked",
       "true",
     );
 
-    await user.click(screen.getByRole("button", { name: "Pin Pets to shortcuts" }));
+    await user.click(screen.getByRole("switch", { name: "Pin Pets to shortcuts" }));
     expect(within(nav).queryByRole("link", { name: "Pets" })).not.toBeInTheDocument();
   });
 
@@ -100,5 +100,18 @@ describe("AllModules", () => {
     );
     expect(screen.getByRole("searchbox", { name: "Modules zoeken" })).toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("toggles a shortcut from the keyboard with Space", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <FavoritesProvider initial={null}>
+        <AllModules homeId={null} />
+      </FavoritesProvider>,
+    );
+    const toggle = screen.getByRole("switch", { name: "Pin Pets to shortcuts" });
+    toggle.focus();
+    await user.keyboard(" ");
+    expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 });
