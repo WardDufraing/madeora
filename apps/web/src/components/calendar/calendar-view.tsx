@@ -480,7 +480,7 @@ async function OccurrenceItem({
   if (occurrence.workPeriod) {
     return (
       <li
-        className="rounded-control border-s-4 border-dashed border-accent-edge bg-accent-subtle text-body"
+        className="rounded-control border-s-4 border-dashed border-accent-edge bg-page text-body"
         data-testid="calendar-work-period"
         data-kind={occurrence.kind}
       >
@@ -503,15 +503,12 @@ async function OccurrenceItem({
     >
       <EventPreview
         {...preview}
-        className="flex flex-col rounded-control px-1 text-fg hover:bg-accent-subtle"
+        className="flex flex-col rounded-control border-s-[3px] border-accent-edge bg-accent-subtle px-2 py-0.5 text-fg hover:underline"
       >
         <span>
-          <span className="text-fg-muted">{when}</span>{" "}
-          <bdi>{occurrence.title || t("untitledGoogle")}</bdi>
+          <span>{when}</span> <bdi>{occurrence.title || t("untitledGoogle")}</bdi>
         </span>
-        {notes.length > 0 ? (
-          <span className="text-helper text-fg-muted">{notes.join(" · ")}</span>
-        ) : null}
+        {notes.length > 0 ? <span className="text-helper">{notes.join(" · ")}</span> : null}
       </EventPreview>
     </li>
   );
@@ -586,7 +583,7 @@ async function MonthGrid({
   return (
     <div className="hidden overflow-x-auto sm:block">
       <table
-        className="w-full min-w-[42rem] table-fixed border-collapse"
+        className="w-full min-w-[42rem] table-fixed border-separate border-spacing-1"
         data-testid="calendar-grid"
       >
         <caption className="sr-only">{title}</caption>
@@ -633,12 +630,21 @@ async function MonthGrid({
                   return (
                     <td
                       key={date}
-                      // Borderless (decision 44): a hairline above each week and tone for weekends,
-                      // instead of a box around every day.
+                      // Soft cells: each day is its own rounded tile, weekends and days outside the
+                      // month sit back on the page tone, and today carries an accent edge as well as
+                      // the filled number, so it never relies on colour alone.
                       className={cx(
-                        "group border-t border-line p-1.5 align-top",
+                        "group rounded-card border p-1.5 align-top",
                         window.view === "month" ? "h-28" : "h-48",
-                        isWeekend(date) && "bg-page",
+                        date === today
+                          ? "border-accent-edge bg-surface ring-1 ring-accent-edge"
+                          : cx(
+                              "border-line",
+                              isWeekend(date) || outside ? "bg-page" : "bg-surface",
+                            ),
+                        date === today
+                          ? "forced-colors:border-[Highlight]"
+                          : "forced-colors:border-[CanvasText]",
                       )}
                       data-testid="calendar-day"
                       data-date={date}
