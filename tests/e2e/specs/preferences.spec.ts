@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
-import { registerConfirmed, signIn, type Account } from "../support/accounts";
+import { openAccountMenu, registerConfirmed, signIn, type Account } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
 
 // S07: the personal context with zero Homes, the starter dashboard shell and the account's global
@@ -165,6 +165,7 @@ test("the language is saved on the account and wins over each device's language"
   await other.context.close();
 
   // This device also remembers it for its sign-in page after signing out.
+  await openAccountMenu(page);
   await page.getByRole("button", { name: "Afmelden" }).click();
   await expect(page).toHaveURL(/\/sign-in/);
   await expect(page.locator("html")).toHaveAttribute("lang", "nl");

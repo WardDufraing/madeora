@@ -66,3 +66,9 @@ export async function signIn(page: Page, account: Account, path = "/sign-in"): P
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
 }
+
+/** Opens the top bar's account menu (Switch account, Sign out); the menu starts closed. */
+export async function openAccountMenu(page: Page): Promise<void> {
+  const menu = page.getByTestId("account-menu");
+  if ((await menu.getAttribute("aria-expanded")) !== "true") await menu.click();
+}

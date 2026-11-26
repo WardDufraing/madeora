@@ -1,6 +1,6 @@
 import type { Page, WebSocket } from "@playwright/test";
 
-import { registerConfirmed, signIn, type Account } from "../support/accounts";
+import { openAccountMenu, registerConfirmed, signIn, type Account } from "../support/accounts";
 import { axeViolations, expect, realtimeAvailable, test } from "../support/browser";
 import { createHomeFor, setGlobalProfile } from "../support/database";
 
@@ -48,6 +48,7 @@ test("switching accounts clears every cache and subscription", async ({ page, ba
   const annSockets = [...sockets];
 
   // The chooser: Ann is remembered and active; only her name shows, no Home or list.
+  await openAccountMenu(page);
   await page.getByTestId("switch-account-link").click();
   await expect(page).toHaveURL(/\/accounts$/);
   const list = page.getByRole("list", { name: "Remembered accounts" });

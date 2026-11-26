@@ -25,6 +25,13 @@ describe("state components", () => {
     expect(screen.getByRole("button", { name: "Add task" })).toBeInTheDocument();
   });
 
+  it("EmptyState is a soft solid card, not a dashed outline", () => {
+    render(<EmptyState title="No tasks yet" />);
+    const card = screen.getByText("No tasks yet").parentElement;
+    expect(card).toHaveClass("rounded-card", "bg-page");
+    expect(card).not.toHaveClass("border-dashed");
+  });
+
   it("ErrorState is announced only when asked", () => {
     const { rerender } = render(<ErrorState title="Couldn't load tasks" />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

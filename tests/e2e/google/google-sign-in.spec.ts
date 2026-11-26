@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Page } from "@playwright/test";
 
-import { registerConfirmed, signIn, type Account } from "../support/accounts";
+import { openAccountMenu, registerConfirmed, signIn, type Account } from "../support/accounts";
 import { axeViolations, expect, test } from "../support/browser";
 import { e2eEnv } from "../support/env";
 import { subjects, waitForEmail } from "../support/mail";
@@ -58,6 +58,7 @@ const alert = (page: Page) => page.getByRole("main").getByRole("alert");
 const methods = (page: Page) => page.getByRole("region", { name: "Sign-in methods" });
 
 async function signOut(page: Page) {
+  await openAccountMenu(page);
   await page.getByRole("button", { name: "Sign out" }).first().click();
   await page.waitForURL(/\/sign-in/);
 }
@@ -264,6 +265,7 @@ test("a link that finishes after the browser switched accounts does not touch th
   // Meanwhile, someone else signs in on the same browser in another tab.
   const other = await page.context().newPage();
   await other.goto("/");
+  await openAccountMenu(other);
   await other.getByRole("button", { name: "Sign out" }).first().click();
   await other.waitForURL(/\/sign-in/);
   await signIn(other, second);

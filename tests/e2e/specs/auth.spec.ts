@@ -2,6 +2,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 
 import {
   newAccount,
+  openAccountMenu,
   registerConfirmed,
   registerUnconfirmed,
   signIn,
@@ -74,6 +75,7 @@ test.describe("registration and email confirmation", () => {
     // Personal context with zero Homes (spec: Home-independent onboarding).
     await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
 
+    await openAccountMenu(page);
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/sign-in\?status=signed-out$/);
     await expect(page.getByText("You're signed out.")).toBeVisible();
@@ -408,6 +410,7 @@ test.describe("access to the app", () => {
       await page.getByRole("button", { name: "Sign in" }).click();
       await expect(dashboardHeading(page)).toBeVisible();
       expect(new URL(page.url()).origin).toBe(baseURL);
+      await openAccountMenu(page);
       await page.getByRole("button", { name: "Sign out" }).click();
       await expect(page).toHaveURL(/\/sign-in\?status=signed-out$/);
     }
@@ -563,6 +566,7 @@ test.describe("sessions", () => {
     await second.getByRole("button", { name: "Expand sidebar" }).click();
     await expect(second.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 
+    await openAccountMenu(first);
     await first.getByRole("button", { name: "Sign out" }).click();
     await expect(first).toHaveURL(`${baseURL ?? ""}/sign-in?status=signed-out`);
     // The other tab is told straight away and asks the server again, which sends it to sign-in.

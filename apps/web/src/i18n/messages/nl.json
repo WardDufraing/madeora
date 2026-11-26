@@ -3,6 +3,8 @@
     "pageTitle": "{page} · Madeora"
   },
   "Shell": {
+    "accountMenu": "Accountmenu",
+    "signedInAs": "Aangemeld als {name}",
     "skipToContent": "Naar de hoofdinhoud",
     "mainNavigation": "Hoofdmenu",
     "brandLink": "Madeora, naar het dashboard",

@@ -318,8 +318,11 @@ test.describe("language", () => {
     test("switches between Dutch and English at once and after a reload", async ({
       page,
       baseURL,
+      context,
     }) => {
       await signIn(page, await registerConfirmed(baseURL ?? ""));
+      // The labels are asserted as link text, which a collapsed sidebar doubles with its tooltip.
+      await setCookies(context, { "md-sidebar": "expanded" }, page);
       await page.goto("/settings");
       await expect(page.locator("html")).toHaveAttribute("lang", "en");
 
