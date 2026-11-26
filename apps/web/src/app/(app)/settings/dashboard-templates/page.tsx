@@ -10,6 +10,7 @@ import {
 } from "@/components/dashboard/template-manager";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState } from "@/components/ui/states";
+import { layoutPreview } from "@/dashboard/preview";
 import { listTemplates } from "@/dashboard/server";
 import { getHomeContext, listMyHomes } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
@@ -62,6 +63,7 @@ export default async function DashboardTemplatesPage() {
               widgets: template.layout.widgets.map((w) => w.type),
               isMine: template.isMine,
               sharedHomeIds: template.sharedHomeIds,
+              preview: layoutPreview(template.layout),
             }))}
             homes={homes}
           />

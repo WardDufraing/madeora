@@ -19,8 +19,8 @@ import { dashboardTemplatesKey } from "./use-template-options";
 import { useWidgetLabels } from "./use-widget-labels";
 
 /**
- * Edit mode's layout tools (S17): apply a template, reset to the starter layout, undo the last
- * reset or template, and save the saved layout as a template. Template apply, reset and undo commit
+ * Edit mode's layout tools (S17, UX2c): apply a template, reset to the starter layout, undo the last
+ * reset or template, open the version history, and save the saved layout as a template. Template apply, reset and undo commit
  * at once (each undoable once) and end the edit-mode draft; the editor confirms them first.
  */
 export function LayoutTools({
@@ -36,6 +36,7 @@ export function LayoutTools({
   onApply,
   onReset,
   onUndo,
+  onHistory,
 }: {
   readonly target: DashboardTarget;
   readonly templates: readonly TemplateOption[];
@@ -49,6 +50,8 @@ export function LayoutTools({
   readonly onApply: (option: TemplateOption) => void;
   readonly onReset: () => void;
   readonly onUndo: () => void;
+  /** Opens the version history (decision 32). */
+  readonly onHistory: () => void;
 }) {
   const t = useTranslations("Dashboard");
   const labels = useWidgetLabels();
@@ -58,6 +61,9 @@ export function LayoutTools({
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   const [saved, setSaved] = useState<{ name: string; dropped: number } | null>(null);
+  const ownNames = templates.flatMap((option) =>
+    option.source === "mine" ? [option.name.trim().toLocaleLowerCase()] : [],
+  );
 
   const create = useMutation<{ id: string; dropped: number }, DashboardRequestError, string>({
     mutationFn: (templateName) => createTemplate(templateName, target),
@@ -118,6 +124,15 @@ export function LayoutTools({
             {t("undoLastChange")}
           </Button>
         ) : null}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={pending}
+          onClick={onHistory}
+          data-testid="dashboard-history-open"
+        >
+          {t("versionHistory")}
+        </Button>
       </div>
 
       <form
@@ -128,6 +143,11 @@ export function LayoutTools({
           const parsed = templateNameSchema.safeParse(name);
           if (!parsed.success) {
             setNameError(t("templateNameInvalid"));
+            return;
+          }
+          // Decision 31: clear names. The person's own templates never share a name.
+          if (ownNames.includes(parsed.data.toLocaleLowerCase())) {
+            setNameError(t("templateNameTaken"));
             return;
           }
           setNameError(undefined);

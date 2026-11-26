@@ -76,3 +76,17 @@ export const templateIdSchema = z.uuid();
 
 /** Same limit as the database (`private.dashboard_limit('templates')`). */
 export const TEMPLATE_LIMIT = 50;
+
+/** A copy of a visible template as a new private template of the person's own (UX2c). */
+export const duplicateTemplateSchema = z.strictObject({ name: templateNameSchema });
+
+/**
+ * Restores one version of a dashboard's history as a new commit (UX2c; decision 32). The version
+ * must belong to `target`; `expectedRevision` is the dashboard's revision the person saw (a history
+ * exists only once something was saved, so never 0).
+ */
+export const restoreVersionSchema = z.strictObject({
+  target: dashboardTargetSchema,
+  versionId: z.uuid(),
+  expectedRevision: revision.min(1),
+});

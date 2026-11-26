@@ -1,8 +1,10 @@
 import type { Mock } from "vitest";
 
 import { addWidget } from "@/dashboard/layout";
-import { personalStarterLayout } from "@/dashboard/starter";
+import { homeStarterLayout, personalStarterLayout } from "@/dashboard/starter";
+import { defaultConfig } from "@/dashboard/widgets";
 
+import { POST as duplicate } from "./[templateId]/duplicate/route";
 import { DELETE as deleteTemplate, PATCH } from "./[templateId]/route";
 import { DELETE as unshare, PUT as share } from "./[templateId]/shares/[homeId]/route";
 import { GET, POST } from "./route";
@@ -46,7 +48,8 @@ function send(path: string, method: string, body: unknown): Request {
 
 function answers(map: Record<string, { data: unknown; error?: unknown }>) {
   state.rpc.mockImplementation((name) => {
-    const answer = map[name];
+    // The name check (UX2c) reads the visible templates; none unless a test says otherwise.
+    const answer = map[name] ?? (name === "list_dashboard_templates" ? { data: [] } : undefined);
     if (!answer) throw new Error(`unexpected rpc ${name}`);
     return { data: answer.data, error: answer.error ?? null };
   });
@@ -66,7 +69,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/v1/dashboard-templates", () => {
-  it("lists visible templates with their widget types, never their layouts", async () => {
+  it("lists visible templates with their widget types and arrangement, never settings", async () => {
     answers({
       list_dashboard_templates: {
         data: [
@@ -93,6 +96,14 @@ describe("GET /api/v1/dashboard-templates", () => {
           isMine: true,
           sharedHomeIds: [HOME_ID],
           widgets: ["welcome", "quick-actions", "notifications", "tasks", "upcoming-events"],
+          preview: {
+            widgets: personalStarterLayout.widgets.map(({ id, type, hidden }) => ({
+              id,
+              type,
+              hidden,
+            })),
+            placements: personalStarterLayout.placements,
+          },
         },
       ],
     });
@@ -226,5 +237,152 @@ describe("PUT and DELETE /api/v1/dashboard-templates/{id}/shares/{homeId}", () =
       shareParams,
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/dashboard-templates/:id/duplicate", () => {
+  const SHARED_ID = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0101";
+  const visible = {
+    data: [
+      {
+        template_id: SHARED_ID,
+        name: "Weekend",
+        kind: "home",
+        layout: addWidget(homeStarterLayout, {
+          id: WIDGET_ID,
+          type: "tasks",
+          hidden: false,
+          config: defaultConfig("tasks"),
+        }),
+        is_mine: false,
+        shared_home_ids: [HOME_ID],
+        updated_at: "2026-10-16T08:00:00Z",
+      },
+    ],
+  };
+  const params = (templateId: string) => ({ params: Promise.resolve({ templateId }) });
+
+  it("copies a visible template, even one shared by someone else, as the person's own", async () => {
+    answers({
+      list_dashboard_templates: visible,
+      create_dashboard_template: { data: [{ outcome: "created", template_id: TEMPLATE_ID }] },
+    });
+    const response = await duplicate(
+      send(`/${SHARED_ID}/duplicate`, "POST", { name: "Weekend (copy)" }),
+      params(SHARED_ID),
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ id: TEMPLATE_ID, dropped: 0 });
+    const args = rpcArgs("create_dashboard_template");
+    expect(args?.p_name).toBe("Weekend (copy)");
+    expect(args?.p_kind).toBe("home");
+    // New widget ids: the copy never shares ids with the original.
+    const layout = args?.p_layout as { widgets: { id: string }[] };
+    expect(layout.widgets.map((w) => w.id)).not.toContain(WIDGET_ID);
+    expect(layout.widgets).toHaveLength(homeStarterLayout.widgets.length + 1);
+  });
+
+  it("answers 404 for a template the person may not see", async () => {
+    answers({ list_dashboard_templates: visible });
+    const response = await duplicate(
+      send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Copy" }),
+      params(TEMPLATE_ID),
+    );
+    expect(response.status).toBe(404);
+    expect(rpcArgs("create_dashboard_template")).toBeUndefined();
+    expect(
+      (await duplicate(send("/nope/duplicate", "POST", { name: "Copy" }), params("nope"))).status,
+    ).toBe(404);
+  });
+
+  it("answers 409 at the template limit and 400 for a bad name", async () => {
+    answers({
+      list_dashboard_templates: visible,
+      create_dashboard_template: { data: [{ outcome: "limit_reached", template_id: null }] },
+    });
+    const response = await duplicate(
+      send(`/${SHARED_ID}/duplicate`, "POST", { name: "Copy" }),
+      params(SHARED_ID),
+    );
+    expect(response.status).toBe(409);
+    expect(
+      (await duplicate(send(`/${SHARED_ID}/duplicate`, "POST", { name: " " }), params(SHARED_ID)))
+        .status,
+    ).toBe(400);
+  });
+});
+
+describe("template names (UX2c, decision 31)", () => {
+  const own = {
+    data: [
+      {
+        template_id: TEMPLATE_ID,
+        name: "Morning",
+        kind: "home",
+        layout: homeStarterLayout,
+        is_mine: true,
+        shared_home_ids: [],
+        updated_at: "2026-10-16T08:00:00Z",
+      },
+    ],
+  };
+
+  it("refuses a new template under a name of another own template, of either kind", async () => {
+    answers({
+      list_dashboard_templates: own,
+      get_dashboard: {
+        data: [{ layout: null, revision: 0, can_edit: true, can_undo: false, updated_at: null }],
+      },
+    });
+    const response = await POST(
+      send("", "POST", { name: " morning ", from: { kind: "personal" } }),
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "name-taken" });
+    expect(rpcArgs("create_dashboard_template")).toBeUndefined();
+  });
+
+  it("lets a template keep its own name on rename, but not take another's", async () => {
+    const other = "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0109";
+    answers({ list_dashboard_templates: own, rename_dashboard_template: { data: "ok" } });
+    expect(
+      (await PATCH(send(`/${TEMPLATE_ID}`, "PATCH", { name: "MORNING" }), templateParams)).status,
+    ).toBe(200);
+    const refused = await PATCH(send(`/${other}`, "PATCH", { name: "Morning" }), {
+      params: Promise.resolve({ templateId: other }),
+    });
+    expect(refused.status).toBe(409);
+  });
+
+  it("refuses a duplicate under a taken name, and cross-site or signed-out requests", async () => {
+    answers({ list_dashboard_templates: own });
+    const params = { params: Promise.resolve({ templateId: TEMPLATE_ID }) };
+    expect(
+      (await duplicate(send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Morning" }), params))
+        .status,
+    ).toBe(409);
+    const crossSite = new Request(`${base}/${TEMPLATE_ID}/duplicate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://evil.example",
+        host: "madeora.example",
+      },
+      body: JSON.stringify({ name: "Copy" }),
+    });
+    expect((await duplicate(crossSite, params)).status).toBe(403);
+    expect(
+      (
+        await duplicate(
+          send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Copy", extra: 1 }),
+          params,
+        )
+      ).status,
+    ).toBe(400);
+    state.identity = null;
+    expect(
+      (await duplicate(send(`/${TEMPLATE_ID}/duplicate`, "POST", { name: "Copy" }), params)).status,
+    ).toBe(401);
+    expect(rpcArgs("create_dashboard_template")).toBeUndefined();
   });
 });

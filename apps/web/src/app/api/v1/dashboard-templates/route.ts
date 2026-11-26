@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/auth/supabase-server";
 import { getVerifiedIdentity } from "@/auth/identity";
 import { templateCopy } from "@/dashboard/layout";
+import { layoutPreview } from "@/dashboard/preview";
 import {
   databaseFailure,
   failure,
@@ -12,11 +13,13 @@ import {
 } from "@/dashboard/route-helpers";
 import { createTemplateSchema } from "@/dashboard/schema";
 import { listTemplates, loadTarget } from "@/dashboard/server";
+import { templateNameTaken } from "@/dashboard/template-names";
 import { homeIdSchema } from "@/homes/schema";
 
 /**
  * The templates the signed-in person may see (S17): their own, and those shared into a Home they
  * belong to, or with `homeId` only those shared into that Home (404 when they are not a member).
+ * Each comes with its arrangement for a preview (UX2c), never its widget settings.
  */
 export async function GET(request: Request): Promise<Response> {
   if (!(await getVerifiedIdentity())) return failure(401, "unauthenticated");
@@ -38,6 +41,8 @@ export async function GET(request: Request): Promise<Response> {
       isMine: template.isMine,
       sharedHomeIds: template.sharedHomeIds,
       widgets: template.layout.widgets.map((widget) => widget.type),
+      // The arrangement for a preview (UX2c): widget types and places, never settings.
+      preview: layoutPreview(template.layout),
     })),
   });
 }
@@ -51,6 +56,9 @@ export async function POST(request: Request): Promise<Response> {
   const input = await readDashboardMutation(request, createTemplateSchema, SMALL_BODY_BYTES);
   if (!input.ok) return input.response;
   const { name, from } = input.data;
+  const taken = await templateNameTaken(name);
+  if (taken === null) return failure(500, "unavailable");
+  if (taken) return failure(409, "name-taken");
 
   const current = await loadTarget(from);
   if (current.status === "not-found") return failure(404, "not-found");

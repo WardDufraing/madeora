@@ -65,6 +65,8 @@ function jsonResponse(status: number, body: unknown): Response {
 
 /** The templates edit mode loads (GET); answers for the mutations are queued with `answer`. */
 let templateList: unknown[] = [];
+/** What GET /api/v1/dashboard/history answers (UX2c). */
+let historyList: unknown[] = [];
 let queued: Response[] = [];
 /** What GET /api/v1/dashboard/draft answers (UX2b). */
 let storedDraft: unknown = null;
@@ -109,6 +111,7 @@ beforeEach(() => {
   push.mockReset();
   fetchMock.mockReset();
   templateList = [];
+  historyList = [];
   queued = [];
   storedDraft = null;
   draftSaveStatus = 200;
@@ -131,6 +134,13 @@ beforeEach(() => {
         );
       }
       return Promise.resolve(jsonResponse(200, { discarded: true }));
+    }
+    if (
+      init?.method === undefined &&
+      typeof url === "string" &&
+      url.startsWith("/api/v1/dashboard/history")
+    ) {
+      return Promise.resolve(jsonResponse(200, { versions: historyList }));
     }
     return Promise.resolve(
       init?.method === undefined
@@ -445,6 +455,8 @@ describe("DashboardBoard edit mode", () => {
     await user.click(screen.getByRole("button", { name: "Apply template" }));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("Your unsaved changes will be discarded.");
+    // Decision 31: the arrangement is previewed before it replaces the current one.
+    expect(within(dialog).getByTestId("layout-preview")).toBeInTheDocument();
     answer(200, { revision: 1, dropped: 0 });
     await user.click(within(dialog).getByRole("button", { name: "Apply template" }));
     await waitFor(() => {
@@ -517,6 +529,127 @@ describe("DashboardBoard edit mode", () => {
           .map((o) => o.textContent),
       ).toEqual(["Starter layout", "Own board", "\u2068Shared here\u2069 (shared)"]);
     });
+  });
+
+  it("refuses to save a template under the name of one of the person's templates", async () => {
+    templateList = [
+      {
+        id: "t1",
+        name: "Mornings",
+        kind: "personal",
+        isMine: true,
+        sharedHomeIds: [],
+        widgets: ["welcome"],
+      },
+    ];
+    renderBoard();
+    const user = await openEditor();
+    await screen.findByRole("option", { name: "Mornings" });
+    await user.type(screen.getByLabelText("Template name"), "mornings");
+    await user.click(screen.getByRole("button", { name: "Save as template" }));
+    expect(
+      screen.getByText("You already have a template with this name. Choose another name."),
+    ).toBeVisible();
+    expect(mutations()).toHaveLength(0);
+  });
+
+  it("restores a history version after confirming, dropping the edit draft (UX2c)", async () => {
+    const preview = {
+      widgets: [{ id: "a", type: "welcome", hidden: false }],
+      placements: {
+        lg: [{ id: "a", x: 0, y: 0, w: 6, h: 2 }],
+        md: [{ id: "a", x: 0, y: 0, w: 6, h: 2 }],
+        sm: [{ id: "a", x: 0, y: 0, w: 1, h: 2 }],
+      },
+    };
+    historyList = [
+      {
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0302",
+        revision: 4,
+        reason: "save",
+        savedByMe: true,
+        createdAt: "2026-11-25T10:00:00Z",
+        isCurrent: true,
+        dropped: false,
+        preview,
+      },
+      {
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0301",
+        revision: 3,
+        reason: "save",
+        savedByMe: true,
+        createdAt: "2026-11-24T10:00:00Z",
+        isCurrent: false,
+        dropped: false,
+        preview,
+      },
+    ];
+    renderBoard({ revision: 4, canUndo: false });
+    const user = await openEditor();
+    await user.click(screen.getByRole("button", { name: "Version history" }));
+    const versions = await screen.findAllByTestId("dashboard-history-version");
+    await user.click(within(versions[1] as HTMLElement).getByRole("button", { name: "Restore" }));
+    answer(200, { revision: 5 });
+    await user.click(screen.getByRole("button", { name: "Restore version" }));
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(1);
+    });
+    expect(mutations()[0]?.[0]).toBe("/api/v1/dashboard/history/restore");
+    expect(sentBody()).toEqual({
+      target: { kind: "personal" },
+      versionId: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0301",
+      expectedRevision: 4,
+    });
+    expect(await screen.findByText(/The earlier version was restored/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(draftCalls("DELETE").length).toBeGreaterThan(0);
+    });
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("stays in edit mode when the chosen version left the history meanwhile", async () => {
+    const preview = {
+      widgets: [{ id: "a", type: "welcome", hidden: false }],
+      placements: {
+        lg: [{ id: "a", x: 0, y: 0, w: 6, h: 2 }],
+        md: [{ id: "a", x: 0, y: 0, w: 6, h: 2 }],
+        sm: [{ id: "a", x: 0, y: 0, w: 1, h: 2 }],
+      },
+    };
+    historyList = [
+      {
+        id: "v2",
+        revision: 4,
+        reason: "save",
+        savedByMe: true,
+        createdAt: "2026-11-25T10:00:00Z",
+        isCurrent: true,
+        dropped: false,
+        preview,
+      },
+      {
+        id: "v1",
+        revision: 3,
+        reason: "save",
+        savedByMe: true,
+        createdAt: "2026-11-24T10:00:00Z",
+        isCurrent: false,
+        dropped: false,
+        preview,
+      },
+    ];
+    renderBoard({ revision: 4 });
+    const user = await openEditor();
+    await user.click(screen.getByRole("button", { name: "Version history" }));
+    const versions = await screen.findAllByTestId("dashboard-history-version");
+    await user.click(within(versions[1] as HTMLElement).getByRole("button", { name: "Restore" }));
+    answer(404, { error: "not-found" });
+    await user.click(screen.getByRole("button", { name: "Restore version" }));
+    expect(
+      await screen.findByText(/The version history changed since it was opened/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-editor")).toBeInTheDocument();
+    expect(screen.queryByTestId("dashboard-keep-mine")).not.toBeInTheDocument();
   });
 
   it("offers a template saved from edit mode at once, without reloading", async () => {

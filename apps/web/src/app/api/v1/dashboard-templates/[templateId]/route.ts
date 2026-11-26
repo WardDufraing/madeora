@@ -7,6 +7,7 @@ import {
   SMALL_BODY_BYTES,
 } from "@/dashboard/route-helpers";
 import { renameTemplateSchema, templateIdSchema } from "@/dashboard/schema";
+import { templateNameTaken } from "@/dashboard/template-names";
 import { z } from "zod";
 
 interface TemplateRouteContext {
@@ -15,12 +16,18 @@ interface TemplateRouteContext {
 
 const emptySchema = z.strictObject({});
 
-/** Renames one of the person's own templates (S17). Anyone else's answers 404. */
+/**
+ * Renames one of the person's own templates (S17). Anyone else's answers 404; a name another of
+ * their templates uses answers `409 name-taken` (UX2c).
+ */
 export async function PATCH(request: Request, { params }: TemplateRouteContext): Promise<Response> {
   const input = await readDashboardMutation(request, renameTemplateSchema, SMALL_BODY_BYTES);
   if (!input.ok) return input.response;
   const id = templateIdSchema.safeParse((await params).templateId);
   if (!id.success) return failure(404, "not-found");
+  const taken = await templateNameTaken(input.data.name, id.data);
+  if (taken === null) return failure(500, "unavailable");
+  if (taken) return failure(409, "name-taken");
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("rename_dashboard_template", {

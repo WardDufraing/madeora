@@ -15,6 +15,7 @@ import {
   discardDraft,
   fetchDraft,
   resetDashboard,
+  restoreVersion,
   saveDashboard,
   undoDashboard,
   type DashboardDraft,
@@ -30,7 +31,7 @@ import { useFailureMessage } from "./use-failure-message";
 import { WidgetSettingsDialog } from "./widget-settings-dialog";
 
 type Notice =
-  | { readonly kind: "saved" | "reset" | "undone" }
+  | { readonly kind: "saved" | "reset" | "undone" | "restored" }
   | { readonly kind: "applied"; readonly dropped: number };
 
 /** An open edit session (UX2b). */
@@ -120,6 +121,9 @@ export function DashboardBoard({
               ? { builtIn: action.option.builtIn }
               : { id: action.option.id },
           );
+        case "restore":
+          // Against the revision the history showed as current (UX2c), not the draft's base.
+          return restoreVersion(target, action.versionId, action.expectedRevision);
       }
     },
     onSuccess: (result, action) => {
@@ -127,10 +131,17 @@ export function DashboardBoard({
         action.kind === "apply"
           ? { kind: "applied", dropped: result.dropped ?? 0 }
           : {
-              kind: action.kind === "save" ? "saved" : action.kind === "reset" ? "reset" : "undone",
+              kind:
+                action.kind === "save"
+                  ? "saved"
+                  : action.kind === "reset"
+                    ? "reset"
+                    : action.kind === "restore"
+                      ? "restored"
+                      : "undone",
             },
       );
-      // A reset, template or undo from edit mode replaced the layout the draft was built on.
+      // A reset, template, restore or undo from edit mode replaced the layout the draft was built on.
       if (editing && action.kind !== "save") void discardDraft(target).catch(() => undefined);
       // Leave edit mode together with the fresh server render, so the saved layout replaces the
       // draft in one step.
@@ -141,10 +152,13 @@ export function DashboardBoard({
         router.refresh();
       });
     },
-    onError: (error) => {
+    onError: (error, action) => {
       // Not permitted any more: the fresh render drops Customize. A conflict waits for "Load latest",
       // so the person's draft is not thrown away without them seeing why.
-      if (error.failure === "notPermitted" || error.failure === "notFound") {
+      // A history version that is gone (rotated out of the last 10 by newer saves) is not a lost
+      // right: edit mode and its draft stay, and the history loads fresh when opened again.
+      const versionGone = action.kind === "restore" && error.failure === "notFound";
+      if (error.failure === "notPermitted" || (error.failure === "notFound" && !versionGone)) {
         startRefresh(() => {
           setSession(null);
           returnFocus.current = true;
@@ -267,6 +281,12 @@ export function DashboardBoard({
   }
 
   const error = mutation.error;
+  // A restore against a history that changed since it loaded (UX2c): the version rotated out, or
+  // someone saved. Edit mode stays; reopening the history shows the current versions.
+  const restoreStale =
+    editing &&
+    mutation.variables?.kind === "restore" &&
+    (error?.failure === "notFound" || error?.failure === "conflict");
   const settingsWidget = layout.widgets.find((widget) => widget.id === settingsFor);
   const settingsEntry = widgets.find((entry) => entry.id === settingsFor);
   const noticeText =
@@ -276,15 +296,19 @@ export function DashboardBoard({
         ? t("resetNotice")
         : notice?.kind === "undone"
           ? t("undoneNotice")
-          : notice?.kind === "applied"
-            ? `${t("appliedNotice")}${notice.dropped > 0 ? ` ${t("appliedDropped", { count: notice.dropped })}` : ""}`
-            : null;
+          : notice?.kind === "restored"
+            ? t("restoredNotice")
+            : notice?.kind === "applied"
+              ? `${t("appliedNotice")}${notice.dropped > 0 ? ` ${t("appliedDropped", { count: notice.dropped })}` : ""}`
+              : null;
 
   return (
     <div className="flex flex-col gap-4" data-testid="dashboard">
       {error && !settingsFor ? (
         <FormAlert tone="error" announce>
-          {editing && error.failure === "conflict" ? (
+          {restoreStale ? (
+            <p>{t("restoreStale")}</p>
+          ) : editing && error.failure === "conflict" ? (
             <>
               <p>{t("conflictWhileEditing")}</p>
               <div className="mt-2 flex flex-wrap gap-2">

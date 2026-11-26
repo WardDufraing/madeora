@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import type { LayoutPreview } from "./preview";
 import type { BuiltInTemplateId } from "./starter";
 import type { EmptyStateMode, WidgetType } from "./widgets";
 
@@ -27,6 +28,8 @@ export type TemplateOption =
       readonly source: "built-in";
       readonly builtIn: BuiltInTemplateId;
       readonly widgets: readonly WidgetType[];
+      /** Its arrangement, for the preview before applying it (UX2c). */
+      readonly preview: LayoutPreview;
     }
   | {
       readonly key: string;
@@ -34,6 +37,8 @@ export type TemplateOption =
       readonly id: string;
       readonly name: string;
       readonly widgets: readonly WidgetType[];
+      /** Its arrangement, for the preview before applying it (UX2c); null if the server sent none. */
+      readonly preview: LayoutPreview | null;
     };
 
 /** A Home the person may bind a widget to on their personal dashboard. */
