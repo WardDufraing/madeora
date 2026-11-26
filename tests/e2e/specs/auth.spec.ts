@@ -24,7 +24,10 @@ test.use({
 });
 
 const dashboardHeading = (page: Page) =>
-  page.getByRole("main").getByRole("heading", { level: 1, name: "Dashboard" });
+  page.getByRole("main").getByRole("heading", {
+    level: 1,
+    name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+  });
 
 async function fillNewPassword(page: Page, password: string) {
   await page.getByLabel(/^New password/).fill(password);

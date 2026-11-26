@@ -49,6 +49,12 @@
     "help": "Help"
   },
   "Dashboard": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "greetingMorningNamed": "Good morning, {name}",
+    "greetingAfternoonNamed": "Good afternoon, {name}",
+    "greetingEveningNamed": "Good evening, {name}",
     "greeting": "Welcome to Madeora",
     "greetingNamed": "Welcome, {name}",
     "today": "{weekday} {date}",

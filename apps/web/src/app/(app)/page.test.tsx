@@ -134,7 +134,12 @@ describe("DashboardPage", () => {
 
   it("welcomes a new adult with zero Homes: their dashboard and optional Home actions outside it", async () => {
     renderWithIntl(await DashboardPage());
-    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+      }),
+    ).toBeInTheDocument();
     const homes = screen.getByRole("region", { name: "Homes" });
     expect(within(homes).getByRole("link", { name: "Create a Home" })).toHaveAttribute(
       "href",
@@ -178,7 +183,12 @@ describe("DashboardPage", () => {
   it("stays personal when the remembered Home is no longer theirs, and says nothing about it", async () => {
     state.remembered = { kind: "home", homeId: HOME_ID };
     renderWithIntl(await DashboardPage());
-    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+      }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
@@ -186,7 +196,12 @@ describe("DashboardPage", () => {
     state.remembered = { kind: "home", homeId: HOME_ID };
     state.memberOf = new Set([HOME_ID]);
     renderWithIntl(await DashboardPage({ context: "personal" }));
-    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("explains neutrally that a Home could not be opened", async () => {
