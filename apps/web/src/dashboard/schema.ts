@@ -8,7 +8,15 @@ import { z } from "zod";
 
 export const dashboardTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("personal") }),
-  z.strictObject({ kind: z.literal("home"), homeId: z.uuid() }),
+  z.strictObject({
+    kind: z.literal("home"),
+    homeId: z.uuid(),
+    /**
+     * Which of the Home's dashboards (UX2d; decision 33): the shared default (none, the same as
+     * before), or the person's own "My Home view" of it.
+     */
+    view: z.enum(["default", "mine"]).optional(),
+  }),
 ]);
 export type DashboardTarget = z.infer<typeof dashboardTargetSchema>;
 
@@ -89,4 +97,14 @@ export const restoreVersionSchema = z.strictObject({
   target: dashboardTargetSchema,
   versionId: z.uuid(),
   expectedRevision: revision.min(1),
+});
+
+/** Ends the person's own view of a Home: they see the shared default again (UX2d; decision 33). */
+export const resetHomeViewSchema = z.strictObject({ homeId: z.uuid() });
+
+/** Dismisses shared-default additions the person does not want in their view (decision 34). */
+export const dismissSuggestionsSchema = z.strictObject({
+  homeId: z.uuid(),
+  /** A dashboard holds at most 40 widgets (`MAX_WIDGETS`). */
+  widgetIds: z.array(z.uuid()).min(1).max(40),
 });

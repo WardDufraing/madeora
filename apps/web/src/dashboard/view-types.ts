@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import type { DashboardLayout, DashboardWidget } from "./layout";
 import type { LayoutPreview } from "./preview";
 import type { BuiltInTemplateId } from "./starter";
 import type { EmptyStateMode, WidgetType } from "./widgets";
@@ -45,4 +46,28 @@ export type TemplateOption =
 export interface SourceHome {
   readonly id: string;
   readonly name: string;
+}
+
+/**
+ * What a Home dashboard needs beyond the layout it shows (UX2d; decisions 33 and 34): whether the
+ * person is looking at their own view or the shared default, what they may edit, the shared default
+ * itself (to return to it or to edit it from their view) and widgets it added since their view began.
+ * Everything here is read with the person's own session; it only guides the interface.
+ */
+export interface HomeViews {
+  readonly homeId: string;
+  /** Which dashboard the page shows. */
+  readonly showing: "mine" | "default";
+  /** The person may keep their own view of this Home. */
+  readonly canHaveView: boolean;
+  /** The person may edit the shared default (the Owner, or "Manage Home dashboard"). */
+  readonly canEditShared: boolean;
+  readonly shared: {
+    readonly layout: DashboardLayout;
+    readonly revision: number;
+    readonly canUndo: boolean;
+    readonly preview: LayoutPreview;
+  };
+  /** Widgets the shared default added that this person's view lacks; none without a view. */
+  readonly suggestions: readonly DashboardWidget[];
 }

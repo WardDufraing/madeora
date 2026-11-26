@@ -38,7 +38,9 @@ export async function listHistory(target: DashboardTarget): Promise<HistoryResul
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc(
     "list_dashboard_versions",
-    target.kind === "home" ? { p_home_id: target.homeId, p_target: "default" } : {},
+    target.kind === "home"
+      ? { p_home_id: target.homeId, p_target: target.view === "mine" ? "mine" : "default" }
+      : {},
   );
   if (error) {
     if (error.code === "42501") return { status: "not-found" };

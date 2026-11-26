@@ -25,7 +25,18 @@ export interface LoadedDashboard {
   readonly canUndo: boolean;
   /** Something stored could not be shown (an unknown widget type, broken settings). */
   readonly dropped: boolean;
+  /**
+   * Which dashboard this is (UX2d): the person's own, a Home's shared default, or the person's own
+   * view of a Home. For a view they do not have yet, the layout is the shared default's, at
+   * revision 0: that is what they would start from.
+   */
+  readonly answered: "personal" | "default" | "mine";
+  /** The person has their own view of this Home (Home dashboards only). */
+  readonly hasOverride: boolean;
 }
+
+/** Which Home dashboard a read asks for: `effective` is the person's view, else the shared default. */
+export type HomeDashboardView = "default" | "mine" | "effective";
 
 export type DashboardResult =
   | { readonly status: "ok"; readonly dashboard: LoadedDashboard }
@@ -40,11 +51,20 @@ export function logDashboard(event: string, code: string | undefined): void {
 
 /** The dashboard as the person may see it now; cached for this request only. */
 export const loadDashboard = cache(
-  async (kind: DashboardKind, homeId: string | null): Promise<DashboardResult> => {
+  async (
+    kind: DashboardKind,
+    homeId: string | null,
+    view: HomeDashboardView = "default",
+  ): Promise<DashboardResult> => {
     const supabase = await createSupabaseServerClient();
+    const home = kind === "home" && homeId;
     const { data, error } = await supabase.rpc(
       "get_dashboard",
-      kind === "home" && homeId ? { p_home_id: homeId } : {},
+      home
+        ? view === "default"
+          ? { p_home_id: homeId }
+          : { p_home_id: homeId, p_target: view }
+        : {},
     );
     if (error) {
       if (error.code === "42501") return { status: "not-found" };
@@ -55,6 +75,23 @@ export const loadDashboard = cache(
     if (!row) return { status: "unavailable" };
     // The generated types call the column non-null; it is null until the first save.
     const stored: unknown = row.layout;
+    const answered = !home ? "personal" : row.target === "mine" ? "mine" : "default";
+    if (stored === null && answered === "mine") {
+      // No view yet: the person starts from the shared default they see, saved as a new view.
+      const shared = await loadDashboard(kind, homeId, "default");
+      if (shared.status !== "ok") return shared;
+      return {
+        status: "ok",
+        dashboard: {
+          ...shared.dashboard,
+          revision: 0,
+          canEdit: row.can_edit,
+          canUndo: false,
+          answered: "mine",
+          hasOverride: false,
+        },
+      };
+    }
     if (stored === null) {
       return {
         status: "ok",
@@ -65,6 +102,8 @@ export const loadDashboard = cache(
           canEdit: row.can_edit,
           canUndo: false,
           dropped: false,
+          answered,
+          hasOverride: row.has_override,
         },
       };
     }
@@ -78,13 +117,63 @@ export const loadDashboard = cache(
         canEdit: row.can_edit,
         canUndo: row.can_undo,
         dropped,
+        answered,
+        hasOverride: row.has_override,
       },
     };
   },
 );
 
 export function loadTarget(target: DashboardTarget): Promise<DashboardResult> {
-  return loadDashboard(target.kind, target.kind === "home" ? target.homeId : null);
+  return target.kind === "home"
+    ? loadDashboard("home", target.homeId, target.view === "mine" ? "mine" : "default")
+    : loadDashboard("personal", null);
+}
+
+/** A widget the shared default added since the person's view started (decision 34). */
+export interface HomeSuggestion {
+  readonly widgetId: string;
+  /** The widget as the shared default holds it, read like any saved layout. */
+  readonly widget: DashboardLayout["widgets"][number];
+}
+
+export type SuggestionsResult =
+  | { readonly status: "ok"; readonly suggestions: readonly HomeSuggestion[] }
+  | { readonly status: "unavailable" };
+
+/**
+ * Widgets of the Home's shared default that the person's own view lacks and that they neither saw
+ * when the view started nor dismissed. Nothing without a view of their own. Read with the person's
+ * session; the database answers only members of the Home. Widgets the registry does not know are
+ * left out (an older client with a newer server).
+ */
+export async function loadSuggestions(homeId: string): Promise<SuggestionsResult> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("list_dashboard_suggestions", { p_home_id: homeId });
+  if (error) {
+    logDashboard("dashboard.suggestions_failed", error.code);
+    return { status: "unavailable" };
+  }
+  const suggestions = data.flatMap((row): HomeSuggestion[] => {
+    // One widget per entry: read it through a one-widget layout so config is checked like any save.
+    const widget: unknown = row.widget;
+    if (typeof widget !== "object" || widget === null) return [];
+    const { layout } = readLayout(
+      {
+        version: 1,
+        widgets: [widget],
+        placements: {
+          lg: [{ id: row.widget_id, x: 0, y: 0, w: 1, h: 1 }],
+          md: [{ id: row.widget_id, x: 0, y: 0, w: 1, h: 1 }],
+          sm: [{ id: row.widget_id, x: 0, y: 0, w: 1, h: 1 }],
+        },
+      },
+      "home",
+    );
+    const read = layout.widgets[0];
+    return read ? [{ widgetId: row.widget_id, widget: read }] : [];
+  });
+  return { status: "ok", suggestions };
 }
 
 /**

@@ -4,6 +4,7 @@ import type { DashboardLayout } from "./layout";
 import { layoutPreviewSchema, type LayoutPreview } from "./preview";
 import type { DashboardTarget } from "./schema";
 import type { BuiltInTemplateId } from "./starter";
+import { targetQuery } from "./target-args";
 
 /**
  * The HTTP contract of dashboards and templates (S17). Every mutation is same-origin JSON and
@@ -191,7 +192,7 @@ const draftResponseSchema = z.object({
 });
 
 export async function fetchDraft(target: DashboardTarget): Promise<DashboardDraft | null> {
-  const query = target.kind === "home" ? `?homeId=${encodeURIComponent(target.homeId)}` : "";
+  const query = targetQuery(target);
   let response: Response;
   try {
     response = await fetch(`${DASHBOARD_DRAFT_ENDPOINT}${query}`, {
@@ -365,7 +366,7 @@ export interface DashboardVersion {
 
 /** The dashboard's last committed versions, newest first; only for someone who may edit it. */
 export async function fetchHistory(target: DashboardTarget): Promise<readonly DashboardVersion[]> {
-  const query = target.kind === "home" ? `?homeId=${encodeURIComponent(target.homeId)}` : "";
+  const query = targetQuery(target);
   let response: Response;
   try {
     response = await fetch(`${DASHBOARD_HISTORY_ENDPOINT}${query}`, {
@@ -401,4 +402,22 @@ export async function restoreVersion(
       expectedRevision,
     }),
   );
+}
+
+/**
+ * Ends the person's own view of a Home so they see the shared default again (UX2d; decision 33).
+ * Its history and any unsaved draft go with it. Resolves to whether there was a view to end.
+ */
+export async function resetHomeView(homeId: string): Promise<boolean> {
+  const payload = await send("DELETE", `${DASHBOARD_ENDPOINT}/home-view`, { homeId });
+  const record = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
+  return record.reset === true;
+}
+
+/** Dismisses shared-default additions so they are not offered again (decision 34). */
+export async function dismissSuggestions(
+  homeId: string,
+  widgetIds: readonly string[],
+): Promise<void> {
+  await send("POST", `${DASHBOARD_ENDPOINT}/suggestions/dismiss`, { homeId, widgetIds });
 }

@@ -16,7 +16,7 @@ Source of intent: `docs/design/dashboard-ux-ui-redesign.md` (Decisions 1–71; n
 | UX2a     | `feat/dashboard-widget-header`            | **PR open**: widget header and menu, settings panel, empty-state modes, size variants (`UX2a-brief.md`) |
 | UX2b     | `feat/ux-dashboard-edit-mode`             | **PR open**: edit mode on the drafts API, gallery, presets, reflow, list editing (`UX2b-brief.md`)      |
 | UX2c     | Opus                                      | presets and history UI                                                                                  |
-| UX2d     | Opus                                      | Home views and suggestions UI                                                                           |
+| UX2d     | `feat/ux-home-dashboard-overrides`        | **in progress**: Home views, return to shared default, shared-default suggestions UI (`UX2d-brief.md`)  |
 | UX3b     | UI on UX3a                                | calendar modal, borderless look, event preview, work-period blocks                                      |
 | UX4b     | UI on UX4a                                | Tasks workspace, + New Task, rows, side panel                                                           |
 | UX5      |                                           | Habits                                                                                                  |
