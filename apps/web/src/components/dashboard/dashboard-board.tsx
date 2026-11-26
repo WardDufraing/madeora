@@ -36,7 +36,7 @@ type Notice =
   | { readonly kind: "saved" | "reset" | "undone" | "restored" }
   | { readonly kind: "applied"; readonly dropped: number }
   /** UX2d: the person's own view ended, or shared-default additions were dismissed. */
-  | { readonly kind: "returned" | "dismissed" };
+  | { readonly kind: "returned" | "dismissed" | "viewCreated" };
 
 /** Which Home dashboard Customize edits (UX2d; decision 33). */
 type EditChoice = "mine" | "default";
@@ -166,19 +166,24 @@ export function DashboardBoard({
       }
     },
     onSuccess: (result, action) => {
+      // A widget setting changed by a member who may not edit the shared default starts their own
+      // view; say so, because it detaches them from later shared-default layout changes.
+      const createdView = !session && action.kind === "save" && !canEdit && homeViews !== null;
       setNotice(
-        action.kind === "apply"
-          ? { kind: "applied", dropped: result.dropped ?? 0 }
-          : {
-              kind:
-                action.kind === "save"
-                  ? "saved"
-                  : action.kind === "reset"
-                    ? "reset"
-                    : action.kind === "restore"
-                      ? "restored"
-                      : "undone",
-            },
+        createdView
+          ? { kind: "viewCreated" }
+          : action.kind === "apply"
+            ? { kind: "applied", dropped: result.dropped ?? 0 }
+            : {
+                kind:
+                  action.kind === "save"
+                    ? "saved"
+                    : action.kind === "reset"
+                      ? "reset"
+                      : action.kind === "restore"
+                        ? "restored"
+                        : "undone",
+              },
       );
       // A reset, template, restore or undo from edit mode replaced the layout the draft was built on.
       if (session && action.kind !== "save")
@@ -412,13 +417,15 @@ export function DashboardBoard({
           ? t("undoneNotice")
           : notice?.kind === "restored"
             ? t("restoredNotice")
-            : notice?.kind === "returned"
-              ? tViews("returnedNotice")
-              : notice?.kind === "dismissed"
-                ? tViews("dismissedNotice")
-                : notice?.kind === "applied"
-                  ? `${t("appliedNotice")}${notice.dropped > 0 ? ` ${t("appliedDropped", { count: notice.dropped })}` : ""}`
-                  : null;
+            : notice?.kind === "viewCreated"
+              ? tViews("viewCreatedNotice")
+              : notice?.kind === "returned"
+                ? tViews("returnedNotice")
+                : notice?.kind === "dismissed"
+                  ? tViews("dismissedNotice")
+                  : notice?.kind === "applied"
+                    ? `${t("appliedNotice")}${notice.dropped > 0 ? ` ${t("appliedDropped", { count: notice.dropped })}` : ""}`
+                    : null;
 
   return (
     <div className="flex flex-col gap-4" data-testid="dashboard">
@@ -622,7 +629,8 @@ export function DashboardBoard({
                   canUndo &&
                   notice?.kind !== "undone" &&
                   notice?.kind !== "returned" &&
-                  notice?.kind !== "dismissed" ? (
+                  notice?.kind !== "dismissed" &&
+                  notice?.kind !== "viewCreated" ? (
                     <Button
                       size="sm"
                       variant="ghost"

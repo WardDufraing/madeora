@@ -57,6 +57,11 @@ Out of scope: wall-display layout (UX8), changes to `mobile-nav.tsx`, `sidebar.t
 - Adults only for views (children and Household Display accounts get `canHaveView: false`, as the database decides).
 - No migration, no new table: the UX2-data RPCs are enough.
 
+- **Deferred (Ward to confirm):** a separate "review latest shared default" step for placement/size changes. For now the voluntary path is
+  "Return to shared default" (preview + confirm, loses the view). A merge-style review of layout changes needs a UX decision and is not built.
+- Known, accepted (review L1, L2, L4): `p_previous` is the server's current layout on first save; Undo after a first save returns to a copy of the
+  shared layout, not to "no view"; adding suggestions while an older draft exists keeps the draft on Resume (the banner stays, so they can add again).
+
 ## Files
 
 - New: `dashboard/target-args.ts`, `dashboard/suggestions.ts`, `components/dashboard/home-view-controls.tsx`,
@@ -77,4 +82,5 @@ None. Rollback = revert the PR; stored views and dismissals stay in the database
 ## Local checks (Ward's testing rule: only relevant tests)
 
 - Typecheck `@madeora/web`: passed. ESLint on dashboard code and routes: passed. Prettier on changed files: passed.
-- Vitest: dashboard components, `dashboard/`, dashboard API routes and `(app)` page: 19 files, 266 tests passed. Full suite and e2e: CI.
+- Independent review: `reviews/steps/UX2d-review.md`, PASS (0 BLOCKER, 0 HIGH, 4 MEDIUM, 5 LOW). Fixed: M2 (route target tests for undo, reset, apply-template, draft PUT/DELETE, restore guard), M3 (`server.test.ts`, axe in dialogs), M4 (notice when settings start a view), L3 (banner button wording). M1 deferred as above.
+- Vitest: dashboard components, `dashboard/`, dashboard API routes and `(app)` page: 19 files, 273 tests passed. Full suite and e2e: CI.

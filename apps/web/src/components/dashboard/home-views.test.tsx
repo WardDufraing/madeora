@@ -2,9 +2,10 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Mock } from "vitest";
 
-import { removeWidget, type DashboardLayout } from "@/dashboard/layout";
+import { addWidget, removeWidget, type DashboardLayout } from "@/dashboard/layout";
 import { layoutPreview } from "@/dashboard/preview";
 import { homeStarterLayout } from "@/dashboard/starter";
+import { defaultConfig } from "@/dashboard/widgets";
 import type { HomeViews, WidgetEntry } from "@/dashboard/view-types";
 import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
@@ -322,5 +323,57 @@ describe("Home views: shared-default suggestions (decision 34)", () => {
     await user.click(within(dialog).getByRole("checkbox"));
     expect(within(dialog).getByTestId("dashboard-suggestions-add")).toBeDisabled();
     expect(within(dialog).getByTestId("dashboard-suggestions-dismiss-selected")).toBeDisabled();
+  });
+});
+
+describe("Home views: settings by a member who may not edit the shared default", () => {
+  it("starts their own view, says so, and never targets the shared default", async () => {
+    renderBoard(views(), {
+      layout: addWidget(homeStarterLayout, {
+        id: "6f2c1f0e-1d7a-4b8e-9c55-2b2f6b0a0777",
+        type: "upcoming-events",
+        hidden: false,
+        config: defaultConfig("upcoming-events"),
+      }),
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Actions for upcoming-events" }));
+    await user.click(screen.getByRole("menuitem", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.selectOptions(
+      within(dialog).getByLabelText("When there is nothing to show"),
+      "hide",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Apply" }));
+    await waitFor(() => {
+      expect(mutations()).toHaveLength(1);
+    });
+    const body = JSON.parse(mutations()[0]?.[1]?.body as string) as Record<string, unknown>;
+    expect(body.target).toEqual({ kind: "home", homeId: HOME_ID, view: "mine" });
+    expect(body.expectedRevision).toBe(0);
+    expect(await screen.findByText(/This created your own Home view/)).toBeInTheDocument();
+  });
+});
+
+describe("Home views: dialogs and the editing banner are accessible", () => {
+  it("has no axe violations in the review dialog", async () => {
+    const { container } = renderBoard(views({ showing: "mine", suggestions: [added] }));
+    await userEvent.setup().click(await screen.findByTestId("dashboard-suggestions-review"));
+    await screen.findByRole("dialog");
+    expect(await axeViolations(container.ownerDocument.body)).toEqual([]);
+  });
+
+  it("has no axe violations in the return dialog", async () => {
+    const { container } = renderBoard(views({ showing: "mine" }));
+    await userEvent.setup().click(await screen.findByTestId("dashboard-return-shared"));
+    await screen.findByRole("dialog");
+    expect(await axeViolations(container.ownerDocument.body)).toEqual([]);
+  });
+
+  it("has no axe violations while editing My Home view", async () => {
+    const { container } = renderBoard(views());
+    await userEvent.setup().click(screen.getByRole("button", { name: "Customize" }));
+    await screen.findByTestId("dashboard-editing-label");
+    expect(await axeViolations(container.ownerDocument.body)).toEqual([]);
   });
 });
