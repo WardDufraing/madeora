@@ -86,7 +86,7 @@ export function AllModules({ homeId }: AllModulesProps) {
               return (
                 <li
                   key={item.id}
-                  className="flex flex-col rounded-card border border-line bg-surface shadow-raised"
+                  className="card-lift flex flex-col rounded-card border border-line bg-surface shadow-raised"
                 >
                   <ModuleLink
                     item={item}
@@ -152,7 +152,7 @@ function ModuleLink({
       href={href}
       className={cx(
         "flex min-h-14 flex-1 items-center gap-3 px-4 text-body font-medium text-fg hover:bg-accent-subtle",
-        className ?? "rounded-card border border-line bg-surface shadow-raised",
+        className ?? "card-lift rounded-card border border-line bg-surface shadow-raised",
       )}
     >
       <span
