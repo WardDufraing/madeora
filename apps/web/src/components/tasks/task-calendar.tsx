@@ -147,40 +147,26 @@ export async function TaskCalendar({ home, searchParams }: TaskCalendarProps) {
             {title}
           </h2>
           <nav aria-label={t("navigation")} className="flex flex-wrap items-center gap-2">
-            <ul className="flex gap-1" aria-label={t("viewChoice")}>
+            <ul className="segmented" aria-label={t("viewChoice")}>
               {(["week", "month"] as const).map((view) => (
                 <li key={view}>
                   <Link
                     href={href({ view, date: window.anchor, day: undefined })}
                     aria-current={window.view === view ? "page" : undefined}
-                    className={cx(
-                      "inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium",
-                      window.view === view
-                        ? "bg-accent-subtle text-fg"
-                        : "text-accent-fg underline",
-                    )}
+                    className="segment"
                   >
                     {view === "week" ? t("week") : t("month")}
                   </Link>
                 </li>
               ))}
             </ul>
-            <Link
-              href={href({ date: window.previous, day: undefined })}
-              className="inline-flex min-h-10 items-center px-2 text-body link-action"
-            >
+            <Link href={href({ date: window.previous, day: undefined })} className="link-action">
               {window.view === "week" ? t("previousWeek") : t("previousMonth")}
             </Link>
-            <Link
-              href={href({ date: undefined, day: undefined })}
-              className="inline-flex min-h-10 items-center px-2 text-body link-action"
-            >
+            <Link href={href({ date: undefined, day: undefined })} className="link-action">
               {t("today")}
             </Link>
-            <Link
-              href={href({ date: window.next, day: undefined })}
-              className="inline-flex min-h-10 items-center px-2 text-body link-action"
-            >
+            <Link href={href({ date: window.next, day: undefined })} className="link-action">
               {window.view === "week" ? t("nextWeek") : t("nextMonth")}
             </Link>
           </nav>

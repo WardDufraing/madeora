@@ -288,8 +288,8 @@ export function ChoreScheduleWidget({
       aria-pressed={pressed}
       onClick={onClick}
       className={cx(
-        "inline-flex min-h-8 items-center rounded-control px-2 text-helper font-medium",
-        pressed ? "bg-accent-subtle text-fg" : "text-accent-fg underline",
+        "inline-flex min-h-8 items-center rounded-pill px-3 text-helper font-semibold",
+        pressed ? "bg-accent text-on-accent" : "bg-accent-subtle text-accent-fg",
       )}
       data-testid={testId}
     >
@@ -475,10 +475,10 @@ export function ChoreScheduleWidget({
                           setDay(date);
                         }}
                         className={cx(
-                          "inline-flex min-h-8 min-w-10 items-center justify-center rounded-control px-1 text-helper font-medium",
+                          "inline-flex min-h-8 min-w-10 items-center justify-center rounded-pill px-2 text-helper font-semibold",
                           date === (day >= anchor && day <= to ? day : anchor)
                             ? "bg-accent text-on-accent"
-                            : "text-accent-fg underline",
+                            : "bg-accent-subtle text-accent-fg",
                         )}
                       >
                         {weekday(date)} {Number(date.slice(8, 10))}

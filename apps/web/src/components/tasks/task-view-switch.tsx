@@ -1,7 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
-import { cx } from "@/components/ui/cx";
 import { tasksPath } from "@/tasks/format";
 import { taskViews, viewHref, type TaskView } from "@/tasks/views";
 
@@ -32,12 +31,7 @@ export async function TaskViewSwitch({
       <Link
         href={href}
         aria-current={current === view ? "page" : undefined}
-        className={cx(
-          "press-feedback inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium",
-          current === view
-            ? "bg-accent-subtle font-semibold text-fg shadow-selected"
-            : "text-fg-muted hover:bg-accent-subtle hover:text-fg",
-        )}
+        className="segment press-feedback"
       >
         {text}
       </Link>
@@ -45,7 +39,7 @@ export async function TaskViewSwitch({
   );
   return (
     <nav aria-label={t("viewSwitch")} className="mb-4" data-testid="task-view-switch">
-      <ul className="flex flex-wrap gap-1">
+      <ul className="segmented">
         {taskViews.map((view) => item(view, viewHref(homeId, view, { list }), label[view]))}
         {item(
           "calendar",

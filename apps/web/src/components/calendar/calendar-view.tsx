@@ -46,8 +46,7 @@ export interface CalendarViewProps {
 /** How many events a month cell lists before "+N more" (the day view shows them all). */
 const MONTH_CELL_ENTRIES = 3;
 
-const linkClass =
-  "inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline";
+const linkClass = "link-action";
 
 /** Names of a Home's members by membership id, for "Shared by". */
 export type MemberNames = ReadonlyMap<string, string | null>;
@@ -216,18 +215,13 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
             {title}
           </h2>
           <nav aria-label={t("navigation")} className="flex flex-wrap items-center gap-2">
-            <ul className="flex flex-wrap gap-1" aria-label={t("viewChoice")}>
+            <ul className="segmented" aria-label={t("viewChoice")}>
               {calendarViews.map((view) => (
                 <li key={view}>
                   <Link
                     href={href(view, window.anchor)}
                     aria-current={window.view === view ? "page" : undefined}
-                    className={cx(
-                      "inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium",
-                      window.view === view
-                        ? "bg-accent-subtle text-fg"
-                        : "text-accent-fg underline",
-                    )}
+                    className="segment"
                     data-testid={`calendar-view-${view}`}
                   >
                     {viewLabel[view]}

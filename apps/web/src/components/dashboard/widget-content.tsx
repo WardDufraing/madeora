@@ -97,11 +97,11 @@ export interface HomeScope {
 
 export type WidgetScope = PersonalScope | HomeScope;
 
-const linkClass = "text-body font-medium text-accent-fg underline";
+const linkClass = "link-action";
 
 function ActionList({ items }: { readonly items: readonly { href: string; label: string }[] }) {
   return (
-    <ul className="flex flex-wrap gap-x-6 gap-y-2">
+    <ul className="flex flex-wrap gap-2">
       {items.map((item) => (
         <li key={item.href}>
           <Link href={item.href} className={linkClass}>
