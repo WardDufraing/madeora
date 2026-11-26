@@ -21,23 +21,43 @@ import {
   type DashboardDraft,
   type RevisionResponse,
 } from "@/dashboard/api";
-import type { DashboardLayout } from "@/dashboard/layout";
+import type { DashboardLayout, DashboardWidget } from "@/dashboard/layout";
 import type { DashboardTarget } from "@/dashboard/schema";
-import type { SourceHome, WidgetEntry } from "@/dashboard/view-types";
+import { withSuggestions } from "@/dashboard/suggestions";
+import type { HomeViews, SourceHome, WidgetEntry } from "@/dashboard/view-types";
 
 import { DashboardEditor, type EditorAction } from "./dashboard-editor";
 import { DashboardGrid } from "./dashboard-grid";
+import { HomeViewLabel, SuggestionsNotice } from "./home-view-controls";
 import { useFailureMessage } from "./use-failure-message";
 import { WidgetSettingsDialog } from "./widget-settings-dialog";
 
 type Notice =
   | { readonly kind: "saved" | "reset" | "undone" | "restored" }
-  | { readonly kind: "applied"; readonly dropped: number };
+  | { readonly kind: "applied"; readonly dropped: number }
+  /** UX2d: the person's own view ended, or shared-default additions were dismissed. */
+  | { readonly kind: "returned" | "dismissed" };
+
+/** Which Home dashboard Customize edits (UX2d; decision 33). */
+type EditChoice = "mine" | "default";
+
+/** What an edit session starts from: the dashboard, what it holds now, and its revision. */
+interface EditSource {
+  readonly target: DashboardTarget;
+  readonly committed: DashboardLayout;
+  readonly revision: number;
+  readonly canUndo: boolean;
+}
 
 /** An open edit session (UX2b). */
 interface Session {
   /** Remounts the editor for a fresh session. */
   readonly key: number;
+  /** The dashboard being edited: on a Home, "My Home view" or the shared default (UX2d). */
+  readonly target: DashboardTarget;
+  /** What that dashboard holds now, which Cancel returns to and unsaved changes are measured from. */
+  readonly committed: DashboardLayout;
+  readonly canUndo: boolean;
   readonly initial: DashboardLayout;
   readonly resumed: boolean;
   /** The committed revision the draft builds on: Done succeeds only if nobody saved since. */
@@ -67,6 +87,7 @@ export function DashboardBoard({
   widgets,
   sourceHomes,
   emptyState,
+  homeViews = null,
 }: {
   readonly target: DashboardTarget;
   readonly layout: DashboardLayout;
@@ -79,8 +100,11 @@ export function DashboardBoard({
   readonly widgets: readonly WidgetEntry[];
   readonly sourceHomes: readonly SourceHome[];
   readonly emptyState: ReactNode;
+  /** Home dashboards only: my view vs the shared default, and shared additions to suggest (UX2d). */
+  readonly homeViews?: HomeViews | null;
 }) {
   const t = useTranslations("Dashboard");
+  const tViews = useTranslations("DashboardHomeViews");
   const format = useFormatter();
   const router = useRouter();
   const hydrated = useHydrated();
@@ -91,6 +115,11 @@ export function DashboardBoard({
   const sessions = useRef(0);
   // A draft found when opening edit mode, waiting for Resume or Discard.
   const [found, setFound] = useState<DashboardDraft | null>(null);
+  // What the person chose to edit while that draft waits for Resume or Discard (UX2d).
+  const [pendingEdit, setPendingEdit] = useState<{
+    source: EditSource;
+    initial: DashboardLayout;
+  } | null>(null);
   const [opening, setOpening] = useState(false);
   const [draftCheckFailed, setDraftCheckFailed] = useState(false);
 
@@ -102,20 +131,30 @@ export function DashboardBoard({
   const customizeRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
 
+  // Widget settings outside edit mode save to the dashboard on screen when the person may edit it.
+  // Otherwise (a member looking at the shared default) they start the person's own Home view from
+  // it (UX2d): the shared default is never changed by someone who may not edit it.
+  const canCustomize = canEdit || homeViews?.canHaveView === true;
+  const settingsOrigin: { target: DashboardTarget; revision: number } =
+    canEdit || !homeViews
+      ? { target, revision }
+      : { target: { kind: "home", homeId: homeViews.homeId, view: "mine" }, revision: 0 };
+
   const mutation = useMutation<RevisionResponse, DashboardRequestError, EditorAction>({
     mutationFn: (action) => {
-      const expected = session ? session.baseRevision : revision;
+      const expected = session ? session.baseRevision : settingsOrigin.revision;
+      const where = session ? session.target : settingsOrigin.target;
       switch (action.kind) {
         case "save":
           // From edit mode this is Done: the draft goes with the commit.
-          return saveDashboard(target, action.layout, expected, { commitDraft: editing });
+          return saveDashboard(where, action.layout, expected, { commitDraft: editing });
         case "reset":
-          return resetDashboard(target, expected);
+          return resetDashboard(where, expected);
         case "undo":
-          return undoDashboard(target, expected);
+          return undoDashboard(where, expected);
         case "apply":
           return applyTemplate(
-            target,
+            where,
             expected,
             action.option.source === "built-in"
               ? { builtIn: action.option.builtIn }
@@ -123,7 +162,7 @@ export function DashboardBoard({
           );
         case "restore":
           // Against the revision the history showed as current (UX2c), not the draft's base.
-          return restoreVersion(target, action.versionId, action.expectedRevision);
+          return restoreVersion(where, action.versionId, action.expectedRevision);
       }
     },
     onSuccess: (result, action) => {
@@ -142,7 +181,8 @@ export function DashboardBoard({
             },
       );
       // A reset, template, restore or undo from edit mode replaced the layout the draft was built on.
-      if (editing && action.kind !== "save") void discardDraft(target).catch(() => undefined);
+      if (session && action.kind !== "save")
+        void discardDraft(session.target).catch(() => undefined);
       // Leave edit mode together with the fresh server render, so the saved layout replaces the
       // draft in one step.
       startRefresh(() => {
@@ -168,45 +208,117 @@ export function DashboardBoard({
     },
   });
 
-  const pending = mutation.isPending || refreshing || opening;
+  const busy = mutation.isPending || refreshing || opening;
   useEffect(() => {
-    if (!returnFocus.current || editing || pending) return;
+    if (!returnFocus.current || editing || busy) return;
     returnFocus.current = false;
     customizeRef.current?.focus();
-  }, [editing, pending]);
+  }, [editing, busy]);
 
-  function open(initial: DashboardLayout, resumed: boolean, baseRevision: number) {
-    sessions.current += 1;
-    setSession({ key: sessions.current, initial, resumed, baseRevision, doneRequest: 0 });
+  /** What Customize edits for `choice` (UX2d), and the layout and revision it starts from. */
+  function sourceFor(choice: EditChoice | null): EditSource {
+    if (!homeViews || choice === null) {
+      return { target, committed: layout, revision, canUndo };
+    }
+    const homeId = homeViews.homeId;
+    if (choice === "mine") {
+      const mineNow = homeViews.showing === "mine";
+      return {
+        target: { kind: "home", homeId, view: "mine" },
+        committed: layout,
+        // No view yet: it starts from the shared default on screen, as a new view (revision 0).
+        revision: mineNow ? revision : 0,
+        canUndo: mineNow && canUndo,
+      };
+    }
+    const sharedNow = homeViews.showing === "default";
+    return {
+      target: { kind: "home", homeId },
+      committed: sharedNow ? layout : homeViews.shared.layout,
+      revision: sharedNow ? revision : homeViews.shared.revision,
+      canUndo: sharedNow ? canUndo : homeViews.shared.canUndo,
+    };
   }
 
-  /** Customize: resume or discard a stored draft first, if there is one. */
-  async function startEditing() {
+  function open(
+    source: EditSource,
+    initial: DashboardLayout,
+    resumed: boolean,
+    baseRevision: number,
+  ) {
+    sessions.current += 1;
+    setSession({
+      key: sessions.current,
+      target: source.target,
+      committed: source.committed,
+      canUndo: source.canUndo,
+      initial,
+      resumed,
+      baseRevision,
+      doneRequest: 0,
+    });
+  }
+
+  /**
+   * Customize: resume or discard a stored draft first, if there is one. On a Home, `choice` says
+   * which dashboard (UX2d), and `additions` are shared-default widgets to add to the person's view.
+   */
+  async function startEditing(
+    choice: EditChoice | null = null,
+    additions: readonly DashboardWidget[] = [],
+  ) {
     mutation.reset();
     setNotice(null);
     setDraftCheckFailed(false);
     setOpening(true);
+    const source = sourceFor(choice);
+    const initial = additions.length
+      ? withSuggestions(source.committed, additions).layout
+      : source.committed;
     try {
-      const draft = await fetchDraft(target);
-      if (draft) setFound(draft);
-      else open(layout, false, revision);
+      const draft = await fetchDraft(source.target);
+      if (draft) {
+        setPendingEdit({ source, initial });
+        setFound(draft);
+      } else open(source, initial, false, source.revision);
     } catch (error) {
       // Edit anyway; autosave says plainly whether a draft could be stored.
       if (!(error instanceof DashboardRequestError) || error.failure !== "signedOut") {
         setDraftCheckFailed(true);
       }
-      open(layout, false, revision);
+      open(source, initial, false, source.revision);
     } finally {
       setOpening(false);
     }
   }
 
+  /**
+   * Customize edits the dashboard on screen (UX2d): the shared default for someone who may edit it,
+   * otherwise the person's own Home view. The other one has its own labelled button, so the shared
+   * default is never changed by a choice that was not clearly made.
+   */
+  function customize() {
+    if (!homeViews) void startEditing();
+    else if (homeViews.showing === "mine") void startEditing("mine");
+    else void startEditing(homeViews.canEditShared ? "default" : "mine");
+  }
+
+  // The other dashboard, for someone who may edit both (UX2d).
+  const otherChoice: EditChoice | null =
+    homeViews?.canHaveView && homeViews.canEditShared
+      ? homeViews.showing === "mine"
+        ? "default"
+        : "mine"
+      : null;
+
   function resumeDraft(draft: DashboardDraft) {
     setFound(null);
+    const source = pendingEdit?.source ?? sourceFor(null);
+    setPendingEdit(null);
     // When someone committed since, resuming builds on the newer revision: Done then replaces it,
     // which is the choice the person just made. The page refreshes so Cancel returns to it.
     const conflict = draft.baseRevision !== draft.currentRevision;
-    open(draft.layout, true, conflict ? draft.currentRevision : draft.baseRevision);
+    open(source, draft.layout, true, conflict ? draft.currentRevision : draft.baseRevision);
     if (conflict) {
       startRefresh(() => {
         router.refresh();
@@ -216,8 +328,10 @@ export function DashboardBoard({
 
   async function discardFound() {
     setFound(null);
-    await discardDraft(target).catch(() => undefined);
-    open(layout, false, revision);
+    const choice = pendingEdit ?? { source: sourceFor(null), initial: layout };
+    setPendingEdit(null);
+    await discardDraft(choice.source.target).catch(() => undefined);
+    open(choice.source, choice.initial, false, choice.source.revision);
   }
 
   /** Commits from edit mode; resolves to whether it worked (the editor keeps its draft if not). */
@@ -243,7 +357,7 @@ export function DashboardBoard({
   /** After a conflict on Done: drop this draft and show what was saved. */
   function discardMine() {
     mutation.reset();
-    void discardDraft(target).catch(() => undefined);
+    void discardDraft(session?.target ?? target).catch(() => undefined);
     startRefresh(() => {
       setSession(null);
       returnFocus.current = true;
@@ -298,9 +412,13 @@ export function DashboardBoard({
           ? t("undoneNotice")
           : notice?.kind === "restored"
             ? t("restoredNotice")
-            : notice?.kind === "applied"
-              ? `${t("appliedNotice")}${notice.dropped > 0 ? ` ${t("appliedDropped", { count: notice.dropped })}` : ""}`
-              : null;
+            : notice?.kind === "returned"
+              ? tViews("returnedNotice")
+              : notice?.kind === "dismissed"
+                ? tViews("dismissedNotice")
+                : notice?.kind === "applied"
+                  ? `${t("appliedNotice")}${notice.dropped > 0 ? ` ${t("appliedDropped", { count: notice.dropped })}` : ""}`
+                  : null;
 
   return (
     <div className="flex flex-col gap-4" data-testid="dashboard">
@@ -352,6 +470,7 @@ export function DashboardBoard({
         open={found !== null}
         onClose={() => {
           setFound(null);
+          setPendingEdit(null);
           returnFocus.current = true;
         }}
         title={t("resumeTitle")}
@@ -403,49 +522,107 @@ export function DashboardBoard({
       </Dialog>
 
       {session ? (
-        <DashboardEditor
-          key={session.key}
-          target={target}
-          committed={layout}
-          initial={session.initial}
-          resumed={session.resumed}
-          draftUnchecked={draftCheckFailed}
-          baseRevision={session.baseRevision}
-          doneRequest={session.doneRequest}
-          entries={widgets}
-          sourceHomes={sourceHomes}
-          canUndo={canUndo}
-          pending={pending}
-          onAction={editorAction}
-          onCancel={() => {
-            mutation.reset();
-            // Cancel discards the draft and goes back to the saved layout (decision 6).
-            void discardDraft(target).catch(() => undefined);
-            setSession(null);
-            returnFocus.current = true;
-          }}
-        />
+        <>
+          {homeViews ? (
+            <FormAlert tone="info" announce>
+              <p data-testid="dashboard-editing-label">
+                <strong className="font-semibold">
+                  {session.target.kind === "home" && session.target.view === "mine"
+                    ? tViews("editingMine")
+                    : tViews("editingShared")}
+                </strong>{" "}
+                {session.target.kind === "home" && session.target.view === "mine"
+                  ? tViews("editingMineHint")
+                  : tViews("editingSharedHint")}
+              </p>
+            </FormAlert>
+          ) : null}
+          <DashboardEditor
+            key={session.key}
+            target={session.target}
+            committed={session.committed}
+            initial={session.initial}
+            resumed={session.resumed}
+            draftUnchecked={draftCheckFailed}
+            baseRevision={session.baseRevision}
+            doneRequest={session.doneRequest}
+            entries={widgets}
+            sourceHomes={sourceHomes}
+            canUndo={session.canUndo}
+            pending={busy}
+            onAction={editorAction}
+            onCancel={() => {
+              mutation.reset();
+              // Cancel discards the draft and goes back to the saved layout (decision 6).
+              void discardDraft(session.target).catch(() => undefined);
+              setSession(null);
+              returnFocus.current = true;
+            }}
+          />
+        </>
       ) : (
         <>
-          {canEdit || noticeText ? (
+          {homeViews ? (
+            <HomeViewLabel
+              views={homeViews}
+              busy={busy || !hydrated}
+              onReturned={() => {
+                setNotice({ kind: "returned" });
+                startRefresh(() => {
+                  router.refresh();
+                });
+              }}
+            />
+          ) : null}
+          {homeViews ? (
+            <SuggestionsNotice
+              views={homeViews}
+              layout={layout}
+              busy={busy || !hydrated}
+              onAdd={(additions) => {
+                void startEditing("mine", additions);
+              }}
+              onDismissed={() => {
+                setNotice({ kind: "dismissed" });
+                startRefresh(() => {
+                  router.refresh();
+                });
+              }}
+            />
+          ) : null}
+          {canCustomize || noticeText ? (
             <div className="flex flex-wrap items-center gap-3">
-              {canEdit ? (
+              {canCustomize ? (
                 <Button
                   variant="secondary"
-                  disabled={!hydrated || pending}
-                  onClick={() => {
-                    void startEditing();
-                  }}
+                  disabled={!hydrated || busy}
+                  onClick={customize}
                   data-testid="dashboard-customize"
                   ref={customizeRef}
                 >
                   {t("customize")}
                 </Button>
               ) : null}
+              {canCustomize && otherChoice ? (
+                <Button
+                  variant="ghost"
+                  disabled={!hydrated || busy}
+                  onClick={() => {
+                    void startEditing(otherChoice);
+                  }}
+                  data-testid="dashboard-customize-other"
+                >
+                  {otherChoice === "mine" ? tViews("startMine") : tViews("editShared")}
+                </Button>
+              ) : null}
               {noticeText ? (
                 <FormAlert tone="success" announce className="flex-1">
                   {noticeText}{" "}
-                  {canEdit && canUndo && notice?.kind !== "undone" ? (
+                  {canEdit &&
+                  canUndo &&
+                  notice?.kind !== "undone" &&
+                  notice?.kind !== "returned" &&
+                  notice?.kind !== "dismissed" ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -467,11 +644,9 @@ export function DashboardBoard({
             layout={layout}
             widgets={widgets}
             emptyState={emptyState}
-            canEdit={canEdit}
+            canEdit={canCustomize}
             onSettings={openSettings}
-            onCustomize={() => {
-              void startEditing();
-            }}
+            onCustomize={customize}
           />
           {settingsWidget && settingsEntry ? (
             <WidgetSettingsDialog
@@ -481,7 +656,7 @@ export function DashboardBoard({
               contextHomeId={
                 target.kind === "home" ? target.homeId : (settingsWidget.source?.homeId ?? null)
               }
-              pending={pending}
+              pending={busy}
               error={
                 error ? (
                   <>

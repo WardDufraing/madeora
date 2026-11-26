@@ -4,9 +4,10 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { ErrorState } from "@/components/ui/states";
-import { loadDashboard } from "@/dashboard/server";
+import { layoutPreview } from "@/dashboard/preview";
+import { loadDashboard, loadSuggestions } from "@/dashboard/server";
 import type { DashboardTarget } from "@/dashboard/schema";
-import type { SourceHome } from "@/dashboard/view-types";
+import type { HomeViews, SourceHome } from "@/dashboard/view-types";
 
 import { DashboardBoard } from "./dashboard-board";
 import { renderWidgets, type WidgetScope } from "./widget-content";
@@ -24,16 +25,49 @@ export async function DashboardSection({
   readonly emptyState: ReactNode;
 }) {
   const homeId = scope.kind === "home" ? scope.home.id : null;
-  const [t, result] = await Promise.all([
+  // A Home shows the person's own view when they have one, else the shared default (UX2d). Both are
+  // read, with the person's own session: the shared default for what "return to it" would show and
+  // whether they may edit it, their own view for whether they may keep one.
+  const [t, shared, mine] = await Promise.all([
     getTranslations("Dashboard"),
     loadDashboard(scope.kind, homeId),
+    homeId ? loadDashboard("home", homeId, "mine") : Promise.resolve(null),
   ]);
-  if (result.status !== "ok") {
+  if (shared.status !== "ok") {
     return <ErrorState title={t("loadFailedTitle")} description={t("loadFailed")} />;
   }
-  const { dashboard } = result;
+  // The viewer's own view could not be read: show the shared default, without offering views.
+  const view = homeId && mine?.status === "ok" ? mine.dashboard : null;
+  const mineView = view?.hasOverride ? view : null;
+  const showingMine = mineView !== null;
+  const dashboard = mineView ?? shared.dashboard;
   const target: DashboardTarget =
-    scope.kind === "home" ? { kind: "home", homeId: scope.home.id } : { kind: "personal" };
+    scope.kind === "home"
+      ? showingMine
+        ? { kind: "home", homeId: scope.home.id, view: "mine" }
+        : { kind: "home", homeId: scope.home.id }
+      : { kind: "personal" };
+
+  let homeViews: HomeViews | null = null;
+  if (homeId) {
+    const suggestions = showingMine ? await loadSuggestions(homeId) : null;
+    homeViews = {
+      homeId,
+      showing: showingMine ? "mine" : "default",
+      canHaveView: view?.canEdit === true,
+      canEditShared: shared.dashboard.canEdit,
+      shared: {
+        layout: shared.dashboard.layout,
+        revision: shared.dashboard.revision,
+        canUndo: shared.dashboard.canUndo,
+        preview: layoutPreview(shared.dashboard.layout),
+      },
+      suggestions:
+        suggestions?.status === "ok"
+          ? suggestions.suggestions.map((suggestion) => suggestion.widget)
+          : [],
+    };
+  }
 
   const widgets = await renderWidgets(dashboard.layout, scope);
   const sourceHomes: SourceHome[] =
@@ -50,6 +84,7 @@ export async function DashboardSection({
       widgets={widgets}
       sourceHomes={sourceHomes}
       emptyState={emptyState}
+      homeViews={homeViews}
     />
   );
 }

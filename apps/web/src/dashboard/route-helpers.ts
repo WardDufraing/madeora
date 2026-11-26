@@ -12,6 +12,7 @@ import { createSupabaseServerClient } from "@/auth/supabase-server";
 import type { DashboardErrorCode, DashboardErrorResponse } from "./api";
 import type { DashboardLayout } from "./layout";
 import type { DashboardTarget } from "./schema";
+import { targetArgs } from "./target-args";
 import { logDashboard } from "./server";
 
 /** A JSON answer that no cache may keep. */
@@ -125,7 +126,7 @@ export async function persistLayout(
   const { data, error } = await supabase.rpc("save_dashboard", {
     p_layout: layoutJson(layout),
     p_expected_revision: expectedRevision,
-    ...(target.kind === "home" ? { p_home_id: target.homeId } : {}),
+    ...targetArgs(target),
     ...(previous ? { p_previous: layoutJson(previous) } : {}),
     // Done (UX2b): the draft is discarded in the same transaction, and only when the save succeeds.
     ...(options.commitDraft ? { p_commit_draft: true } : {}),

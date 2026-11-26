@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/auth/supabase-server";
+import { targetArgs } from "@/dashboard/target-args";
 import {
   databaseFailure,
   readDashboardMutation,
@@ -19,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("undo_dashboard_change", {
     p_expected_revision: expectedRevision,
-    ...(target.kind === "home" ? { p_home_id: target.homeId } : {}),
+    ...targetArgs(target),
   });
   if (error) return databaseFailure("dashboard.undo_failed", error);
   return revisionAnswer("dashboard.undo_failed", data[0]);

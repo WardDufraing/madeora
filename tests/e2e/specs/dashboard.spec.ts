@@ -187,7 +187,17 @@ test("a Home dashboard is edited by its Owner and granted Administrators only", 
   await memberPage.goto(`/homes/${homeId}`);
   await expect(widget(memberPage, "Home members")).toBeVisible();
   await expect(widget(memberPage, "Quick actions")).toHaveCount(0);
-  await expect(memberPage.getByTestId("dashboard-customize")).toHaveCount(0);
+  await expect(memberPage.getByTestId("dashboard-view-label")).toContainText("Shared Home default");
+  // A member may keep their own view of the Home, which changes nothing for anyone else (UX2d).
+  await customize(memberPage);
+  await expect(memberPage.getByTestId("dashboard-editing-label")).toContainText("My Home view");
+  const memberPanel = await select(memberPage, "Home members");
+  await memberPanel.getByRole("button", { name: "Hide" }).click();
+  await save(memberPage);
+  await expect(widget(memberPage, "Home members")).toHaveCount(0);
+  await expect(memberPage.getByTestId("dashboard-view-label")).toContainText("My Home view");
+  await page.reload();
+  await expect(widget(page, "Home members")).toBeVisible();
   const refused = await forged(memberPage, baseURL, "/api/v1/dashboard/reset", "POST", {
     target: { kind: "home", homeId },
     expectedRevision: 1,
@@ -201,7 +211,9 @@ test("a Home dashboard is edited by its Owner and granted Administrators only", 
   await signIn(adminPage, admin);
   await adminPage.goto(`/homes/${homeId}`);
   await expect(widget(adminPage, "Welcome")).toBeVisible();
-  await expect(adminPage.getByTestId("dashboard-customize")).toHaveCount(0);
+  // Without the right the Administrator can only keep their own view, never edit the shared one.
+  await expect(adminPage.getByTestId("dashboard-customize-other")).toHaveCount(0);
+  await expect(adminPage.getByTestId("dashboard-view-label")).toContainText("Shared Home default");
   sql(
     `insert into private.home_admin_capabilities (home_id, user_id, capability)
      select :'home'::uuid, id, 'manageHomeDashboard' from auth.users where email = :'email';`,

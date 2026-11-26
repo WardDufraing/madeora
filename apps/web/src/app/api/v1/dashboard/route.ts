@@ -38,7 +38,11 @@ export async function PUT(request: Request): Promise<Response> {
     target,
     checked.layout,
     expectedRevision,
-    null,
+    // The first save of "My Home view" starts from the shared default the person was looking at;
+    // the database uses it only to know which widgets they have already seen (decision 34).
+    target.kind === "home" && target.view === "mine" && expectedRevision === 0
+      ? current.dashboard.layout
+      : null,
     {},
     { commitDraft: commitDraft === true },
   );
