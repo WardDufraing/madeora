@@ -102,7 +102,7 @@ describe("generated CSS", () => {
 
   it("keeps primary and muted text readable on both canvas stops", () => {
     for (const theme of themes) {
-      for (const stop of [canvas[theme].from, canvas[theme].to]) {
+      for (const stop of [canvas[theme].from, canvas[theme].to, canvas[theme].glow]) {
         expect(contrastRatio(neutral[theme].fg, stop)).toBeGreaterThanOrEqual(CONTRAST.text);
         expect(contrastRatio(neutral[theme].fgMuted, stop)).toBeGreaterThanOrEqual(CONTRAST.text);
       }

@@ -52,11 +52,11 @@ export function AppShell({
             {/* Personal or one Home (S09); the spec requires a clearly identified Personal
                 context even with zero Homes. */}
             <ContextSwitcher homes={homes} />
-            <div className="ms-auto flex items-center gap-2">
+            <div className="ms-auto flex items-center gap-1 rounded-pill border border-line bg-surface p-1 shadow-selected">
               <NotificationBell unread={unreadNotifications} />
               <Link
                 href="/accounts"
-                className="rounded-pill px-4 py-2 text-helper font-semibold text-fg hover:bg-surface hover:shadow-selected"
+                className="rounded-pill px-4 py-2 text-helper font-semibold text-fg hover:bg-accent-subtle"
                 data-testid="switch-account-link"
               >
                 {tAccounts("switchAccount")}

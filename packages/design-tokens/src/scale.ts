@@ -140,9 +140,11 @@ export const motionReduced: Readonly<Record<keyof typeof motion, string>> = {
  * both stops (tested). Solid `page` colour is the fallback for forced colours and reduced
  * transparency.
  */
-export const canvas: Readonly<Record<Theme, { readonly from: Hex; readonly to: Hex }>> = {
-  light: { from: "#f3f4fa", to: "#e7eaf3" },
-  dark: { from: "#141926", to: "#0a0d14" },
+export const canvas: Readonly<
+  Record<Theme, { readonly from: Hex; readonly to: Hex; readonly glow: Hex }>
+> = {
+  light: { from: "#f3f4fa", to: "#e7eaf3", glow: "#ffffff" },
+  dark: { from: "#141926", to: "#0a0d14", glow: "#1c2440" },
 };
 
 /**

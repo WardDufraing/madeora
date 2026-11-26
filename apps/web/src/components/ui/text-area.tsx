@@ -60,7 +60,7 @@ export function TextArea({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cx(
-          "rounded-control border bg-surface px-3 py-2 text-body text-fg shadow-inset",
+          "rounded-control border bg-surface px-4 py-3 text-body text-fg shadow-inset",
           "placeholder:text-fg-muted transition-colors duration-(--md-duration-fast) ease-standard",
           "disabled:cursor-not-allowed disabled:opacity-60",
           error ? "border-danger" : "border-line-control",

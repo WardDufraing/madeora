@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { requireIdentity } from "@/auth/identity";
@@ -52,13 +52,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
   }
 
-  const [t, tNav, stored, { source }, formats, myHomes] = await Promise.all([
+  const [t, tNav, stored, { source, timeZone }, formats, myHomes, locale] = await Promise.all([
     getTranslations("Dashboard"),
     getTranslations("Nav"),
     getStoredPreferences(),
     getEffectiveTimeZone(),
     getDateTimeFormats(),
     listMyHomes(),
+    getLocale(),
   ]);
   const now = new Date();
   const homes = myHomes.status === "ok" ? myHomes.homes : [];
@@ -71,7 +72,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         context={{ kind: "personal" }}
         clearParams={["context", "notice"]}
       />
-      <PageHeader title={tNav("dashboard")} />
+      <PageHeader
+        title={tNav("dashboard")}
+        subtitle={new Intl.DateTimeFormat(locale, {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          timeZone,
+        }).format(now)}
+      />
       {notice ? (
         <FormAlert tone="info" announce className="mb-6">
           {notice === "home-left" ? t("leftHome") : t("homeUnavailable")}

@@ -8,6 +8,8 @@ import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/states";
+import { TextField } from "@/components/ui/text-field";
 
 import { PreviewProvider } from "./preview-provider";
 
@@ -49,7 +51,7 @@ export default async function ShellPreviewPage() {
     <PreviewProvider>
       <AppShell sidebar="expanded" homes={[]} unreadNotifications={3}>
         <div lang="en" className="mx-auto w-full max-w-(--md-canvas-max-width)">
-          <PageHeader title="Good evening, Sam" />
+          <PageHeader title="Good evening, Sam" subtitle="Thursday 26 November" />
           <div className="grid grid-cols-1 gap-(--md-space-grid-gap) md:grid-cols-3">
             {stats.map(([label, value]) => (
               <WidgetFrame key={label} widget={{ title: label, unavailable: false }}>
@@ -87,6 +89,16 @@ export default async function ShellPreviewPage() {
                   View all
                 </Button>
               </div>
+            </WidgetFrame>
+            <WidgetFrame widget={{ title: "Quick add", unavailable: false }}>
+              <TextField label="Task title" placeholder="What needs doing?" />
+            </WidgetFrame>
+            <WidgetFrame widget={{ title: "Shopping list", unavailable: false }}>
+              <EmptyState
+                title="Nothing on the list"
+                description="Items you add show up here."
+                action={<Button size="sm">Add item</Button>}
+              />
             </WidgetFrame>
           </div>
         </div>

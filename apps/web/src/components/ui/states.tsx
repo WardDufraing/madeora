@@ -13,10 +13,19 @@ interface StateProps {
 
 const frame = "flex flex-col items-center gap-2 px-4 py-8 text-center";
 
-/** Nothing here yet. Invites the next step without inventing data (spec: no fake content). */
+/**
+ * Nothing here yet. Invites the next step without inventing data (spec: no fake content). Drawn as
+ * a calm dashed placeholder so an empty widget reads as "room for something", not as an error.
+ */
 export function EmptyState({ title, description, action, className }: StateProps) {
   return (
-    <div className={cx(frame, className)}>
+    <div
+      className={cx(
+        frame,
+        "rounded-control border border-dashed border-line-control bg-accent-subtle/30",
+        className,
+      )}
+    >
       <p className="text-body font-semibold text-fg">{title}</p>
       {description ? <div className="max-w-sm text-helper text-fg-muted">{description}</div> : null}
       {action ? <div className="mt-2">{action}</div> : null}

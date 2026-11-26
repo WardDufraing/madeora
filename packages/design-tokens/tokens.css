@@ -96,7 +96,8 @@
   --md-shadow-selected: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 3px rgb(21 26 41 / 0.1);
   --md-canvas-from: #f3f4fa;
   --md-canvas-to: #e7eaf3;
-  --md-canvas: linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
+  --md-canvas-glow: #ffffff;
+  --md-canvas: radial-gradient(70rem 36rem at 12% -8%, var(--md-canvas-glow), transparent 70%), linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
 }
 
 /* With no explicit choice, follow the operating system. */
@@ -145,7 +146,8 @@
     --md-shadow-selected: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 3px rgb(0 0 0 / 0.4);
     --md-canvas-from: #141926;
     --md-canvas-to: #0a0d14;
-    --md-canvas: linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
+    --md-canvas-glow: #1c2440;
+    --md-canvas: radial-gradient(70rem 36rem at 12% -8%, var(--md-canvas-glow), transparent 70%), linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
   }
 }
 
@@ -193,7 +195,8 @@
   --md-shadow-selected: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 3px rgb(0 0 0 / 0.4);
   --md-canvas-from: #141926;
   --md-canvas-to: #0a0d14;
-  --md-canvas: linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
+  --md-canvas-glow: #1c2440;
+  --md-canvas: radial-gradient(70rem 36rem at 12% -8%, var(--md-canvas-glow), transparent 70%), linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to));
 }
 
 /* Reduced motion: every transition and animation built on the duration tokens stops moving. */
