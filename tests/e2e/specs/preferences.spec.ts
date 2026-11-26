@@ -67,7 +67,12 @@ test("a new adult lands on the personal dashboard with zero Homes, without being
   await newAdult(page, baseURL);
   expect(new URL(page.url()).pathname).toBe("/");
   const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await expect(
+    main.getByRole("heading", {
+      level: 1,
+      name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+    }),
+  ).toBeVisible();
   await expect(main.getByText("Welcome to Madeora")).toBeVisible();
   await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
   await expect(main.getByTestId("dashboard-grid")).toBeVisible();

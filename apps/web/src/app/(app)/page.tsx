@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { requireIdentity } from "@/auth/identity";
 import { FormAlert } from "@/components/auth/form-alert";
+import { greetingPeriod } from "@/components/dashboard/greeting";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { HomeSetupCard } from "@/components/dashboard/home-setup-card";
 import { RememberContext } from "@/components/homes/remember-context";
@@ -52,9 +53,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
   }
 
-  const [t, tNav, stored, { source, timeZone }, formats, myHomes, locale] = await Promise.all([
+  const [t, stored, { source, timeZone }, formats, myHomes, locale] = await Promise.all([
     getTranslations("Dashboard"),
-    getTranslations("Nav"),
     getStoredPreferences(),
     getEffectiveTimeZone(),
     getDateTimeFormats(),
@@ -64,6 +64,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const now = new Date();
   const homes = myHomes.status === "ok" ? myHomes.homes : [];
   const hasHomes = homes.length > 0;
+  const period = greetingPeriod(now, timeZone);
+  const name = stored.displayName?.trim();
+  const greeting = name
+    ? t(
+        period === "morning"
+          ? "greetingMorningNamed"
+          : period === "afternoon"
+            ? "greetingAfternoonNamed"
+            : "greetingEveningNamed",
+        { name },
+      )
+    : t(
+        period === "morning"
+          ? "greetingMorning"
+          : period === "afternoon"
+            ? "greetingAfternoon"
+            : "greetingEvening",
+      );
 
   return (
     <>
@@ -74,7 +92,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       />
       <PageHeader
         centered
-        title={tNav("dashboard")}
+        title={greeting}
         subtitle={new Intl.DateTimeFormat(locale, {
           weekday: "long",
           day: "numeric",

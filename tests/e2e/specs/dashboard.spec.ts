@@ -72,7 +72,12 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
   baseURL,
 }) => {
   const account = await newAdult(page, baseURL);
-  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+    }),
+  ).toBeVisible();
   // The starter layout, with truthful empty states and nothing invented.
   await expect(widget(page, "Welcome").getByText("Welcome to Madeora")).toBeVisible();
   await expect(
