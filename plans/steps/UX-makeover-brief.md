@@ -42,3 +42,9 @@ design-tokens: 69 pass. web: tsc clean; eslint clean on touched dirs; vitest she
 
 Fixed: tracking reset for ar/fa/he and no font-smoothing override (M2, L2); /dev/shell production-gate test and WidgetFrame test (M1/M3); stale comment (L1); synthetic name (L5).
 Accepted for Stage 2: real dashboard grid rows/gap and widget minimum heights (M1), mobile nav / context switcher alignment (M4, so this must not ship to production alone), 44px touch targets on remaining controls (L3), font metrics fallback (L4).
+
+## Direction chosen by Ward (2026-11-26): C, Family Hub
+
+Answers: keep purple default accent; slim icon rail is the default sidebar state (still expandable, saved per device); flat cards with a hairline edge (20px corners, near-zero shadow); greeting centred on the dashboards only.
+Built: dark floating rail in both themes with an accent-filled active item; teal-slate neutrals; flat card tokens; `PageHeader centered`; `link-inline` (links inside sentences) and `link-action` (standalone links and text buttons become soft pills) applied to 303 occurrences by a codemod (34 inline, 269 action; the split is "preceded by a space expression in the same sentence"); e2e updates for the new default rail and the token-colour check (both themes allowed because the rail forces dark).
+Open: some of the 269 action links may deserve a different treatment or sit awkwardly in tight rows; check page by page in Stage 2. Real pages not screenshotted (needs an account and database); preview at `/dev/shell`.
