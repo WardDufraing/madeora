@@ -20,7 +20,7 @@ export function RecipeCard({ recipe, homeId }: RecipeCardProps) {
   const t = useTranslations("Recipes");
   return (
     <article
-      className="relative flex h-full flex-col gap-3 rounded-card border border-line bg-surface p-3"
+      className="card-lift relative flex h-full flex-col gap-3 rounded-card border border-line bg-surface p-3"
       data-testid="recipe-card"
     >
       <RecipeCover fileId={recipe.coverFileId} size="card" />
