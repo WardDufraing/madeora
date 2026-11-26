@@ -26,7 +26,7 @@ import {
 import { useScrollHide } from "./use-scroll-hide";
 
 const tabClass =
-  "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-helper transition-colors duration-(--md-duration-fast) hover:bg-accent-subtle";
+  "group relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-helper";
 
 /**
  * Navigation below the `md` breakpoint (redesign decisions 26, 27 and 29): a bottom bar with
@@ -148,15 +148,17 @@ export function MobileNav() {
             aria-current={active ? "page" : undefined}
             className={cx(tabClass, active ? "font-semibold text-fg" : "text-fg-muted")}
           >
-            <Icon size="md" />
+            {/* The current tab sits in a soft pill, and is also bolder: never colour alone. */}
+            <span
+              aria-hidden="true"
+              className={cx(
+                "inline-flex h-8 w-14 items-center justify-center rounded-pill border border-transparent group-hover:bg-accent-subtle motion-safe:transition-colors",
+                active && "bg-accent-subtle forced-colors:border-[Highlight]",
+              )}
+            >
+              <Icon size="md" />
+            </span>
             <span>{tNav(item.id)}</span>
-            {/* The current tab is marked by a bar and weight, not by colour alone. */}
-            {active ? (
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-4 top-0 h-1 rounded-full bg-accent forced-colors:bg-[Highlight]"
-              />
-            ) : null}
           </Link>
         </li>
       );
@@ -205,7 +207,12 @@ export function MobileNav() {
               aria-haspopup="dialog"
               className={cx(tabClass, "text-fg-muted")}
             >
-              <MenuIcon size="md" />
+              <span
+                aria-hidden="true"
+                className="inline-flex h-8 w-14 items-center justify-center rounded-pill border border-transparent group-hover:bg-accent-subtle"
+              >
+                <MenuIcon size="md" />
+              </span>
               <span>{t("moreMenu")}</span>
             </button>
           </li>
