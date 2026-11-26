@@ -1,11 +1,10 @@
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
 import type { MyHome } from "@/homes/types";
 import type { SidebarState } from "@/preferences/preferences";
 
+import { AccountMenu } from "./account-menu";
 import { ContextSwitcher } from "./context-switcher";
 import { FavoritesProvider } from "./favorites";
 import { MobileNav } from "./mobile-nav";
@@ -20,6 +19,8 @@ export interface AppShellProps {
   readonly homes: readonly MyHome[] | null;
   /** Unread notifications, for the bell (S14). */
   readonly unreadNotifications?: number;
+  /** The person's display name, for the account menu's avatar. */
+  readonly displayName?: string | null;
   readonly children: ReactNode;
 }
 
@@ -32,10 +33,10 @@ export function AppShell({
   favorites = null,
   homes,
   unreadNotifications = 0,
+  displayName = null,
   children,
 }: AppShellProps) {
   const t = useTranslations("Shell");
-  const tAccounts = useTranslations("Accounts");
 
   return (
     <FavoritesProvider initial={favorites}>
@@ -54,14 +55,7 @@ export function AppShell({
             <ContextSwitcher homes={homes} />
             <div className="ms-auto flex items-center gap-1 rounded-pill border border-line bg-surface p-1 shadow-selected">
               <NotificationBell unread={unreadNotifications} />
-              <Link
-                href="/accounts"
-                className="rounded-pill px-4 py-2 text-helper font-semibold text-fg hover:bg-accent-subtle"
-                data-testid="switch-account-link"
-              >
-                {tAccounts("switchAccount")}
-              </Link>
-              <SignOutButton />
+              <AccountMenu displayName={displayName} />
             </div>
           </header>
           <main id="main" tabIndex={-1} className="flex-1 px-4 pb-24 md:px-8 focus:outline-none">

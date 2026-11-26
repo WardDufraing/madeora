@@ -41,6 +41,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           favorites={favorites}
           homes={myHomes.status === "ok" ? myHomes.homes : null}
           unreadNotifications={unread}
+          displayName={stored.displayName ?? null}
         >
           {reviewDue ? <SecurityReviewBanner /> : null}
           {children}

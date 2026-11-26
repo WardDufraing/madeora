@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
  * ends the session at Supabase Auth and deletes the cookies. This tab drops its cached data at once;
  * the sign-in page it lands on then tells the other tabs (`AnnounceSignedOut`).
  */
-export function SignOutButton() {
+export function SignOutButton({ variant = "ghost" }: { readonly variant?: "ghost" | "menu" }) {
   const t = useTranslations("Auth");
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
@@ -26,9 +26,19 @@ export function SignOutButton() {
         clearAccountTabStorage();
       }}
     >
-      <Button type="submit" variant="ghost" size="sm" loading={pending}>
-        {t("signOut")}
-      </Button>
+      {variant === "menu" ? (
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex min-h-10 w-full items-center rounded-control px-3 text-start text-body font-semibold text-fg hover:bg-accent-subtle"
+        >
+          {t("signOut")}
+        </button>
+      ) : (
+        <Button type="submit" variant="ghost" size="sm" loading={pending}>
+          {t("signOut")}
+        </Button>
+      )}
     </form>
   );
 }
