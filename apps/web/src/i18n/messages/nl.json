@@ -4,7 +4,7 @@
   },
   "Shell": {
     "accountMenu": "Accountmenu",
-    "signedInAs": "Ingelogd als {name}",
+    "signedInAs": "Aangemeld als {name}",
     "skipToContent": "Naar de hoofdinhoud",
     "mainNavigation": "Hoofdmenu",
     "brandLink": "Madeora, naar het dashboard",

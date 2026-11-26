@@ -46,4 +46,33 @@ describe("AccountMenu", () => {
     expect(screen.queryByText(/Signed in as/)).toBeNull();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
   });
+
+  it("closes on a press outside and when focus tabs out", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <QueryClientProvider client={new QueryClient()}>
+        <AccountMenu displayName="Ann" />
+        <button type="button">After</button>
+      </QueryClientProvider>,
+    );
+    const button = screen.getByRole("button", { name: "Account menu" });
+    await user.click(button);
+    await user.click(document.body);
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await user.click(button);
+    await user.tab();
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "After" })).toHaveFocus();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("signs out with a real form POST", async () => {
+    const user = userEvent.setup();
+    renderMenu("Ann");
+    await user.click(screen.getByRole("button", { name: "Account menu" }));
+    const form = screen.getByRole("button", { name: "Sign out" }).closest("form");
+    expect(form).toHaveAttribute("method", "post");
+    expect(form).toHaveAttribute("action", "/auth/sign-out");
+  });
 });
