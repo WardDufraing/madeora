@@ -423,6 +423,13 @@
     "description": "Dit adres bestaat niet in Madeora. Gebruik het menu om te vinden wat je zocht."
   },
   "Settings": {
+    "sectionsLabel": "Instellingsonderdelen",
+    "jumpTo": "Ga naar onderdeel",
+    "groupProfile": "Account",
+    "groupAppearance": "Uiterlijk",
+    "groupSecurity": "Beveiliging en privacy",
+    "groupData": "Je gegevens",
+    "groupConnections": "Koppelingen",
     "appearance": "Weergave",
     "theme": "Thema",
     "themeLight": "Licht",

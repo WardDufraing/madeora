@@ -16,6 +16,7 @@ import { AvatarSetting } from "@/components/storage/avatar-setting";
 import { SignInMethodsSetting } from "@/components/settings/sign-in-methods-setting";
 import { ThemeSetting } from "@/components/settings/theme-setting";
 import { TimeZoneSetting } from "@/components/settings/time-zone-setting";
+import { SettingsGroup, SettingsLayout } from "@/components/settings/settings-layout";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { pageTitle } from "@/i18n/page-title";
@@ -94,152 +95,175 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   ]);
   const hasRecovered = recovered.status === "ok" && recovered.homes.length > 0;
   const stored = account.status === "ok" ? account.preferences : noPreferences;
+  const sections = [
+    { id: "profile", label: t("groupProfile") },
+    { id: "appearance", label: t("groupAppearance") },
+    { id: "language", label: t("languageAndRegion") },
+    { id: "security", label: t("groupSecurity") },
+    { id: "data", label: t("groupData") },
+    { id: "connections", label: t("groupConnections") },
+  ];
 
   return (
     <>
       <PageHeader title={tNav("settings")} />
-      <div className="flex max-w-2xl flex-col gap-6">
+      <SettingsLayout sections={sections}>
         {account.status === "unavailable" ? (
           <FormAlert tone="error">{t("loadFailed")}</FormAlert>
         ) : null}
-        <Card title={t("profile")} description={t("profileHint")}>
-          <DisplayNameSetting initialName={stored.displayName} />
-        </Card>
-        <Card title={tStorage("avatarTitle")} description={tStorage("avatarHint")}>
-          <AvatarSetting
-            scope={{ kind: "global" }}
-            currentFileId={avatars.status === "ok" ? avatars.global : null}
-            name={stored.displayName}
-            accentColor={stored.accentColor}
-            locale={locale}
-            uploadsEnabled={storageEnabled()}
-          />
-        </Card>
-        <Card title={t("accent")} description={t("accentHint")}>
-          <AccentSetting initialColor={stored.accentColor} />
-        </Card>
-        <Card title={t("languageAndRegion")} description={t("languageAndRegionHint")}>
-          <div className="flex flex-col gap-8">
-            <LanguageSetting currentLocale={locale} />
-            <RegionalSetting
-              overrides={stored}
-              detected={regional.detected}
-              samples={regionalSamples(locale)}
-            />
-            <TimeZoneSetting
-              chosen={stored.timeZone}
-              deviceSaved={deviceTimeZone}
-              choices={timeZoneChoices([stored.timeZone, deviceTimeZone])}
+        <SettingsGroup id="profile" label={t("groupProfile")}>
+          <Card title={t("profile")} description={t("profileHint")}>
+            <DisplayNameSetting initialName={stored.displayName} />
+          </Card>
+          <Card title={tStorage("avatarTitle")} description={tStorage("avatarHint")}>
+            <AvatarSetting
+              scope={{ kind: "global" }}
+              currentFileId={avatars.status === "ok" ? avatars.global : null}
+              name={stored.displayName}
+              accentColor={stored.accentColor}
               locale={locale}
-              timeFormat={regional.effective.timeFormat}
+              uploadsEnabled={storageEnabled()}
             />
-          </div>
-        </Card>
-        {user ? (
-          <div id="sign-in-methods" className="scroll-mt-20">
-            <Card title={t("signInMethods")} description={t("signInMethodsHint")}>
-              <SignInMethodsSetting
-                userId={userId}
-                methods={describeSignInMethods(
-                  user,
-                  security.status === "ok" ? security.value.hasPassword : null,
-                )}
-                twoFactor={verifiedTotpFactor(user) !== null}
-                googleAvailable={googleEnabled}
-                notice={
-                  params.linked === "google"
-                    ? "linked"
-                    : params.unlinked === "google"
-                      ? "unlinked"
-                      : null
-                }
+          </Card>
+        </SettingsGroup>
+        <SettingsGroup id="appearance" label={t("groupAppearance")}>
+          <Card title={t("accent")} description={t("accentHint")}>
+            <AccentSetting initialColor={stored.accentColor} />
+          </Card>
+          <Card title={t("appearance")}>
+            <ThemeSetting initialTheme={theme} />
+          </Card>
+        </SettingsGroup>
+        <SettingsGroup id="language" label={t("languageAndRegion")}>
+          <Card title={t("languageAndRegion")} description={t("languageAndRegionHint")}>
+            <div className="flex flex-col gap-8">
+              <LanguageSetting currentLocale={locale} />
+              <RegionalSetting
+                overrides={stored}
+                detected={regional.detected}
+                samples={regionalSamples(locale)}
               />
-            </Card>
-          </div>
-        ) : null}
-        <Card title={t("securityTitle")} description={t("securityHint")}>
-          <Link
-            href="/settings/security"
-            className="text-body link-action"
-            data-testid="security-link"
-          >
-            {t("securityLink")}
-          </Link>
-        </Card>
-        <Card title={tPrivacy("settingsCardTitle")} description={tPrivacy("settingsCardHint")}>
-          <Link
-            href="/settings/privacy"
-            className="text-body link-action"
-            data-testid="privacy-link"
-          >
-            {tPrivacy("settingsCardLink")}
-          </Link>
-        </Card>
-        <Card title={tActivity("settingsCardTitle")} description={tActivity("settingsCardHint")}>
-          <Link
-            href="/settings/activity"
-            className="text-body link-action"
-            data-testid="activity-link"
-          >
-            {tActivity("settingsCardLink")}
-          </Link>
-        </Card>
-        <Card title={t("notificationsTitle")} description={t("notificationsHint")}>
-          <Link href="/settings/notifications" className="text-body link-action">
-            {t("notificationsLink")}
-          </Link>
-        </Card>
-        <Card title={tOra("cardTitle")} description={tOra("cardHint")}>
-          <Link
-            href="/settings/ora"
-            className="text-body link-action"
-            data-testid="ora-settings-link"
-          >
-            {tOra("cardLink")}
-          </Link>
-        </Card>
-        <Card title={tGoogle("settingsCardTitle")} description={tGoogle("settingsCardHint")}>
-          <Link
-            href="/settings/google-calendar"
-            className="text-body link-action"
-            data-testid="google-calendar-link"
-          >
-            {tGoogle("settingsCardLink")}
-          </Link>
-        </Card>
-        <Card title={tStorage("settingsCardTitle")} description={tStorage("settingsCardHint")}>
-          <Link
-            href="/settings/storage"
-            className="text-body link-action"
-            data-testid="storage-link"
-          >
-            {tStorage("settingsCardLink")}
-          </Link>
-        </Card>
-        <Card title={tTrash("settingsCardTitle")} description={tTrash("settingsCardHint")}>
-          <Link href="/settings/trash" className="text-body link-action" data-testid="trash-link">
-            {tTrash("settingsCardLink")}
-          </Link>
-        </Card>
-        <Card title={tTemplates("settingsCardTitle")} description={tTemplates("settingsCardHint")}>
-          <Link
-            href="/settings/dashboard-templates"
-            className="text-body link-action"
-            data-testid="dashboard-templates-link"
-          >
-            {tTemplates("settingsCardLink")}
-          </Link>
-        </Card>
-        <Card title={t("appearance")}>
-          <ThemeSetting initialTheme={theme} />
-        </Card>
-        {hasRecovered ? (
-          <Card title={tRecovery("recoveredTitle")}>
-            <Link href="/settings/recoveries" className="text-body link-action">
-              {tRecovery("recoveredLink")}
+              <TimeZoneSetting
+                chosen={stored.timeZone}
+                deviceSaved={deviceTimeZone}
+                choices={timeZoneChoices([stored.timeZone, deviceTimeZone])}
+                locale={locale}
+                timeFormat={regional.effective.timeFormat}
+              />
+            </div>
+          </Card>
+        </SettingsGroup>
+        <SettingsGroup id="security" label={t("groupSecurity")}>
+          {user ? (
+            <div id="sign-in-methods" className="scroll-mt-20">
+              <Card title={t("signInMethods")} description={t("signInMethodsHint")}>
+                <SignInMethodsSetting
+                  userId={userId}
+                  methods={describeSignInMethods(
+                    user,
+                    security.status === "ok" ? security.value.hasPassword : null,
+                  )}
+                  twoFactor={verifiedTotpFactor(user) !== null}
+                  googleAvailable={googleEnabled}
+                  notice={
+                    params.linked === "google"
+                      ? "linked"
+                      : params.unlinked === "google"
+                        ? "unlinked"
+                        : null
+                  }
+                />
+              </Card>
+            </div>
+          ) : null}
+          <Card title={t("securityTitle")} description={t("securityHint")}>
+            <Link
+              href="/settings/security"
+              className="text-body link-action"
+              data-testid="security-link"
+            >
+              {t("securityLink")}
             </Link>
           </Card>
-        ) : null}
+          <Card title={tPrivacy("settingsCardTitle")} description={tPrivacy("settingsCardHint")}>
+            <Link
+              href="/settings/privacy"
+              className="text-body link-action"
+              data-testid="privacy-link"
+            >
+              {tPrivacy("settingsCardLink")}
+            </Link>
+          </Card>
+          {hasRecovered ? (
+            <Card title={tRecovery("recoveredTitle")}>
+              <Link href="/settings/recoveries" className="text-body link-action">
+                {tRecovery("recoveredLink")}
+              </Link>
+            </Card>
+          ) : null}
+        </SettingsGroup>
+        <SettingsGroup id="data" label={t("groupData")}>
+          <Card title={tActivity("settingsCardTitle")} description={tActivity("settingsCardHint")}>
+            <Link
+              href="/settings/activity"
+              className="text-body link-action"
+              data-testid="activity-link"
+            >
+              {tActivity("settingsCardLink")}
+            </Link>
+          </Card>
+          <Card title={tStorage("settingsCardTitle")} description={tStorage("settingsCardHint")}>
+            <Link
+              href="/settings/storage"
+              className="text-body link-action"
+              data-testid="storage-link"
+            >
+              {tStorage("settingsCardLink")}
+            </Link>
+          </Card>
+          <Card title={tTrash("settingsCardTitle")} description={tTrash("settingsCardHint")}>
+            <Link href="/settings/trash" className="text-body link-action" data-testid="trash-link">
+              {tTrash("settingsCardLink")}
+            </Link>
+          </Card>
+        </SettingsGroup>
+        <SettingsGroup id="connections" label={t("groupConnections")}>
+          <Card title={t("notificationsTitle")} description={t("notificationsHint")}>
+            <Link href="/settings/notifications" className="text-body link-action">
+              {t("notificationsLink")}
+            </Link>
+          </Card>
+          <Card title={tOra("cardTitle")} description={tOra("cardHint")}>
+            <Link
+              href="/settings/ora"
+              className="text-body link-action"
+              data-testid="ora-settings-link"
+            >
+              {tOra("cardLink")}
+            </Link>
+          </Card>
+          <Card title={tGoogle("settingsCardTitle")} description={tGoogle("settingsCardHint")}>
+            <Link
+              href="/settings/google-calendar"
+              className="text-body link-action"
+              data-testid="google-calendar-link"
+            >
+              {tGoogle("settingsCardLink")}
+            </Link>
+          </Card>
+          <Card
+            title={tTemplates("settingsCardTitle")}
+            description={tTemplates("settingsCardHint")}
+          >
+            <Link
+              href="/settings/dashboard-templates"
+              className="text-body link-action"
+              data-testid="dashboard-templates-link"
+            >
+              {tTemplates("settingsCardLink")}
+            </Link>
+          </Card>
+        </SettingsGroup>
         {/* Only decides whether to show the link; every staff page and action checks again. */}
         {isStaff ? (
           <Card title={tRecovery("staffTitle")}>
@@ -252,7 +276,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             </Link>
           </Card>
         ) : null}
-      </div>
+      </SettingsLayout>
     </>
   );
 }

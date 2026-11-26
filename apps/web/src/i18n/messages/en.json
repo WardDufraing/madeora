@@ -423,6 +423,13 @@
     "description": "This address does not exist in Madeora. Use the menu to find what you were looking for."
   },
   "Settings": {
+    "sectionsLabel": "Settings sections",
+    "jumpTo": "Jump to section",
+    "groupProfile": "Account",
+    "groupAppearance": "Appearance",
+    "groupSecurity": "Security and privacy",
+    "groupData": "Your data",
+    "groupConnections": "Connections",
     "appearance": "Appearance",
     "theme": "Theme",
     "themeLight": "Light",
