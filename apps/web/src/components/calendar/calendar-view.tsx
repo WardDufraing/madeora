@@ -202,12 +202,25 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
       memberNames={Object.fromEntries(names)}
       create={create}
     >
-      <PageHeader title={t("title")} />
-      <p className="mb-4 text-body text-fg-muted">
-        <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
-        {" · "}
-        {t("shownIn", { zone: value.timezone })}
-      </p>
+      <PageHeader
+        title={t("title")}
+        subtitle={
+          <>
+            <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
+            {" · "}
+            {t("shownIn", { zone: value.timezone })}
+          </>
+        }
+        actions={
+          value.canCreate ? (
+            <NewEventButton
+              homeId={homeId}
+              {...(window.view === "day" ? { date: window.anchor } : {})}
+              label={t("newEvent")}
+            />
+          ) : null
+        }
+      />
 
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -248,13 +261,6 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
             showChores={value.showChores}
             showVacations={value.showVacations}
           />
-          {value.canCreate ? (
-            <NewEventButton
-              homeId={homeId}
-              {...(window.view === "day" ? { date: window.anchor } : {})}
-              label={t("newEvent")}
-            />
-          ) : null}
         </div>
 
         {homeId === null && (hasWork || hideWork) ? (

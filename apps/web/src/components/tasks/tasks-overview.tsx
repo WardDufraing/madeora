@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/shell/page-header";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { z } from "zod";
@@ -244,36 +245,40 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-page-title font-semibold">{t("title")}</h1>
-        {current?.archived ? null : (
-          <NewTask
-            homeId={homeId}
-            lists={activeLists}
-            defaultListId={current?.id ?? null}
-            labels={labelOptions}
-            members={canManage ? memberOptions : []}
-            dateFormat={formats.dateFormat}
-            templates={templates.value}
-            canCreateList={canManage}
-          />
-        )}
-      </div>
-      <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
-        <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
-        {canManage ? (
-          <>
+      <PageHeader
+        title={t("title")}
+        subtitle={
+          <span className="flex flex-wrap gap-x-2">
+            <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
+            {canManage ? (
+              <>
+                <span aria-hidden="true">{"\u{00B7}"}</span>
+                <Link href={`${base}/manage`} className="link-action">
+                  {t("manageLink")}
+                </Link>
+              </>
+            ) : null}
             <span aria-hidden="true">{"\u{00B7}"}</span>
-            <Link href={`${base}/manage`} className="link-action">
-              {t("manageLink")}
+            <Link href={`${base}/templates`} className="link-action">
+              {tTemplates("libraryLink")}
             </Link>
-          </>
-        ) : null}
-        <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={`${base}/templates`} className="link-action">
-          {tTemplates("libraryLink")}
-        </Link>
-      </p>
+          </span>
+        }
+        actions={
+          current?.archived ? null : (
+            <NewTask
+              homeId={homeId}
+              lists={activeLists}
+              defaultListId={current?.id ?? null}
+              labels={labelOptions}
+              members={canManage ? memberOptions : []}
+              dateFormat={formats.dateFormat}
+              templates={templates.value}
+              canCreateList={canManage}
+            />
+          )
+        }
+      />
       <TaskViewSwitch homeId={homeId} current={view} list={current?.id} />
       {notice === "deleted" ? (
         <TaskNotice>
