@@ -45,6 +45,20 @@ describe("SettingsLayout", () => {
     expect(nav.querySelector('a[href="#profile"]')).not.toHaveAttribute("aria-current");
   });
 
+  it("marks nothing current without an address, and survives a malformed one", () => {
+    window.location.hash = "#%";
+    renderLayout();
+    const nav = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(nav.querySelector("[aria-current]")).toBeNull();
+  });
+
+  it("treats the sign-in methods anchor as part of Security and privacy", () => {
+    window.location.hash = "#sign-in-methods";
+    renderLayout();
+    const nav = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(nav.querySelector('a[href="#security"]')).toHaveAttribute("aria-current", "location");
+  });
+
   it("jumps to a section chosen in the dropdown", async () => {
     const user = userEvent.setup();
     renderLayout();

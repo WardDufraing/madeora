@@ -15,9 +15,18 @@ export interface SettingsLayoutProps {
   readonly children: ReactNode;
 }
 
+/** Other anchors on the page that belong to one of the groups. */
+const aliases: Readonly<Record<string, string>> = { "sign-in-methods": "security" };
+
 function hashId(): string | null {
-  const id = window.location.hash.slice(1);
-  return id === "" ? null : decodeURIComponent(id);
+  const raw = window.location.hash.slice(1);
+  if (raw === "") return null;
+  try {
+    const id = decodeURIComponent(raw);
+    return aliases[id] ?? id;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -27,8 +36,8 @@ function hashId(): string | null {
  */
 export function SettingsLayout({ sections, children }: SettingsLayoutProps) {
   const t = useTranslations("Settings");
-  const first = sections[0]?.id ?? "";
-  const [active, setActive] = useState(first);
+  // Nothing is marked current until the address or a choice names a section.
+  const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => {
@@ -51,7 +60,7 @@ export function SettingsLayout({ sections, children }: SettingsLayoutProps) {
           </label>
           <select
             id="settings-section"
-            value={active}
+            value={active ?? sections[0]?.id ?? ""}
             onChange={(event) => {
               window.location.hash = event.target.value;
             }}
@@ -71,9 +80,9 @@ export function SettingsLayout({ sections, children }: SettingsLayoutProps) {
                 href={`#${section.id}`}
                 aria-current={active === section.id ? "location" : undefined}
                 className={cx(
-                  "flex min-h-10 items-center rounded-control px-3 text-body text-fg-muted hover:bg-accent-subtle hover:text-fg",
+                  "flex min-h-10 items-center rounded-control border border-transparent px-3 text-body text-fg-muted hover:bg-accent-subtle hover:text-fg",
                   "aria-[current=location]:bg-accent-subtle aria-[current=location]:font-semibold aria-[current=location]:text-fg",
-                  "forced-colors:aria-[current=location]:border forced-colors:aria-[current=location]:border-[Highlight]",
+                  "forced-colors:aria-[current=location]:border-[Highlight]",
                 )}
               >
                 {section.label}
