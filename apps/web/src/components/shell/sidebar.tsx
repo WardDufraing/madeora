@@ -113,6 +113,8 @@ export function Sidebar({ initialState }: SidebarProps) {
   return (
     <aside
       data-state={state}
+      // A dark floating rail in both themes (UI makeover): the dark tokens apply inside it only.
+      data-theme="dark"
       className={cx(
         "sticky top-0 hidden h-dvh shrink-0 md:flex",
         collapsed ? "p-2" : "p-4",
@@ -120,7 +122,7 @@ export function Sidebar({ initialState }: SidebarProps) {
         collapsed ? "w-(--md-shell-sidebar-collapsed)" : "w-(--md-shell-sidebar-expanded)",
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-col rounded-card border border-line bg-sidebar shadow-raised">
+      <div className="flex min-w-0 flex-1 flex-col rounded-card border border-line bg-sidebar text-fg shadow-overlay">
         <div
           className={cx(
             "flex gap-2",
