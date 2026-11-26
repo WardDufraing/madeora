@@ -205,7 +205,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   padding-inline: 1rem;
   white-space: nowrap;
   border-radius: var(--radius-pill);
@@ -235,7 +235,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   padding-inline: 1rem;
   white-space: nowrap;
   border-radius: var(--radius-pill);

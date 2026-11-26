@@ -289,7 +289,9 @@ export function ChoreScheduleWidget({
       onClick={onClick}
       className={cx(
         "inline-flex min-h-8 items-center rounded-pill px-3 text-helper font-semibold",
-        pressed ? "bg-accent text-on-accent" : "bg-accent-subtle text-accent-fg",
+        pressed
+          ? "bg-accent text-on-accent forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
+          : "bg-accent-subtle text-accent-fg",
       )}
       data-testid={testId}
     >
