@@ -348,16 +348,16 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
               <section
                 key={group.id}
                 aria-labelledby={`chores-${group.id}`}
-                className="flex flex-col gap-2"
+                className="flex flex-col rounded-card border border-line bg-surface p-widget-padding shadow-raised"
                 data-testid={`chores-group-${group.id}`}
               >
-                <h2 id={`chores-${group.id}`} className="text-section-title font-semibold text-fg">
+                <h2 id={`chores-${group.id}`} className="mb-3 text-section-title font-bold text-fg">
                   {group.title}{" "}
                   <span className="text-body font-normal text-fg-muted">
                     {t("groupCount", { count: rows.length })}
                   </span>
                 </h2>
-                <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+                <ul className="flex flex-col divide-y divide-line">
                   {rows.map((row) => {
                     // Quick complete only where nothing needs a choice: no mandatory step open, and
                     // the viewer is the natural contributor (their chore, or nobody's).
@@ -369,7 +369,7 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
                     return (
                       <li
                         key={row.id}
-                        className="flex flex-wrap items-center justify-between gap-3 p-3"
+                        className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                         data-testid="chore-row"
                       >
                         <div className="flex min-w-0 flex-col gap-1">
