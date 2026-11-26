@@ -142,7 +142,7 @@ export function MobileNav() {
       const Icon = item.icon;
       const active = isItemActive(item, homeId, pathname);
       return (
-        <li key={item.id} className="flex flex-1">
+        <li key={item.id} className="flex min-w-0 flex-1">
           <Link
             href={contextHref(item, homeId)}
             aria-current={active ? "page" : undefined}
@@ -152,8 +152,9 @@ export function MobileNav() {
             <span
               aria-hidden="true"
               className={cx(
-                "inline-flex h-8 w-14 items-center justify-center rounded-pill border border-transparent group-hover:bg-accent-subtle motion-safe:transition-colors",
-                active && "bg-accent-subtle forced-colors:border-[Highlight]",
+                "inline-flex h-8 w-full max-w-14 items-center justify-center rounded-pill group-hover:bg-accent-subtle motion-safe:transition-colors",
+                active &&
+                  "border border-transparent bg-accent-subtle forced-colors:border-[Highlight]",
               )}
             >
               <Icon size="md" />
@@ -197,7 +198,7 @@ export function MobileNav() {
             </button>
           </li>
           {tabs([tasks])}
-          <li className="flex flex-1">
+          <li className="flex min-w-0 flex-1">
             <button
               ref={button}
               type="button"
@@ -209,7 +210,7 @@ export function MobileNav() {
             >
               <span
                 aria-hidden="true"
-                className="inline-flex h-8 w-14 items-center justify-center rounded-pill border border-transparent group-hover:bg-accent-subtle"
+                className="inline-flex h-8 w-full max-w-14 items-center justify-center rounded-pill group-hover:bg-accent-subtle"
               >
                 <MenuIcon size="md" />
               </span>
