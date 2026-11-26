@@ -93,6 +93,23 @@
   }
 }
 
+/* A clickable card rises a touch and takes a deeper shadow on hover (calm lift): only where hover
+   exists, and the travel is 0 under reduced motion (the shadow still changes, so the cue stays). */
+@utility card-lift {
+  transition-property: box-shadow, transform, border-color;
+  transition-duration: var(--md-duration-fast);
+  transition-timing-function: var(--md-ease-standard);
+  @media (hover: hover) {
+    &:hover {
+      transform: translateY(calc(var(--md-motion-shift-sm) * -0.5));
+      box-shadow: var(--md-shadow-overlay);
+    }
+  }
+  &:active {
+    transform: none;
+  }
+}
+
 /* Dashboard edit mode (S17): the layout mechanics React Grid Layout needs, in Madeora's own styles
    (architecture.md §15: the library supplies mechanics, never the look). Only edit mode uses it;
    normal use is a plain CSS grid. Movement is instant when reduced motion is asked for, because

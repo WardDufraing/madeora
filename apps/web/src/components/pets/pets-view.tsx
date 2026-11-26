@@ -66,7 +66,7 @@ export function PetsView({ homeId, list, today }: PetsViewProps) {
               <li key={pet.id}>
                 <Link
                   href={petPath(homeId, pet.id)}
-                  className="flex items-center gap-3 rounded-card border border-line bg-surface p-3 text-fg hover:border-line-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  className="card-lift flex items-center gap-3 rounded-card border border-line bg-surface p-3 text-fg hover:border-line-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                   data-testid="pet-card"
                 >
                   <PetPhoto fileId={pet.photoFileId} name={pet.name} size="card" />
