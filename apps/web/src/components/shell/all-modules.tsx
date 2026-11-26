@@ -94,18 +94,21 @@ export function AllModules({ homeId }: AllModulesProps) {
                     label={name}
                     className="rounded-t-card"
                   />
-                  <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2">
-                    <span id={`shortcut-${item.id}`} className="text-helper text-fg-muted">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={pinned}
+                    aria-label={t("pinToggle", { module: name })}
+                    onClick={() => {
+                      togglePin(item);
+                    }}
+                    className="flex min-h-11 items-center justify-between gap-3 rounded-b-card border-t border-line px-4 py-2 text-start hover:bg-accent-subtle"
+                  >
+                    <span aria-hidden="true" className="text-helper text-fg-muted">
                       {t("shortcut")}
                     </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={pinned}
-                      aria-label={t("pinToggle", { module: name })}
-                      onClick={() => {
-                        togglePin(item);
-                      }}
+                    <span
+                      aria-hidden="true"
                       className={cx(
                         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-pill border border-line-control motion-safe:transition-colors",
                         "forced-colors:border-[ButtonText]",
@@ -113,16 +116,15 @@ export function AllModules({ homeId }: AllModulesProps) {
                       )}
                     >
                       <span
-                        aria-hidden="true"
                         className={cx(
-                          "block size-4 rounded-full bg-surface shadow-raised motion-safe:transition-transform forced-colors:bg-[ButtonText]",
+                          "block size-4 rounded-full bg-surface shadow-raised motion-safe:transition-transform",
                           pinned
-                            ? "translate-x-6 rtl:-translate-x-6"
-                            : "translate-x-1 rtl:-translate-x-1",
+                            ? "translate-x-[22px] rtl:-translate-x-[22px] forced-colors:bg-[HighlightText]"
+                            : "translate-x-[3px] rtl:-translate-x-[3px] forced-colors:bg-[ButtonText]",
                         )}
                       />
-                    </button>
-                  </div>
+                    </span>
+                  </button>
                 </li>
               );
             })}
