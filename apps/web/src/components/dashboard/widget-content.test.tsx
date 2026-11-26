@@ -3,7 +3,8 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import type { HomePermissionProjection } from "@madeora/domain/permissions";
 import { addWidget, type DashboardLayout } from "@/dashboard/layout";
-import { homeStarterLayout, personalStarterLayout } from "@/dashboard/starter";
+import { homeStarterLayout } from "@/dashboard/starter";
+import { legacyPersonalStarterLayout as personalStarterLayout } from "@/dashboard/starter.fixture";
 import type { WidgetEntry } from "@/dashboard/view-types";
 import type { DateTimeFormats } from "@/invitations/format";
 import type { TaskRow } from "@/tasks/api";

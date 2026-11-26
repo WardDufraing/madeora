@@ -73,7 +73,6 @@ test("a new adult lands on the personal dashboard with zero Homes, without being
       name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
     }),
   ).toBeVisible();
-  await expect(main.getByText("Welcome to Madeora")).toBeVisible();
   await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
   await expect(main.getByTestId("dashboard-grid")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -134,7 +133,13 @@ test("the display name is saved on the account: after a reload and on another de
   await saveProfile.click();
   await expect(page.getByRole("status").filter({ hasText: "Display name saved." })).toBeVisible();
   await page.goto("/");
-  await expect(page.getByText("Welcome to Madeora")).toBeVisible();
+  // Without a display name the greeting has no name after it.
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)$/,
+    }),
+  ).toBeVisible();
 });
 
 test("the language is saved on the account and wins over each device's language", async ({
