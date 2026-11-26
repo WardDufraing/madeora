@@ -8920,6 +8920,7 @@
     "core": "Altijd in het menu",
     "others": "Modules",
     "resultCount": "{count, plural, one {# module} other {# modules}}",
-    "pinToggle": "{module} vastzetten in snelkoppelingen"
+    "pinToggle": "{module} vastzetten in snelkoppelingen",
+    "shortcut": "Snelkoppeling"
   }
 }

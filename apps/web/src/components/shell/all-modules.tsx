@@ -1,6 +1,5 @@
 "use client";
 
-import { PinIcon } from "@madeora/icons";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useState } from "react";
@@ -85,24 +84,45 @@ export function AllModules({ homeId }: AllModulesProps) {
               const pinned = favorites.isPinned(item.id);
               const name = tNav(item.id);
               return (
-                <li key={item.id} className="flex items-stretch gap-2">
-                  <ModuleLink item={item} href={contextHref(item, homeId)} label={name} />
-                  <button
-                    type="button"
-                    aria-pressed={pinned}
-                    aria-label={t("pinToggle", { module: name })}
-                    onClick={() => {
-                      togglePin(item);
-                    }}
-                    className={cx(
-                      "inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-control border",
-                      pinned
-                        ? "border-accent bg-accent-subtle text-fg shadow-inset"
-                        : "border-line-control bg-surface text-fg-muted shadow-raised hover:bg-accent-subtle",
-                    )}
-                  >
-                    <PinIcon size="md" />
-                  </button>
+                <li
+                  key={item.id}
+                  className="flex flex-col rounded-card border border-line bg-surface shadow-raised"
+                >
+                  <ModuleLink
+                    item={item}
+                    href={contextHref(item, homeId)}
+                    label={name}
+                    className="rounded-t-card"
+                  />
+                  <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2">
+                    <span id={`shortcut-${item.id}`} className="text-helper text-fg-muted">
+                      {t("shortcut")}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={pinned}
+                      aria-label={t("pinToggle", { module: name })}
+                      onClick={() => {
+                        togglePin(item);
+                      }}
+                      className={cx(
+                        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-pill border border-line-control motion-safe:transition-colors",
+                        "forced-colors:border-[ButtonText]",
+                        pinned ? "bg-accent forced-colors:bg-[Highlight]" : "bg-page",
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cx(
+                          "block size-4 rounded-full bg-surface shadow-raised motion-safe:transition-transform forced-colors:bg-[ButtonText]",
+                          pinned
+                            ? "translate-x-6 rtl:-translate-x-6"
+                            : "translate-x-1 rtl:-translate-x-1",
+                        )}
+                      />
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -117,18 +137,28 @@ function ModuleLink({
   item,
   href,
   label,
+  className,
 }: {
   readonly item: NavItem;
   readonly href: string;
   readonly label: string;
+  readonly className?: string;
 }) {
   const Icon = item.icon;
   return (
     <Link
       href={href}
-      className="flex min-h-12 flex-1 items-center gap-3 rounded-card border border-line bg-surface px-4 text-body font-medium text-fg shadow-raised hover:bg-accent-subtle"
+      className={cx(
+        "flex min-h-14 flex-1 items-center gap-3 px-4 text-body font-medium text-fg hover:bg-accent-subtle",
+        className ?? "rounded-card border border-line bg-surface shadow-raised",
+      )}
     >
-      <Icon size="md" className="text-fg-muted" />
+      <span
+        aria-hidden="true"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-subtle text-accent-fg"
+      >
+        <Icon size="md" />
+      </span>
       {label}
     </Link>
   );
