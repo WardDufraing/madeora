@@ -138,10 +138,7 @@ export function DeactivateAccount({
           {blockers.map((blocker) => (
             <li key={blocker.homeId} className="text-body">
               <bdi className="font-semibold">{blocker.homeName}</bdi>{" "}
-              <Link
-                href={`/homes/${blocker.homeId}/members`}
-                className="font-medium text-accent-fg underline"
-              >
+              <Link href={`/homes/${blocker.homeId}/members`} className="link-inline">
                 {t("blockedTransferLink")}
               </Link>
             </li>

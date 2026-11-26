@@ -89,19 +89,19 @@ export async function PointsPage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={rewardsPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={rewardsPath(home.id)} className="link-action">
           {t("rewardsLink")}
         </Link>
         {summary.status === "ok" && summary.value.leaderboardEnabled ? (
           <>
             <span aria-hidden="true">{"\u{00B7}"}</span>
-            <Link href={leaderboardPath(home.id)} className="font-medium text-accent-fg underline">
+            <Link href={leaderboardPath(home.id)} className="link-action">
               {t("leaderboardLink")}
             </Link>
           </>
         ) : null}
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={choresPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={choresPath(home.id)} className="link-action">
           {t("backToChores")}
         </Link>
       </p>
@@ -242,7 +242,7 @@ export async function PointsPage({
                       {row.accountId ? (
                         <Link
                           href={`${base}?account=${row.accountId}`}
-                          className="text-body font-medium text-accent-fg underline"
+                          className="text-body link-action"
                           aria-label={t("openLedgerFor", { person: label })}
                         >
                           {t("openLedger")}
@@ -280,7 +280,7 @@ export async function PointsPage({
               formats={formats}
               nextHref={null}
             />
-            <Link href={base} className="text-body font-medium text-accent-fg underline">
+            <Link href={base} className="text-body link-action">
               {t("closeLedger")}
             </Link>
           </section>

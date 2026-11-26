@@ -73,7 +73,7 @@ export async function WeeklyPointsWidget({
     to: formatTaskDate(week.endsOn, formats),
   });
   const link = (
-    <Link href={pointsPath(homeId)} className="text-helper font-medium text-accent-fg underline">
+    <Link href={pointsPath(homeId)} className="text-helper link-action">
       {t("widgetOpenPoints")}
     </Link>
   );
@@ -175,10 +175,7 @@ export async function LeaderboardWidget({
         limit={count}
         testId="leaderboard-widget-rows"
       />
-      <Link
-        href={leaderboardPath(homeId)}
-        className="text-helper font-medium text-accent-fg underline"
-      >
+      <Link href={leaderboardPath(homeId)} className="text-helper link-action">
         {t("widgetOpenLeaderboard")}
       </Link>
     </div>
@@ -227,7 +224,7 @@ export async function MyPointsWidget({ homeId }: { readonly homeId: string }) {
           </ul>
         </>
       ) : null}
-      <Link href={rewardsPath(homeId)} className="text-helper font-medium text-accent-fg underline">
+      <Link href={rewardsPath(homeId)} className="text-helper link-action">
         {t("widgetOpenRewards")}
       </Link>
     </div>

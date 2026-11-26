@@ -139,7 +139,7 @@ export function MealWidgetBody({
                     editable && slot.enabled ? (
                       <button
                         type="button"
-                        className="self-start text-helper font-medium text-accent-fg underline"
+                        className="self-start text-helper link-action"
                         aria-label={t("addMealTo", {
                           slot: texts.slotName(slot),
                           date: formatMealDate(plan.from, locale),
@@ -160,10 +160,7 @@ export function MealWidgetBody({
           </ul>
         </>
       )}
-      <Link
-        href={`${mealsPath(homeId)}?date=${plan.from}`}
-        className="text-body font-medium text-accent-fg underline"
-      >
+      <Link href={`${mealsPath(homeId)}?date=${plan.from}`} className="text-body link-action">
         {t("openPlanner")}
       </Link>
       {target ? (

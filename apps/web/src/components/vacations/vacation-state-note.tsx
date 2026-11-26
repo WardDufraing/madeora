@@ -61,7 +61,7 @@ export async function VacationStateNote({
         <p key={line}>{line}</p>
       ))}
       <p>
-        <Link href={vacationsPath(homeId)} className="font-medium text-accent-fg underline">
+        <Link href={vacationsPath(homeId)} className="link-action">
           {t("openVacations")}
         </Link>
       </p>

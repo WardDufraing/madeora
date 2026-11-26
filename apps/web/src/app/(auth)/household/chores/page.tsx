@@ -56,7 +56,7 @@ export default async function HouseholdChoresPage() {
         />
       )}
       <p className="mt-6 text-body">
-        <Link href="/household" className="font-medium text-accent-fg underline">
+        <Link href="/household" className="link-action">
           {t("pinSignInLink")}
         </Link>
       </p>

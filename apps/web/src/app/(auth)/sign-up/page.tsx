@@ -33,7 +33,7 @@ export default async function SignUpPage() {
       ) : null}
       <p className="mt-6 text-body text-fg-muted">
         {t("haveAccount")}{" "}
-        <Link href="/sign-in" className="font-medium text-accent-fg underline">
+        <Link href="/sign-in" className="link-inline">
           {t("signInLink")}
         </Link>
       </p>

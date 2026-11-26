@@ -37,7 +37,7 @@ export async function RecoveryNotice({
   ) : null;
   if (status.status !== "ok" || status.cases.length === 0) return confirmation;
   const recoveryLink = (
-    <Link href={`/homes/${homeId}/recovery`} className="font-medium text-accent-fg underline">
+    <Link href={`/homes/${homeId}/recovery`} className="link-action">
       {t("openRecoveryPage")}
     </Link>
   );

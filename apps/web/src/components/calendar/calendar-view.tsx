@@ -267,7 +267,7 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
           <p className="text-helper text-fg-muted">
             <Link
               href={calendarHref(homeId, window.view, window.anchor, !hideWork)}
-              className="font-medium text-accent-fg underline"
+              className="link-action"
               data-testid="calendar-toggle-work"
             >
               {hideWork ? t("showWork") : t("hideWork")}
@@ -277,7 +277,7 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
         <GoogleWarnings warnings={value.googleWarnings} names={names} formats={formats} />
         {homeId === null ? (
           <p className="text-helper text-fg-muted">
-            <Link href={googleSettingsPath} className="font-medium text-accent-fg underline">
+            <Link href={googleSettingsPath} className="link-action">
               {t("googleSettingsLink")}
             </Link>
           </p>
@@ -306,7 +306,7 @@ export async function CalendarView({ home, searchParams }: CalendarViewProps) {
         {tasks?.status === "ok" && tasks.value.undated > 0 ? (
           <p className="text-body text-fg-muted" data-testid="calendar-undated-tasks">
             {t("undatedTasks", { count: tasks.value.undated })}{" "}
-            <Link href={undatedHref} className="font-medium text-accent-fg underline">
+            <Link href={undatedHref} className="link-inline">
               {t("undatedTasksLink")}
             </Link>
           </p>

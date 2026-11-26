@@ -61,13 +61,10 @@ export function CopyToHome({ itemType, itemId, files, homes, backHref }: CopyToH
           ))}
         </ul>
         <p className="flex flex-wrap gap-x-4 gap-y-2">
-          <Link
-            href="/settings/privacy/copies"
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href="/settings/privacy/copies" className="text-body link-action">
             {t("myRequestsLink")}
           </Link>
-          <Link href={backHref} className="text-body font-medium text-accent-fg underline">
+          <Link href={backHref} className="text-body link-action">
             {t("backToItem")}
           </Link>
         </p>

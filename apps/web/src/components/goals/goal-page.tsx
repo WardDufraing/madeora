@@ -57,7 +57,7 @@ export async function GoalPage({ homeId, goalId }: GoalPageProps) {
   return (
     <>
       <p className="mb-2">
-        <Link href={goalsPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={goalsPath(homeId)} className="text-body link-action">
           {t("backToGoals")}
         </Link>
       </p>

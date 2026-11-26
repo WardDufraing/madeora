@@ -60,7 +60,7 @@ export function StartAccountRecovery() {
         <FormAlert tone="success" announce>
           {t("startSent")}
         </FormAlert>
-        <Link href="/sign-in" className="text-body font-medium text-accent-fg underline">
+        <Link href="/sign-in" className="text-body link-action">
           {t("backToSignIn")}
         </Link>
       </div>
@@ -231,7 +231,7 @@ export function FinishAccountRecovery({ token }: FinishAccountRecoveryProps) {
         <FormAlert tone="success" announce>
           {t("finishCompleted")}
         </FormAlert>
-        <Link href="/forgot-password" className="text-body font-medium text-accent-fg underline">
+        <Link href="/forgot-password" className="text-body link-action">
           {t("setNewPassword")}
         </Link>
       </div>
@@ -264,7 +264,7 @@ function LinkInvalid({ message }: { readonly message: string }) {
       <FormAlert tone="error" announce>
         {message}
       </FormAlert>
-      <Link href="/account-recovery" className="text-body font-medium text-accent-fg underline">
+      <Link href="/account-recovery" className="text-body link-action">
         {t("startAgain")}
       </Link>
     </div>

@@ -24,7 +24,7 @@ export function RecipeSource({ source }: { readonly source: Source }) {
         href={source.url}
         target="_blank"
         rel="noopener noreferrer nofollow"
-        className="font-medium text-accent-fg underline"
+        className="link-inline"
       >
         <bdi>{label}</bdi>
         <span className="sr-only"> {t("opensInNewTab")}</span>

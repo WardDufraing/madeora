@@ -121,10 +121,7 @@ export function GoalDetailView({
               period: texts.period(goal.period.start, goal.period.end),
               frequency: texts.frequency(goal.period.frequency),
             })}{" "}
-            <Link
-              href={goalSeriesPath(goal.homeId, goal.period.seriesId)}
-              className="text-accent-fg underline"
-            >
+            <Link href={goalSeriesPath(goal.homeId, goal.period.seriesId)} className="link-inline">
               <bdi>{goal.period.seriesTitle}</bdi>
             </Link>
           </p>
@@ -137,10 +134,7 @@ export function GoalDetailView({
         {goal.renewedFrom ? (
           <p className="text-helper text-fg-muted">
             {t("renewedFrom")}{" "}
-            <Link
-              href={goalsPath(goal.homeId, goal.renewedFrom.id)}
-              className="text-accent-fg underline"
-            >
+            <Link href={goalsPath(goal.homeId, goal.renewedFrom.id)} className="link-inline">
               <bdi>{goal.renewedFrom.title}</bdi>
             </Link>
           </p>

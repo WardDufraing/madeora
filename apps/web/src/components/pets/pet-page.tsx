@@ -50,7 +50,7 @@ export async function PetPage({
   return (
     <>
       <p className="mb-2">
-        <Link href={petsPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={petsPath(homeId)} className="text-body link-action">
           {t("backToPets")}
         </Link>
       </p>

@@ -19,11 +19,11 @@ describe("device preferences", () => {
     }
   });
 
-  it("accepts only known sidebar states and otherwise expands", () => {
+  it("accepts only known sidebar states and otherwise uses the slim rail", () => {
     expect(parseSidebar("collapsed")).toBe("collapsed");
     expect(parseSidebar("expanded")).toBe("expanded");
     for (const junk of [undefined, "", "closed", "COLLAPSED"]) {
-      expect(parseSidebar(junk)).toBe("expanded");
+      expect(parseSidebar(junk)).toBe("collapsed");
     }
   });
 

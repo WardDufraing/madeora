@@ -87,7 +87,7 @@ export default async function AddChildPage({ params }: AddChildPageProps) {
     <>
       <PageHeader title={t("addTitle")} />
       <p className="mb-6 text-body text-fg-muted">
-        <Link href={`/homes/${home.id}/members`} className="font-medium text-accent-fg underline">
+        <Link href={`/homes/${home.id}/members`} className="link-action">
           {t("backToMembers")}
         </Link>
       </p>

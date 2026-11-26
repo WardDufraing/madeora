@@ -126,7 +126,7 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
     return (
       <div className="flex flex-col gap-4">
         <FormAlert tone="error">{t("resetMissingToken")}</FormAlert>
-        <Link href="/forgot-password" className="text-body font-medium text-accent-fg underline">
+        <Link href="/forgot-password" className="text-body link-action">
           {t("requestNewLink")}
         </Link>
       </div>
@@ -170,7 +170,7 @@ export function ResetPasswordForm({ tokenHash }: ResetPasswordFormProps) {
           {failure === "linkInvalid" ? (
             <>
               {" "}
-              <Link href="/forgot-password" className="font-medium text-accent-fg underline">
+              <Link href="/forgot-password" className="link-inline">
                 {t("requestNewLink")}
               </Link>
             </>

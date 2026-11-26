@@ -60,10 +60,7 @@ export async function MealsPage({ home, kind, searchParams }: MealsPageProps) {
   const back =
     kind === "planner" ? null : (
       <p className="mb-2 print:hidden">
-        <Link
-          href={`${mealsPath(homeId)}?date=${from}`}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={`${mealsPath(homeId)}?date=${from}`} className="text-body link-action">
           {t("backToPlanner")}
         </Link>
       </p>

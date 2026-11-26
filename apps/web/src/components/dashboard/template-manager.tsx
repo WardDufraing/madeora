@@ -174,7 +174,7 @@ export function TemplateManager({
           {notice.kind === "deleted" ? (
             <>
               {t("deletedNotice", { name: isolate(notice.name) })}{" "}
-              <Link href="/settings/trash" className="font-medium text-accent-fg underline">
+              <Link href="/settings/trash" className="link-inline">
                 {t("openTrash")}
               </Link>
             </>

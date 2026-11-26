@@ -52,7 +52,7 @@ export function ConfirmEmailChange({ tokenHash }: ConfirmEmailChangeProps) {
         <FormAlert tone="success" announce>
           {t("emailConfirmed")}
         </FormAlert>
-        <Link href="/settings/security" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/security" className="text-body link-action">
           {t("backToSecurity")}
         </Link>
       </div>

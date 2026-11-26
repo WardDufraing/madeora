@@ -47,7 +47,7 @@ export default async function SecurityNotificationsPage() {
       <PageHeader title={t("alertsTitle")} />
       <p className="mb-2 max-w-2xl text-body text-fg-muted">{t("alertsHint")}</p>
       <p className="mb-4">
-        <Link href="/settings/security" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/security" className="text-body link-action">
           {t("alertsBack")}
         </Link>
       </p>

@@ -38,7 +38,7 @@ export default async function PersonalChoresPage() {
               <li key={home.id} className="p-3">
                 <Link
                   href={choresPath(home.id)}
-                  className="text-body font-semibold text-accent-fg underline"
+                  className="text-body link-action"
                   data-testid="personal-chores-home"
                 >
                   {t("homeChoresLink", { home: home.name })}

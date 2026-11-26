@@ -83,7 +83,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
       <p className="mb-6 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi> {"\u{00B7}"}{" "}
         <RoleLabel role={membership.role} /> {"\u{00B7}"}{" "}
-        <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
+        <Link href={`/homes/${home.id}`} className="link-inline">
           {t("backToHome")}
         </Link>
       </p>
@@ -148,7 +148,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           <p className="mb-3 text-body text-fg-muted">{tDisplays("settingsCardText")}</p>
           <Link
             href={`/homes/${home.id}/displays`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="home-displays-link"
           >
             {tDisplays("settingsLink")}
@@ -160,7 +160,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
         <Card title={tTrash("settingsCardTitle")} className="mt-6 max-w-2xl">
           <Link
             href={`/homes/${home.id}/trash`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="home-trash-link"
           >
             {tTrash("homeSettingsLink")}
@@ -172,7 +172,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
         <Card title={tStorage("settingsCardTitle")} className="mt-6 max-w-2xl">
           <Link
             href={`/homes/${home.id}/storage`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="home-storage-link"
           >
             {tStorage("homeSettingsLink")}
@@ -185,7 +185,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
         <Card title={tPrivacy("homeExportTitle")} className="mt-6 max-w-2xl">
           <Link
             href={`/homes/${home.id}/export`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="home-export-link"
           >
             {tPrivacy("homeExportLink")}
@@ -197,7 +197,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
       <Card title={tCopies("requestsTitle")} className="mt-6 max-w-2xl">
         <Link
           href={`/homes/${home.id}/copy-requests`}
-          className="text-body font-medium text-accent-fg underline"
+          className="text-body link-action"
           data-testid="home-copy-requests-link"
         >
           {tCopies("homeSettingsLink")}
@@ -209,7 +209,7 @@ export default async function HomeSettingsPage({ params }: HomeSettingsPageProps
           <p className="mb-3 text-body text-fg-muted">{tDeletion("closeCardText")}</p>
           <Link
             href={`/homes/${home.id}/close`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="home-close-link"
           >
             {tDeletion("closeCardLink")}

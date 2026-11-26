@@ -92,7 +92,7 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
       <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={choresPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={choresPath(home.id)} className="link-action">
           {t("backToChores")}
         </Link>
       </p>
@@ -174,10 +174,7 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
               {t("calendarApplyFilters")}
             </Button>
             {filtered ? (
-              <Link
-                href={clear ? `${base}?${clear}` : base}
-                className="text-body font-medium text-accent-fg underline"
-              >
+              <Link href={clear ? `${base}?${clear}` : base} className="text-body link-action">
                 {t("calendarClearFilters")}
               </Link>
             ) : null}

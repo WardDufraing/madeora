@@ -13,6 +13,7 @@
     "test:boundary": "node scripts/check-server-env-boundary.ts"
   },
   "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "5.3.0",
     "@hookform/resolvers": "5.9.1",
     "@madeora/config": "workspace:*",
     "@madeora/database": "workspace:*",

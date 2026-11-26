@@ -30,7 +30,7 @@ export default async function MyHomeCopiesPage() {
     <>
       <PageHeader title={t("mineTitle")} />
       <p className="mb-4">
-        <Link href="/settings/privacy" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/privacy" className="text-body link-action">
           {t("backToPrivacy")}
         </Link>
       </p>

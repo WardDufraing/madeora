@@ -37,7 +37,7 @@ export async function RecoveredHomesNotice({ now }: { readonly now: Date }) {
         ))}
       </ul>
       <p className="mt-1">
-        <Link href="/settings/recoveries" className="font-medium text-accent-fg underline">
+        <Link href="/settings/recoveries" className="link-action">
           {t("recoveredLink")}
         </Link>
       </p>

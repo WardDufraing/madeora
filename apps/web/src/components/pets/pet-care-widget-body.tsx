@@ -56,12 +56,12 @@ export function PetCareWidgetBody({
                 <p className="text-body text-fg">
                   <Link
                     href={careActivityPath(homeId, row.petId, row.activityId)}
-                    className="font-semibold text-accent-fg underline"
+                    className="link-action"
                   >
                     {title}
                   </Link>
                   {" · "}
-                  <Link href={petPath(homeId, row.petId)} className="text-accent-fg underline">
+                  <Link href={petPath(homeId, row.petId)} className="link-action">
                     {row.petName}
                   </Link>
                 </p>
@@ -80,7 +80,7 @@ export function PetCareWidgetBody({
         })}
       </ul>
       {care.hasMore ? (
-        <Link href={petsPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={petsPath(homeId)} className="text-body link-action">
           {t("widgetCareMore")}
         </Link>
       ) : null}

@@ -26,10 +26,7 @@ export async function ShoppingWidget({
     return (
       <div className="flex flex-col gap-2" data-testid="shopping-widget">
         <p className="text-body text-fg-muted">{t("chooseLists")}</p>
-        <Link
-          href={shoppingPath(homeId)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={shoppingPath(homeId)} className="text-body link-action">
           {t("openLists")}
         </Link>
       </div>

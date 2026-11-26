@@ -48,7 +48,7 @@ export default async function DashboardTemplatesPage() {
     <>
       <PageHeader title={t("title")} />
       <p className="mb-4">
-        <Link href="/settings" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings" className="text-body link-action">
           {t("backToSettings")}
         </Link>
       </p>

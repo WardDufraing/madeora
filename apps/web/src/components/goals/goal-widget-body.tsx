@@ -137,7 +137,7 @@ export function GoalsWidgetBody({
           </li>
         ))}
       </ul>
-      <Link href={goalsPath(homeId)} className="text-helper text-accent-fg underline">
+      <Link href={goalsPath(homeId)} className="text-helper link-action">
         {t("widgetAll")}
       </Link>
     </div>

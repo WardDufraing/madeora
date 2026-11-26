@@ -264,13 +264,13 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
         {canManage ? (
           <>
             <span aria-hidden="true">{"\u{00B7}"}</span>
-            <Link href={`${base}/manage`} className="font-medium text-accent-fg underline">
+            <Link href={`${base}/manage`} className="link-action">
               {t("manageLink")}
             </Link>
           </>
         ) : null}
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={`${base}/templates`} className="font-medium text-accent-fg underline">
+        <Link href={`${base}/templates`} className="link-action">
           {tTemplates("libraryLink")}
         </Link>
       </p>
@@ -278,10 +278,7 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
       {notice === "deleted" ? (
         <TaskNotice>
           {t("deletedNotice")}{" "}
-          <Link
-            href={home ? `/homes/${home.id}/trash` : "/settings/trash"}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={home ? `/homes/${home.id}/trash` : "/settings/trash"} className="link-inline">
             {t("openTrash")}
           </Link>
         </TaskNotice>

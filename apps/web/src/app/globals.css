@@ -3,11 +3,26 @@
    Tailwind theme that exposes only those tokens (Tailwind's own colour palette is removed). */
 @import "@madeora/design-tokens/tokens.css";
 @import "@madeora/design-tokens/tailwind.css";
+@import "@fontsource-variable/plus-jakarta-sans/wght.css";
 @import "../components/ora/ora-character.css";
 
 @layer base {
   html {
     font-family: var(--md-font-sans);
+  }
+
+  /* Headings are set tight and bold: the hierarchy comes from size and weight, not from lines. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+  }
+
+  /* Negative tracking breaks the joined letters of cursive scripts. */
+  :lang(ar) :is(h1, h2, h3),
+  :lang(fa) :is(h1, h2, h3),
+  :lang(he) :is(h1, h2, h3) {
+    letter-spacing: normal;
   }
 
   body {
@@ -157,5 +172,43 @@
   [data-print-view] bdi,
   [data-print-view] li {
     overflow-wrap: anywhere;
+  }
+}
+
+/* Links and link-like actions (UI makeover). A link inside a sentence stays quiet text with a
+   thin underline; a standalone link or text button becomes a soft pill, so it reads as something
+   to press. Both draw only from accent tokens (accent-fg on accent-subtle is contrast-checked). */
+@utility link-inline {
+  color: var(--color-accent-fg);
+  font-weight: 600;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+@utility link-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding-inline: 1rem;
+  white-space: nowrap;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent-fg);
+  font-weight: 600;
+  text-decoration-line: none;
+  transition-property: color, background-color, transform;
+  transition-duration: var(--md-duration-fast);
+  transition-timing-function: var(--md-ease-standard);
+  &:hover {
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  &:active {
+    transform: scale(var(--md-motion-press-scale));
   }
 }

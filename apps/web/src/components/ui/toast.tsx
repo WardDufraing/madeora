@@ -320,7 +320,7 @@ function Toast({ toast, dismissLabel, toneLabel, onDismiss }: ToastProps) {
               toast.action?.onAction();
               onDismiss(toast.id);
             }}
-            className="mt-1 self-start rounded-control text-body font-medium text-accent-fg underline-offset-4 hover:underline"
+            className="mt-1 self-start rounded-control text-body underline-offset-4 hover:underline link-action"
           >
             {toast.action.label}
           </button>

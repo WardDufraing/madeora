@@ -52,10 +52,7 @@ export function DeleteAccount({
           {blockers.map((blocker) => (
             <li key={blocker.homeId} className="text-body">
               <bdi className="font-semibold">{blocker.homeName}</bdi>{" "}
-              <Link
-                href={`/homes/${blocker.homeId}/leave`}
-                className="font-medium text-accent-fg underline"
-              >
+              <Link href={`/homes/${blocker.homeId}/leave`} className="link-inline">
                 {t("accountBlockedLink")}
               </Link>
             </li>

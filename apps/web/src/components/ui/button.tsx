@@ -25,16 +25,17 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 // Solid fills only (no gradient treatments). Every accent colour comes from tokens. Secondary is
 // raised and ghost is flat; both keep a visible label and focus ring, depth is not the signal.
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-pressed",
+  primary:
+    "bg-accent text-on-accent shadow-selected hover:bg-accent-hover active:bg-accent-pressed",
   secondary:
-    "border border-line-control bg-surface text-fg shadow-raised hover:bg-accent-subtle active:bg-accent-subtle active:shadow-inset",
+    "border border-line-control bg-surface text-fg shadow-selected hover:bg-accent-subtle active:bg-accent-subtle active:shadow-inset",
   ghost: "text-fg hover:bg-accent-subtle active:bg-accent-subtle",
   destructive: "bg-danger-solid text-on-danger hover:brightness-95 active:brightness-90",
 };
 
 const sizes: Record<ButtonSize, string> = {
-  md: "min-h-10 px-4 text-body gap-2",
-  sm: "min-h-8 px-3 text-helper gap-1.5",
+  md: "min-h-11 px-5 text-body gap-2",
+  sm: "min-h-9 px-4 text-helper gap-1.5",
 };
 
 export function Button({
@@ -71,7 +72,7 @@ export function Button({
       aria-busy={loading || undefined}
       onClick={handleClick}
       className={cx(
-        "inline-flex items-center justify-center rounded-control font-medium",
+        "inline-flex items-center justify-center rounded-pill font-semibold whitespace-nowrap",
         "press-feedback",
         sizes[size],
         variants[variant],

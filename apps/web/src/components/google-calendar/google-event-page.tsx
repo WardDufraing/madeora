@@ -84,10 +84,7 @@ export async function GoogleEventPage({
     <>
       <PageHeader title={event.title || t("untitledGoogle")} />
       <p className="mb-4">
-        <Link
-          href={calendarPath(homeId)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={calendarPath(homeId)} className="text-body link-action">
           {t("backToCalendar")}
         </Link>
       </p>
@@ -105,7 +102,7 @@ export async function GoogleEventPage({
             {event.kind === "personal" ? (
               <>
                 {" "}
-                <Link href={settingsPath} className="font-medium text-accent-fg underline">
+                <Link href={settingsPath} className="link-inline">
                   {tg("openSettings")}
                 </Link>
               </>
@@ -167,7 +164,7 @@ export async function GoogleEventPage({
               href={event.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 inline-flex min-h-10 items-center text-body font-medium text-accent-fg underline"
+              className="mt-3 inline-flex min-h-10 items-center text-body link-action"
             >
               {tg("openInGoogle")}
               <span className="sr-only"> {tg("newTab")}</span>

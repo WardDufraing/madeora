@@ -71,7 +71,7 @@ export default async function HomeTrashPage({ params, searchParams }: HomeTrashP
       <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={`/homes/${home.id}/settings`} className="font-medium text-accent-fg underline">
+        <Link href={`/homes/${home.id}/settings`} className="link-action">
           {tHomes("settingsTitle")}
         </Link>
       </p>

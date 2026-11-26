@@ -71,7 +71,7 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
   return (
     <>
       <RememberContext userId={userId} context={{ kind: "home", homeId: home.id }} />
-      <PageHeader title={isolatedName(home.name)} />
+      <PageHeader centered title={isolatedName(home.name)} />
       <OwnershipTransferNotice homeId={home.id} homeName={home.name} done={transferDone} />
       <RecoveryNotice
         homeId={home.id}
@@ -84,26 +84,20 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
         </p>
         <Link
           href={`/homes/${home.id}/members`}
-          className="text-body font-medium text-accent-fg underline"
+          className="text-body link-action"
           data-testid="members-link"
         >
           {tMembers("directoryLink")}
         </Link>
-        <Link
-          href={`/homes/${home.id}/profile`}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={`/homes/${home.id}/profile`} className="text-body link-action">
           {tMembers("profileLink")}
         </Link>
-        <Link
-          href={`/homes/${home.id}/settings`}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={`/homes/${home.id}/settings`} className="text-body link-action">
           {t("settingsLink")}
         </Link>
         <Link
           href={`/homes/${home.id}/vacations`}
-          className="text-body font-medium text-accent-fg underline"
+          className="text-body link-action"
           data-testid="vacations-link"
         >
           {t("vacationsLink")}
@@ -111,7 +105,7 @@ export default async function HomeDashboardPage({ params, searchParams }: HomePa
         {canInvite ? (
           <Link
             href={`/homes/${home.id}/invitations`}
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="invite-people-link"
           >
             {pendingRequests > 0

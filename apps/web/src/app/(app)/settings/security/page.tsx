@@ -92,27 +92,24 @@ export default async function SecurityPage({ searchParams }: SecurityPageProps) 
     <>
       <PageHeader title={t("title")} />
       <p className="mb-4">
-        <Link href="/settings" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings" className="text-body link-action">
           {tSettings("notificationsBack")}
         </Link>
       </p>
       <p className="mb-4 flex flex-wrap gap-4">
         <Link
           href="/settings/security/activity"
-          className="text-body font-medium text-accent-fg underline"
+          className="text-body link-action"
           data-testid="security-activity-link"
         >
           {tActivity("securityLink")}
         </Link>
-        <Link
-          href="/settings/security/notifications"
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href="/settings/security/notifications" className="text-body link-action">
           {tActivity("alertsLink")}
         </Link>
         <Link
           href="/settings/security/deactivate"
-          className="text-body font-medium text-accent-fg underline"
+          className="text-body link-action"
           data-testid="deactivate-link"
         >
           {tLifecycle("deactivateLink")}

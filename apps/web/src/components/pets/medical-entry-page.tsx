@@ -37,10 +37,7 @@ export async function MedicalEntryPage({
   return (
     <>
       <p className="mb-2">
-        <Link
-          href={petPath(homeId, petId)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={petPath(homeId, petId)} className="text-body link-action">
           {t("backToPet", { name: entry.value.petName })}
         </Link>
       </p>

@@ -36,11 +36,11 @@ export async function AbsencesPage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={choresPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={choresPath(home.id)} className="link-action">
           {t("backToChores")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={vacationsPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={vacationsPath(home.id)} className="link-action">
           {t("vacationsLink")}
         </Link>
       </p>
@@ -141,7 +141,7 @@ export async function AbsenceReviewPage({
     <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
       <bdi className="font-semibold text-fg">{home.name}</bdi>
       <span aria-hidden="true">{"\u{00B7}"}</span>
-      <Link href={absencesPath(home.id)} className="font-medium text-accent-fg underline">
+      <Link href={absencesPath(home.id)} className="link-action">
         {t("backToAbsences")}
       </Link>
     </p>

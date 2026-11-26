@@ -128,7 +128,7 @@ export function AccountChooser({ activeUserId }: AccountChooserProps) {
             </Button>
           </form>
         ) : (
-          <Link href="/sign-in" className="font-medium text-accent-fg underline">
+          <Link href="/sign-in" className="link-action">
             {t("add")}
           </Link>
         )}

@@ -82,7 +82,7 @@ export function PetCareSection({
                   <div className="flex min-w-0 flex-col gap-1">
                     <Link
                       href={careActivityPath(pet.homeId, pet.id, activity.id)}
-                      className="text-body font-semibold text-accent-fg underline"
+                      className="text-body link-action"
                       data-testid="care-link"
                     >
                       {title}

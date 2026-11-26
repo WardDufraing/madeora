@@ -109,10 +109,7 @@ export async function EventPage({
     <>
       <PageHeader title={shown.title} />
       <p className="mb-4">
-        <Link
-          href={calendarPath(homeId)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={calendarPath(homeId)} className="text-body link-action">
           {t("backToCalendar")}
         </Link>
       </p>

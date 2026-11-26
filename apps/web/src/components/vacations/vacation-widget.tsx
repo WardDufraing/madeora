@@ -24,7 +24,7 @@ export async function HomeVacationWidget({
   }
   const { vacation, pausedToday, others } = data.value;
   const link = (
-    <Link href={vacationsPath(homeId)} className="text-helper font-medium text-accent-fg underline">
+    <Link href={vacationsPath(homeId)} className="text-helper link-action">
       {t("widgetOpen")}
     </Link>
   );

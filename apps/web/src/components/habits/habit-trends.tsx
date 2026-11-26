@@ -313,7 +313,7 @@ export function HabitTrends({ habits, homeId, today, weekStart }: HabitTrendsPro
                 </div>
                 <Link
                   href={habitsPath(homeId, habit.id)}
-                  className="text-body font-medium text-accent-fg underline"
+                  className="text-body link-action"
                   aria-label={t("trendsOpenHabit", { habit: habit.name })}
                 >
                   {t("trendsOpen")}

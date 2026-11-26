@@ -48,15 +48,15 @@ export function AppShell({
       <div className="flex min-h-dvh">
         <Sidebar initialState={sidebar} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="relative flex h-16 items-center gap-3 px-4 md:px-8">
+          <header className="relative flex h-20 items-center gap-3 px-4 md:px-8">
             {/* Personal or one Home (S09); the spec requires a clearly identified Personal
                 context even with zero Homes. */}
             <ContextSwitcher homes={homes} />
-            <div className="ms-auto flex items-center gap-2">
+            <div className="ms-auto flex items-center gap-1 rounded-pill border border-line bg-surface p-1 shadow-selected">
               <NotificationBell unread={unreadNotifications} />
               <Link
                 href="/accounts"
-                className="rounded-control px-3 py-1.5 text-helper font-medium text-fg hover:bg-accent-subtle"
+                className="rounded-pill px-4 py-2 text-helper font-semibold text-fg hover:bg-accent-subtle"
                 data-testid="switch-account-link"
               >
                 {tAccounts("switchAccount")}

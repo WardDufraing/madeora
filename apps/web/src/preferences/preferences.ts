@@ -30,9 +30,9 @@ export function parseTheme(value: unknown): ThemePreference {
   return oneOf(themePreferences, value, "system");
 }
 
-/** A saved sidebar state, or "expanded" when missing or invalid. */
+/** A saved sidebar state, or "collapsed" (the slim icon rail) when missing or invalid. */
 export function parseSidebar(value: unknown): SidebarState {
-  return oneOf(sidebarStates, value, "expanded");
+  return oneOf(sidebarStates, value, "collapsed");
 }
 
 /** The `data-theme` value for `<html>`: none for "system", so CSS follows the device setting. */

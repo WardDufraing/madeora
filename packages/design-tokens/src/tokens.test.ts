@@ -102,19 +102,19 @@ describe("generated CSS", () => {
 
   it("keeps primary and muted text readable on both canvas stops", () => {
     for (const theme of themes) {
-      for (const stop of [canvas[theme].from, canvas[theme].to]) {
+      for (const stop of [canvas[theme].from, canvas[theme].to, canvas[theme].glow]) {
         expect(contrastRatio(neutral[theme].fg, stop)).toBeGreaterThanOrEqual(CONTRAST.text);
         expect(contrastRatio(neutral[theme].fgMuted, stop)).toBeGreaterThanOrEqual(CONTRAST.text);
       }
     }
   });
 
-  it("uses the moderately rounded radii of redesign decision 16", () => {
+  it("uses the generous radii of the UI makeover (supersedes redesign decision 16)", () => {
     const px = (rem: string) => Number.parseFloat(rem) * 16;
-    expect(px(radius.card)).toBeGreaterThanOrEqual(12);
-    expect(px(radius.card)).toBeLessThanOrEqual(16);
-    expect(px(radius.control)).toBeGreaterThanOrEqual(6);
-    expect(px(radius.control)).toBeLessThanOrEqual(10);
+    expect(px(radius.card)).toBeGreaterThanOrEqual(18);
+    expect(px(radius.card)).toBeLessThanOrEqual(24);
+    expect(px(radius.control)).toBeGreaterThanOrEqual(10);
+    expect(px(radius.control)).toBeLessThanOrEqual(14);
     expect(px(radius.overlay)).toBeGreaterThan(px(radius.card));
   });
 
@@ -138,7 +138,7 @@ describe("generated CSS", () => {
   it("shrinks the roomy spacing tokens on narrow viewports only", () => {
     const css = renderTokensCss();
     const narrow = css.slice(css.indexOf("@media (max-width: 40rem)"));
-    expect(narrow).toContain("--md-space-grid-gap: 0.75rem;");
+    expect(narrow).toContain("--md-space-grid-gap: 1rem;");
     expect(css).toContain(`--md-space-grid-gap: ${space["grid-gap"]};`);
   });
 

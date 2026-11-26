@@ -88,7 +88,7 @@ export async function PointLedgerList({
         ))}
       </ol>
       {nextHref ? (
-        <Link href={nextHref} className="text-body font-medium text-accent-fg underline">
+        <Link href={nextHref} className="text-body link-action">
           {t("ledgerOlder")}
         </Link>
       ) : null}

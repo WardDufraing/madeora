@@ -72,10 +72,7 @@ export default async function HomeExportPage({ params, searchParams }: HomeExpor
         {t("homeExportIntro", { home: home.name })}
       </p>
       <p className="mb-4">
-        <Link
-          href={`/homes/${home.id}/settings`}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={`/homes/${home.id}/settings`} className="text-body link-action">
           {t("backToHomeSettings")}
         </Link>
       </p>

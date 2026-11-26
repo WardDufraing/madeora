@@ -89,9 +89,13 @@ export function themeVariables(theme: Theme): [string, string][] {
   for (const role of elevationRoles) vars.push([`--md-shadow-${role}`, elevation[theme][role]]);
   vars.push(["--md-canvas-from", canvas[theme].from]);
   vars.push(["--md-canvas-to", canvas[theme].to]);
+  vars.push(["--md-canvas-glow", canvas[theme].glow]);
   // Declared in every theme block, because custom properties resolve where they are declared:
   // an element that forces a theme gets a background built from its own values.
-  vars.push(["--md-canvas", "linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to))"]);
+  vars.push([
+    "--md-canvas",
+    "radial-gradient(70rem 36rem at 12% -8%, var(--md-canvas-glow), transparent 70%), linear-gradient(180deg, var(--md-canvas-from), var(--md-canvas-to))",
+  ]);
   return vars;
 }
 

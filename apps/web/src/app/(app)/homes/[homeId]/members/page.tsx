@@ -90,13 +90,13 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <RoleLabel role={membership.role} />
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
+        <Link href={`/homes/${home.id}`} className="link-action">
           {tHomes("backToHome")}
         </Link>
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
           href={`/homes/${home.id}/children/new`}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="add-child-link"
         >
           {t("addChildLink")}
@@ -104,7 +104,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <Link
           href={`/homes/${home.id}/children/link`}
-          className="font-medium text-accent-fg underline"
+          className="link-action"
           data-testid="link-child-link"
         >
           {t("linkChildLink")}
@@ -112,10 +112,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         {permissions["home.invitations.manage"] ? (
           <>
             <span aria-hidden="true">{"\u{00B7}"}</span>
-            <Link
-              href={`/homes/${home.id}/invitations`}
-              className="font-medium text-accent-fg underline"
-            >
+            <Link href={`/homes/${home.id}/invitations`} className="link-action">
               {t("invitationsLink")}
             </Link>
           </>
@@ -184,10 +181,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       {permissions["home.recovery.request"] ? (
         <p className="mt-6 text-body text-fg-muted" data-testid="recovery-link">
           {tRecovery("cannotReachOwner")}{" "}
-          <Link
-            href={`/homes/${home.id}/recovery`}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={`/homes/${home.id}/recovery`} className="link-inline">
             {tRecovery("cannotReachOwnerLink")}
           </Link>
         </p>

@@ -414,7 +414,7 @@ function AttachmentRow({
             href={content}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline"
+            className="inline-flex min-h-10 items-center px-2 text-body link-action"
             aria-label={t("openNamed", { name: attachment.name })}
           >
             {t("open")}
@@ -422,7 +422,7 @@ function AttachmentRow({
         ) : null}
         <a
           href={`${content}?download=1`}
-          className="inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline"
+          className="inline-flex min-h-10 items-center px-2 text-body link-action"
           aria-label={t("downloadNamed", { name: attachment.name })}
         >
           {t("download")}

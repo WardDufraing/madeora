@@ -61,7 +61,7 @@ export default async function StaffCasePage({ params }: StaffCasePageProps) {
   if (read.status === "not-staff") notFound();
   const back = (
     <p className="mb-6 text-body">
-      <Link href="/staff/ownership-recoveries" className="font-medium text-accent-fg underline">
+      <Link href="/staff/ownership-recoveries" className="link-action">
         {t("staffBackToQueue")}
       </Link>
     </p>

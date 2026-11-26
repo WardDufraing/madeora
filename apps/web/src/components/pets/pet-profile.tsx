@@ -142,7 +142,7 @@ export function PetProfileView({ pet }: { readonly pet: PetDetail }) {
           <PetValue label={t("fieldVetClinic")}>{show(null, pet.vetClinic)}</PetValue>
           <PetValue label={t("fieldVetPhone")}>
             {pet.vetPhone ? (
-              <a href={`tel:${pet.vetPhone}`} className="text-accent-fg underline">
+              <a href={`tel:${pet.vetPhone}`} className="link-action">
                 {pet.vetPhone}
               </a>
             ) : (
@@ -151,7 +151,7 @@ export function PetProfileView({ pet }: { readonly pet: PetDetail }) {
           </PetValue>
           <PetValue label={t("fieldVetEmail")}>
             {pet.vetEmail ? (
-              <a href={`mailto:${pet.vetEmail}`} className="text-accent-fg underline">
+              <a href={`mailto:${pet.vetEmail}`} className="link-action">
                 {pet.vetEmail}
               </a>
             ) : (
@@ -281,7 +281,7 @@ function PhotoControls({ pet }: { readonly pet: PetDetail }) {
               {" "}
               <button
                 type="button"
-                className="font-medium text-accent-fg underline"
+                className="link-inline"
                 onClick={() => {
                   void upload(retryable);
                 }}

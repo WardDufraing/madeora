@@ -87,7 +87,7 @@ export function RecipeEditSession({
               {t("takeOver")}
             </Button>
           ) : null}
-          <Link href={back} className="text-body font-medium text-accent-fg underline">
+          <Link href={back} className="text-body link-action">
             {t("backToRecipe")}
           </Link>
         </div>
@@ -100,7 +100,7 @@ export function RecipeEditSession({
         <FormAlert tone="error" announce>
           {failureText(state.failure)}
         </FormAlert>
-        <Link href={back} className="text-body font-medium text-accent-fg underline">
+        <Link href={back} className="text-body link-action">
           {t("backToRecipe")}
         </Link>
       </div>

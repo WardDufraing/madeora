@@ -52,10 +52,7 @@ export async function ShoppingListPage({ userId, listId, home }: ShoppingListPag
         version={context.value.signalVersion}
       />
       <p className="mb-2">
-        <Link
-          href={shoppingPath(homeId)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={shoppingPath(homeId)} className="text-body link-action">
           {t("backToLists")}
         </Link>
       </p>

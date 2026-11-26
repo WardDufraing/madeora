@@ -66,7 +66,9 @@ test.describe("desktop sidebar", () => {
 
   test("collapses and expands, survives a reload, and gives the width to the main content", async ({
     page,
+    context,
   }) => {
+    await setCookies(context, { "md-sidebar": "expanded" }, page);
     await page.goto("/");
     const main = page.getByRole("main");
     const expandedMain = (await main.boundingBox())?.width ?? 0;

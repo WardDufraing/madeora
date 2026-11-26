@@ -74,7 +74,7 @@ export function JoinInvitation({
         <p className="text-body text-fg">
           {t("requestSentDescription", { home: isolate(requested) })}
         </p>
-        <Link href={REQUESTS_PATH} className="text-body font-medium text-accent-fg underline">
+        <Link href={REQUESTS_PATH} className="text-body link-action">
           {t("viewMyRequests")}
         </Link>
       </section>
@@ -141,10 +141,7 @@ export function JoinOutcomeMessage({
         <p className="text-body text-fg">
           {t("outcomeMember", { home: isolate(preview.homeName) })}
         </p>
-        <Link
-          href={`/homes/${preview.homeId}`}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={`/homes/${preview.homeId}`} className="text-body link-action">
           {t("openHome")}
         </Link>
       </div>
@@ -158,7 +155,7 @@ export function JoinOutcomeMessage({
         <p className="text-body text-fg">
           {t("outcomePending", { home: isolate(preview.homeName) })}
         </p>
-        <Link href={REQUESTS_PATH} className="text-body font-medium text-accent-fg underline">
+        <Link href={REQUESTS_PATH} className="text-body link-action">
           {t("viewMyRequests")}
         </Link>
       </div>
@@ -176,7 +173,7 @@ export function JoinOutcomeMessage({
           <SignOutButton />
         </div>
       ) : null}
-      <Link href={REQUESTS_PATH} className="text-body font-medium text-accent-fg underline">
+      <Link href={REQUESTS_PATH} className="text-body link-action">
         {t("enterCodeInstead")}
       </Link>
     </div>

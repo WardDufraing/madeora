@@ -8,12 +8,12 @@ import type { Theme } from "./neutral.ts";
  * body 14–16px, helper text 12–14px.
  */
 export const fontFamily = {
-  sans: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
+  sans: '"Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
 } as const;
 
 export const fontSize = {
-  "page-title": { size: "1.875rem", lineHeight: "2.375rem" },
-  "section-title": { size: "1.125rem", lineHeight: "1.625rem" },
+  "page-title": { size: "2rem", lineHeight: "2.5rem" },
+  "section-title": { size: "1.1875rem", lineHeight: "1.75rem" },
   body: { size: "0.9375rem", lineHeight: "1.5rem" },
   helper: { size: "0.8125rem", lineHeight: "1.25rem" },
 } as const;
@@ -26,9 +26,11 @@ export const spacingUnitPx = 4;
  * controls. Overlay panels (dialogs, sheets, side panels) get a slightly larger radius.
  */
 export const radius = {
-  control: "0.5rem",
-  card: "0.875rem",
-  overlay: "1.25rem",
+  control: "0.75rem",
+  card: "1.25rem",
+  overlay: "1.5rem",
+  /** Buttons, chips and search fields (UI makeover): fully rounded ends. */
+  pill: "9999px",
   /** The 20px checkbox box: a control radius would make it look round. */
   checkbox: "0.375rem",
 } as const;
@@ -44,16 +46,14 @@ export type ElevationRole = "raised" | "overlay" | "inset" | "selected";
  */
 export const elevation: Readonly<Record<Theme, Readonly<Record<ElevationRole, string>>>> = {
   light: {
-    raised:
-      "inset 0 1px 0 rgb(255 255 255 / 0.9), 0 2px 4px rgb(21 26 41 / 0.06), 0 8px 24px rgb(21 26 41 / 0.1)",
+    raised: "0 1px 2px rgb(16 24 28 / 0.05)",
     overlay:
-      "inset 0 1px 0 rgb(255 255 255 / 0.9), 0 6px 16px rgb(21 26 41 / 0.12), 0 24px 56px rgb(21 26 41 / 0.18)",
+      "inset 0 1px 0 rgb(255 255 255 / 1), 0 8px 20px rgb(21 26 41 / 0.1), 0 32px 64px rgb(21 26 41 / 0.16)",
     inset: "inset 0 2px 4px rgb(21 26 41 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.8)",
     selected: "inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 3px rgb(21 26 41 / 0.1)",
   },
   dark: {
-    raised:
-      "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.35)",
+    raised: "0 1px 2px rgb(0 0 0 / 0.3)",
     overlay:
       "inset 0 1px 0 rgb(255 255 255 / 0.09), 0 6px 16px rgb(0 0 0 / 0.5), 0 24px 56px rgb(0 0 0 / 0.55)",
     inset: "inset 0 2px 5px rgb(0 0 0 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.05)",
@@ -67,20 +67,20 @@ export const elevation: Readonly<Record<Theme, Readonly<Record<ElevationRole, st
  * touch targets are never reduced.
  */
 export const space = {
-  "grid-gap": "1.25rem",
-  "widget-padding": "1.25rem",
-  "widget-header-gap": "0.75rem",
-  "panel-padding": "1.5rem",
+  "grid-gap": "1.5rem",
+  "widget-padding": "1.5rem",
+  "widget-header-gap": "1rem",
+  "panel-padding": "2rem",
   "control-gap": "0.5rem",
   /** Page gutter of the main content canvas. */
-  "canvas-gutter": "1.5rem",
+  "canvas-gutter": "2rem",
 } as const;
 
 /** Narrow viewports (below 40rem): the roomy spacing tokens shrink a step. */
 export const spaceCompact: Readonly<Partial<Record<keyof typeof space, string>>> = {
-  "grid-gap": "0.75rem",
-  "widget-padding": "1rem",
-  "panel-padding": "1.25rem",
+  "grid-gap": "1rem",
+  "widget-padding": "1.25rem",
+  "panel-padding": "1.5rem",
   "canvas-gutter": "1rem",
 };
 
@@ -138,9 +138,11 @@ export const motionReduced: Readonly<Record<keyof typeof motion, string>> = {
  * both stops (tested). Solid `page` colour is the fallback for forced colours and reduced
  * transparency.
  */
-export const canvas: Readonly<Record<Theme, { readonly from: Hex; readonly to: Hex }>> = {
-  light: { from: "#fbfcff", to: "#f3f5fa" },
-  dark: { from: "#151a26", to: "#0d1017" },
+export const canvas: Readonly<
+  Record<Theme, { readonly from: Hex; readonly to: Hex; readonly glow: Hex }>
+> = {
+  light: { from: "#f4f5f7", to: "#ebeef0", glow: "#ffffff" },
+  dark: { from: "#0e1519", to: "#080c0f", glow: "#10222a" },
 };
 
 /**

@@ -40,7 +40,7 @@ export async function RewardsPage({
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={pointsPath(home.id)} className="font-medium text-accent-fg underline">
+        <Link href={pointsPath(home.id)} className="link-action">
           {t("pointsLink")}
         </Link>
       </p>

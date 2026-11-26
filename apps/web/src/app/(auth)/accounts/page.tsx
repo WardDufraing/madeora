@@ -47,7 +47,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       </div>
       {activeUserId ? (
         <p className="mt-6 text-body">
-          <Link href="/" className="font-medium text-accent-fg underline">
+          <Link href="/" className="link-action">
             {t("back")}
           </Link>
         </p>

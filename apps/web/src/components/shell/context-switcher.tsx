@@ -120,7 +120,7 @@ export function ContextSwitcher({ homes }: ContextSwitcherProps) {
           if (!open) router.refresh();
           setOpen((value) => !value);
         }}
-        className="flex min-h-10 max-w-[60vw] items-center gap-2 rounded-control border border-line bg-surface px-3 text-body font-semibold text-fg hover:bg-accent-subtle sm:max-w-xs"
+        className="flex min-h-11 max-w-[60vw] items-center gap-2 rounded-pill border border-line bg-surface px-4 text-body font-semibold text-fg shadow-selected hover:bg-accent-subtle sm:max-w-xs"
       >
         <span className="sr-only">{`${t("currentContext")}:`}</span>{" "}
         <bdi className="truncate">{currentName}</bdi>

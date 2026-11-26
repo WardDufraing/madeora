@@ -56,7 +56,7 @@ export async function RecipeDetailPage({ recipeId, homeId, searchParams }: Recip
   return (
     <>
       <p className="mb-2">
-        <Link href={recipesPath(homeId)} className="text-body font-medium text-accent-fg underline">
+        <Link href={recipesPath(homeId)} className="text-body link-action">
           {t("backToLibrary")}
         </Link>
       </p>

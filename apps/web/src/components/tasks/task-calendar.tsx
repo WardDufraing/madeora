@@ -167,19 +167,19 @@ export async function TaskCalendar({ home, searchParams }: TaskCalendarProps) {
             </ul>
             <Link
               href={href({ date: window.previous, day: undefined })}
-              className="inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline"
+              className="inline-flex min-h-10 items-center px-2 text-body link-action"
             >
               {window.view === "week" ? t("previousWeek") : t("previousMonth")}
             </Link>
             <Link
               href={href({ date: undefined, day: undefined })}
-              className="inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline"
+              className="inline-flex min-h-10 items-center px-2 text-body link-action"
             >
               {t("today")}
             </Link>
             <Link
               href={href({ date: window.next, day: undefined })}
-              className="inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline"
+              className="inline-flex min-h-10 items-center px-2 text-body link-action"
             >
               {window.view === "week" ? t("nextWeek") : t("nextMonth")}
             </Link>
@@ -358,7 +358,7 @@ export async function TaskCalendar({ home, searchParams }: TaskCalendarProps) {
           {calendar.value.undated > 0 ? (
             <>
               {t("undated", { count: calendar.value.undated })}{" "}
-              <Link href={undatedHref} className="font-medium text-accent-fg underline">
+              <Link href={undatedHref} className="link-inline">
                 {t("undatedLink")}
               </Link>
             </>
@@ -605,10 +605,7 @@ async function CalendarFilters({
           {tTasks("applyFilters")}
         </Button>
         {hasCalendarFilters(query) ? (
-          <Link
-            href={clear ? `${action}?${clear}` : action}
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href={clear ? `${action}?${clear}` : action} className="text-body link-action">
             {tTasks("clearFilters")}
           </Link>
         ) : null}

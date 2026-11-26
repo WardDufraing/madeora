@@ -242,7 +242,7 @@ export function ChoreScheduleWidget({
         {hidden > 0 || open ? (
           <button
             type="button"
-            className="min-h-6 text-helper font-medium text-accent-fg underline"
+            className="min-h-6 text-helper link-action"
             aria-expanded={open}
             aria-label={
               open
@@ -526,7 +526,7 @@ export function ChoreScheduleWidget({
             {t("scheduleUnassignedDayNote", { date: dateText(day) })}{" "}
             <button
               type="button"
-              className="font-medium text-accent-fg underline"
+              className="link-inline"
               onClick={() => {
                 setMode("week");
               }}

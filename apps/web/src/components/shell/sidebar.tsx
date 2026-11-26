@@ -78,7 +78,7 @@ export function Sidebar({ initialState }: SidebarProps) {
       type="button"
       onClick={toggle}
       aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-control text-fg-muted hover:bg-accent-subtle hover:text-fg"
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-pill text-fg-muted hover:bg-accent-subtle hover:text-fg"
     >
       {/* The arrow points towards the edge it moves to, so it mirrors in right-to-left layouts. */}
       <ToggleIcon className="rtl:-scale-x-100" />
@@ -113,14 +113,16 @@ export function Sidebar({ initialState }: SidebarProps) {
   return (
     <aside
       data-state={state}
+      // A dark floating rail in both themes (UI makeover): the dark tokens apply inside it only.
+      data-theme="dark"
       className={cx(
         "sticky top-0 hidden h-dvh shrink-0 md:flex",
-        collapsed ? "p-2" : "p-3",
+        collapsed ? "p-2" : "p-4",
         "transition-[width] duration-(--md-duration-slow) ease-standard",
         collapsed ? "w-(--md-shell-sidebar-collapsed)" : "w-(--md-shell-sidebar-expanded)",
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-col rounded-card border border-line bg-sidebar shadow-raised">
+      <div className="flex min-w-0 flex-1 flex-col rounded-card border border-line bg-sidebar text-fg shadow-overlay">
         <div
           className={cx(
             "flex gap-2",

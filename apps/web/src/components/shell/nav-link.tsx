@@ -42,13 +42,12 @@ export function NavLink({
       {...(onPointerEnter ? { onPointerEnter } : {})}
       {...(onFocus ? { onFocus } : {})}
       className={cx(
-        "group relative flex h-10 items-center rounded-control text-body transition-colors duration-(--md-duration-fast)",
-        "hover:bg-accent-subtle hover:text-fg",
-        // The current page is marked by weight and a bar at the start edge, not by colour alone.
+        "group relative flex h-11 items-center rounded-pill text-body transition-colors duration-(--md-duration-fast)",
+        // The current page is marked by weight and an inverted fill, not by colour alone.
         active
-          ? "bg-accent-subtle font-semibold text-fg before:absolute before:inset-y-2 before:start-0 before:w-1 before:rounded-full before:bg-accent forced-colors:before:bg-[Highlight] before:forced-color-adjust-none"
-          : "text-fg-muted",
-        collapsed ? "mx-auto w-10 justify-center" : "gap-3 px-3",
+          ? "bg-accent font-semibold text-on-accent forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
+          : "font-medium text-fg-muted hover:bg-accent-subtle hover:text-fg",
+        collapsed ? "mx-auto w-11 justify-center" : "gap-3 px-4",
       )}
     >
       <Icon size="md" className="shrink-0" />

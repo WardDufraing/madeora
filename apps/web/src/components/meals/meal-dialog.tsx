@@ -812,10 +812,7 @@ export function MealDialog({ target, plan, homeId, onClose }: MealDialogProps) {
             </div>
             {source && source.type === "recipe" && source.recipe ? (
               <p className="text-helper">
-                <Link
-                  href={recipePath(homeId, source.recipe.id)}
-                  className="font-medium text-accent-fg underline"
-                >
+                <Link href={recipePath(homeId, source.recipe.id)} className="link-action">
                   {t("openRecipe")}
                 </Link>
               </p>
@@ -843,10 +840,7 @@ function MealFacts({
       <dt className="font-medium text-fg">{t("fieldMeal")}</dt>
       <dd className="text-fg">
         {source.type === "recipe" && source.recipe ? (
-          <Link
-            href={recipePath(homeId, source.recipe.id)}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={recipePath(homeId, source.recipe.id)} className="link-action">
             <bdi>{source.recipe.name}</bdi>
           </Link>
         ) : (

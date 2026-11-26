@@ -80,10 +80,7 @@ export function ConfirmBackupEmail({ token }: ConfirmBackupEmailProps) {
 function BackLink() {
   const t = useTranslations("Security");
   return (
-    <Link
-      href="/settings/security#recovery"
-      className="text-body font-medium text-accent-fg underline"
-    >
+    <Link href="/settings/security#recovery" className="text-body link-action">
       {t("backToSecurity")}
     </Link>
   );

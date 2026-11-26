@@ -130,10 +130,7 @@ export default async function ComponentPreviewPage() {
         title="Card with an action"
         description="A short description."
         action={
-          <a
-            href="#icons"
-            className="text-helper font-medium text-accent-fg underline-offset-4 hover:underline"
-          >
+          <a href="#icons" className="text-helper underline-offset-4 hover:underline link-action">
             View all
           </a>
         }

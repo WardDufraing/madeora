@@ -299,10 +299,7 @@ function CopyResults({
         </>
       ) : null}
       <p>
-        <Link
-          href={`${mealsPath(homeId)}?date=${destination}`}
-          className="font-medium text-accent-fg underline"
-        >
+        <Link href={`${mealsPath(homeId)}?date=${destination}`} className="link-action">
           {t("openDestinationWeek")}
         </Link>
       </p>

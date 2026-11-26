@@ -27,10 +27,7 @@ export async function AddSeveralPage({
   }
   const back = (
     <p className="mb-2">
-      <Link
-        href={shoppingListPath(homeId, listId)}
-        className="text-body font-medium text-accent-fg underline"
-      >
+      <Link href={shoppingListPath(homeId, listId)} className="text-body link-action">
         {t("backToList", { name: list.value.name })}
       </Link>
     </p>

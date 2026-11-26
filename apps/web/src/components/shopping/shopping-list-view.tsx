@@ -163,7 +163,7 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
             <p className="flex flex-wrap gap-3">
               <Link
                 href={shoppingListPath(homeId, list.id, "add-several")}
-                className="text-body font-medium text-accent-fg underline"
+                className="text-body link-action"
                 data-testid="shopping-add-several"
               >
                 {t("addSeveral")}

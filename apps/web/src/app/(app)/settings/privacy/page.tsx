@@ -54,7 +54,7 @@ export default async function PrivacyPage() {
           </p>
           <Link
             href="/settings/privacy/review"
-            className="text-body font-medium text-accent-fg underline"
+            className="text-body link-action"
             data-testid="privacy-review-link"
           >
             {state !== null && state.completedAt === null ? t("reviewResume") : t("reviewStart")}
@@ -66,7 +66,7 @@ export default async function PrivacyPage() {
             {step === "data_rights" ? (
               <Link
                 href="/settings/privacy/export"
-                className="mt-2 inline-block text-body font-medium text-accent-fg underline"
+                className="mt-2 inline-block text-body link-action"
                 data-testid="privacy-export-link"
               >
                 {t("exportLink")}
@@ -76,28 +76,28 @@ export default async function PrivacyPage() {
               <p className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
                 <Link
                   href="/settings/closed-homes"
-                  className="text-body font-medium text-accent-fg underline"
+                  className="text-body link-action"
                   data-testid="privacy-closed-homes-link"
                 >
                   {tDeletion("closedLink")}
                 </Link>
                 <Link
                   href="/settings/privacy/copies"
-                  className="text-body font-medium text-accent-fg underline"
+                  className="text-body link-action"
                   data-testid="privacy-copies-link"
                 >
                   {tCopies("privacyLink")}
                 </Link>
                 <Link
                   href="/settings/privacy/delete-data"
-                  className="text-body font-medium text-accent-fg underline"
+                  className="text-body link-action"
                   data-testid="privacy-delete-data-link"
                 >
                   {tData("privacyLink")}
                 </Link>
                 <Link
                   href="/settings/privacy/delete"
-                  className="text-body font-medium text-accent-fg underline"
+                  className="text-body link-action"
                   data-testid="privacy-delete-account-link"
                 >
                   {tDeletion("accountLink")}

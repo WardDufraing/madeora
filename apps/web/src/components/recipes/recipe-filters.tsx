@@ -92,7 +92,7 @@ export async function RecipeFilters({ action, query, tags, filtered }: RecipeFil
           {t("applyFilters")}
         </Button>
         {filtered ? (
-          <Link href={action} className="text-body font-medium text-accent-fg underline">
+          <Link href={action} className="text-body link-action">
             {t("clearFilters")}
           </Link>
         ) : null}

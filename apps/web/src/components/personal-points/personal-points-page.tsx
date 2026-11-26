@@ -33,7 +33,7 @@ export async function PersonalPointsPage({ before }: { readonly before: number |
       <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <span>{t("personalContext")}</span>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={PERSONAL_REWARDS_PATH} className="font-medium text-accent-fg underline">
+        <Link href={PERSONAL_REWARDS_PATH} className="link-action">
           {t("rewardsLink")}
         </Link>
       </p>
@@ -140,7 +140,7 @@ export async function PersonalPointsPage({ before }: { readonly before: number |
           {next !== null ? (
             <Link
               href={`${PERSONAL_POINTS_PATH}?before=${String(next)}`}
-              className="text-body font-medium text-accent-fg underline"
+              className="text-body link-action"
             >
               {tp("ledgerOlder")}
             </Link>

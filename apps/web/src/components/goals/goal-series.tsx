@@ -260,10 +260,7 @@ function CurrentPeriod({ series }: { readonly series: GoalSeriesDetail }) {
       </h2>
       {current ? (
         <p className="text-body text-fg" data-testid="goal-series-current">
-          <Link
-            href={goalsPath(series.homeId, current.id)}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={goalsPath(series.homeId, current.id)} className="link-action">
             {texts.period(current.start, current.end)}
           </Link>{" "}
           · {series.kind === "measurable" ? texts.progress(current) : texts.status(current.status)}
@@ -349,7 +346,7 @@ function PeriodRow({ period }: { readonly period: GoalSummary }) {
   ].filter((mark): mark is string => mark !== null);
   return (
     <li className="flex flex-wrap items-baseline gap-x-2" data-testid="goal-series-period">
-      <Link href={goalsPath(period.homeId, period.id)} className="text-accent-fg underline">
+      <Link href={goalsPath(period.homeId, period.id)} className="link-action">
         {texts.period(info.start, info.end)}
       </Link>
       <span>

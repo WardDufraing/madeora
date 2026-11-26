@@ -47,17 +47,14 @@ export async function RecipeLibrary({ userId, home, searchParams }: RecipeLibrar
       <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
-        <Link href={DRAFTS_PATH} className="font-medium text-accent-fg underline">
+        <Link href={DRAFTS_PATH} className="link-action">
           {t("myDraftsLink")}
         </Link>
       </p>
       {notice === "deleted" ? (
         <TaskNotice>
           {t("deletedNotice")}{" "}
-          <Link
-            href={home ? `/homes/${home.id}/trash` : "/settings/trash"}
-            className="font-medium text-accent-fg underline"
-          >
+          <Link href={home ? `/homes/${home.id}/trash` : "/settings/trash"} className="link-inline">
             {t("openTrash")}
           </Link>
         </TaskNotice>

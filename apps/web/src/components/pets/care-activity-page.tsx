@@ -46,10 +46,7 @@ export async function CareActivityPage({
   return (
     <>
       <p className="mb-2">
-        <Link
-          href={petPath(homeId, petId)}
-          className="text-body font-medium text-accent-fg underline"
-        >
+        <Link href={petPath(homeId, petId)} className="text-body link-action">
           {t("backToPet", { name: pet.value.name })}
         </Link>
       </p>

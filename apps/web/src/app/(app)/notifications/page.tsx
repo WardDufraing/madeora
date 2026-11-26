@@ -32,10 +32,7 @@ export default async function NotificationsPage() {
       <PageHeader title={t("title")} />
       <div className="flex max-w-3xl flex-col gap-4">
         <p>
-          <Link
-            href="/settings/notifications"
-            className="text-body font-medium text-accent-fg underline"
-          >
+          <Link href="/settings/notifications" className="text-body link-action">
             {t("settingsLink")}
           </Link>
         </p>

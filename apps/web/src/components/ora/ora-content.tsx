@@ -467,7 +467,7 @@ export function OraContent({
             onClick={() => {
               setView(view === "browse" ? "main" : "browse");
             }}
-            className="inline-flex min-h-8 items-center gap-1 rounded-control text-helper font-medium text-accent-fg hover:underline"
+            className="inline-flex min-h-8 items-center gap-1 rounded-control text-helper hover:underline link-action"
           >
             {view === "browse" ? t("browseFewer") : t("browseAll")}
             <ChevronDownIcon

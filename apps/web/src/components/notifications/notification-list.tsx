@@ -378,7 +378,7 @@ export async function NotificationList({
                 />
               ) : null}
               <div className="flex flex-wrap items-start gap-3">
-                <Link href={href} className="text-body font-medium text-accent-fg underline">
+                <Link href={href} className="text-body link-action">
                   {t("open")}
                 </Link>
                 {isUnread ? (

@@ -106,7 +106,7 @@ export function DeletePersonalData({
         {failed.length > 0 ? (
           <button
             type="button"
-            className="self-start text-body font-medium text-accent-fg underline"
+            className="self-start text-body link-action"
             onClick={() => {
               setSelected(failed);
               setAcknowledged([]);
@@ -182,7 +182,7 @@ export function DeletePersonalData({
           </ul>
           <p className="text-body">
             {t("exportFirst")}{" "}
-            <Link href="/settings/privacy/export" className="font-medium text-accent-fg underline">
+            <Link href="/settings/privacy/export" className="link-inline">
               {t("exportLink")}
             </Link>
           </p>

@@ -300,7 +300,7 @@ function TransferReview({
         <p>
           <Link
             href={shoppingListPath(homeId, values.listId)}
-            className="font-medium text-accent-fg underline"
+            className="link-action"
             data-testid="meal-transfer-open-list"
           >
             {t("openList", { list: listName })}

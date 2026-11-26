@@ -37,7 +37,7 @@ export default async function NotificationSettingsPage() {
     <>
       <PageHeader title={t("title")} />
       <p className="mb-4">
-        <Link href="/settings" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings" className="text-body link-action">
           {tSettings("notificationsBack")}
         </Link>
       </p>

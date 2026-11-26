@@ -44,7 +44,7 @@ export default async function DeactivatePage({ searchParams }: DeactivatePagePro
     <>
       <PageHeader title={t("deactivateTitle")} />
       <p className="mb-4">
-        <Link href="/settings/security" className="text-body font-medium text-accent-fg underline">
+        <Link href="/settings/security" className="text-body link-action">
           {t("backToSecurity")}
         </Link>
       </p>

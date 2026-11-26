@@ -42,10 +42,10 @@ export async function PersonalPointsWidget() {
         <p className="text-fg-muted">{t("widgetNothingAffordable")}</p>
       )}
       <p className="flex flex-wrap gap-x-4 text-helper">
-        <Link href={PERSONAL_POINTS_PATH} className="font-medium text-accent-fg underline">
+        <Link href={PERSONAL_POINTS_PATH} className="link-action">
           {t("widgetOpenPoints")}
         </Link>
-        <Link href={PERSONAL_REWARDS_PATH} className="font-medium text-accent-fg underline">
+        <Link href={PERSONAL_REWARDS_PATH} className="link-action">
           {t("widgetOpenRewards")}
         </Link>
       </p>

@@ -120,7 +120,7 @@ export function OAuthCallback() {
         <FormAlert tone={outcome.failure === "cancelled" ? "info" : "error"} announce>
           {messages[outcome.failure]}
         </FormAlert>
-        <Link href="/sign-in" className="text-body font-medium text-accent-fg underline">
+        <Link href="/sign-in" className="text-body link-action">
           {t("backToSignIn")}
         </Link>
       </div>
@@ -145,10 +145,7 @@ export function OAuthCallback() {
           ? tMethods("linkAccountChanged")
           : linkMessages[outcome.failure]}
       </FormAlert>
-      <Link
-        href="/settings#sign-in-methods"
-        className="text-body font-medium text-accent-fg underline"
-      >
+      <Link href="/settings#sign-in-methods" className="text-body link-action">
         {tMethods("backToSettings")}
       </Link>
     </div>

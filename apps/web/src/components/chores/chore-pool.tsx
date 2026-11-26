@@ -106,15 +106,15 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
           </span>
         </h2>
         <nav aria-label={t("poolWeekNav")} className="flex flex-wrap gap-x-3 text-body">
-          <Link href={week.previousHref} className="font-medium text-accent-fg underline">
+          <Link href={week.previousHref} className="link-action">
             {t("poolPreviousWeek")}
           </Link>
           {week.current ? null : (
-            <Link href={week.currentHref} className="font-medium text-accent-fg underline">
+            <Link href={week.currentHref} className="link-action">
               {t("poolThisWeek")}
             </Link>
           )}
-          <Link href={week.nextHref} className="font-medium text-accent-fg underline">
+          <Link href={week.nextHref} className="link-action">
             {t("poolNextWeek")}
           </Link>
         </nav>

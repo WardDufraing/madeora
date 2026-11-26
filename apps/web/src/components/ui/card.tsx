@@ -40,10 +40,10 @@ export function Card({
       )}
     >
       {title || action ? (
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             {title ? (
-              <Heading id={titleId} className="text-section-title font-semibold">
+              <Heading id={titleId} className="text-section-title font-bold">
                 {title}
               </Heading>
             ) : null}

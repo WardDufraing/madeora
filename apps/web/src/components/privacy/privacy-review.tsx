@@ -99,7 +99,7 @@ export function PrivacyReview({ state, unavailable, panels, changeLinks }: Priva
           >
             {done ? t("reviewRestart") : t("reviewStart")}
           </Button>
-          <Link href="/settings/privacy" className="self-center text-body text-accent-fg underline">
+          <Link href="/settings/privacy" className="self-center text-body link-action">
             {t("backToPrivacy")}
           </Link>
         </div>
@@ -186,7 +186,7 @@ export function PrivacyReview({ state, unavailable, panels, changeLinks }: Priva
         ) : null}
         <Link
           href="/settings/privacy"
-          className="inline-flex items-center px-3 text-body text-accent-fg underline"
+          className="inline-flex items-center px-3 text-body link-action"
         >
           {t("reviewLater")}
         </Link>

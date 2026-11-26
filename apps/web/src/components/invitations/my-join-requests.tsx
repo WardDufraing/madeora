@@ -69,7 +69,7 @@ export function MyJoinRequests({
             <div className="flex flex-col gap-1">
               <p className="text-body font-medium text-fg">
                 {request.homeId ? (
-                  <Link href={`/homes/${request.homeId}`} className="text-accent-fg underline">
+                  <Link href={`/homes/${request.homeId}`} className="link-action">
                     <bdi>{request.homeName}</bdi>
                   </Link>
                 ) : (

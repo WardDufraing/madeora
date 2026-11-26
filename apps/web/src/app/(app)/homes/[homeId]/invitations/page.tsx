@@ -74,7 +74,7 @@ export default async function HomeInvitationsPage({ params }: InvitationsPagePro
       <PageHeader title={t("title")} />
       <p className="mb-6 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi> {"\u{00B7}"}{" "}
-        <Link href={`/homes/${home.id}`} className="font-medium text-accent-fg underline">
+        <Link href={`/homes/${home.id}`} className="link-inline">
           {tHomes("backToHome")}
         </Link>
       </p>

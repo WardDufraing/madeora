@@ -137,10 +137,7 @@ export function ShoppingWidgetBody({
         ) : null}
         <p className="flex flex-wrap gap-x-4 gap-y-1">
           {single ? (
-            <Link
-              href={shoppingListPath(homeId, single.id)}
-              className="text-body font-medium text-accent-fg underline"
-            >
+            <Link href={shoppingListPath(homeId, single.id)} className="text-body link-action">
               {t("openList")}
             </Link>
           ) : (
@@ -148,17 +145,14 @@ export function ShoppingWidgetBody({
               <Link
                 key={list.id}
                 href={shoppingListPath(homeId, list.id)}
-                className="text-body font-medium text-accent-fg underline"
+                className="text-body link-action"
               >
                 {t("openNamedList", { name: list.name })}
               </Link>
             ))
           )}
           {data.lists.length === 0 ? (
-            <Link
-              href={shoppingPath(homeId)}
-              className="text-body font-medium text-accent-fg underline"
-            >
+            <Link href={shoppingPath(homeId)} className="text-body link-action">
               {t("openLists")}
             </Link>
           ) : null}
