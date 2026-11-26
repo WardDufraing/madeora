@@ -8,7 +8,8 @@ export function greetingPeriod(date: Date, timeZone: string): GreetingPeriod {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone }).format(date),
   );
-  if (hour < 12) return "morning";
+  // Some engines print midnight as "24"; the hour of the day is 0 to 23.
+  if (hour % 24 < 12) return "morning";
   if (hour < 18) return "afternoon";
   return "evening";
 }

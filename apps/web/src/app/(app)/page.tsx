@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/states";
 import { getHomeContext, getRememberedContext, listMyHomes } from "@/homes/server";
 import { pageTitle } from "@/i18n/page-title";
 import { getStoredPreferences } from "@/preferences/account";
+import { isolate } from "@/invitations/format";
 import { getDateTimeFormats } from "@/invitations/server";
 import { getEffectiveTimeZone } from "@/preferences/server";
 
@@ -73,7 +74,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           : period === "afternoon"
             ? "greetingAfternoonNamed"
             : "greetingEveningNamed",
-        { name },
+        { name: isolate(name) },
       )
     : t(
         period === "morning"
