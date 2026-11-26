@@ -175,7 +175,10 @@ export function MealPlanner({
             <section
               key={day}
               aria-labelledby={headingId}
-              className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+              className={cx(
+                "flex flex-col gap-3 rounded-card border bg-surface p-widget-padding shadow-raised",
+                day === plan.today ? "border-accent-edge" : "border-line",
+              )}
               data-testid={`meal-day-${day}`}
             >
               <h2
@@ -192,7 +195,7 @@ export function MealPlanner({
               {slots.length === 0 ? (
                 <p className="text-helper text-fg-muted">{t("noSlots")}</p>
               ) : (
-                <ul className="flex flex-col gap-2">
+                <ul className="flex flex-col divide-y divide-line">
                   {slots.map((slot) => (
                     <SlotRow
                       key={slot.id}
@@ -275,7 +278,7 @@ function SlotRow({
   const texts = useMealTexts();
   const name = texts.slotName(slotName);
   return (
-    <li className="flex flex-col gap-1 border-t border-line pt-2 first:border-t-0 first:pt-0">
+    <li className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
       <span className="text-helper font-medium text-fg-muted">
         <bdi>{name}</bdi>
         {!enabled ? (
