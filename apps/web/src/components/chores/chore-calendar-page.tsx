@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
-import { cx } from "@/components/ui/cx";
 import { SelectField } from "@/components/ui/select-field";
 import { ErrorState } from "@/components/ui/states";
 import {
@@ -34,8 +33,7 @@ export interface ChoreCalendarPageProps {
   readonly searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }
 
-const navLink =
-  "inline-flex min-h-10 items-center px-2 text-body font-medium text-accent-fg underline";
+const navLink = "link-action";
 
 /**
  * A Home's Chores calendar (S21; spec "Confirmed chore calendar and rescheduling"): a week or month
@@ -103,18 +101,13 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
             {title}
           </h2>
           <nav aria-label={t("calendarNavigation")} className="flex flex-wrap items-center gap-2">
-            <ul className="flex gap-1" aria-label={t("calendarViewChoice")}>
+            <ul className="segmented" aria-label={t("calendarViewChoice")}>
               {(["week", "month"] as const).map((view) => (
                 <li key={view}>
                   <Link
                     href={href({ view, date: window.anchor, day: null })}
                     aria-current={window.view === view ? "page" : undefined}
-                    className={cx(
-                      "inline-flex min-h-10 items-center rounded-control px-3 text-body font-medium",
-                      window.view === view
-                        ? "bg-accent-subtle text-fg"
-                        : "text-accent-fg underline",
-                    )}
+                    className="segment"
                   >
                     {view === "week" ? t("calendarWeek") : t("calendarMonth")}
                   </Link>

@@ -127,17 +127,13 @@ export async function LeaderboardPage({
             <h2 id="leaderboard-heading" className="text-section-title font-semibold text-fg">
               {t(`period_${value.period}`)}
             </h2>
-            <nav aria-label={t("periodNav")} className="flex flex-wrap gap-3">
+            <nav aria-label={t("periodNav")} className="segmented">
               {leaderboardPeriods.map((option) => (
                 <Link
                   key={option}
                   href={`${leaderboardPath(home.id)}?period=${option}`}
                   aria-current={option === value.period ? "page" : undefined}
-                  className={
-                    option === value.period
-                      ? "text-body font-semibold text-fg underline"
-                      : "text-body font-medium text-accent-fg underline"
-                  }
+                  className="segment"
                 >
                   {t(`period_${option}`)}
                 </Link>

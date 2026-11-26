@@ -189,11 +189,53 @@
   }
 }
 
+/* View switcher (Month/Week/Day/Agenda, task views): one rounded track, the current view a filled
+   pill. The current item is marked by aria-current, so it is never colour alone (weight changes too). */
+@utility segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-page);
+  border: 1px solid var(--color-line);
+}
+
+@utility segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding-inline: 1rem;
+  white-space: nowrap;
+  border-radius: var(--radius-pill);
+  color: var(--color-fg-muted);
+  font-weight: 500;
+  transition-property: color, background-color, transform;
+  transition-duration: var(--md-duration-fast);
+  transition-timing-function: var(--md-ease-standard);
+  &:hover {
+    color: var(--color-fg);
+    background-color: var(--color-accent-subtle);
+  }
+  &[aria-current="page"] {
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+    font-weight: 600;
+  }
+  @media (forced-colors: active) {
+    &[aria-current="page"] {
+      background-color: Highlight;
+      color: HighlightText;
+    }
+  }
+}
+
 @utility link-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   padding-inline: 1rem;
   white-space: nowrap;
   border-radius: var(--radius-pill);

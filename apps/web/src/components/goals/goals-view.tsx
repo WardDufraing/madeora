@@ -88,17 +88,13 @@ export function GoalsView({
   return (
     <div className="flex flex-col gap-6" data-testid="goals-view">
       <nav aria-label={t("viewsLabel")}>
-        <ul className="flex flex-wrap gap-2">
+        <ul className="segmented">
           {views.map((item) => (
             <li key={item.view}>
               <Link
                 href={item.view === "active" ? base : `${base}?view=${item.view}`}
                 aria-current={item.view === view ? "page" : undefined}
-                className={
-                  item.view === view
-                    ? "inline-flex min-h-10 items-center rounded-control bg-accent-subtle px-3 text-body font-semibold text-fg"
-                    : "inline-flex min-h-10 items-center rounded-control px-3 text-body text-accent-fg underline"
-                }
+                className="segment"
                 data-testid={`goals-view-${item.view}`}
               >
                 {item.label}
