@@ -296,20 +296,19 @@ export function TaskList({
       <li
         key={task.id}
         className={cx(
-          "relative flex items-start gap-3 border-b border-line py-3 ps-4 pe-2 last:border-b-0",
+          "relative flex items-start gap-3 rounded-card border border-line bg-surface p-3 ps-4 shadow-raised",
           "motion-safe:transition-colors motion-safe:duration-(--md-duration-base)",
           // A ring, not a tinted fill: muted text keeps its contrast on the plain surface.
-          isSelected || retained ? "ring-1 ring-inset ring-accent-edge" : "",
+          isSelected || retained
+            ? "ring-1 ring-inset ring-accent-edge forced-colors:border-[Highlight]"
+            : "",
           inCompletedSection ? "opacity-80" : "",
         )}
         data-testid="task-row"
         data-task-id={task.id}
       >
         {bar ? (
-          <span
-            aria-hidden="true"
-            className={cx("absolute inset-y-2.5 start-0 rounded-full", bar)}
-          />
+          <span aria-hidden="true" className={cx("absolute inset-y-4 start-0 rounded-full", bar)} />
         ) : null}
         {selecting ? (
           <Checkbox
@@ -512,7 +511,7 @@ export function TaskList({
             description={filtered ? t("emptyFiltered") : t("empty")}
           />
         ) : (
-          <ul className="flex flex-col">{rows.map((task) => renderRow(task, false))}</ul>
+          <ul className="flex flex-col gap-2">{rows.map((task) => renderRow(task, false))}</ul>
         )}
         {pages.hasNextPage ? (
           <div>
@@ -553,7 +552,7 @@ export function TaskList({
               {t("completedSection", { count: Math.max(completedCount, completedItems.length) })}
             </button>
             {showCompleted ? (
-              <ul id={`${headingId}-completed`} className="mt-1 flex flex-col">
+              <ul id={`${headingId}-completed`} className="mt-2 flex flex-col gap-2">
                 {completedItems.map((task) => renderRow(task, true))}
               </ul>
             ) : null}
