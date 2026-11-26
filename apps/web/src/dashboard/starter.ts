@@ -30,16 +30,16 @@ function stacked(items: readonly { readonly id: string; readonly h: number }[]):
   });
 }
 
-const P_WELCOME = "5d1a0000-0000-4000-8000-000000000001";
 const P_ACTIONS = "5d1a0000-0000-4000-8000-000000000002";
 const P_NOTIFICATIONS = "5d1a0000-0000-4000-8000-000000000003";
 const P_TASKS = "5d1a0000-0000-4000-8000-000000000004";
 const P_EVENTS = "5d1a0000-0000-4000-8000-000000000005";
 
+// The page heading already greets the person and shows the date, so the personal starter has no
+// Welcome widget; it stays in the catalogue, and dashboards saved before this keep theirs.
 export const personalStarterLayout: DashboardLayout = {
   version: LAYOUT_VERSION,
   widgets: [
-    widget(P_WELCOME, "welcome"),
     widget(P_ACTIONS, "quick-actions"),
     widget(P_NOTIFICATIONS, "notifications"),
     widget(P_TASKS, "tasks"),
@@ -47,21 +47,18 @@ export const personalStarterLayout: DashboardLayout = {
   ],
   placements: {
     lg: [
-      { id: P_WELCOME, x: 0, y: 0, w: 6, h: 2 },
-      { id: P_ACTIONS, x: 6, y: 0, w: 6, h: 2 },
+      { id: P_ACTIONS, x: 0, y: 0, w: 6, h: 2 },
       { id: P_NOTIFICATIONS, x: 0, y: 2, w: 6, h: 4 },
-      { id: P_TASKS, x: 6, y: 2, w: 6, h: 4 },
-      { id: P_EVENTS, x: 6, y: 6, w: 6, h: 4 },
+      { id: P_TASKS, x: 6, y: 0, w: 6, h: 4 },
+      { id: P_EVENTS, x: 6, y: 4, w: 6, h: 4 },
     ],
     md: [
-      { id: P_WELCOME, x: 0, y: 0, w: 6, h: 2 },
-      { id: P_ACTIONS, x: 0, y: 2, w: 6, h: 2 },
-      { id: P_NOTIFICATIONS, x: 0, y: 4, w: 6, h: 4 },
-      { id: P_TASKS, x: 0, y: 8, w: 6, h: 4 },
-      { id: P_EVENTS, x: 0, y: 12, w: 6, h: 4 },
+      { id: P_ACTIONS, x: 0, y: 0, w: 6, h: 2 },
+      { id: P_NOTIFICATIONS, x: 0, y: 2, w: 6, h: 4 },
+      { id: P_TASKS, x: 0, y: 6, w: 6, h: 4 },
+      { id: P_EVENTS, x: 0, y: 10, w: 6, h: 4 },
     ],
     sm: stacked([
-      { id: P_WELCOME, h: 2 },
       { id: P_ACTIONS, h: 3 },
       { id: P_NOTIFICATIONS, h: 4 },
       { id: P_TASKS, h: 5 },

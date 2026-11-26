@@ -43,13 +43,34 @@ function todayIn(timeZone: string): string {
 }
 
 /**
+ * The starter has no Welcome widget (the heading greets the person), but its date line is where
+ * these tests read the dashboard's date and zone. Add it once; the layout is the account's own, so
+ * every device then shows it.
+ */
+async function showWelcome(page: Page) {
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-customize")).toBeEnabled();
+  if ((await page.getByTestId("today").count()) > 0) return;
+  await page.getByTestId("dashboard-customize").click();
+  await expect(page.getByTestId("dashboard-editor")).toBeVisible();
+  await page.getByTestId("dashboard-add-widget").click();
+  await page
+    .getByTestId("dashboard-catalogue")
+    .getByRole("button", { name: "Add Welcome" })
+    .click();
+  await page.getByTestId("dashboard-save").click();
+  await expect(page.getByText("Dashboard saved.")).toBeVisible();
+  await expect(page.getByTestId("dashboard-editor")).toHaveCount(0);
+}
+
+/**
  * The dashboard renders in `timeZone`, and its date is today there (either side of a midnight
  * during the test). The assertion retries, so a device's first visit, where the page refreshes
  * once the browser has reported its zone, is waited for instead of raced.
  */
 async function expectDashboardDateIn(page: Page, timeZone: string) {
   const before = todayIn(timeZone);
-  await page.goto("/");
+  await showWelcome(page);
   const today = page.getByTestId("today");
   await expect(today).toHaveAttribute("data-time-zone", timeZone);
   expect([before, todayIn(timeZone)]).toContain(await today.getAttribute("datetime"));
@@ -73,7 +94,6 @@ test("a new adult lands on the personal dashboard with zero Homes, without being
       name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
     }),
   ).toBeVisible();
-  await expect(main.getByText("Welcome to Madeora")).toBeVisible();
   await expect(page.getByRole("button", { name: "Current context: Personal" })).toBeVisible();
   await expect(main.getByTestId("dashboard-grid")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -119,10 +139,12 @@ test("the display name is saved on the account: after a reload and on another de
   await page.reload();
   await expect(field).toHaveValue("Sam Example");
   await page.goto("/");
-  await expect(page.getByText("Welcome, \u2068Sam Example\u2069")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("\u2068Sam Example\u2069");
 
   const other = await otherDevice(browser, account);
-  await expect(other.page.getByText("Welcome, \u2068Sam Example\u2069")).toBeVisible();
+  await expect(other.page.getByRole("heading", { level: 1 })).toContainText(
+    "\u2068Sam Example\u2069",
+  );
   await other.context.close();
 
   // Emptying the field removes the name. Wait until the saved name is in the field: a fill
@@ -134,7 +156,13 @@ test("the display name is saved on the account: after a reload and on another de
   await saveProfile.click();
   await expect(page.getByRole("status").filter({ hasText: "Display name saved." })).toBeVisible();
   await page.goto("/");
-  await expect(page.getByText("Welcome to Madeora")).toBeVisible();
+  // Without a display name the greeting has no name after it.
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)$/,
+    }),
+  ).toBeVisible();
 });
 
 test("the language is saved on the account and wins over each device's language", async ({
@@ -203,7 +231,7 @@ test("regional formats: Custom choices persist and apply; Automatic restores the
   await expect(region.getByRole("combobox", { name: "Date" })).toHaveValue("ymd-dash");
   await expect(preview("date")).toHaveText("2026-12-31");
   await expect(preview("units")).toHaveText("3,4 mi · 70°F · 3,3 lb");
-  await page.goto("/");
+  await showWelcome(page);
   await expect(page.getByTestId("today")).toHaveText(/ \d{4}-\d{2}-\d{2}$/);
 
   // The same formats on another device, even with a US browser.

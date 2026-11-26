@@ -4,7 +4,8 @@ import Link from "next/link";
 import type { Mock } from "vitest";
 
 import type { DashboardLayout } from "@/dashboard/layout";
-import { homeStarterLayout, personalStarterLayout } from "@/dashboard/starter";
+import { homeStarterLayout } from "@/dashboard/starter";
+import { legacyPersonalStarterLayout as personalStarterLayout } from "@/dashboard/starter.fixture";
 import type { WidgetEntry } from "@/dashboard/view-types";
 import { axeViolations } from "@/test/axe";
 import { renderWithQuery } from "@/test/intl";
@@ -436,7 +437,7 @@ describe("DashboardBoard edit mode", () => {
     const user = await openEditor();
     await user.click(screen.getByRole("button", { name: "Reset to starter layout" }));
     const dialog = screen.getByRole("dialog", { name: "Reset to the starter layout?" });
-    expect(dialog).toHaveTextContent("Welcome, Quick actions, Notifications");
+    expect(dialog).toHaveTextContent("Quick actions, Notifications");
     expect(dialog).toHaveTextContent("You can undo this once afterwards.");
     answer(200, { revision: 6 });
     await user.click(within(dialog).getByRole("button", { name: "Reset layout" }));
@@ -889,16 +890,16 @@ describe("DashboardBoard edit-mode drafts, gallery and list editing (UX2b)", () 
   it("recommends a default widget that was removed, and adds it with focus on it", async () => {
     renderBoard();
     const user = await openEditor();
-    await user.click(screen.getByRole("button", { name: "Arrange Welcome" }));
+    await user.click(screen.getByRole("button", { name: "Arrange Quick actions" }));
     await user.click(
       within(screen.getByTestId("dashboard-selected")).getByRole("button", { name: "Remove" }),
     );
     await openGallery(user);
     const recommended = screen.getByTestId("gallery-recommended");
-    await user.click(within(recommended).getByRole("button", { name: "Add Welcome" }));
+    await user.click(within(recommended).getByRole("button", { name: "Add Quick actions" }));
     expect(screen.queryByRole("dialog", { name: "Add widget" })).toBeNull();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Arrange Welcome" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Arrange Quick actions" })).toHaveFocus();
     });
   });
 

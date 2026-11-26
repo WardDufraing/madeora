@@ -23,7 +23,8 @@ import {
   type DashboardLayout,
   type LayoutContext,
 } from "./layout";
-import { homeStarterLayout, personalStarterLayout } from "./starter";
+import { legacyPersonalStarterLayout as personalStarterLayout } from "./starter.fixture";
+import { homeStarterLayout } from "./starter";
 import { catalogueFor, defaultConfig, parseConfig, surfaceFor, widgetTypes } from "./widgets";
 
 const HOME = "6f9b1c2e-4a1d-4e7b-9c3a-1b2c3d4e5f60";

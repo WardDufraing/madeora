@@ -1,7 +1,8 @@
 import type { Mock } from "vitest";
 
 import { addWidget } from "@/dashboard/layout";
-import { homeStarterLayout, personalStarterLayout } from "@/dashboard/starter";
+import { homeStarterLayout } from "@/dashboard/starter";
+import { legacyPersonalStarterLayout as personalStarterLayout } from "@/dashboard/starter.fixture";
 import { defaultConfig } from "@/dashboard/widgets";
 
 import { POST as duplicate } from "./[templateId]/duplicate/route";

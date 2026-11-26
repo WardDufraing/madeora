@@ -47,7 +47,7 @@ test("the dashboard history previews and restores an earlier version, which can 
 }) => {
   await newAdult(page, baseURL);
   await customize(page);
-  await removeWidget(page, "Welcome");
+  await removeWidget(page, "Quick actions");
   await save(page);
   await customize(page);
   await removeWidget(page, "Notifications");
@@ -79,7 +79,7 @@ test("the dashboard history previews and restores an earlier version, which can 
   await expect(page.getByText(/The earlier version was restored/)).toBeVisible();
   await expect(page.getByTestId("dashboard-editor")).toHaveCount(0);
   await expect(widget(page, "Notifications")).toBeVisible();
-  await expect(widget(page, "Welcome")).toHaveCount(0);
+  await expect(widget(page, "Quick actions")).toHaveCount(0);
 
   // The replaced layout is still in the history, and Undo brings it back once.
   await page.getByTestId("dashboard-undo").click();

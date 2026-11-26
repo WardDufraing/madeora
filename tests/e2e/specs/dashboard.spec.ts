@@ -79,7 +79,8 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
     }),
   ).toBeVisible();
   // The starter layout, with truthful empty states and nothing invented.
-  await expect(widget(page, "Welcome").getByText("Welcome to Madeora")).toBeVisible();
+  // The heading greets the person, so the starter has no Welcome widget.
+  await expect(widget(page, "Welcome")).toHaveCount(0);
   await expect(
     widget(page, "Quick actions").getByRole("link", { name: "Create a Home" }),
   ).toBeVisible();
@@ -95,7 +96,7 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
     expect(await axeViolations(page), `edit mode, ${theme}`).toEqual([]);
   }
 
-  // Keyboard only: move Notifications up, make it narrower, hide Quick actions, remove Welcome.
+  // Keyboard only: move Notifications up, make it narrower, hide Quick actions, remove Upcoming events, add Welcome.
   // (Which screen-size layout this edits depends on the dashboard's width next to the sidebar.)
   const notifications = page.getByRole("button", { name: "Arrange Notifications" });
   await notifications.focus();
@@ -107,7 +108,7 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
 
   let panel = await select(page, "Quick actions");
   await panel.getByRole("button", { name: "Hide" }).click();
-  panel = await select(page, "Welcome");
+  panel = await select(page, "My upcoming events");
   await panel.getByRole("button", { name: "Remove" }).click();
   await page.getByTestId("dashboard-add-widget").click();
   await page
@@ -126,19 +127,12 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
     ["quick-actions", true],
     ["notifications", false],
     ["tasks", false],
-    ["upcoming-events", false],
     ["welcome", false],
   ]);
 
   // Remove everything: an honest empty dashboard.
   await customize(page);
-  for (const name of [
-    "Notifications",
-    "Welcome",
-    "Quick actions",
-    "Personal tasks",
-    "My upcoming events",
-  ]) {
+  for (const name of ["Notifications", "Welcome", "Quick actions", "Personal tasks"]) {
     panel = await select(page, name);
     await panel.getByRole("button", { name: "Remove" }).click();
   }
@@ -149,10 +143,10 @@ test("a new adult gets a starter dashboard, customizes it by keyboard, and it pe
   await customize(page);
   await page.getByRole("button", { name: "Reset to starter layout" }).click();
   const dialog = page.getByRole("dialog", { name: "Reset to the starter layout?" });
-  await expect(dialog).toContainText("Welcome, Quick actions, Notifications, Tasks");
+  await expect(dialog).toContainText("Quick actions, Notifications, Tasks");
   await dialog.getByRole("button", { name: "Reset layout" }).click();
   await expect(page.getByText("The dashboard is back to the starter layout.")).toBeVisible();
-  await expect(widget(page, "Welcome")).toBeVisible();
+  await expect(widget(page, "Quick actions")).toBeVisible();
   await page.getByTestId("dashboard-undo").click();
   await expect(page.getByText("The last change was undone.")).toBeVisible();
   await expect(page.getByText("No widgets to show")).toBeVisible();
@@ -267,7 +261,7 @@ test("a selected Home widget on the personal dashboard is labelled, and unavaila
   await expect(page.getByTestId("dashboard-grid")).not.toContainText("Buren");
   // Other edits may keep it, so the person removes it when they like.
   await customize(page);
-  let panel = await select(page, "Welcome");
+  let panel = await select(page, "Quick actions");
   await panel.getByRole("button", { name: "Hide" }).click();
   await save(page);
   await expect(widget(page, "Widget unavailable")).toBeVisible();
@@ -335,7 +329,7 @@ test("templates are shared into a Home by kind and applied by the right people",
     picker.getByRole("option", { name: "\u2068Calm mornings\u2069 (shared)" }),
   ).toBeAttached();
   await picker.selectOption({ label: "\u2068Calm mornings\u2069 (shared)" });
-  await expect(memberPage.getByText("Contains: Welcome, Notifications")).toBeVisible();
+  await expect(memberPage.getByText("Contains: Notifications, Tasks")).toBeVisible();
   await memberPage.getByTestId("dashboard-apply-template").click();
   await memberPage.getByRole("dialog").getByRole("button", { name: "Apply template" }).click();
   await expect(memberPage.getByText("Template applied.")).toBeVisible();
