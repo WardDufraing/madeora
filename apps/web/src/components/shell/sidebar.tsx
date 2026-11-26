@@ -115,7 +115,7 @@ export function Sidebar({ initialState }: SidebarProps) {
       data-state={state}
       className={cx(
         "sticky top-0 hidden h-dvh shrink-0 md:flex",
-        collapsed ? "p-3" : "p-4",
+        collapsed ? "p-2" : "p-4",
         "transition-[width] duration-(--md-duration-slow) ease-standard",
         collapsed ? "w-(--md-shell-sidebar-collapsed)" : "w-(--md-shell-sidebar-expanded)",
       )}

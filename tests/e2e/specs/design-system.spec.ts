@@ -1,4 +1,10 @@
-import { deriveAccent, themes, type AccentTokens, type Theme } from "@madeora/design-tokens";
+import {
+  deriveAccent,
+  neutral,
+  themes,
+  type AccentTokens,
+  type Theme,
+} from "@madeora/design-tokens";
 import type { Page } from "@playwright/test";
 
 import { axeViolations, expect, nonTokenColours, test } from "../support/browser";
@@ -129,11 +135,11 @@ for (const theme of themes) {
 test("follows the operating system's dark mode when no theme is forced", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/dev/components");
-  await expect(page.locator("body")).toHaveCSS("background-color", rgb("#10141d"));
+  await expect(page.locator("body")).toHaveCSS("background-color", rgb(neutral.dark.page));
   await page.evaluate(() => {
     document.documentElement.dataset.theme = "light";
   });
-  await expect(page.locator("body")).toHaveCSS("background-color", rgb("#f7f8fc"));
+  await expect(page.locator("body")).toHaveCSS("background-color", rgb(neutral.light.page));
 });
 
 test("the canvas gradient is on the page only and disappears with forced colours", async ({
