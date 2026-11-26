@@ -186,13 +186,19 @@ export function ShoppingListView({ list, homeId, members, formats, today }: Shop
             </p>
           ) : (
             groups.map((group) => (
-              <div key={group.id ?? "uncategorized"} className="flex flex-col gap-2">
+              <div
+                key={group.id ?? "uncategorized"}
+                className="flex flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
+              >
                 {list.categories.length > 0 ? (
                   <h3 className="text-body font-semibold text-fg-muted">
                     <bdi>{group.name}</bdi>
                   </h3>
                 ) : null}
-                <ul className="flex flex-col gap-1" data-testid="shopping-active-items">
+                <ul
+                  className="flex flex-col divide-y divide-line"
+                  data-testid="shopping-active-items"
+                >
                   {group.items.map((item, index) => (
                     <ItemRow
                       key={item.id}
@@ -293,7 +299,7 @@ function ItemRow({
   const error = complete.error ?? move.error;
   return (
     <li
-      className="flex flex-wrap items-center gap-3 rounded-control border border-line bg-surface px-3 py-2"
+      className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
       data-testid="shopping-item"
       data-item-name={item.name}
     >
