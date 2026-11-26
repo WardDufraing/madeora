@@ -20,12 +20,10 @@ test.use({
 });
 
 const dashboardHeading = (page: Page) =>
-  page
-    .getByRole("main")
-    .getByRole("heading", {
-      level: 1,
-      name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
-    });
+  page.getByRole("main").getByRole("heading", {
+    level: 1,
+    name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+  });
 
 // This job has no setup project that signs in first, so a test's first landing on `/` can meet
 // a cold `next start` while the other tests start in parallel: the first render loads every

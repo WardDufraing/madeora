@@ -6,11 +6,9 @@ test("the dashboard loads with its heading inside the app shell", async ({ page 
   expect(response?.status()).toBe(200);
   await expect(page).toHaveTitle("Dashboard · Madeora");
   await expect(
-    page
-      .getByRole("main")
-      .getByRole("heading", {
-        level: 1,
-        name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
-      }),
+    page.getByRole("main").getByRole("heading", {
+      level: 1,
+      name: /^(Good (morning|afternoon|evening)|Goedemorgen|Goedemiddag|Goedenavond)/,
+    }),
   ).toBeVisible();
 });
