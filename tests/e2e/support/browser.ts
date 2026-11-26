@@ -95,20 +95,30 @@ export async function axeViolations(
 export async function nonTokenColours(page: Page): Promise<string[]> {
   await settle(page);
   return page.evaluate(() => {
-    const probe = document.createElement("span");
-    document.body.append(probe);
+    // Both themes' tokens are allowed: a region may force a theme with `data-theme` (the sidebar
+    // is always dark), so it paints the other theme's tokens, which are still design tokens.
+    const probes = (["light", "dark"] as const).map((theme) => {
+      const host = document.createElement("div");
+      host.dataset.theme = theme;
+      const probe = document.createElement("span");
+      host.append(probe);
+      document.body.append(host);
+      return { host, probe };
+    });
     const allowed = new Set(["rgba(0, 0, 0, 0)"]);
     for (const sheet of document.styleSheets) {
       for (const rule of sheet.cssRules) {
         if (!(rule instanceof CSSStyleRule)) continue;
         for (const name of rule.style) {
           if (!name.startsWith("--md-color-")) continue;
-          probe.style.color = `var(${name})`;
-          allowed.add(getComputedStyle(probe).color);
+          for (const { probe } of probes) {
+            probe.style.color = `var(${name})`;
+            allowed.add(getComputedStyle(probe).color);
+          }
         }
       }
     }
-    probe.remove();
+    for (const { host } of probes) host.remove();
 
     const found = new Set<string>();
     for (const element of document.querySelectorAll("body, body *")) {

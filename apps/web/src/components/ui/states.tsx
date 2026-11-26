@@ -22,7 +22,7 @@ export function EmptyState({ title, description, action, className }: StateProps
     <div
       className={cx(
         frame,
-        "rounded-control border border-dashed border-line-control bg-accent-subtle/30",
+        "rounded-control border border-dashed border-line-control bg-surface",
         className,
       )}
     >
