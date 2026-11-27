@@ -90,6 +90,18 @@ export function AvatarSetting({
     }
   }
 
+  const clearButton = currentFileId ? (
+    <Button
+      variant="ghost"
+      disabled={!hydrated || busy !== null}
+      loading={busy === "clear"}
+      onClick={() => void run("clear", () => clearAvatar(scope))}
+      data-testid="avatar-clear"
+    >
+      {scope.kind === "home" ? t("avatarUseGlobal") : t("avatarRemove")}
+    </Button>
+  ) : null;
+
   return (
     <div className="flex flex-col gap-4" data-testid={`avatar-setting-${scope.kind}`}>
       <div className="flex items-center gap-4">
@@ -109,18 +121,31 @@ export function AvatarSetting({
         </p>
       </div>
       {uploadsEnabled ? (
-        <div className="flex flex-col gap-1">
-          <label htmlFor={inputId} className="text-body font-medium text-fg">
-            {t("avatarChoose")}
-          </label>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              disabled={!hydrated || busy !== null}
+              onClick={() => inputRef.current?.click()}
+              aria-describedby={hintId}
+              data-testid="avatar-choose"
+            >
+              {t("avatarChoose")}
+            </Button>
+            {clearButton}
+          </div>
+          {/* The visible control is the button above; this input only receives the file. It keeps its
+              label so scripts and tests can still find it by name. */}
           <input
             ref={inputRef}
             id={inputId}
             type="file"
             accept={avatarUploadTypes.join(",")}
-            aria-describedby={hintId}
+            aria-label={t("avatarChoose")}
+            aria-hidden="true"
+            tabIndex={-1}
             disabled={!hydrated || busy !== null}
-            className="text-body text-fg file:me-3 file:rounded-md file:border file:border-line-control file:bg-surface file:px-3 file:py-2 file:text-body file:font-medium file:text-fg"
+            className="sr-only"
             data-testid="avatar-input"
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
@@ -132,9 +157,12 @@ export function AvatarSetting({
           </p>
         </div>
       ) : (
-        <p className="text-helper text-fg-muted" data-testid="avatar-uploads-off">
-          {t("avatarUploadsOff")}
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="text-helper text-fg-muted" data-testid="avatar-uploads-off">
+            {t("avatarUploadsOff")}
+          </p>
+          {clearButton ? <div>{clearButton}</div> : null}
+        </div>
       )}
       {busy === "upload" ? (
         <FormAlert tone="info" announce>
@@ -159,19 +187,6 @@ export function AvatarSetting({
               : t(scope.kind === "home" ? "avatarHomeReset" : "avatarRemoved")}
           </p>
         </FormAlert>
-      ) : null}
-      {currentFileId ? (
-        <div>
-          <Button
-            variant="secondary"
-            disabled={!hydrated || busy !== null}
-            loading={busy === "clear"}
-            onClick={() => void run("clear", () => clearAvatar(scope))}
-            data-testid="avatar-clear"
-          >
-            {scope.kind === "home" ? t("avatarUseGlobal") : t("avatarRemove")}
-          </Button>
-        </div>
       ) : null}
     </div>
   );
