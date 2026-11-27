@@ -562,7 +562,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
           {status}
           {unlockedId !== null && unlockLeft !== null ? (
             <div
-              className="flex items-center gap-3 rounded-control border border-line bg-accent-subtle px-3 py-1"
+              className="flex items-center gap-3 rounded-control border border-accent-edge bg-accent-subtle px-3 py-1"
               data-testid="display-unlocked"
             >
               <p className="text-helper text-fg">
@@ -611,7 +611,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
               <section
                 key={widget.id}
                 aria-label={title ?? t("widget.clock")}
-                className={`flex min-w-0 flex-col gap-3 overflow-hidden rounded-card border border-line bg-surface ${compact ? "p-3" : "p-5"} sm:[grid-column:span_var(--span-columns)] sm:[grid-row:span_var(--span-rows)]`}
+                className={`flex min-w-0 flex-col gap-3 overflow-hidden rounded-card border border-line bg-surface shadow-raised ${compact ? "p-3" : "p-5"} sm:[grid-column:span_var(--span-columns)] sm:[grid-row:span_var(--span-rows)]`}
                 style={
                   {
                     "--span-columns": span.columns,
@@ -630,7 +630,7 @@ export function DisplayScreen({ initialBoard }: { readonly initialBoard: Display
         </div>
       ) : (
         <section
-          className={`flex min-w-0 flex-col gap-4 rounded-card border border-line bg-surface ${compact ? "p-3" : "p-5"}`}
+          className={`flex min-w-0 flex-col gap-4 rounded-card border border-line bg-surface shadow-raised ${compact ? "p-3" : "p-5"}`}
           data-testid={`display-view-${view}`}
           aria-labelledby="display-view-heading"
         >

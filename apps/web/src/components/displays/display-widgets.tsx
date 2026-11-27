@@ -89,11 +89,11 @@ export function DisplayChoreList({
   const shown = chores.slice(0, count);
   return (
     <>
-      <ul className="flex flex-col gap-2" data-testid="display-chore-list">
+      <ul className="flex flex-col gap-3" data-testid="display-chore-list">
         {shown.map((chore) => (
           <li
             key={chore.occurrenceId}
-            className="flex flex-col rounded-control border border-line bg-surface px-4 py-3 text-start"
+            className="flex flex-col rounded-control border border-line bg-page px-4 py-3 text-start"
           >
             <span className="text-body font-medium text-fg" dir="auto">
               {chore.title}
