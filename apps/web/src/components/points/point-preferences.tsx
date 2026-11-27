@@ -81,7 +81,7 @@ export function PointPreferences({
           mutation.mutate(values);
         })(event);
       }}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="point-preferences"
     >
       {region}
@@ -167,7 +167,7 @@ export function LeaderboardSettings({
           mutation.mutate(values);
         })(event);
       }}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="leaderboard-settings"
     >
       {region}

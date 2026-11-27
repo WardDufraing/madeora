@@ -91,7 +91,7 @@ export async function PersonalRewardsPage({ archived }: { readonly archived: boo
             <EmptyState title={tr("emptyTitle")} description={t("empty")} />
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="personal-rewards"
             >
               {rewards.value.map((reward) => {
@@ -182,7 +182,7 @@ export async function PersonalRewardsPage({ archived }: { readonly archived: boo
             <p className="text-body text-fg-muted">{tr("mineEmpty")}</p>
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="personal-redemptions"
             >
               {redemptions.value.map((redemption) => (

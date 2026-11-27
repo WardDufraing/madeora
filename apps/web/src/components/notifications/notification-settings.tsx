@@ -226,7 +226,7 @@ function ScopeSettings({ scope, zoneChoices, emailVerified, preferences, quietHo
       role="group"
       aria-labelledby={headingId}
       data-testid={scope.id ? "notification-scope-home" : "notification-scope-account"}
-      className="flex flex-col gap-5 rounded-card border border-line bg-surface p-5"
+      className="flex flex-col gap-5 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
     >
       <h3 id={headingId} className="text-body font-semibold text-fg">
         {scope.name}

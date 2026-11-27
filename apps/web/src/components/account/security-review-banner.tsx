@@ -10,7 +10,7 @@ export async function SecurityReviewBanner() {
   return (
     <aside
       aria-label={t("reviewBannerLabel")}
-      className="mb-4 mt-4 flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface p-4 text-body"
+      className="mb-4 mt-4 flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised text-body"
       data-testid="security-review-banner"
     >
       <p className="min-w-0 flex-1">{t("reviewBanner")}</p>

@@ -75,7 +75,7 @@ export function PetCareSection({
             return (
               <li
                 key={activity.id}
-                className="rounded-card border border-line bg-surface p-4"
+                className="rounded-card border border-line bg-surface p-widget-padding shadow-raised"
                 data-testid="care-item"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
