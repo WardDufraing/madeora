@@ -117,7 +117,7 @@ export async function ChoreSummaryPage({
               <h2 id={headingId} className="text-section-title font-semibold text-fg">
                 {t(group.title)} <span className="text-fg-muted">({count})</span>
               </h2>
-              <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+              <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
                 {rows.map((item) => (
                   <li key={item.id} className="flex flex-col gap-1 p-3">
                     <Link

@@ -93,7 +93,7 @@ export async function ChoreApprovalsPage({
           <EmptyState title={t("approvalsEmptyTitle")} description={t("approvalsEmpty")} />
         ) : (
           <ul
-            className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+            className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
             data-testid="chore-approvals"
           >
             {approvals.value.map((item) => {

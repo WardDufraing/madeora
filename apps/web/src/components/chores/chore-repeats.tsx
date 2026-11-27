@@ -183,7 +183,7 @@ export function ChoreRepeats({
               </Button>
             </div>
           ) : (
-            <fieldset className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+            <fieldset className="flex flex-col gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised">
               <legend className="sr-only">{t("pause")}</legend>
               <p className="text-helper text-fg-muted">{t("pauseHelp")}</p>
               <RadioOption

@@ -162,7 +162,7 @@ export async function HomeHistoryPage({ userId, home, searchParams }: HomeHistor
           method="get"
           action={action}
           role="search"
-          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           aria-label={t("homeHistoryFilters")}
           data-testid="home-history-filters"
         >

@@ -72,7 +72,7 @@ export function HomeHistoryList({
   return (
     <HydrationGate>
       <ol
-        className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+        className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
         data-testid="home-chore-history"
       >
         {rows.map((row) => (

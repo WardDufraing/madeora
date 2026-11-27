@@ -127,7 +127,7 @@ function TemplateForm({
       onSubmit={(event) => {
         void form.handleSubmit(onSubmit)(event);
       }}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="chore-template-form"
     >
       <TextField
@@ -431,7 +431,7 @@ export function TemplateManager({
           </FormAlert>
         ) : null}
         {active.length > 0 ? (
-          <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
             {active.map(row)}
           </ul>
         ) : (
@@ -442,7 +442,7 @@ export function TemplateManager({
             <summary className="cursor-pointer text-body font-medium text-fg">
               {t("retiredTemplates", { count: retired.length })}
             </summary>
-            <ul className="mt-2 flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+            <ul className="mt-2 flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
               {retired.map(row)}
             </ul>
           </details>

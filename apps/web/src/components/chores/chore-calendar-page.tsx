@@ -129,7 +129,7 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
         <form
           method="get"
           action={base}
-          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           aria-label={t("filtersLabel")}
           data-testid="chore-calendar-filters"
         >

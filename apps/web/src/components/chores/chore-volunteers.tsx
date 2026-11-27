@@ -137,7 +137,7 @@ export function VolunteerOffers({
       <h2 id="volunteer-offers-heading" className="text-section-title font-semibold text-fg">
         {t("volunteerOffersHeading")}
       </h2>
-      <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+      <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
         {offers.map((offer) => (
           <li
             key={offer.requestId}

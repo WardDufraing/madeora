@@ -331,7 +331,7 @@ export function TemplateLibrary({ homeId, templates, labels, canManage }: Templa
             {templates.map((template) => (
               <li
                 key={template.id}
-                className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
+                className="flex flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
                 data-testid="template"
               >
                 <p className="text-body font-semibold text-fg">
@@ -386,7 +386,7 @@ export function TemplateLibrary({ homeId, templates, labels, canManage }: Templa
         )}
         {canManage ? (
           creating ? (
-            <div className="rounded-card border border-line bg-surface p-4">
+            <div className="rounded-card border border-line bg-surface p-widget-padding shadow-raised">
               <h3 className="mb-3 text-body font-semibold text-fg">{t("newHeading")}</h3>
               <TemplateForm
                 defaults={{

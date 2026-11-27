@@ -189,7 +189,7 @@ export function ChoreClaimPolicyEditor({ choreId, policy, members }: ChoreClaimP
               rePreviewed.current = false;
               void submit(event);
             }}
-            className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+            className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
             data-testid="chore-policy-form"
           >
             <p className="text-helper text-fg-muted">{t("policyHelp")}</p>

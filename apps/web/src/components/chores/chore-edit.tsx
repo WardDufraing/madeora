@@ -354,7 +354,7 @@ export function ChoreEdit({ occurrence, members, dateFormat }: ChoreEditProps) {
           {t("editHeading")}
         </h2>
         <div
-          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           data-testid="chore-edit-form"
         >
           {recurring ? (

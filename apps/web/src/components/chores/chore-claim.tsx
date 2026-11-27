@@ -243,7 +243,7 @@ export function ChoreClaim({
           <div className="flex flex-col gap-2">
             <h3 className="text-body font-semibold text-fg">{t("requestsOnOccurrence")}</h3>
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="chore-claim-requests"
             >
               {state.requests.map((request) => {
@@ -382,7 +382,7 @@ function RequestForm({
           mutation.mutate(values);
         })(event);
       }}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="chore-request-form"
     >
       <p className="text-helper text-fg-muted">

@@ -115,7 +115,7 @@ export function NewChore({
             ) : null}
           </div>
         ) : (
-          <div className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4">
+          <div className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised">
             {templates.length > 0 ? (
               <div className="flex flex-wrap items-end gap-3">
                 <SelectField

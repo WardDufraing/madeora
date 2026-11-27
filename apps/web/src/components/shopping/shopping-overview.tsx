@@ -81,7 +81,7 @@ export async function ShoppingOverview({ userId, home, searchParams }: ShoppingO
             {lists.value.map((list, index) => (
               <li
                 key={list.id}
-                className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface p-4"
+                className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
                 data-testid="shopping-list-card"
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-1">

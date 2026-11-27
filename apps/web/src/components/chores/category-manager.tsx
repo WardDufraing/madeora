@@ -315,7 +315,7 @@ export function CategoryManager({
           </FormAlert>
         ) : null}
         {active.length > 0 ? (
-          <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
             {active.map((category, index) => row(category, index))}
           </ul>
         ) : (
@@ -326,7 +326,7 @@ export function CategoryManager({
             <summary className="cursor-pointer text-body font-medium text-fg">
               {t("archivedCategories", { count: archived.length })}
             </summary>
-            <ul className="mt-2 flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+            <ul className="mt-2 flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
               {archived.map((category) => row(category, null))}
             </ul>
           </details>

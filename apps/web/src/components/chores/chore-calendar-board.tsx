@@ -332,7 +332,7 @@ export function ChoreCalendarBoard({
           {selectedItems.length === 0 ? (
             <p className="text-body text-fg-muted">{t("calendarDayEmpty")}</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+            <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
               {selectedItems.map((item, index) => {
                 const words = states(item);
                 return (
