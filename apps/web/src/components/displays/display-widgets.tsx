@@ -93,7 +93,7 @@ export function DisplayChoreList({
         {shown.map((chore) => (
           <li
             key={chore.occurrenceId}
-            className="flex flex-col rounded-control border border-line bg-page px-4 py-3 text-start"
+            className="flex flex-col rounded-control border border-line bg-surface-sunken px-4 py-3 text-start"
           >
             <span className="text-body font-medium text-fg" dir="auto">
               {chore.title}
