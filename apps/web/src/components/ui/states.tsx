@@ -1,4 +1,4 @@
-import { ErrorIcon, SpinnerIcon } from "@madeora/icons";
+import { ErrorIcon, InfoIcon, SpinnerIcon } from "@madeora/icons";
 import type { ReactNode } from "react";
 
 import { cx } from "./cx";
@@ -12,6 +12,8 @@ interface StateProps {
 }
 
 const frame = "flex flex-col items-center gap-2 px-4 py-8 text-center";
+// The icon sits in a soft circle. The icon shape (not only the colour) tells the states apart.
+const medallion = "mb-1 flex size-12 shrink-0 items-center justify-center rounded-pill";
 
 /**
  * Nothing here yet. Invites the next step without inventing data (spec: no fake content). Drawn as
@@ -21,6 +23,9 @@ const frame = "flex flex-col items-center gap-2 px-4 py-8 text-center";
 export function EmptyState({ title, description, action, className }: StateProps) {
   return (
     <div className={cx(frame, "rounded-card border border-line bg-page px-6 py-10", className)}>
+      <span className={cx(medallion, "bg-accent-subtle text-accent-fg")}>
+        <InfoIcon size="lg" />
+      </span>
       <p className="text-body font-semibold text-fg">{title}</p>
       {description ? <div className="max-w-sm text-helper text-fg-muted">{description}</div> : null}
       {action ? <div className="mt-2">{action}</div> : null}
@@ -66,7 +71,9 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div role={announce ? "alert" : undefined} className={cx(frame, className)}>
-      <ErrorIcon size="lg" className="text-danger" />
+      <span className={cx(medallion, "bg-danger-subtle text-danger")}>
+        <ErrorIcon size="lg" />
+      </span>
       <p className="text-body font-semibold text-fg">{title}</p>
       {description ? <div className="max-w-sm text-helper text-fg-muted">{description}</div> : null}
       {action ? <div className="mt-2">{action}</div> : null}
