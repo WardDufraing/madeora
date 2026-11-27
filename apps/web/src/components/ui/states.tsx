@@ -13,7 +13,7 @@ interface StateProps {
 
 const frame = "flex flex-col items-center gap-2 px-4 py-8 text-center";
 // The icon sits in a soft circle. The icon shape (not only the colour) tells the states apart.
-const medallion = "mb-1 flex size-12 items-center justify-center rounded-pill";
+const medallion = "mb-1 flex size-12 shrink-0 items-center justify-center rounded-pill";
 
 /**
  * Nothing here yet. Invites the next step without inventing data (spec: no fake content). Drawn as
