@@ -523,7 +523,7 @@ function ReminderForm({
       method="post"
       noValidate
       aria-label={t("formLabel")}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       onSubmit={(event) => {
         void form.handleSubmit((submitted) => {
           const parsed = bodyOf(submitted);
