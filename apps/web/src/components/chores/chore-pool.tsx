@@ -127,7 +127,7 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
       </p>
       <HydrationGate>
         <details
-          className="rounded-card border border-line bg-surface p-3"
+          className="rounded-card border border-line bg-surface p-4 shadow-raised"
           data-testid="pool-filters"
         >
           <summary className="cursor-pointer text-body font-medium text-fg">
@@ -209,11 +209,11 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
         </details>
       </HydrationGate>
       {pool.rows.length === 0 ? (
-        <p className="rounded-card border border-line bg-surface p-3 text-body text-fg-muted">
+        <p className="rounded-card border border-line bg-surface p-4 text-body text-fg-muted shadow-raised">
           {t("poolEmpty")}
         </p>
       ) : shown.length === 0 ? (
-        <p className="rounded-card border border-line bg-surface p-3 text-body text-fg-muted">
+        <p className="rounded-card border border-line bg-surface p-4 text-body text-fg-muted shadow-raised">
           {t("poolNoMatch")}
         </p>
       ) : (
@@ -230,7 +230,7 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
                   {t("groupCount", { count: section.rows.length })}
                 </span>
               </h3>
-              <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+              <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
                 {section.rows.map((row) => (
                   <PoolRow
                     key={row.id}
@@ -269,7 +269,7 @@ function PoolRow({
   const t = useTranslations("Chores");
   return (
     <li
-      className={`flex flex-wrap items-center justify-between gap-3 p-3${isToday ? " bg-accent-subtle" : ""}`}
+      className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3${isToday ? " bg-accent-subtle" : ""}`}
       data-testid="pool-row"
     >
       <div className="flex min-w-0 flex-col gap-1">
