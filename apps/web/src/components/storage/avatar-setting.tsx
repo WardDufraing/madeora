@@ -134,7 +134,8 @@ export function AvatarSetting({
             </Button>
             {clearButton}
           </div>
-          {/* The visible control is the button above; this input only receives the file. */}
+          {/* The visible control is the button above; this input only receives the file. It keeps its
+              label so scripts and tests can still find it by name. */}
           <input
             ref={inputRef}
             id={inputId}
