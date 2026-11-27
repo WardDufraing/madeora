@@ -117,12 +117,12 @@ export function WidgetFrame({
         className,
       )}
     >
-      <div className="mx-6 flex items-center gap-2 border-b border-line pt-5 pb-3">
+      <div className="mx-6 flex items-center gap-2 border-b border-line pt-5 pb-2">
         {/* Wraps instead of truncating, so a Home widget's source Home stays readable on a phone. */}
         <h2 className="min-w-0 flex-1 text-section-title font-bold break-words">{widget.title}</h2>
         {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-6 pt-4 pb-6">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto px-6 pt-3 pb-6">{children}</div>
     </article>
   );
 }
