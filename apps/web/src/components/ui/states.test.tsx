@@ -32,6 +32,20 @@ describe("state components", () => {
     expect(card).not.toHaveClass("border-dashed");
   });
 
+  it("EmptyState and ErrorState show a decorative icon medallion, with different shapes", () => {
+    const { container: empty } = render(<EmptyState title="No tasks yet" />);
+    const { container: failed } = render(<ErrorState title="Couldn't load tasks" />);
+
+    const emptyIcon = empty.querySelector("svg");
+    const errorIcon = failed.querySelector("svg");
+    expect(emptyIcon).toHaveAttribute("aria-hidden", "true");
+    expect(errorIcon).toHaveAttribute("aria-hidden", "true");
+    // Two different icon shapes, so the states are not told apart by colour alone.
+    expect(emptyIcon?.innerHTML).not.toBe(errorIcon?.innerHTML);
+    expect(emptyIcon?.parentElement).toHaveClass("rounded-pill", "bg-accent-subtle");
+    expect(errorIcon?.parentElement).toHaveClass("rounded-pill", "bg-danger-subtle");
+  });
+
   it("ErrorState is announced only when asked", () => {
     const { rerender } = render(<ErrorState title="Couldn't load tasks" />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
