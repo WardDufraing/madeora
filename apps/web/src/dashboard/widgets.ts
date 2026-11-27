@@ -40,8 +40,8 @@ export function breakpointFor(width: number): Breakpoint {
   if (width >= breakpointMinWidths.md) return "md";
   return "sm";
 }
-/** Space between widgets, in px (Tailwind `gap-4`). */
-export const GRID_GAP = 16;
+/** Space between widgets, in px (Tailwind `gap-5`). */
+export const GRID_GAP = 20;
 /** One grid row, in px. */
 export const ROW_HEIGHT = 88;
 

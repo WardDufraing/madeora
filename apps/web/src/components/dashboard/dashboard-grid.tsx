@@ -48,7 +48,7 @@ export function DashboardGrid({
     <div className="@container" data-testid="dashboard-grid">
       <ol
         className={cx(
-          "grid auto-rows-[88px] gap-4",
+          "grid auto-rows-[88px] gap-5",
           "[grid-template-columns:repeat(1,minmax(0,1fr))]",
           "@min-[640px]:[grid-template-columns:repeat(6,minmax(0,1fr))]",
           "@min-[1024px]:[grid-template-columns:repeat(12,minmax(0,1fr))]",
@@ -117,12 +117,12 @@ export function WidgetFrame({
         className,
       )}
     >
-      <div className="flex items-center gap-2 px-6 pt-5 pb-1">
+      <div className="mx-6 flex items-center gap-2 border-b border-line pt-5 pb-3">
         {/* Wraps instead of truncating, so a Home widget's source Home stays readable on a phone. */}
         <h2 className="min-w-0 flex-1 text-section-title font-bold break-words">{widget.title}</h2>
         {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-6 pt-3 pb-6">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto px-6 pt-4 pb-6">{children}</div>
     </article>
   );
 }
