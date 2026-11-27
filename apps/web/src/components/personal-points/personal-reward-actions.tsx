@@ -239,7 +239,7 @@ export function PersonalRewardForm({ reward }: { readonly reward: PersonalReward
       onChange={() => {
         setImpact(null);
       }}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
       data-testid="personal-reward-form"
     >
       {region}
