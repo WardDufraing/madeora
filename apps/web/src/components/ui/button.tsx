@@ -35,7 +35,8 @@ const variants: Record<ButtonVariant, string> = {
 
 const sizes: Record<ButtonSize, string> = {
   md: "min-h-11 px-5 text-body gap-2",
-  sm: "min-h-9 px-4 text-helper gap-1.5",
+  // 36px visible; the pseudo-element extends the tap area to 44px without shifting the layout.
+  sm: "relative min-h-9 px-4 text-helper gap-1.5 after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']",
 };
 
 export function Button({
