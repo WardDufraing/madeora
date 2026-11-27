@@ -7,6 +7,15 @@ import { axeViolations } from "@/test/axe";
 import { Button } from "./button";
 
 describe("Button", () => {
+  it("keeps a 44px tap area on the small size", () => {
+    render(<Button size="sm">Undo</Button>);
+
+    const classes = screen.getByRole("button", { name: "Undo" }).className;
+    // 36px visible (min-h-9) plus 4px of hit area above and below.
+    expect(classes).toContain("min-h-9");
+    expect(classes).toContain("after:-inset-y-1");
+  });
+
   it("is a plain button (not submit) with its label as the accessible name", async () => {
     const onClick = vi.fn();
     render(<Button onClick={onClick}>Save</Button>);
