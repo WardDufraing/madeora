@@ -296,13 +296,14 @@ export function TaskList({
       <li
         key={task.id}
         className={cx(
-          "relative flex items-start gap-3 rounded-card border border-line bg-surface p-3 ps-4 shadow-raised",
+          "relative flex items-start gap-3 rounded-card border border-line bg-surface p-3 ps-4",
           "motion-safe:transition-colors motion-safe:duration-(--md-duration-base)",
           // A ring, not a tinted fill: muted text keeps its contrast on the plain surface.
           isSelected || retained
             ? "ring-1 ring-inset ring-accent-edge forced-colors:border-[Highlight]"
             : "",
-          inCompletedSection ? "opacity-80" : "",
+          // Quieter by dropping the lift, not by fading: opacity would cut the muted text's contrast.
+          inCompletedSection ? "" : "shadow-raised",
         )}
         data-testid="task-row"
         data-task-id={task.id}
