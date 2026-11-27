@@ -127,7 +127,7 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
       </p>
       <HydrationGate>
         <details
-          className="rounded-card border border-line bg-surface p-4 shadow-raised"
+          className="rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           data-testid="pool-filters"
         >
           <summary className="cursor-pointer text-body font-medium text-fg">
@@ -209,11 +209,11 @@ export function ChorePool({ homeId, pool, week, today, categories, formats }: Ch
         </details>
       </HydrationGate>
       {pool.rows.length === 0 ? (
-        <p className="rounded-card border border-line bg-surface p-4 text-body text-fg-muted shadow-raised">
+        <p className="rounded-card border border-line bg-surface p-widget-padding text-body text-fg-muted shadow-raised">
           {t("poolEmpty")}
         </p>
       ) : shown.length === 0 ? (
-        <p className="rounded-card border border-line bg-surface p-4 text-body text-fg-muted shadow-raised">
+        <p className="rounded-card border border-line bg-surface p-widget-padding text-body text-fg-muted shadow-raised">
           {t("poolNoMatch")}
         </p>
       ) : (
