@@ -70,6 +70,20 @@ afterEach(() => {
 });
 
 describe("AvatarSetting", () => {
+  it("opens the file picker from the visible button; the file input itself is not a tab stop", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<AvatarSetting {...base} scope={{ kind: "global" }} />);
+    const input = screen.getByTestId("avatar-input");
+    const opened = vi.fn();
+    input.addEventListener("click", opened);
+
+    await user.click(await screen.findByRole("button", { name: "Choose a picture" }));
+
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(input).toHaveAttribute("tabindex", "-1");
+    expect(input).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("uploads a picture straight to storage, finalizes it and makes it the global avatar", async () => {
     uploadSucceeds();
     const user = userEvent.setup();
