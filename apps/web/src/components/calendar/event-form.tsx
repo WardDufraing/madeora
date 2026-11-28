@@ -650,7 +650,7 @@ export function EventForm({
       {preview ? (
         <section
           aria-labelledby="event-preview-heading"
-          className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           data-testid="event-preview"
         >
           <h2 id="event-preview-heading" className="text-body font-semibold">
