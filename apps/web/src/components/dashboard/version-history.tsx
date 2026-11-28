@@ -199,7 +199,7 @@ function VersionRow({
   return (
     <article
       aria-labelledby={headingId}
-      className="flex flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised text-fg"
+      className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4 text-fg"
       data-testid="dashboard-history-version"
       data-version-id={version.id}
       data-current={version.isCurrent ? "true" : undefined}

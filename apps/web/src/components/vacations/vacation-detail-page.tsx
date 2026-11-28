@@ -171,7 +171,7 @@ export async function VacationDetailPage({
             <p className="text-body text-fg-muted">{t("peopleEmpty")}</p>
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="vacation-people"
             >
               {accepted.map(personItem)}
@@ -181,7 +181,7 @@ export async function VacationDetailPage({
             <>
               <h3 className="text-body font-semibold text-fg">{t("othersHeading")}</h3>
               <ul
-                className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+                className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
                 data-testid="vacation-others"
               >
                 {others.map(personItem)}

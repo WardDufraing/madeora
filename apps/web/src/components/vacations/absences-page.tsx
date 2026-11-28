@@ -78,7 +78,7 @@ export async function AbsencesPage({
             <EmptyState title={t("absencesEmptyTitle")} description={t("absencesEmpty")} />
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="absences"
             >
               {list.value.absences.map((absence) => (

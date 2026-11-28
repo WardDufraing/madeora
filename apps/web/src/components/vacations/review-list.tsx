@@ -59,7 +59,7 @@ export function ReviewList({
     <div className="flex flex-col gap-4">
       {items.length > 0 ? (
         <ul
-          className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+          className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
           data-testid="vacation-review"
         >
           {items.map((item) => (
