@@ -129,7 +129,7 @@ export async function VacationsPage({
               {t("requestsHeading")}
             </h2>
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="vacation-requests"
             >
               {value.invitations.map((invitation) => (
@@ -190,7 +190,7 @@ export async function VacationsPage({
             <EmptyState title={t("emptyTitle")} description={t("empty")} />
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="vacations-current"
             >
               {value.current.map(item)}
@@ -203,7 +203,7 @@ export async function VacationsPage({
               {t("historyHeading")}
             </h2>
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="vacations-history"
             >
               {value.history.map(item)}
