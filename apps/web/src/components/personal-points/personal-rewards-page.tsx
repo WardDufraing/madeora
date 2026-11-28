@@ -37,9 +37,11 @@ export async function PersonalRewardsPage({ archived }: { readonly archived: boo
   const header = (
     <>
       <PageHeader title={t("rewardsTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <span>{t("personalContext")}</span>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={PERSONAL_POINTS_PATH} className="link-action">
           {t("pointsLink")}
         </Link>

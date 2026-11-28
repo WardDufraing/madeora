@@ -85,15 +85,19 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     <>
       <RememberContext userId={userId} context={{ kind: "home", homeId: home.id }} />
       <PageHeader title={t("directoryTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         <span aria-hidden="true">{"\u{00B7}"}</span>
         <RoleLabel role={membership.role} />
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={`/homes/${home.id}`} className="link-action">
           {tHomes("backToHome")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link
           href={`/homes/${home.id}/children/new`}
           className="link-action"
@@ -101,7 +105,9 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         >
           {t("addChildLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link
           href={`/homes/${home.id}/children/link`}
           className="link-action"
@@ -111,7 +117,9 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         </Link>
         {permissions["home.invitations.manage"] ? (
           <>
-            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <span aria-hidden="true" className="max-sm:hidden">
+              {"\u{00B7}"}
+            </span>
             <Link href={`/homes/${home.id}/invitations`} className="link-action">
               {t("invitationsLink")}
             </Link>

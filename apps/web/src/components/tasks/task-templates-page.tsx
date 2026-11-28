@@ -30,9 +30,11 @@ export async function TaskTemplatesPage({
   const header = (
     <>
       <PageHeader title={t("pageTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home ? home.name : tTasks("personalSpace")}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={tasksPath(homeId)} className="link-action">
           {tTasks("backToTasks")}
         </Link>

@@ -73,9 +73,11 @@ export async function HomeHistoryPage({ userId, home, searchParams }: HomeHistor
   const header = (
     <>
       <PageHeader title={t("homeHistoryTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={base} className="link-action">
           {t("backToChores")}
         </Link>
@@ -213,7 +215,7 @@ export async function HomeHistoryPage({ userId, home, searchParams }: HomeHistor
               }))}
             />
           </div>
-          <fieldset className="flex flex-col gap-3">
+          <fieldset className="flex min-w-0 flex-col gap-3">
             <legend className="text-body font-medium text-fg">{t("historyDates")}</legend>
             <p className="text-helper text-fg-muted">
               {t("historyDatesHelp", { zone: home.timeZone })}

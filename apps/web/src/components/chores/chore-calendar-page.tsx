@@ -87,9 +87,11 @@ export async function ChoreCalendarPage({ home, searchParams }: ChoreCalendarPag
   return (
     <>
       <PageHeader title={t("calendarTitle")} />
-      <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={choresPath(home.id)} className="link-action">
           {t("backToChores")}
         </Link>

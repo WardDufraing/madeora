@@ -167,11 +167,13 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
   return (
     <>
       <PageHeader title={t("title")} />
-      <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
         {context.value.canReview ? (
           <>
-            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <span aria-hidden="true" className="max-sm:hidden">
+              {"\u{00B7}"}
+            </span>
             <Link
               href={`${base}/approvals`}
               className="link-action"
@@ -181,7 +183,9 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
             </Link>
           </>
         ) : null}
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link
           href={`${base}/proposals`}
           className="link-action"
@@ -191,13 +195,17 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
             ? t("proposalsLink", { count: proposals.value.pendingCount })
             : t("proposeLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={`${base}/calendar`} className="link-action" data-testid="chores-calendar-link">
           {t("calendarLink")}
         </Link>
         {context.value.canManage ? (
           <>
-            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <span aria-hidden="true" className="max-sm:hidden">
+              {"\u{00B7}"}
+            </span>
             <Link
               href={`${base}/summary`}
               className="link-action"
@@ -207,19 +215,27 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
             </Link>
           </>
         ) : null}
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={`${base}/history`} className="link-action">
           {t("homeHistoryLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={pointsPath(home.id)} className="link-action" data-testid="chores-points-link">
           {t("pointsLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={rewardsPath(home.id)} className="link-action" data-testid="chores-rewards-link">
           {t("rewardsLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link
           href={vacationsPath(home.id)}
           className="link-action"
@@ -227,7 +243,9 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         >
           {t("vacationsLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link
           href={absencesPath(home.id)}
           className="link-action"
@@ -237,7 +255,9 @@ export async function ChoresOverview({ home, searchParams, notice }: ChoresOverv
         </Link>
         {context.value.canManage ? (
           <>
-            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <span aria-hidden="true" className="max-sm:hidden">
+              {"\u{00B7}"}
+            </span>
             <Link href={`${base}/manage`} className="link-action">
               {t("manageLink")}
             </Link>

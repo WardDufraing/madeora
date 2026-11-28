@@ -26,7 +26,7 @@ import {
 import { useScrollHide } from "./use-scroll-hide";
 
 const tabClass =
-  "group relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-helper";
+  "group relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-0.5 text-helper";
 
 /**
  * Navigation below the `md` breakpoint (redesign decisions 26, 27 and 29): a bottom bar with
@@ -159,7 +159,7 @@ export function MobileNav() {
             >
               <Icon size="md" />
             </span>
-            <span>{tNav(item.id)}</span>
+            <span className="max-w-full truncate">{tNav(item.id)}</span>
           </Link>
         </li>
       );
@@ -182,16 +182,16 @@ export function MobileNav() {
           hidden && "translate-y-full",
         )}
       >
-        <ul className="mx-auto flex max-w-xl items-stretch gap-1 px-2 pt-1">
+        <ul className="mx-auto flex max-w-xl items-stretch px-1 pt-1 min-[360px]:gap-1 min-[360px]:px-2">
           {tabs([dashboard, calendar])}
-          <li className="flex flex-1 items-center justify-center">
+          <li className="flex flex-none items-center justify-center px-1">
             <button
               type="button"
               onClick={() => {
                 setCreateOpen(true);
               }}
               aria-haspopup="dialog"
-              className="inline-flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5 rounded-control bg-accent px-3 text-helper font-semibold text-on-accent shadow-raised hover:bg-accent-hover active:bg-accent-pressed"
+              className="inline-flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5 rounded-control bg-accent px-2 text-helper font-semibold text-on-accent shadow-raised hover:bg-accent-hover active:bg-accent-pressed"
             >
               <PlusIcon size="md" />
               <span>{t("createMenu")}</span>
@@ -214,7 +214,7 @@ export function MobileNav() {
               >
                 <MenuIcon size="md" />
               </span>
-              <span>{t("moreMenu")}</span>
+              <span className="max-w-full truncate">{t("moreMenu")}</span>
             </button>
           </li>
         </ul>

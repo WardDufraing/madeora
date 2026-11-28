@@ -152,7 +152,7 @@ export function TaskComments({
                 className="rounded-control border border-line bg-surface p-3"
                 data-testid="task-comment"
               >
-                <p className="flex flex-wrap gap-x-2 text-helper text-fg-muted">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-helper text-fg-muted">
                   <span className="font-semibold text-fg">
                     <bdi>{texts.person(comment.author)}</bdi>
                   </span>
