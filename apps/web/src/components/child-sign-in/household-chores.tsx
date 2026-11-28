@@ -176,7 +176,7 @@ export function HouseholdChores({
             <li key={item.occurrenceId}>
               <button
                 type="button"
-                className="flex min-h-14 w-full flex-col items-start gap-1 rounded-control border border-line bg-surface px-4 py-3 text-start hover:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="flex min-h-14 w-full flex-col items-start gap-1 rounded-card border border-line bg-surface px-4 py-3 text-start shadow-raised hover:border-accent-edge hover:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                 disabled={!hydrated}
                 onClick={() => {
                   reset();
@@ -214,7 +214,7 @@ export function HouseholdChores({
             <li key={person.membershipId}>
               <button
                 type="button"
-                className="flex min-h-14 w-full items-center gap-3 rounded-control border border-line bg-surface px-4 py-3 text-start text-body font-medium text-fg hover:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="flex min-h-14 w-full items-center gap-3 rounded-card border border-line bg-surface px-4 py-3 text-start text-body font-medium text-fg shadow-raised hover:border-accent-edge hover:bg-accent-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                 onClick={() => {
                   setFailure(null);
                   setPin("");
@@ -224,7 +224,7 @@ export function HouseholdChores({
               >
                 <span
                   aria-hidden="true"
-                  className="size-4 shrink-0 rounded-full border border-line"
+                  className="size-6 shrink-0 rounded-full border border-line"
                   style={person.accentColor ? { backgroundColor: person.accentColor } : undefined}
                 />
                 <bdi>{nameOf(person)}</bdi>
