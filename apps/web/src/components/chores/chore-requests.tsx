@@ -54,7 +54,7 @@ export function ChoreRequests({ homeId, requests, members, formats }: ChoreReque
         return (
           <div key={box.id} className="flex flex-col gap-2">
             <h3 className="text-body font-semibold text-fg">{box.title}</h3>
-            <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+            <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
               {items.map((request) => (
                 <li
                   key={request.id}

@@ -54,7 +54,7 @@ export async function TaskFilters({
     <form
       method="get"
       action={action}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       aria-label={t("filtersLabel")}
       data-testid="task-filters"
     >

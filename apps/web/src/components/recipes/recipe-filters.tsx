@@ -41,7 +41,7 @@ export async function RecipeFilters({ action, query, tags, filtered }: RecipeFil
       action={action}
       role="search"
       aria-label={t("filtersLabel")}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="recipe-filters"
     >
       <div className="grid gap-4 sm:grid-cols-2">

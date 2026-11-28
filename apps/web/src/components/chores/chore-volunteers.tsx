@@ -137,7 +137,7 @@ export function VolunteerOffers({
       <h2 id="volunteer-offers-heading" className="text-section-title font-semibold text-fg">
         {t("volunteerOffersHeading")}
       </h2>
-      <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+      <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
         {offers.map((offer) => (
           <li
             key={offer.requestId}
@@ -255,7 +255,7 @@ export function ChoreVolunteerPanel({
       ) : null}
       <HydrationGate>
         {ownInvite && open ? (
-          <div className="flex flex-col gap-2 rounded-card border border-line bg-surface p-3">
+          <div className="flex flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised">
             <p className="text-body text-fg">{t("volunteerYouAreInvited")}</p>
             <AnswerButtons
               requestId={open.id}
@@ -379,7 +379,7 @@ function VolunteerRoster({
   const room = CHORE_LIMITS.recipients - invited.size;
 
   return (
-    <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-3">
+    <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised">
       <h3 className="text-body font-semibold text-fg">{t("volunteerRosterHeading")}</h3>
       <ul className="flex flex-col divide-y divide-line" data-testid="volunteer-roster">
         {request.invitations.map((invitation, index) => {

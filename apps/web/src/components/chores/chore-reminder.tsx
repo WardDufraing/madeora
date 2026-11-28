@@ -179,7 +179,7 @@ export function ChoreReminder({
         {editing ? (
           <form
             noValidate
-            className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+            className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
             onSubmit={(event) => {
               event.preventDefault();
               send(preview === null);

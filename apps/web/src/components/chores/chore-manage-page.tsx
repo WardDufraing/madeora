@@ -86,7 +86,7 @@ export async function ChoreManagePage({
           ? t("stateNext", { date: formatTaskDate(chore.nextDue, formats) })
           : t("stateNoOpen");
   const list = (chores: readonly ChoreSummary[], endedList: boolean) => (
-    <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+    <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised">
       {chores.map((chore) => (
         <li
           key={chore.id}

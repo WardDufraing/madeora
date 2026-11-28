@@ -290,7 +290,7 @@ function ScheduleForm({
   return (
     <form
       noValidate
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="series-schedule-form"
       onSubmit={(event) => {
         void form.handleSubmit(({ startsOn: first, repeat }) => {

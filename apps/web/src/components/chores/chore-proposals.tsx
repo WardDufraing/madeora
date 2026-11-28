@@ -72,7 +72,7 @@ export function ProposeChore({
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4">
+          <div className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised">
             <p className="text-body text-fg-muted">{t("proposeIntro")}</p>
             <ProposalForm
               defaults={proposalDefaults(today)}

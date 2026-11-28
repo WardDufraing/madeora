@@ -177,7 +177,7 @@ export async function ChoreProposalsPage({
             <EmptyState title={t("proposalsEmptyTitle")} description={t("proposalsEmpty")} />
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="chore-proposals-waiting"
             >
               {waiting.map(item)}
@@ -190,7 +190,7 @@ export async function ChoreProposalsPage({
               {t("proposalsDecided")}
             </h2>
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="chore-proposals-decided"
             >
               {decided.map(item)}

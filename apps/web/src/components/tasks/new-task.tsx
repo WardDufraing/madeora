@@ -254,7 +254,7 @@ export function NewTask({
           ) : (
             <section
               aria-labelledby={headingId}
-              className="rounded-card border border-line bg-surface p-4"
+              className="rounded-card border border-line bg-surface p-widget-padding shadow-raised"
             >
               <h3 id={headingId} className="sr-only">
                 {t("newTaskHeading")}

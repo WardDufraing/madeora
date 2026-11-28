@@ -82,7 +82,7 @@ export function ChoreSettingsForm({ homeId, settings }: ChoreSettingsFormProps) 
               mutation.mutate(values);
             })(event);
           }}
-          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           data-testid="chore-settings-form"
         >
           <SelectField

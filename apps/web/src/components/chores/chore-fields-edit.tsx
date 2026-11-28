@@ -131,7 +131,7 @@ export function ChoreFieldsEdit({ chore, categories, points }: ChoreFieldsEditPr
               mutation.mutate(values);
             })(event);
           }}
-          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           data-testid="chore-fields-form"
         >
           <p className="text-helper text-fg-muted">{t("editChoreHelp")}</p>

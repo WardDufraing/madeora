@@ -414,7 +414,7 @@ async function DayPanel({
   return (
     <section
       aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="calendar-day-panel"
     >
       <h2 id={headingId} className="text-section-title font-semibold">
@@ -507,7 +507,7 @@ async function CalendarFilters({
     <form
       method="get"
       action={action}
-      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+      className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       aria-label={tTasks("filtersLabel")}
       data-testid="calendar-filters"
     >
