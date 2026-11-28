@@ -210,7 +210,7 @@ export async function PointsPage({
             </h2>
             <p className="text-helper text-fg-muted">{t("membersHelp")}</p>
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="points-accounts"
             >
               {accounts.value.map((row, index) => {

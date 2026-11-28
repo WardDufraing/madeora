@@ -314,7 +314,7 @@ export function GoogleEventForm({
 
       {preview ? (
         <div
-          className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4"
+          className="flex flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
           data-testid="google-event-preview"
         >
           <GooglePreviewList preview={preview.preview} dateFormat={dateFormat} verb="change" />

@@ -412,7 +412,7 @@ function MealRows({
   const errors = form.formState.errors.rows;
   const watched = useWatch({ control: form.control, name: "rows" });
   return (
-    <fieldset className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+    <fieldset className="flex flex-col gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised">
       <legend className="px-1 text-body font-semibold text-fg">
         <bdi>
           {group.meal.recipe?.name ??

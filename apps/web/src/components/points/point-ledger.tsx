@@ -41,7 +41,7 @@ export async function PointLedgerList({
   return (
     <div className="flex flex-col gap-3">
       <ol
-        className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+        className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
         data-testid="point-ledger"
       >
         {ledger.entries.map((entry) => (

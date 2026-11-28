@@ -90,7 +90,7 @@ export async function PersonalPointsPage({ before }: { readonly before: number |
             <p className="text-body text-fg-muted">{tp("ledgerEmpty")}</p>
           ) : (
             <ol
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="personal-ledger"
             >
               {entries.map((entry) => (

@@ -138,7 +138,7 @@ export async function RewardsPage({
 
   const list = (items: readonly Redemption[], showRequester: boolean, testId: string) => (
     <ul
-      className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+      className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
       data-testid={testId}
     >
       {items.map((item) => redemptionItem(item, showRequester))}
@@ -183,7 +183,7 @@ export async function RewardsPage({
             <EmptyState title={t("emptyTitle")} description={t("empty")} />
           ) : (
             <ul
-              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface"
+              className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-raised"
               data-testid="rewards-catalog"
             >
               {rewards.value.map((reward) => {
