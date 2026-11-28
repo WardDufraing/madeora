@@ -130,7 +130,7 @@ export async function TaskDetailPage({
       ) : (
         <PageHeader title={detail.title} />
       )}
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         {panel ? (
           <Link href={`${base}/${detail.id}`} className="link-action">
             {t("openFullPage")}

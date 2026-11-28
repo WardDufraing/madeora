@@ -30,9 +30,11 @@ export async function PersonalPointsPage({ before }: { readonly before: number |
   const header = (
     <>
       <PageHeader title={t("pointsTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <span>{t("personalContext")}</span>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={PERSONAL_REWARDS_PATH} className="link-action">
           {t("rewardsLink")}
         </Link>

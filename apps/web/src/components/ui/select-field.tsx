@@ -42,7 +42,7 @@ export function SelectField({
   const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
-    <div className={cx("flex flex-col gap-1.5", className)}>
+    <div className={cx("flex min-w-0 flex-col gap-1.5", className)}>
       <label htmlFor={id} className="text-body font-medium text-fg">
         {label}
       </label>

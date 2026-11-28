@@ -326,7 +326,7 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled, homes }: P
             <p className="text-helper text-fg-muted">{t("uploadsOff")}</p>
           )
         ) : null}
-        <form onSubmit={onCreateAlbum} className="flex items-end gap-2">
+        <form onSubmit={onCreateAlbum} className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <TextField
             name="name"
             label={t("newAlbumName")}
@@ -404,7 +404,11 @@ export function PhotosView({ homeId, library, offset, uploadsEnabled, homes }: P
           ) : null}
           {canEditAlbum ? (
             <div className="flex flex-wrap items-end gap-2">
-              <form onSubmit={onRenameAlbum} className="flex items-end gap-2" key={album.revision}>
+              <form
+                onSubmit={onRenameAlbum}
+                className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                key={album.revision}
+              >
                 <TextField
                   name="name"
                   label={t("renameAlbum")}

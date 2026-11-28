@@ -83,17 +83,23 @@ export default async function HomeProfilePage({ params }: ProfilePageProps) {
     <>
       <RememberContext userId={userId} context={{ kind: "home", homeId: home.id }} />
       <PageHeader title={t("profileTitle")} />
-      <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={`/homes/${home.id}/members`} className="link-action">
           {t("directoryLink")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={`/homes/${home.id}`} className="link-action">
           {tHomes("backToHome")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={`/homes/${home.id}/leave`} className="link-action" data-testid="leave-link">
           {tManage("leaveLink")}
         </Link>

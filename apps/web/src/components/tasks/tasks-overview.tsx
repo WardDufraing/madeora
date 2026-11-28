@@ -248,17 +248,21 @@ export async function TasksOverview({ userId, home, searchParams, notice }: Task
       <PageHeader
         title={t("title")}
         subtitle={
-          <span className="flex flex-wrap gap-x-2">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
             {canManage ? (
               <>
-                <span aria-hidden="true">{"\u{00B7}"}</span>
+                <span aria-hidden="true" className="max-sm:hidden">
+                  {"\u{00B7}"}
+                </span>
                 <Link href={`${base}/manage`} className="link-action">
                   {t("manageLink")}
                 </Link>
               </>
             ) : null}
-            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <span aria-hidden="true" className="max-sm:hidden">
+              {"\u{00B7}"}
+            </span>
             <Link href={`${base}/templates`} className="link-action">
               {tTemplates("libraryLink")}
             </Link>

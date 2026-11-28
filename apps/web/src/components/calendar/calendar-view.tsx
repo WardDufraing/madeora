@@ -486,7 +486,7 @@ async function OccurrenceItem({
       >
         <EventPreview
           {...preview}
-          className="flex flex-wrap gap-x-2 rounded-control px-2 py-0.5 text-fg"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control px-2 py-0.5 text-fg"
         >
           <span className="font-semibold">{t("workLabel")}</span>
           <span className="text-fg-muted">{when}</span>

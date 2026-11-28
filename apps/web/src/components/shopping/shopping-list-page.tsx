@@ -58,7 +58,7 @@ export async function ShoppingListPage({ userId, listId, home }: ShoppingListPag
       </p>
       <PageHeader title={list.value.name} />
       <div className="mb-4 flex flex-col gap-3">
-        <p className="flex flex-wrap gap-x-2 text-body text-fg-muted">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
           <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
         </p>
         {/* The switcher is a convenience: if the other lists cannot be read, the list still shows. */}

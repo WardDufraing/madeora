@@ -205,13 +205,15 @@ export async function ChoreDetailPage({ userId, homeId, occurrenceId }: ChoreDet
   return (
     <>
       <PageHeader title={title} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <Link href={base} className="link-action">
           {t("backToChores")}
         </Link>
         {manage ? (
           <>
-            <span aria-hidden="true">{"\u{00B7}"}</span>
+            <span aria-hidden="true" className="max-sm:hidden">
+              {"\u{00B7}"}
+            </span>
             <Link href={`${base}/manage`} className="link-action">
               {t("manageLink")}
             </Link>

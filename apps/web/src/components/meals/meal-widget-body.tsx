@@ -78,7 +78,7 @@ export function MealWidgetBody({
                 {planned.length === 0 ? (
                   <span className="text-helper text-fg-muted">{t("nothingPlanned")}</span>
                 ) : (
-                  <span className="flex flex-wrap gap-x-2 text-body">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body">
                     {planned.slice(0, WEEK_DAY_MEALS).map((meal) => (
                       <button
                         key={mealKey(meal)}

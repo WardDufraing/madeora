@@ -99,9 +99,11 @@ export async function LeaderboardPage({
   const header = (
     <>
       <PageHeader title={t("leaderboardTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={pointsPath(home.id)} className="link-action">
           {t("backToPoints")}
         </Link>

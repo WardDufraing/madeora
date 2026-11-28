@@ -33,13 +33,17 @@ export async function AbsencesPage({
   const header = (
     <>
       <PageHeader title={t("absencesTitle")} />
-      <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={choresPath(home.id)} className="link-action">
           {t("backToChores")}
         </Link>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link href={vacationsPath(home.id)} className="link-action">
           {t("vacationsLink")}
         </Link>
@@ -138,9 +142,11 @@ export async function AbsenceReviewPage({
     listTaskMembers(home.id),
   ]);
   const back = (
-    <p className="mb-6 flex flex-wrap gap-x-2 text-body text-fg-muted">
+    <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
       <bdi className="font-semibold text-fg">{home.name}</bdi>
-      <span aria-hidden="true">{"\u{00B7}"}</span>
+      <span aria-hidden="true" className="max-sm:hidden">
+        {"\u{00B7}"}
+      </span>
       <Link href={absencesPath(home.id)} className="link-action">
         {t("backToAbsences")}
       </Link>

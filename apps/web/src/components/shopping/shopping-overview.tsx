@@ -46,9 +46,11 @@ export async function ShoppingOverview({ userId, home, searchParams }: ShoppingO
         version={context.value.signalVersion}
       />
       <PageHeader title={archived ? t("archivedTitle") : t("title")} />
-      <p className="mb-4 flex flex-wrap gap-x-2 text-body text-fg-muted">
+      <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home ? home.name : t("personalSpace")}</bdi>
-        <span aria-hidden="true">{"\u{00B7}"}</span>
+        <span aria-hidden="true" className="max-sm:hidden">
+          {"\u{00B7}"}
+        </span>
         <Link
           href={archived ? shoppingPath(homeId) : shoppingPath(homeId, "archived")}
           className="link-action"
