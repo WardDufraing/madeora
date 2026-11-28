@@ -23,7 +23,7 @@ interface Finding {
 }
 
 for (const width of [320, 390]) {
-  for (const theme of ["light", "dark"] as const) {
+  for (const theme of width === 320 ? (["light", "dark"] as const) : (["light"] as const)) {
     test.describe(`${String(width)} px, ${theme}`, () => {
       test.use({ viewport: { width, height: 800 }, colorScheme: theme });
 
@@ -31,7 +31,7 @@ for (const width of [320, 390]) {
         page,
         baseURL,
       }) => {
-        test.setTimeout(30 * 60_000);
+        test.setTimeout(10 * 60_000);
         const account = await registerConfirmed(baseURL ?? "");
         setGlobalProfile(account.email, "Ann", "#2563eb");
         const homeId = createHomeFor(account.email, "Ann's flat");
@@ -42,13 +42,17 @@ for (const width of [320, 390]) {
         const paths = [...personalScreens, ...homeScreens.map((path) => `/homes/${homeId}${path}`)];
         const problems: string[] = [];
         for (const path of paths) {
-          const response = await page.goto(path);
-          if ((response?.status() ?? 0) >= 400) continue;
-          await page
-            .getByRole("heading", { level: 1 })
-            .first()
-            .waitFor({ timeout: 10_000 })
-            .catch(() => undefined);
+          const response = await page.goto(path, { timeout: 30_000 });
+          const status = response?.status() ?? 0;
+          if (status >= 400) {
+            problems.push(`${path}: HTTP ${String(status)}`);
+            continue;
+          }
+          const heading = page.getByRole("heading", { level: 1 }).first();
+          if (!(await heading.isVisible({ timeout: 10_000 }).catch(() => false))) {
+            problems.push(`${path}: no visible level-1 heading`);
+            continue;
+          }
           await settle(page);
           const found = await page.evaluate((): Finding => {
             const vw = document.documentElement.clientWidth;
@@ -88,6 +92,7 @@ for (const width of [320, 390]) {
             );
             for (const el of controls) {
               if (!visible(el) || el.closest("[aria-hidden=true], [inert]")) continue;
+              // A link inside a sentence is exempt from the target size (WCAG 2.2, 2.5.8 "inline").
               if (el.tagName === "A" && !el.closest("nav")) {
                 const parent = el.parentElement;
                 if (

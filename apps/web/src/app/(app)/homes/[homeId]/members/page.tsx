@@ -87,9 +87,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       <PageHeader title={t("directoryTitle")} />
       <p className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
         <bdi className="font-semibold text-fg">{home.name}</bdi>
-        <span aria-hidden="true" className="max-sm:hidden">
-          {"\u{00B7}"}
-        </span>
+        <span aria-hidden="true">{"\u{00B7}"}</span>
         <RoleLabel role={membership.role} />
         <span aria-hidden="true" className="max-sm:hidden">
           {"\u{00B7}"}
