@@ -201,7 +201,7 @@ function GoalCard({ goal }: { readonly goal: GoalSummary }) {
   return (
     <article
       aria-labelledby={headingId}
-      className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-4"
+      className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="goal-card"
     >
       <h2 id={headingId} className="text-section-title font-semibold text-fg">
@@ -239,7 +239,7 @@ function SeriesCard({ series }: { readonly series: GoalSeriesSummary }) {
   return (
     <article
       aria-labelledby={headingId}
-      className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-4"
+      className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
       data-testid="goal-series-card"
     >
       <h3 id={headingId} className="text-section-title font-semibold text-fg">
