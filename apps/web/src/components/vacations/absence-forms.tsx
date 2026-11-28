@@ -121,7 +121,7 @@ export function NewAbsence({
         ) : (
           <form
             noValidate
-            className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4"
+            className="flex flex-col gap-4 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
             data-testid="absence-new-form"
             onSubmit={(event) => {
               void form.handleSubmit((values) => {

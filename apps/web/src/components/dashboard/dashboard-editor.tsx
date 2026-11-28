@@ -1036,7 +1036,7 @@ function EditorPanel({
   return (
     <section
       aria-labelledby={id}
-      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 text-fg"
+      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised text-fg"
     >
       <h2 id={id} className="text-body font-semibold">
         {title}

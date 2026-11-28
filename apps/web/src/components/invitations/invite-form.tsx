@@ -315,7 +315,7 @@ export function InviteForm({
       {created ? (
         <section
           aria-labelledby="invitation-created"
-          className="flex max-w-xl flex-col gap-3 rounded-card border border-line bg-surface p-4"
+          className="flex max-w-xl flex-col gap-3 rounded-card border border-line bg-surface p-widget-padding shadow-raised"
         >
           <h3
             id="invitation-created"
